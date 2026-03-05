@@ -1,0 +1,18 @@
+generator auth_client {
+  provider = "prisma-client-js"
+  output   = "../lib/generated/auth-client"
+}
+
+datasource db_auth {
+  provider = "postgresql"
+  url      = env("DATABASE_AUTH_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String
+  name      String
+  role      String   @default("READONLY")
+  createdAt DateTime @default(now())
+}

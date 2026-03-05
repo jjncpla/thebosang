@@ -1,0 +1,25 @@
+NextAuth.js (Auth.js v5)로 인증 시스템 구축해줘.
+
+DB 구성:
+- 사용자 계정은 PostgreSQL 별도 DB 사용 (기존 SQLite는 유지)
+- PostgreSQL 연결 설정을 .env에 DATABASE_AUTH_URL로 추가
+- Prisma schema에 auth용 별도 datasource 추가 (db_auth)
+- User 테이블: id, email, password, name, role, createdAt
+
+권한 3단계:
+- ADMIN: 모든 페이지 + 사용자 관리
+- STAFF: 조회 + 서식 작성 가능
+- READONLY: 조회만 가능 (서식 작성 버튼 비활성화)
+
+구현 내용:
+1. 로그인 페이지 (/login) - 기존 사이드바 없이 심플하게
+2. 로그인 안된 사용자 전체 페이지 /login으로 리다이렉트 (middleware.ts)
+3. 사이드바 하단에 로그인한 사용자 이름, 권한, 로그아웃 버튼 추가
+4. 관리자 페이지 (/admin/users) - 사용자 목록, 추가, 권한 변경, 삭제
+5. 초기 관리자 계정 시드 스크립트 (email: admin@dbs.com, password: admin1234)
+6. 비밀번호 bcrypt 해싱
+
+조건:
+- 기존 페이지 구조와 스타일 유지
+- READONLY는 /sanjae/claim 접근 시 접근 불가 안내 표시
+- PostgreSQL 포트 기본값 5432 사용

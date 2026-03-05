@@ -1,0 +1,65 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Person {
+  id        Int     @id @default(autoincrement())
+  name      String
+  rrn       String?   // 암호화된 주민번호
+  phone     String?
+  address   String?
+  rrnMasked String?
+
+  createdAt DateTime @default(now())
+
+  cases     Case[]
+}
+
+model Case {
+  id        Int      @id @default(autoincrement())
+  title     String
+
+  status    String   @default("RECEIVED")
+
+  createdAt DateTime @default(now())
+
+  persons   Person[]
+  messages  Message[]
+  timelines TimelineEvent[]
+}
+
+model Message {
+  id        Int      @id @default(autoincrement())
+  messageId Int      @unique
+
+  caseId    Int?
+  case      Case?    @relation(fields: [caseId], references: [id])
+
+  chatId    BigInt
+  userId    BigInt
+
+  username  String?
+  name String?
+  text      String?
+  type      String
+
+  fileId    String?
+  filename  String?
+
+  createdAt DateTime
+  savedAt   DateTime @default(now())
+}
+
+model TimelineEvent {
+  id        Int      @id @default(autoincrement())
+  caseId    Int
+  case      Case     @relation(fields: [caseId], references: [id])  // 👈 추가
+  title     String
+  date      DateTime
+  createdAt DateTime @default(now())
+}
