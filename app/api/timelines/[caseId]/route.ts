@@ -13,9 +13,9 @@ if (process.env.NODE_ENV !== "production") {
 // ✅ GET
 export async function GET(
   req: NextRequest,
-  { params }: { params: { caseId: string } }
+  { params }: { params: Promise<{ caseId: string }> }
 ) {
-  const { caseId } = params;
+  const { caseId } = await params;
 
   if (!caseId) {
     return NextResponse.json({ error: "caseId 없음" }, { status: 400 });
@@ -36,9 +36,9 @@ export async function GET(
 // ✅ POST
 export async function POST(
   req: NextRequest,
-  { params }: { params: { caseId: string } }
+  { params }: { params: Promise<{ caseId: string }> }
 ) {
-  const { caseId } = params;
+  const { caseId } = await params;
   const body = await req.json();
 
   const data = await prisma.timelineEvent.create({
