@@ -18,7 +18,7 @@ export async function POST(
 
     const buffer = await htmlToPdfBuffer({ payload, fieldMap: FIELD_MAP });
 
-    return new NextResponse(buffer, {
+    return new NextResponse(Buffer.from(buffer), {
       status: 200,
       headers: {
         'Content-Type': 'application/pdf',
