@@ -3,7 +3,7 @@ import path from 'path';
 import fs from 'fs';
 import { getCaseById } from '@/lib/mockDb';
 import { renderTemplate } from '@/lib/template';
-import { htmlToPdfBuffer } from '../../../../lib/server/pdf';
+import { htmlToPdfBuffer } from '@/lib/server/pdf';
 
 export const runtime = 'nodejs';
 

@@ -32,7 +32,7 @@ import {
   useMemo,
 } from 'react';
 import FormRenderer from '@/components/FormRenderer';
-import { FIELD_MAP, EXAMPLE_DATA } from '@/forms/sanjae/fieldMeta';
+import { FIELD_MAP } from '@/forms/sanjae/fieldMeta';
 import { transformSanJae } from '@/forms/sanjae/transformSanJae';
 import { PAGE_A4 } from '@/forms/sanjae/pageConfig';
 
@@ -52,7 +52,7 @@ const groupedFields = {
 // MAIN PAGE
 // ─────────────────────────────────────────────────────────────────────────────
 export default function PreviewPage() {
-  const [data,          setData]          = useState(EXAMPLE_DATA);
+  const [data,          setData]          = useState({});
   const [debug,         setDebug]         = useState(true);
   const [scale,         setScale]         = useState(0.75);
   const [loading,       setLoading]       = useState(false);
