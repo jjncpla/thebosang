@@ -1,137 +1,67 @@
-import puppeteer from 'puppeteer';
+// lib/pdf.ts
+
+import { PDFOptions } from 'puppeteer-core';
+import fs from 'fs/promises';
 import path from 'path';
-import fs from 'fs';
-import { transformSanJae } from '@/forms/sanjae/transformSanJae';
 
-type Field = {
-  key: string;
-  x: number; // mm
-  y: number; // mm
-};
+async function getBrowser() {
+  const puppeteer = (await import('puppeteer-core')).default;
 
-// 값 꺼내기
-function getValue(obj: any, pathStr: string) {
-  return pathStr.split('.').reduce((acc, key) => acc?.[key], obj);
+  if (process.env.VERCEL === '1') {
+    // ── Vercel 서버리스 환경 ───────────────────────────
+    const chromium = (await import('@sparticuz/chromium-min')).default;
+    const executablePath = await chromium.executablePath(
+      'https://github.com/Sparticuz/chromium/releases/download/v131.0.1/chromium-v131.0.1-pack.tar'
+    );
+    return puppeteer.launch({
+      args: chromium.args,
+      defaultViewport: chromium.defaultViewport,
+      executablePath,
+      headless: true,
+    });
+  } else {
+    // ── 로컬 개발 환경 ─────────────────────────────────
+    const executablePath =
+      process.platform === 'win32'
+        ? 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'
+        : '/usr/bin/google-chrome';
+    return puppeteer.launch({
+      executablePath,
+      headless: true,
+      args: ['--no-sandbox', '--disable-setuid-sandbox'],
+    });
+  }
 }
 
-// mm → px
-const mmToPx = (mm: number) => Math.round(mm * 3.78);
+export async function htmlToPdfBuffer(
+  htmlContent: string,
+  options?: Partial<PDFOptions>
+): Promise<Buffer> {
+  const browser = await getBrowser();
+  const page = await browser.newPage();
 
-export async function htmlToPdfBuffer({
-  payload,
-  fieldMap,
-}: {
-  payload: any;
-  fieldMap: Field[];
-}) {
   try {
-    console.log('PAYLOAD:', JSON.stringify(payload, null, 2));
+    await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
 
-    // ✅ 외부 transform 사용
-    const finalPayload = transformSanJae(payload);
-
-    console.log('FINAL PAYLOAD:', JSON.stringify(finalPayload, null, 2));
-
-    const fields = fieldMap.map((f) => ({
-   left: mmToPx(f.x) - 1,
-    top: mmToPx(f.y) - 2,
-    value: getValue(finalPayload, f.key) ?? '',
-   }));
-
-    console.log('FIELDS:', fields);
-
-    const imagePath = path.join(
-      process.cwd(),
-      'public/form-backgrounds/disability-claim-v1-page1.jpg'
-    );
-
-    const imageBase64 = fs.readFileSync(imagePath).toString('base64');
-
-    const html = `
-<html>
-<head>
-  <style>
-    body {
-      margin: 0;
-      width: 794px;
-      height: 1123px;
-      position: relative;
-      font-family: 'Malgun Gothic', sans-serif;
-    }
-
-    .bg {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 794px;
-      height: 1123px;
-      z-index: 0;
-    }
-
-    .field {
-     position: absolute;
-     font-size: 12px;
-     z-index: 10;
-     white-space: nowrap;
-
-     display: flex;
-     align-items: center;
-     justify-content: center;
-    }
-
-
-  </style>
-</head>
-
-<body>
-
-  <img class="bg" src="data:image/jpeg;base64,${imageBase64}" />
-
-  ${fields
-    .map(
-      (f) => `
-    <div 
-      class="field" 
-      style="top:${f.top}px; left:${f.left}px;"
-    >
-      ${f.value}
-    </div>
-  `
-    )
-    .join('')}
-
-</body>
-</html>
-`;
-
-    const browser = await puppeteer.launch({
-      headless: true,
-      args: ['--no-sandbox'],
-    });
-
-    const page = await browser.newPage();
-
-    await page.setViewport({
-      width: 794,
-      height: 1123,
-    });
-
-    await page.setContent(html, {
-      waitUntil: 'domcontentloaded',
-    });
-
-    const pdf = await page.pdf({
-      width: '794px',
-      height: '1123px',
+    const pdfBuffer = await page.pdf({
+      format: 'A4',
       printBackground: true,
+      margin: { top: '0mm', right: '0mm', bottom: '0mm', left: '0mm' },
+      ...options,
     });
 
-    await browser.close();
-
-    return pdf;
-
-  } catch (err) {
-    console.error('PDF 생성 오류:', err);
-    throw err;
+    return Buffer.from(pdfBuffer);
+  } finally {
+    await page.close();
+    await browser.close(); // 서버리스는 매번 닫아야 함
   }
+}
+
+export async function savePdfToFile(
+  buffer: Buffer,
+  filePath: string
+): Promise<void> {
+  const dir = path.dirname(filePath);
+  await fs.mkdir(dir, { recursive: true });
+  await fs.writeFile(filePath, buffer);
 }
