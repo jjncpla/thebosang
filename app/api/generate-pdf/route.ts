@@ -30,7 +30,7 @@ const transformSanJae = (data: any) => {
 
 export async function POST(req: NextRequest) {
   try {
-    const { data, debug } = await req.json();
+    const { data } = await req.json();
 
     const payload = transformSanJae(data);
 
