@@ -6,32 +6,15 @@ import path from 'path';
 
 async function getBrowser() {
   const puppeteer = (await import('puppeteer-core')).default;
-
-  if (process.env.VERCEL === '1') {
-    // ── Vercel 서버리스 환경 ───────────────────────────
-    const chromiumPkg = '@sparticuz/chromium-min';
-    const chromium = (await import(/* webpackIgnore: true */ chromiumPkg)).default;
-    const executablePath = await chromium.executablePath(
-      'https://github.com/Sparticuz/chromium/releases/download/v143.0.0/chromium-v143.0.0-pack.tar'
-    );
-    return puppeteer.launch({
-      args: chromium.args,
-      defaultViewport: chromium.defaultViewport,
-      executablePath,
-      headless: true,
-    });
-  } else {
-    // ── 로컬 개발 환경 ─────────────────────────────────
-    const executablePath =
-      process.platform === 'win32'
-        ? 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'
-        : '/usr/bin/google-chrome';
-    return puppeteer.launch({
-      executablePath,
-      headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox'],
-    });
-  }
+  const executablePath =
+    process.platform === 'win32'
+      ? 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'
+      : '/usr/bin/google-chrome';
+  return puppeteer.launch({
+    executablePath,
+    args: ['--no-sandbox', '--disable-setuid-sandbox'],
+    headless: true,
+  });
 }
 
 export async function htmlToPdfBuffer(
