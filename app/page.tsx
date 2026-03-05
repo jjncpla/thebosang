@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useSession, signOut } from "next-auth/react";
 import DisabilityTable from "../components/DisabilityTable";
 import HearingTable from "../components/HearingTable";
+import PneumoconiosisTable from "../components/PneumoconiosisTable";
 import { hearingTable } from "../data/hearing";
 import Link from 'next/link';
 
@@ -1577,7 +1578,12 @@ export default function HomePage() {
 
           {/* 소음성 난청 등급표 */}
           {activePage === "소음성난청" && (
-            <div style={pdfBox}><HearingTable table={hearingTable} /></div>
+            <div style={{ overflowY: "auto", height: "80vh" }}><HearingTable table={hearingTable} /></div>
+          )}
+
+          {/* 폐질환 등급표 */}
+          {activePage === "폐질환등급표" && (
+            <div style={{ overflowY: "auto", height: "80vh" }}><PneumoconiosisTable /></div>
           )}
 
           {/* 평균임금 */}
@@ -1608,7 +1614,7 @@ export default function HomePage() {
           {activePage === "담당TF모니터링" && <TFMonitoringSection />}
 
           {/* 준비 중 페이지 */}
-          {activePage !== null && !["장해보상일수","소음성난청","평균임금","담당TF모니터링"].includes(activePage) && (
+          {activePage !== null && !["장해보상일수","소음성난청","폐질환등급표","평균임금","담당TF모니터링"].includes(activePage) && (
             <div style={{textAlign:"center",padding:80,color:"#6b7280",fontSize:16}}>준비 중입니다.</div>
           )}
 
