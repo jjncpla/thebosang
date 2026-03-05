@@ -9,7 +9,8 @@ async function getBrowser() {
 
   if (process.env.VERCEL === '1') {
     // ── Vercel 서버리스 환경 ───────────────────────────
-    const chromium = (await import('@sparticuz/chromium-min')).default;
+    const chromiumPkg = '@sparticuz/chromium-min';
+    const chromium = (await import(/* webpackIgnore: true */ chromiumPkg)).default;
     const executablePath = await chromium.executablePath(
       'https://github.com/Sparticuz/chromium/releases/download/v143.0.0/chromium-v143.0.0-pack.tar'
     );
