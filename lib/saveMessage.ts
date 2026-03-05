@@ -125,7 +125,7 @@ export async function saveMessage(
   text,
   type,
   fileId,
-  filename,
+  fileName,
 
   createdAt,
 },
