@@ -11,7 +11,7 @@ async function getBrowser() {
     // ── Vercel 서버리스 환경 ───────────────────────────
     const chromium = (await import('@sparticuz/chromium-min')).default;
     const executablePath = await chromium.executablePath(
-      'https://github.com/Sparticuz/chromium/releases/download/v131.0.1/chromium-v131.0.1-pack.tar'
+      'https://github.com/Sparticuz/chromium/releases/download/v143.0.0/chromium-v143.0.0-pack.tar'
     );
     return puppeteer.launch({
       args: chromium.args,
