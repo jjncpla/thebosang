@@ -37,7 +37,7 @@ export async function POST(req: NextRequest) {
     const pdfBuffer = await htmlToPdfBuffer({
       payload,
       fieldMap: FIELD_MAP,
-      debug: debug ?? false,
+      
     });
 
     return new NextResponse(new Uint8Array(pdfBuffer), {
