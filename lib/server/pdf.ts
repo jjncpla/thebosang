@@ -42,15 +42,17 @@ export async function htmlToPdfBuffer(input: PdfInput): Promise<Buffer> {
 
   for (const { key, x, y } of fieldMap) {
     const value = String(get(payload, key) ?? '');
-    if (!value) continue;
+    const displayValue = value || key; // 빈 값이면 key 이름을 대신 표시
+
     const xPx = x * (2480 / 210);
     const yPx = y * (3505 / 297);
-    page.drawText(value, {
+
+    page.drawText(displayValue, {
       x: xPx,
       y: height - yPx,
       size: 28,
       font,
-      color: rgb(0, 0, 0),
+      color: value ? rgb(0, 0, 0) : rgb(0.8, 0.8, 0.8),  // 빈 값은 회색
     });
   }
 
