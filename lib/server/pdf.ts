@@ -1,4 +1,4 @@
-import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
+import { PDFDocument, rgb } from 'pdf-lib';
 import fontkit from '@pdf-lib/fontkit';
 import fs from 'fs/promises';
 import path from 'path';
@@ -31,7 +31,10 @@ export async function htmlToPdfBuffer(input: PdfInput): Promise<Buffer> {
   const page = pdfDoc.addPage([width, height]);
   page.drawImage(jpgImage, { x: 0, y: 0, width, height });
 
-  const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+  const fontBytes = await fs.readFile(
+    path.join(process.cwd(), 'public', 'fonts', 'NotoSansKR-Regular.otf')
+  );
+  const font = await pdfDoc.embedFont(fontBytes);
 
   // 테스트용 고정 텍스트 (페이지 중앙)
   page.drawText('TEST 테스트', {
