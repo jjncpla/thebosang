@@ -33,18 +33,25 @@ export async function htmlToPdfBuffer(input: PdfInput): Promise<Buffer> {
 
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
 
+  // 테스트용 고정 텍스트 (페이지 중앙)
+  page.drawText('TEST 테스트', {
+    x: width / 2 - 100,
+    y: height / 2,
+    size: 60,
+    font,
+    color: rgb(1, 0, 0),  // 빨간색
+  });
+
+  // 기존 루프
   for (const { key, x, y } of fieldMap) {
     const value = String(get(payload, key) ?? '');
     if (!value) continue;
-
-    // mm → px 변환 (A4: 210×297mm = 2480×3505px)
     const xPx = x * (2480 / 210);
     const yPx = y * (3505 / 297);
-
     page.drawText(value, {
       x: xPx,
-      y: height - yPx,  // pdf-lib은 좌하단 기준이라 반전
-      size: 28,          // 300dpi 기준이라 폰트 크기도 크게
+      y: height - yPx,
+      size: 28,
       font,
       color: rgb(0, 0, 0),
     });
