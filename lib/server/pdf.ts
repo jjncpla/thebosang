@@ -36,10 +36,15 @@ export async function htmlToPdfBuffer(input: PdfInput): Promise<Buffer> {
   for (const { key, x, y } of fieldMap) {
     const value = String(get(payload, key) ?? '');
     if (!value) continue;
+
+    // mm → px 변환 (A4: 210×297mm = 2480×3505px)
+    const xPx = x * (2480 / 210);
+    const yPx = y * (3505 / 297);
+
     page.drawText(value, {
-      x,
-      y: height - y,  // PDF 좌표계는 좌하단 기준이라 y 반전
-      size: 11,
+      x: xPx,
+      y: height - yPx,  // pdf-lib은 좌하단 기준이라 반전
+      size: 28,          // 300dpi 기준이라 폰트 크기도 크게
       font,
       color: rgb(0, 0, 0),
     });
