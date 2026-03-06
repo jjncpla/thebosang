@@ -36,16 +36,6 @@ export async function htmlToPdfBuffer(input: PdfInput): Promise<Buffer> {
   );
   const font = await pdfDoc.embedFont(fontBytes);
 
-  // 테스트용 고정 텍스트 (페이지 중앙)
-  page.drawText('TEST 테스트', {
-    x: width / 2 - 100,
-    y: height / 2,
-    size: 60,
-    font,
-    color: rgb(1, 0, 0),  // 빨간색
-  });
-
-  // 기존 루프
   for (const { key, x, y } of fieldMap) {
     const value = String(get(payload, key) ?? '');
     if (!value) continue;
