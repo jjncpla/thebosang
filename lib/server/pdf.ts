@@ -36,6 +36,10 @@ export async function htmlToPdfBuffer(input: PdfInput): Promise<Buffer> {
   );
   const font = await pdfDoc.embedFont(fontBytes);
 
+  console.log('payload:', JSON.stringify(payload, null, 2));
+  console.log('fieldMap 첫번째:', fieldMap[0]);
+  console.log('첫번째 값:', get(payload, fieldMap[0]?.key));
+
   for (const { key, x, y } of fieldMap) {
     const value = String(get(payload, key) ?? '');
     if (!value) continue;
