@@ -18,7 +18,7 @@ async function getBrowser() {
   const executablePath =
     process.platform === 'win32'
       ? 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'
-      : '/usr/bin/google-chrome';
+      : (process.env.CHROMIUM_PATH || '/usr/bin/chromium');
   return puppeteer.launch({
     executablePath,
     args: ['--no-sandbox', '--disable-setuid-sandbox'],
