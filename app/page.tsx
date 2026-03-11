@@ -1444,132 +1444,8 @@ export default function HomePage() {
   }
 
   return (
-    <div style={layoutRoot}>
-
-      {/* ── 사이드바 ── */}
-      <aside style={sidebarStyle}>
-        <div style={sidebarHeader}>
-          <p style={sidebarTitle}>노무법인 더보상</p>
-          <p style={sidebarSub}>업무 지원 시스템</p>
-        </div>
-        <nav style={sidebarNav}>
-
-          {/* ── 1. 법령 및 규정 ── */}
-          <div>
-            <button onClick={() => toggleL1("법령및규정")} style={openL1 === "법령및규정" ? sideNavItemActive : sideNavItem}>법령 및 규정</button>
-            {openL1 === "법령및규정" && (
-              <div style={subMenuContainer}>
-                <a href="https://www.law.go.kr" target="_blank" rel="noopener noreferrer" style={subNavItem as React.CSSProperties}>관계 법령 ↗</a>
-                <button onClick={() => setActivePage("근로복지공단규정")} style={activePage === "근로복지공단규정" ? subNavItemActive : subNavItem}>근로복지공단 규정</button>
-              </div>
-            )}
-          </div>
-
-          {/* ── 2. 장해 등급표 외 ── */}
-          <div>
-            <button onClick={() => toggleL1("장해등급표외")} style={openL1 === "장해등급표외" ? sideNavItemActive : sideNavItem}>장해 등급표 외</button>
-            {openL1 === "장해등급표외" && (
-              <div style={subMenuContainer}>
-                {([
-                  ["장해보상일수",  "장해보상일수"],
-                  ["소음성난청",    "소음성 난청 등급표"],
-                  ["폐질환등급표",  "폐질환 등급표"],
-                  ["안질환등급표",  "안질환 등급표"],
-                ] as [ActivePage, string][]).map(([key, label]) => (
-                  <button key={String(key)} onClick={() => setActivePage(key)} style={activePage === key ? subNavItemActive : subNavItem}>{label}</button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* ── 3. 평균임금 (리프) ── */}
-          <button
-            onClick={() => { setActivePage("평균임금"); setOpenL1(null); }}
-            style={activePage === "평균임금" ? sideNavItemActive : sideNavItem}
-          >평균임금</button>
-
-          {/* ── 4. 산재보상실무 ── */}
-          <div>
-            <button onClick={() => toggleL1("산재보상실무")} style={openL1 === "산재보상실무" ? sideNavItemActive : sideNavItem}>산재보상실무</button>
-            {openL1 === "산재보상실무" && (
-              <div style={subMenuContainer}>
-
-                {/* 재해조사 */}
-                <button onClick={() => setActivePage("재해조사")} style={activePage === "재해조사" ? subNavItemActive : subNavItem}>재해조사</button>
-
-                {/* TF업무 */}
-                <div>
-                  <button onClick={() => toggleSanjaeL2("TF업무")} style={openSanjaeL2 === "TF업무" ? subNavItemActive : subNavItem}>TF업무</button>
-                  {openSanjaeL2 === "TF업무" && (
-                    <div style={subSubMenuContainer}>
-                      {([
-                        ["담당TF모니터링", "담당TF 모니터링"],
-                        ["TF공지",        "TF 공지"],
-                        ["TF통계",        "TF 통계"],
-                      ] as [ActivePage, string][]).map(([key, label]) => (
-                        <button key={String(key)} onClick={() => setActivePage(key)} style={activePage === key ? subSubNavItemActive : subSubNavItem}>{label}</button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                {/* 보험급여 청구 서식 작성 */}
-                <div>
-                  <button onClick={() => toggleSanjaeL2("보험급여청구")} style={openSanjaeL2 === "보험급여청구" ? subNavItemActive : subNavItem}>보험급여 청구 서식 작성</button>
-                  {openSanjaeL2 === "보험급여청구" && (
-                    <div style={subSubMenuContainer}>
-
-                      {/* 요양급여 청구서 작성 (L3 확장) */}
-                      <div>
-                        <button onClick={() => setOpenL3Yoyang(v => !v)} style={openL3Yoyang ? subSubNavItemActive : subSubNavItem}>요양급여 청구서 작성</button>
-                        {openL3Yoyang && (
-                          <div style={subSubSubMenuContainer}>
-                            {([
-                              ["최초요양급여", "최초요양급여 청구"],
-                              ["추가상병",    "추가상병 청구"],
-                              ["재요양",      "재요양 청구"],
-                            ] as [ActivePage, string][]).map(([key, label]) => (
-                              <button key={String(key)} onClick={() => setActivePage(key)} style={activePage === key ? subSubSubNavItemActive : subSubSubNavItem}>{label}</button>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-
-                      <button onClick={() => setActivePage("휴업급여")} style={activePage === "휴업급여" ? subSubNavItemActive : subSubNavItem}>휴업급여 청구서 작성</button>
-                      <Link href="/sanjae/claim" style={subSubNavItem}>장해급여 청구서 작성</Link>
-                      <button onClick={() => setActivePage("유족급여장례비")} style={activePage === "유족급여장례비" ? subSubNavItemActive : subSubNavItem}>유족급여/장례비 청구서 작성</button>
-                    </div>
-                  )}
-                </div>
-
-                {/* 이유서 및 의견서 작성 */}
-                <button onClick={() => setActivePage("이유서의견서")} style={activePage === "이유서의견서" ? subNavItemActive : subNavItem}>이유서 및 의견서 작성</button>
-
-                {/* 주요 쟁점 사항 */}
-                <button onClick={() => setActivePage("주요쟁점")} style={activePage === "주요쟁점" ? subNavItemActive : subNavItem}>주요 쟁점 사항</button>
-
-              </div>
-            )}
-          </div>
-
-        </nav>
-
-        {/* ── 사용자 정보 ── */}
-        <div style={sidebarUserBox}>
-          <div style={sidebarUserName}>{session?.user?.name ?? "…"}</div>
-          <div style={sidebarUserRole}>{roleLabel(session?.user?.role)}</div>
-          {session?.user?.role === "ADMIN" && (
-            <Link href="/admin/users" style={adminLinkStyle}>사용자 관리</Link>
-          )}
-          <button onClick={() => signOut({ callbackUrl: "/login" })} style={logoutBtnStyle}>
-            로그아웃
-          </button>
-        </div>
-      </aside>
-
-      {/* ── 메인 콘텐츠 ── */}
-      <div style={contentWrapper}>
-        <main style={mainArea}>
+    <div style={contentWrapper}>
+        <main>
 
           {/* 장해보상일수 */}
           {activePage === "장해보상일수" && (
@@ -1625,7 +1501,6 @@ export default function HomePage() {
 
         </main>
       </div>
-    </div>
   );
 }
 
@@ -1637,17 +1512,7 @@ export default function HomePage() {
 const page:React.CSSProperties={fontFamily:"'Pretendard','Noto Sans KR',-apple-system,sans-serif",maxWidth:1100,margin:"0 auto",padding:"20px 16px",background:"#f9fafb",minHeight:"100vh"};
 const navBtn:React.CSSProperties={padding:"12px 28px",fontSize:15,fontWeight:600,border:"2px solid #d1d5db",borderRadius:8,background:"#fff",color:"#374151",cursor:"pointer"};
 const activeNav:React.CSSProperties={...navBtn,background:"#1e40af",color:"#fff",border:"2px solid #1e40af"};
-/* ── 사이드바 레이아웃 ── */
-const layoutRoot:React.CSSProperties={display:"flex",minHeight:"100vh",fontFamily:"'Pretendard','Noto Sans KR',-apple-system,sans-serif",background:"#f9fafb"};
-const sidebarStyle:React.CSSProperties={width:240,minWidth:240,background:"#fff",borderRight:"1px solid #e5e7eb",display:"flex",flexDirection:"column",position:"sticky",top:0,height:"100vh",overflowY:"auto"};
-const sidebarHeader:React.CSSProperties={padding:"20px 20px 16px",borderBottom:"1px solid #e5e7eb"};
-const sidebarTitle:React.CSSProperties={fontSize:15,fontWeight:700,color:"#111827",margin:0};
-const sidebarSub:React.CSSProperties={fontSize:12,color:"#6b7280",margin:"4px 0 0"};
-const sidebarNav:React.CSSProperties={display:"flex",flexDirection:"column",padding:"8px 0",flex:1};
-const sideNavItem:React.CSSProperties={display:"block",width:"100%",textAlign:"left",padding:"11px 20px",fontSize:14,fontWeight:500,border:"none",background:"transparent",color:"#374151",cursor:"pointer"};
-const sideNavItemActive:React.CSSProperties={...sideNavItem,background:"#1e40af",color:"#fff",fontWeight:700};
 const contentWrapper:React.CSSProperties={flex:1,display:"flex",flexDirection:"column",minWidth:0};
-const mainArea:React.CSSProperties={flex:1,background:"#fff",minHeight:400,overflow:"hidden"};
 const pdfBox:React.CSSProperties={width:"100%",height:"80vh"};
 const iframe:React.CSSProperties={width:"100%",height:"100%",border:"none"};
 const subNav:React.CSSProperties={display:"flex",gap:0,borderBottom:"2px solid #e5e7eb",background:"#f3f4f6",flexWrap:"wrap"};
@@ -1682,29 +1547,6 @@ const btnAuto:React.CSSProperties={padding:"8px 20px",fontSize:13,fontWeight:700
 const yearTag:React.CSSProperties={display:"inline-flex",alignItems:"center",gap:6,background:"#dbeafe",color:"#1e40af",padding:"6px 12px",borderRadius:16,fontSize:13,fontWeight:600};
 const delBtn:React.CSSProperties={background:"none",border:"none",color:"#dc2626",fontSize:16,cursor:"pointer",fontWeight:700,padding:0,lineHeight:1};
 
-/* ── 사이드바 사용자 영역 ── */
-function roleLabel(role?: string) {
-  if (role === "ADMIN")    return "관리자";
-  if (role === "STAFF")    return "스태프";
-  if (role === "READONLY") return "읽기 전용";
-  return "";
-}
-const sidebarUserBox:React.CSSProperties={borderTop:"1px solid #e5e7eb",padding:"14px 16px",display:"flex",flexDirection:"column",gap:6};
-const sidebarUserName:React.CSSProperties={fontSize:13,fontWeight:700,color:"#111827"};
-const sidebarUserRole:React.CSSProperties={fontSize:11,color:"#6b7280",marginBottom:2};
-const adminLinkStyle:React.CSSProperties={fontSize:12,color:"#1e40af",textDecoration:"none",fontWeight:600};
-const logoutBtnStyle:React.CSSProperties={fontSize:12,fontWeight:600,padding:"6px 10px",border:"1px solid #e5e7eb",borderRadius:6,background:"#f9fafb",color:"#374151",cursor:"pointer",textAlign:"left"};
-
-/* ── 사이드바 서브메뉴 ── */
-const subMenuContainer:React.CSSProperties={background:"#f8fafc",borderLeft:"3px solid #1e40af",margin:"0 8px 4px 20px",borderRadius:"0 6px 6px 0"};
-const subNavItem:React.CSSProperties={display:"block",width:"100%",textAlign:"left",padding:"9px 14px",fontSize:13,fontWeight:500,border:"none",background:"transparent",color:"#4b5563",cursor:"pointer"};
-const subNavItemActive:React.CSSProperties={...subNavItem,background:"#dbeafe",color:"#1e40af",fontWeight:700};
-const subSubMenuContainer:React.CSSProperties={borderLeft:"2px solid #93c5fd",margin:"0 8px 4px 16px"};
-const subSubNavItem:React.CSSProperties={display:"block",width:"100%",textAlign:"left",padding:"8px 14px",fontSize:12,fontWeight:500,color:"#374151",textDecoration:"none",border:"none",background:"transparent",cursor:"pointer",boxSizing:"border-box" as const};
-const subSubNavItemActive:React.CSSProperties={...subSubNavItem,background:"#dbeafe",color:"#1e40af",fontWeight:700};
-const subSubSubMenuContainer:React.CSSProperties={borderLeft:"2px solid #bfdbfe",margin:"0 8px 4px 16px"};
-const subSubSubNavItem:React.CSSProperties={display:"block",width:"100%",textAlign:"left",padding:"7px 14px",fontSize:11,fontWeight:500,color:"#6b7280",border:"none",background:"transparent",cursor:"pointer"};
-const subSubSubNavItemActive:React.CSSProperties={...subSubSubNavItem,background:"#eff6ff",color:"#1e40af",fontWeight:700};
 
 /* ── 달력 ── */
 const calendarWrap:React.CSSProperties={background:"#fff",border:"1px solid #e5e7eb",borderRadius:12,overflow:"hidden",boxShadow:"0 1px 4px rgba(0,0,0,.06)",userSelect:"none"};
