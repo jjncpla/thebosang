@@ -2,18 +2,81 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
 export async function GET(req: NextRequest) {
-  const { searchParams } = req.nextUrl;
-  const status = searchParams.get("status") ?? "";
-  const caseType = searchParams.get("caseType") ?? "";
-  const branch = searchParams.get("branch") ?? "";
-  const search = searchParams.get("search") ?? "";
+  const sp = req.nextUrl.searchParams;
+  const statusParam = sp.get("status") ?? "";
+  const caseType = sp.get("caseType") ?? "";
+  const tfName = sp.get("tfName") ?? "";
+  const search = sp.get("search") ?? "";
+  const salesManager = sp.get("salesManager") ?? "";
+  const caseManager = sp.get("caseManager") ?? "";
+  const salesRoute = sp.get("salesRoute") ?? "";
+  const isOneStop = sp.get("isOneStop") ?? "";
+  const contractDateFrom = sp.get("contractDate_from") ?? "";
+  const contractDateTo = sp.get("contractDate_to") ?? "";
+  const receptionDateFrom = sp.get("receptionDate_from") ?? "";
+  const receptionDateTo = sp.get("receptionDate_to") ?? "";
+
+  const statusList = statusParam ? statusParam.split(",").filter(Boolean) : [];
+
+  // Build hearingLoss where from hl_ prefixed params
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const hlWhere: Record<string, any> = {};
+  let hasHlFilter = false;
+
+  for (const [key, value] of sp.entries()) {
+    if (!key.startsWith("hl_") || !value) continue;
+    const rest = key.slice(3);
+
+    if (rest.endsWith("_from")) {
+      const field = rest.slice(0, -5);
+      hlWhere[field] = { ...((hlWhere[field] as object) ?? {}), gte: new Date(value) };
+      hasHlFilter = true;
+    } else if (rest.endsWith("_to")) {
+      const field = rest.slice(0, -3);
+      hlWhere[field] = { ...((hlWhere[field] as object) ?? {}), lte: new Date(value) };
+      hasHlFilter = true;
+    } else if (rest.endsWith("_min")) {
+      const field = rest.slice(0, -4);
+      hlWhere[field] = { ...((hlWhere[field] as object) ?? {}), gte: Number(value) };
+      hasHlFilter = true;
+    } else if (rest.endsWith("_max")) {
+      const field = rest.slice(0, -4);
+      hlWhere[field] = { ...((hlWhere[field] as object) ?? {}), lte: Number(value) };
+      hasHlFilter = true;
+    } else if (value.includes(",")) {
+      hlWhere[rest] = { in: value.split(",").filter(Boolean) };
+      hasHlFilter = true;
+    } else if (value === "true" || value === "false") {
+      hlWhere[rest] = value === "true";
+      hasHlFilter = true;
+    } else {
+      hlWhere[rest] = { contains: value };
+      hasHlFilter = true;
+    }
+  }
+
+  // Build contractDate / receptionDate range
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const contractDateFilter: Record<string, Date> = {};
+  if (contractDateFrom) contractDateFilter.gte = new Date(contractDateFrom);
+  if (contractDateTo) contractDateFilter.lte = new Date(contractDateTo);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const receptionDateFilter: Record<string, Date> = {};
+  if (receptionDateFrom) receptionDateFilter.gte = new Date(receptionDateFrom);
+  if (receptionDateTo) receptionDateFilter.lte = new Date(receptionDateTo);
 
   try {
     const cases = await prisma.case.findMany({
       where: {
-        ...(status && { status }),
+        ...(statusList.length > 0 && { status: { in: statusList } }),
         ...(caseType && { caseType }),
-        ...(branch && { branch }),
+        ...(tfName && { tfName }),
+        ...(salesManager && { salesManager: { contains: salesManager } }),
+        ...(caseManager && { caseManager: { contains: caseManager } }),
+        ...(salesRoute && { salesRoute: { contains: salesRoute } }),
+        ...(isOneStop && { isOneStop: isOneStop === "true" }),
+        ...(Object.keys(contractDateFilter).length > 0 && { contractDate: contractDateFilter }),
+        ...(Object.keys(receptionDateFilter).length > 0 && { receptionDate: receptionDateFilter }),
         ...(search && {
           patient: {
             OR: [
@@ -22,10 +85,12 @@ export async function GET(req: NextRequest) {
             ],
           },
         }),
+        ...(hasHlFilter && { hearingLoss: hlWhere }),
       },
       orderBy: { createdAt: "desc" },
       include: {
         patient: { select: { id: true, name: true, ssn: true, phone: true } },
+        hearingLoss: true,
       },
     });
     return NextResponse.json(cases);
