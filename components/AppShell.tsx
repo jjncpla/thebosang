@@ -23,6 +23,7 @@ const MENU_ITEMS: MenuItem[] = [
     children: [
       { id: "cases-consult", label: "상담 관리 목록", path: "/cases-consult" },
       { id: "cases-list", label: "사건 목록", path: "/cases" },
+      { id: "patients-list", label: "재해자 목록", path: "/patients" },
     ],
   },
   { id: "cases-view", label: "사건 조회", icon: "🔍", path: "/cases-view" },

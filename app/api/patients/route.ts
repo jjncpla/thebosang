@@ -10,12 +10,17 @@ export async function GET(req: NextRequest) {
             OR: [
               { name: { contains: search } },
               { ssn: { contains: search } },
+              { phone: { endsWith: search } },
             ],
           }
         : undefined,
       orderBy: { createdAt: "desc" },
       include: {
         _count: { select: { cases: true } },
+        cases: {
+          select: { id: true, caseType: true, status: true },
+          orderBy: { createdAt: "desc" },
+        },
       },
     });
     return NextResponse.json(patients);
