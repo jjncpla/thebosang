@@ -1,91 +1,66 @@
 import { NextRequest, NextResponse } from "next/server";
-import { PrismaClient } from "@prisma/client";
+import { prisma } from "@/lib/prisma";
 
-/* Prisma 싱글톤 */
-const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
-const prisma =
-  globalForPrisma.prisma ??
-  new PrismaClient({ log: ["error"] });
-
-if (process.env.NODE_ENV !== "production") {
-  globalForPrisma.prisma = prisma;
-}
-
-/* ─────────────────────────────────────
-   GET /api/cases
-   전체 케이스 조회
-───────────────────────────────────── */
-export async function GET(): Promise<NextResponse> {
+export async function GET(
+  _req: NextRequest,
+  { params }: { params: Promise<{ caseId: string }> }
+) {
+  const { caseId } = await params;
   try {
-    const cases = await prisma.case.findMany({
-      orderBy: { createdAt: "desc" },
+    const c = await prisma.case.findUnique({
+      where: { id: caseId },
       include: {
-        persons: {
-          select: { id: true, name: true, phone: true },
-        },
+        patient: true,
+        hearingLoss: true,
       },
     });
-
-    return NextResponse.json(cases, { status: 200 });
+    if (!c) return NextResponse.json({ error: "없음" }, { status: 404 });
+    return NextResponse.json(c);
   } catch (err) {
-    console.error("[GET /api/cases] DB error:", err);
-    return NextResponse.json(
-      { error: "케이스 조회 중 오류 발생" },
-      { status: 500 }
-    );
+    console.error("[GET /api/cases/[caseId]]", err);
+    return NextResponse.json({ error: "조회 오류" }, { status: 500 });
   }
 }
 
-/* ─────────────────────────────────────
-   POST /api/cases
-   케이스 생성
-───────────────────────────────────── */
-export async function POST(req: NextRequest): Promise<NextResponse> {
+export async function PATCH(
+  req: NextRequest,
+  { params }: { params: Promise<{ caseId: string }> }
+) {
+  const { caseId } = await params;
   try {
     const body = await req.json();
+    const {
+      caseType, caseNumber, tfName, branch, subAgent,
+      branchManager, salesManager, caseManager, salesRoute,
+      contractDate, receptionDate, isOneStop, status, memo,
+    } = body;
 
-    const { title, persons } = body;
-
-    // ── 유효성 검사 ──
-    if (!title) {
-      return NextResponse.json(
-        { error: "title은 필수입니다" },
-        { status: 400 }
-      );
-    }
-
-    if (!persons || !Array.isArray(persons) || persons.length === 0) {
-      return NextResponse.json(
-        { error: "person 최소 1명 필요" },
-        { status: 400 }
-      );
-    }
-
-    // ── 생성 ──
-    const newCase = await prisma.case.create({
+    const updated = await prisma.case.update({
+      where: { id: caseId },
       data: {
-        title,
-        status: "RECEIVED", // 기본값
-        persons: {
-          create: persons.map((p: any) => ({
-            name: p.name,
-            phone: p.phone ?? null,
-          })),
-        },
+        ...(caseType !== undefined && { caseType }),
+        ...(caseNumber !== undefined && { caseNumber }),
+        ...(tfName !== undefined && { tfName }),
+        ...(branch !== undefined && { branch }),
+        ...(subAgent !== undefined && { subAgent }),
+        ...(branchManager !== undefined && { branchManager }),
+        ...(salesManager !== undefined && { salesManager }),
+        ...(caseManager !== undefined && { caseManager }),
+        ...(salesRoute !== undefined && { salesRoute }),
+        ...(contractDate !== undefined && { contractDate: contractDate ? new Date(contractDate) : null }),
+        ...(receptionDate !== undefined && { receptionDate: receptionDate ? new Date(receptionDate) : null }),
+        ...(isOneStop !== undefined && { isOneStop }),
+        ...(status !== undefined && { status }),
+        ...(memo !== undefined && { memo }),
       },
       include: {
-        persons: {
-          select: { id: true, name: true, phone: true },
-        },
+        patient: true,
+        hearingLoss: true,
       },
     });
-
-    return NextResponse.json(newCase, { status: 201 });
+    return NextResponse.json(updated);
   } catch (err) {
-    console.error("[POST /api/cases] DB error:", err);
-    return NextResponse.json(
-      { error: "케이스 생성 중 오류 발생" },
-      { status: 500 }
-    );
+    console.error("[PATCH /api/cases/[caseId]]", err);
+    return NextResponse.json({ error: "수정 오류" }, { status: 500 });
   }
 }

@@ -3,48 +3,129 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
-model Person {
-  id        Int     @id @default(autoincrement())
+model Patient {
+  id        String   @id @default(cuid())
   name      String
-  rrn       String?   // 암호화된 주민번호
+  ssn       String   @unique
   phone     String?
   address   String?
-  rrnMasked String?
-
+  memo      String?
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   cases     Case[]
 }
 
 model Case {
-  id        Int      @id @default(autoincrement())
-  title     String
+  id             String    @id @default(cuid())
+  patientId      String
+  patient        Patient   @relation(fields: [patientId], references: [id])
 
-  status    String   @default("RECEIVED")
+  caseType       String    @default("HEARING_LOSS")
+  caseNumber     String?
+  tfName         String?
+  branch         String?
+  subAgent       String?
+  branchManager  String?
+  salesManager   String?
+  caseManager    String?
+  salesRoute     String?
+  contractDate   DateTime?
+  receptionDate  DateTime?
+  isOneStop      Boolean   @default(false)
+  status         String    @default("접수대기")
+  memo           String?
+
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  hearingLoss    HearingLossDetail?
+  messages       Message[]
+  timelines      TimelineEvent[]
+}
+
+model HearingLossDetail {
+  id      String @id @default(cuid())
+  caseId  String @unique
+  case    Case   @relation(fields: [caseId], references: [id])
+
+  firstClinic        String?
+  firstExamDate      DateTime?
+  firstExamRight     Float?
+  firstExamLeft      Float?
+
+  specialClinic      String?
+  preExamDate        DateTime?
+  exam1Date          DateTime?
+  exam2Date          DateTime?
+  exam3Date          DateTime?
+  airRight1          Float?
+  airLeft1           Float?
+  boneRight1         Float?
+  boneLeft1          Float?
+  speechScore1       Float?
+  abrRight1          Float?
+  abrLeft1           Float?
+  impedanceRight1    String?
+  impedanceLeft1     String?
+
+  reExamClinic       String?
+  reExam1Date        DateTime?
+  reExam2Date        DateTime?
+  reExam3Date        DateTime?
+  airRight2          Float?
+  airLeft2           Float?
+  boneRight2         Float?
+  boneLeft2          Float?
+  speechScore2       Float?
+  abrRight2          Float?
+  abrLeft2           Float?
+  impedanceRight2    String?
+  impedanceLeft2     String?
+
+  reReExamClinic     String?
+  reReExam1Date      DateTime?
+  reReExam2Date      DateTime?
+  reReExam3Date      DateTime?
+  airRight3          Float?
+  airLeft3           Float?
+  boneRight3         Float?
+  boneLeft3          Float?
+  speechScore3       Float?
+  abrRight3          Float?
+  abrLeft3           Float?
+  impedanceRight3    String?
+  impedanceLeft3     String?
+
+  expertOrg          String?
+  expertDate         DateTime?
+
+  disposalType       String?
+  disposalDecidedAt  DateTime?
+  disposalReceivedAt DateTime?
+  gradeType          String?
+  grade              Int?
 
   createdAt DateTime @default(now())
-
-  persons   Person[]
-  messages  Message[]
-  timelines TimelineEvent[]
+  updatedAt DateTime @updatedAt
 }
 
 model Message {
   id        Int      @id @default(autoincrement())
   messageId Int      @unique
 
-  caseId    Int?
+  caseId    String?
   case      Case?    @relation(fields: [caseId], references: [id])
 
   chatId    BigInt
   userId    BigInt
 
   username  String?
-  name String?
+  name      String?
   text      String?
   type      String
 
@@ -57,9 +138,40 @@ model Message {
 
 model TimelineEvent {
   id        Int      @id @default(autoincrement())
-  caseId    Int
-  case      Case     @relation(fields: [caseId], references: [id])  // 👈 추가
+  caseId    String
+  case      Case     @relation(fields: [caseId], references: [id])
   title     String
   date      DateTime
   createdAt DateTime @default(now())
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String
+  name      String
+  role      String   @default("READONLY")
+  createdAt DateTime @default(now())
+}
+
+model SignupRequest {
+  id         String   @id @default(cuid())
+  name       String
+  email      String   @unique
+  department String?
+  jobTitle   String?
+  message    String?
+  status     String   @default("PENDING")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model Notice {
+  id        String   @id @default(cuid())
+  type      String
+  title     String?
+  content   String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }

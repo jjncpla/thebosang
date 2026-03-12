@@ -23,7 +23,7 @@ export async function GET(
 
   const timelines = await prisma.timelineEvent.findMany({
     where: {
-      caseId: Number(caseId),
+      caseId: caseId,
     },
     orderBy: {
       date: "asc", // 🔥 이거 추가 (중요)
@@ -43,7 +43,7 @@ export async function POST(
 
   const data = await prisma.timelineEvent.create({
     data: {
-      caseId: Number(caseId),
+      caseId: caseId,
       title: body.title,
       date: new Date(body.date),
     },

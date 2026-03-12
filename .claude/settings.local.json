@@ -16,7 +16,12 @@
       "Bash(DATABASE_AUTH_URL=\"postgresql://postgres:SRLSqrRWpIAywlMHYSmdMZANmiESHQZf@caboose.proxy.rlwy.net:18869/railway\" npx prisma migrate dev --schema=prisma/auth.prisma --name add_signup_request_notice 2>&1)",
       "Bash(DATABASE_AUTH_URL=\"postgresql://postgres:SRLSqrRWpIAywlMHYSmdMZANmiESHQZf@caboose.proxy.rlwy.net:18869/railway\" npx prisma db push --schema=prisma/auth.prisma 2>&1)",
       "Bash(cd C:/Users/LG/thebosang && npx next build 2>&1)",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "Bash(ls -la \"C:\\\\Users\\\\LG\\\\thebosang\\\\app\\\\api\\\\cases\\\\\" && echo \"---\" && ls -la \"C:\\\\Users\\\\LG\\\\thebosang\\\\app\\\\api\\\\cases\\\\[caseId]\\\\\")",
+      "Bash(mkdir -p \"C:\\\\Users\\\\LG\\\\thebosang\\\\lib\\\\constants\" && mkdir -p \"C:\\\\Users\\\\LG\\\\thebosang\\\\app\\\\api\\\\patients\\\\[patientId]\" && mkdir -p \"C:\\\\Users\\\\LG\\\\thebosang\\\\app\\\\api\\\\cases\\\\[caseId]\\\\hearing-loss\")",
+      "Bash(ls \"C:\\\\Users\\\\LG\\\\thebosang\\\\app\\\\cases\\\\\" 2>/dev/null || echo \"DIR_NOT_FOUND\")",
+      "Bash(taskkill /F /IM node.exe 2>&1; echo \"done\")",
+      "Bash(taskkill //F //IM node.exe 2>&1; echo \"done\")"
     ]
   }
 }
