@@ -23,8 +23,10 @@ export default function NoticesPage() {
       fetch("/api/admin/notices?type=GREETING"),
       fetch("/api/admin/notices?type=NOTICE"),
     ]);
-    const g = await gRes.json();
-    const n = await nRes.json();
+    const gText = gRes.ok ? await gRes.text() : "";
+    const nText = nRes.ok ? await nRes.text() : "";
+    const g: Notice = gText ? JSON.parse(gText) : null;
+    const n: Notice = nText ? JSON.parse(nText) : null;
     setGreeting(g);
     setGreetingContent(g?.content ?? "");
     setNotice(n);

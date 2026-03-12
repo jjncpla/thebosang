@@ -17,16 +17,21 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const { name, email, department, jobTitle, message } = await req.json();
-  if (!name || !email) {
-    return NextResponse.json({ error: "이름과 이메일은 필수입니다." }, { status: 400 });
+  try {
+    const { name, email, department, jobTitle, message } = await req.json();
+    if (!name || !email) {
+      return NextResponse.json({ error: "이름과 이메일은 필수입니다." }, { status: 400 });
+    }
+    const existing = await authPrisma.signupRequest.findUnique({ where: { email } });
+    if (existing) {
+      return NextResponse.json({ error: "이미 가입 요청이 접수된 이메일입니다." }, { status: 400 });
+    }
+    await authPrisma.signupRequest.create({
+      data: { name, email, department, jobTitle, message },
+    });
+    return NextResponse.json({ message: "가입 요청이 접수되었습니다." }, { status: 201 });
+  } catch (err) {
+    console.error("POST /api/admin/signup-requests error:", err);
+    return NextResponse.json({ error: "서버 오류가 발생했습니다." }, { status: 500 });
   }
-  const existing = await authPrisma.signupRequest.findUnique({ where: { email } });
-  if (existing) {
-    return NextResponse.json({ error: "이미 가입 요청이 접수된 이메일입니다." }, { status: 400 });
-  }
-  await authPrisma.signupRequest.create({
-    data: { name, email, department, jobTitle, message },
-  });
-  return NextResponse.json({ message: "가입 요청이 접수되었습니다." }, { status: 201 });
 }
