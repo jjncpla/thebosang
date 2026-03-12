@@ -121,15 +121,15 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         flexDirection: "column",
         height: "100vh",
         fontFamily: "'Malgun Gothic', 'Apple SD Gothic Neo', 'Segoe UI', sans-serif",
-        background: "#f1f5f9",
+        background: "#eef6f0",
       }}
     >
       {/* ── Header ── */}
       <header
         style={{
           height: 54,
-          background: "#1e293b",
-          borderBottom: "1px solid #334155",
+          background: "#ffffff",
+          borderBottom: "3px solid #8DC63F",
           display: "flex",
           alignItems: "center",
           padding: "0 16px",
@@ -153,7 +153,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         >
           ☰
         </button>
-        <span style={{ color: "#e2e8f0", fontWeight: 700, fontSize: 15, flex: 1 }}>
+        <span style={{ color: "#006838", fontWeight: 700, fontSize: 15, flex: 1 }}>
           {getPageTitle()}
         </span>
         <span style={{ color: "#64748b", fontSize: 12 }}>{today}</span>
@@ -179,7 +179,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           style={{
             width: collapsed ? 60 : 220,
             transition: "width 0.2s ease",
-            background: "linear-gradient(180deg, #0f1f45, #162850)",
+            background: "linear-gradient(180deg, #0a2a1a, #0f3d24)",
             display: "flex",
             flexDirection: "column",
             flexShrink: 0,
@@ -201,7 +201,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               style={{
                 width: 32,
                 height: 32,
-                background: "#2563eb",
+                background: "#006838",
                 borderRadius: 8,
                 display: "flex",
                 alignItems: "center",
@@ -235,10 +235,10 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                     title={collapsed ? item.label : undefined}
                     style={{
                       width: "100%",
-                      background: active ? "rgba(59,130,246,0.2)" : "none",
+                      background: active ? "rgba(41,171,226,0.2)" : "none",
                       border: "none",
-                      borderLeft: active ? "3px solid #3b82f6" : "3px solid transparent",
-                      color: active ? "#93c5fd" : restricted ? "rgba(148,163,184,0.35)" : "#94a3b8",
+                      borderLeft: active ? "3px solid #29ABE2" : "3px solid transparent",
+                      color: active ? "#a8e6f8" : restricted ? "rgba(148,163,184,0.35)" : "#94a3b8",
                       display: "flex",
                       alignItems: "center",
                       gap: 10,
@@ -277,12 +277,12 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                             onClick={() => router.push(child.path)}
                             style={{
                               width: "100%",
-                              background: childActive ? "rgba(59,130,246,0.15)" : "none",
+                              background: childActive ? "rgba(41,171,226,0.15)" : "none",
                               border: "none",
                               borderLeft: childActive
-                                ? "3px solid #60a5fa"
+                                ? "3px solid #29ABE2"
                                 : "3px solid transparent",
-                              color: childActive ? "#93c5fd" : "#64748b",
+                              color: childActive ? "#a8e6f8" : "#64748b",
                               display: "flex",
                               alignItems: "center",
                               padding: "8px 14px 8px 44px",
