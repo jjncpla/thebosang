@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { CASE_STATUS, CASE_TYPE_LABELS } from "@/lib/constants/case";
 
@@ -59,6 +59,19 @@ export default function NewCasePage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // patientId 쿼리 파라미터가 있으면 Step 2부터 시작
+  useEffect(() => {
+    const pid = new URLSearchParams(window.location.search).get("patientId");
+    if (!pid) return;
+    fetch(`/api/patients/${pid}`)
+      .then((r) => r.json())
+      .then((p: Patient) => {
+        setSelectedPatient(p);
+        setStep(2);
+      })
+      .catch(() => {});
+  }, []);
+
   const searchPatients = async () => {
     if (!searchQuery.trim()) return;
     setSearching(true);
@@ -114,8 +127,8 @@ export default function NewCasePage() {
         const d = await res.json();
         throw new Error(d.error ?? "등록 실패");
       }
-      const newCase = await res.json();
-      router.push(`/cases/${newCase.id}`);
+      await res.json();
+      router.push(`/patients/${selectedPatient.id}?tab=${caseForm.caseType}`);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "오류");
       setSubmitting(false);

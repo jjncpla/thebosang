@@ -12,6 +12,9 @@ export async function GET(
       include: {
         cases: {
           orderBy: { createdAt: "desc" },
+          include: {
+            hearingLoss: true,
+          },
         },
       },
     });

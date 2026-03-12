@@ -607,7 +607,7 @@ export default function CasesPage() {
             {!loading && cases.map((c, idx) => (
               <tr
                 key={c.id}
-                onClick={() => router.push(`/cases/${c.id}`)}
+                onClick={() => router.push(`/patients/${c.patient.id}?tab=${c.caseType}`)}
                 style={{ borderBottom: "1px solid #f1f5f9", cursor: "pointer" }}
                 onMouseEnter={(e) => (e.currentTarget.style.background = "#f8fafc")}
                 onMouseLeave={(e) => (e.currentTarget.style.background = "white")}
