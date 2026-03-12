@@ -18,16 +18,14 @@ const LINK_GROUPS: LinkGroup[] = [
     label: "더보상",
     links: [
       { label: "노무법인 더보상", url: "https://thebosang.kr" },
-      { label: "법무법인 더보상", url: "https://thebosang.kr" },
+      { label: "법무법인 더보상", url: "https://www.the-bosang.com" },
       { label: "그룹웨어", url: "https://gw.thebosang.kr/#/" },
     ],
   },
   {
     label: "법령정보",
     links: [
-      { label: "국가법령정보센터", url: "https://law.go.kr" },
-      { label: "산재보상보험법", url: "https://law.go.kr" },
-      { label: "근로기준법", url: "https://law.go.kr" },
+      { label: "국가법령정보센터", url: "https://www.law.go.kr" },
     ],
   },
 ];
