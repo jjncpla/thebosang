@@ -23,3 +23,11 @@ export const TF_BY_BRANCH: Record<string, string[]> = {
 };
 
 export const ALL_TF_LIST = Object.values(TF_BY_BRANCH).flat();
+
+export const TF_TO_BRANCH: Record<string, string> = Object.entries(TF_BY_BRANCH).reduce(
+  (acc, [branch, tfs]) => {
+    tfs.forEach((tf) => { acc[tf] = branch; });
+    return acc;
+  },
+  {} as Record<string, string>
+);

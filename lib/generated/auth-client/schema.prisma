@@ -16,3 +16,25 @@ model User {
   role      String   @default("READONLY")
   createdAt DateTime @default(now())
 }
+
+model SignupRequest {
+  id         String   @id @default(cuid())
+  name       String
+  email      String   @unique
+  department String?
+  jobTitle   String?
+  message    String?
+  status     String   @default("PENDING")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model Notice {
+  id        String   @id @default(cuid())
+  type      String
+  title     String?
+  content   String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

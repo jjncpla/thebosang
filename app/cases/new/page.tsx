@@ -3,12 +3,13 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { CASE_STATUS, CASE_TYPE_LABELS } from "@/lib/constants/case";
+import { TF_BY_BRANCH, TF_TO_BRANCH } from "@/lib/constants/tf";
+import { ALL_STAFF } from "@/lib/constants/staff";
 
 const S = { fontFamily: "'Malgun Gothic', 'Apple SD Gothic Neo', 'Segoe UI', sans-serif" };
 
 type Patient = { id: string; name: string; ssn: string; phone: string | null; address: string | null };
 
-const BRANCHES = ["울산지사", "부산지사", "경남지사", "서울지사", "경기지사", "인천지사", "대구지사", "광주지사", "대전지사", "기타"];
 const SALES_ROUTES = ["직접", "제휴", "소개", "온라인", "기타"];
 
 function LabelInput({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
@@ -50,7 +51,6 @@ export default function NewCasePage() {
     caseManager: "",
     salesRoute: "",
     contractDate: "",
-    receptionDate: "",
     isOneStop: false,
     status: "접수대기",
     memo: "",
@@ -120,7 +120,6 @@ export default function NewCasePage() {
           patientId: selectedPatient.id,
           ...caseForm,
           contractDate: caseForm.contractDate || null,
-          receptionDate: caseForm.receptionDate || null,
         }),
       });
       if (!res.ok) {
@@ -261,19 +260,63 @@ export default function NewCasePage() {
                 <input style={inputStyle} value={caseForm.caseNumber} onChange={(e) => setCaseForm({ ...caseForm, caseNumber: e.target.value })} placeholder="사건번호 (선택)" />
               </LabelInput>
               <LabelInput label="TF명">
-                <input style={inputStyle} value={caseForm.tfName} onChange={(e) => setCaseForm({ ...caseForm, tfName: e.target.value })} placeholder="TF명" />
-              </LabelInput>
-              <LabelInput label="지사">
-                <select style={inputStyle} value={caseForm.branch} onChange={(e) => setCaseForm({ ...caseForm, branch: e.target.value })}>
-                  <option value="">선택</option>
-                  {BRANCHES.map((b) => <option key={b} value={b}>{b}</option>)}
+                <select
+                  value={caseForm.tfName}
+                  onChange={(e) => {
+                    const tf = e.target.value;
+                    const branch = TF_TO_BRANCH[tf] ?? "";
+                    setCaseForm({ ...caseForm, tfName: tf, branch });
+                  }}
+                  style={inputStyle}
+                >
+                  <option value="">TF 선택</option>
+                  {Object.entries(TF_BY_BRANCH).map(([branch, tfs]) => (
+                    <optgroup key={branch} label={branch}>
+                      {tfs.map((tf) => (
+                        <option key={tf} value={tf}>{tf}</option>
+                      ))}
+                    </optgroup>
+                  ))}
                 </select>
               </LabelInput>
+              <LabelInput label="지사">
+                <div style={{ ...inputStyle, background: "#f9fafb", color: "#6b7280" }}>
+                  {caseForm.branch || "TF 선택 시 자동 지정"}
+                </div>
+              </LabelInput>
               <LabelInput label="영업담당자">
-                <input style={inputStyle} value={caseForm.salesManager} onChange={(e) => setCaseForm({ ...caseForm, salesManager: e.target.value })} placeholder="영업담당자" />
+                <>
+                  <input
+                    type="text"
+                    list="staff-list"
+                    placeholder="이름 검색 또는 선택..."
+                    value={caseForm.salesManager}
+                    onChange={(e) => setCaseForm({ ...caseForm, salesManager: e.target.value })}
+                    style={inputStyle}
+                  />
+                  <datalist id="staff-list">
+                    {ALL_STAFF.map((name) => (
+                      <option key={name} value={name} />
+                    ))}
+                  </datalist>
+                </>
               </LabelInput>
               <LabelInput label="실무담당자">
-                <input style={inputStyle} value={caseForm.caseManager} onChange={(e) => setCaseForm({ ...caseForm, caseManager: e.target.value })} placeholder="실무담당자" />
+                <>
+                  <input
+                    type="text"
+                    list="staff-list-2"
+                    placeholder="이름 검색 또는 선택..."
+                    value={caseForm.caseManager}
+                    onChange={(e) => setCaseForm({ ...caseForm, caseManager: e.target.value })}
+                    style={inputStyle}
+                  />
+                  <datalist id="staff-list-2">
+                    {ALL_STAFF.map((name) => (
+                      <option key={name} value={name} />
+                    ))}
+                  </datalist>
+                </>
               </LabelInput>
               <LabelInput label="영업경로">
                 <select style={inputStyle} value={caseForm.salesRoute} onChange={(e) => setCaseForm({ ...caseForm, salesRoute: e.target.value })}>
@@ -288,9 +331,6 @@ export default function NewCasePage() {
               </LabelInput>
               <LabelInput label="약정일자">
                 <input type="date" style={inputStyle} value={caseForm.contractDate} onChange={(e) => setCaseForm({ ...caseForm, contractDate: e.target.value })} />
-              </LabelInput>
-              <LabelInput label="접수일자">
-                <input type="date" style={inputStyle} value={caseForm.receptionDate} onChange={(e) => setCaseForm({ ...caseForm, receptionDate: e.target.value })} />
               </LabelInput>
               <div style={{ gridColumn: "1 / -1" }}>
                 <LabelInput label="메모">

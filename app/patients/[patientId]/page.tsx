@@ -344,8 +344,6 @@ function CaseCommonInfoSection({ caseItem, onUpdated }: { caseItem: CaseData; on
                 {([
                   ["TF명", caseItem.tfName ?? "-"],
                   ["지사", caseItem.branch ?? "-"],
-                  ["부지사", caseItem.subAgent ?? "-"],
-                  ["지사장", caseItem.branchManager ?? "-"],
                   ["영업담당", caseItem.salesManager ?? "-"],
                   ["실무담당", caseItem.caseManager ?? "-"],
                   ["영업경로", caseItem.salesRoute ?? "-"],
@@ -384,8 +382,6 @@ function CaseCommonInfoSection({ caseItem, onUpdated }: { caseItem: CaseData; on
                 ["TF명", "tfName"],
                 ["영업담당자", "salesManager"],
                 ["실무담당자", "caseManager"],
-                ["지사장", "branchManager"],
-                ["부지사", "subAgent"],
               ] as [string, keyof typeof form][]).map(([label, key]) => (
                 <div key={key} style={{ display: "flex", flexDirection: "column", gap: 3 }}>
                   <label style={{ fontSize: 11, color: "#9ca3af" }}>{label}</label>
