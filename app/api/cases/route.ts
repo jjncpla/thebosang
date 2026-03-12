@@ -82,6 +82,7 @@ export async function GET(req: NextRequest) {
             OR: [
               { name: { contains: search } },
               { ssn: { contains: search } },
+              { phone: { endsWith: search } },
             ],
           },
         }),

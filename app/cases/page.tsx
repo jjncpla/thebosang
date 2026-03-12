@@ -45,24 +45,24 @@ function formatDate(iso: string | null | undefined): string {
 }
 
 const STATUS_COLOR: Record<string, { bg: string; color: string; border: string; dot: string }> = {
-  "접수대기":   { bg: "#1e1b4b", color: "#a5b4fc", border: "1px solid #4338ca", dot: "#818cf8" },
-  "접수완료":   { bg: "#082f49", color: "#7dd3fc", border: "1px solid #0369a1", dot: "#38bdf8" },
-  "특진예정":   { bg: "#1a2e05", color: "#86efac", border: "1px solid #15803d", dot: "#4ade80" },
-  "특진중":     { bg: "#052e16", color: "#6ee7b7", border: "1px solid #059669", dot: "#34d399" },
-  "특진완료":   { bg: "#052e16", color: "#86efac", border: "1px solid #15803d", dot: "#4ade80" },
-  "재특진예정": { bg: "#1e1b4b", color: "#c4b5fd", border: "1px solid #7c3aed", dot: "#a78bfa" },
-  "재특진중":   { bg: "#2e1065", color: "#d8b4fe", border: "1px solid #9333ea", dot: "#c084fc" },
-  "재특진완료": { bg: "#2e1065", color: "#e9d5ff", border: "1px solid #7e22ce", dot: "#d8b4fe" },
+  "접수대기":    { bg: "#1e1b4b", color: "#a5b4fc", border: "1px solid #4338ca", dot: "#818cf8" },
+  "접수완료":    { bg: "#082f49", color: "#7dd3fc", border: "1px solid #0369a1", dot: "#38bdf8" },
+  "특진예정":    { bg: "#1a2e05", color: "#86efac", border: "1px solid #15803d", dot: "#4ade80" },
+  "특진중":      { bg: "#052e16", color: "#6ee7b7", border: "1px solid #059669", dot: "#34d399" },
+  "특진완료":    { bg: "#052e16", color: "#86efac", border: "1px solid #15803d", dot: "#4ade80" },
+  "재특진예정":  { bg: "#1e1b4b", color: "#c4b5fd", border: "1px solid #7c3aed", dot: "#a78bfa" },
+  "재특진중":    { bg: "#2e1065", color: "#d8b4fe", border: "1px solid #9333ea", dot: "#c084fc" },
+  "재특진완료":  { bg: "#2e1065", color: "#e9d5ff", border: "1px solid #7e22ce", dot: "#d8b4fe" },
   "재재특진예정":{ bg: "#3b1764", color: "#f0abfc", border: "1px solid #a21caf", dot: "#e879f9" },
   "재재특진중":  { bg: "#4a1942", color: "#f9a8d4", border: "1px solid #be185d", dot: "#f472b6" },
   "재재특진완료":{ bg: "#4a1942", color: "#fda4af", border: "1px solid #9f1239", dot: "#fb7185" },
-  "전문예정":   { bg: "#451a03", color: "#fcd34d", border: "1px solid #b45309", dot: "#fbbf24" },
-  "전문완료":   { bg: "#451a03", color: "#fde68a", border: "1px solid #d97706", dot: "#fcd34d" },
-  "승인":       { bg: "#052e16", color: "#86efac", border: "1px solid #16a34a", dot: "#4ade80" },
-  "불승인":     { bg: "#450a0a", color: "#fca5a5", border: "1px solid #b91c1c", dot: "#f87171" },
-  "반려":       { bg: "#450a0a", color: "#fca5a5", border: "1px solid #dc2626", dot: "#f87171" },
-  "보류":       { bg: "#1c1917", color: "#d6d3d1", border: "1px solid #78716c", dot: "#a8a29e" },
-  "파기":       { bg: "#1e293b", color: "#94a3b8", border: "1px solid #475569", dot: "#64748b" },
+  "전문예정":    { bg: "#451a03", color: "#fcd34d", border: "1px solid #b45309", dot: "#fbbf24" },
+  "전문완료":    { bg: "#451a03", color: "#fde68a", border: "1px solid #d97706", dot: "#fcd34d" },
+  "승인":        { bg: "#052e16", color: "#86efac", border: "1px solid #16a34a", dot: "#4ade80" },
+  "불승인":      { bg: "#450a0a", color: "#fca5a5", border: "1px solid #b91c1c", dot: "#f87171" },
+  "반려":        { bg: "#450a0a", color: "#fca5a5", border: "1px solid #dc2626", dot: "#f87171" },
+  "보류":        { bg: "#1c1917", color: "#d6d3d1", border: "1px solid #78716c", dot: "#a8a29e" },
+  "파기":        { bg: "#1e293b", color: "#94a3b8", border: "1px solid #475569", dot: "#64748b" },
 };
 
 function StatusBadge({ status }: { status: string }) {
@@ -75,15 +75,60 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
+// ─── Jurisdiction Modal ───────────────────────────────────────────────────────
+
+function JurisdictionModal({ onClose }: { onClose: () => void }) {
+  return (
+    <>
+      <div
+        onClick={onClose}
+        style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 999 }}
+      />
+      <div style={{
+        position: "fixed", top: "50%", left: "50%", transform: "translate(-50%, -50%)",
+        background: "white", borderRadius: 12, padding: 24, zIndex: 1000,
+        maxWidth: 720, width: "90%", maxHeight: "80vh", overflow: "auto",
+        boxShadow: "0 20px 60px rgba(0,0,0,0.3)",
+      }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+          <h2 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: "#111827" }}>관할표</h2>
+          <button
+            onClick={onClose}
+            style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "#6b7280", lineHeight: 1 }}
+          >
+            ✕
+          </button>
+        </div>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+          <thead>
+            <tr style={{ background: "#f8fafc" }}>
+              <th style={{ padding: "8px 12px", textAlign: "left", fontWeight: 700, fontSize: 11, color: "#6b7280", borderBottom: "2px solid #e5e7eb", whiteSpace: "nowrap" }}>지사</th>
+              <th style={{ padding: "8px 12px", textAlign: "left", fontWeight: 700, fontSize: 11, color: "#6b7280", borderBottom: "2px solid #e5e7eb" }}>담당 TF</th>
+            </tr>
+          </thead>
+          <tbody>
+            {Object.entries(TF_BY_BRANCH).map(([branch, tfs]) => (
+              <tr key={branch} style={{ borderBottom: "1px solid #f1f5f9" }}>
+                <td style={{ padding: "8px 12px", fontWeight: 600, color: "#374151", whiteSpace: "nowrap" }}>{branch}</td>
+                <td style={{ padding: "8px 12px", color: "#6b7280", lineHeight: 1.7 }}>{tfs.join(", ")}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </>
+  );
+}
+
 // ─── Filter value key helpers ─────────────────────────────────────────────────
-// case table fields → direct param name
-// hearingLoss table fields → hl_<field> param name
+
 function paramKey(f: FilterField, suffix?: string): string {
   const base = f.table === "hearingLoss" ? `hl_${f.field}` : f.field;
   return suffix ? `${base}_${suffix}` : base;
 }
 
 // ─── Single filter control ────────────────────────────────────────────────────
+
 function FilterControl({
   field,
   value,
@@ -93,6 +138,8 @@ function FilterControl({
   value: Record<string, string>;
   onChange: (updates: Record<string, string>) => void;
 }) {
+  const [dateMode, setDateMode] = useState<"single" | "range">("single");
+
   const inputStyle = {
     border: "1px solid #e5e7eb",
     borderRadius: 6,
@@ -103,20 +150,16 @@ function FilterControl({
     outline: "none",
   };
 
-  if (field.type === "select" || field.type === "multi_select") {
+  if (field.type === "multi_select") {
     const key = paramKey(field);
     const current = value[key] ?? "";
     const selected = current ? current.split(",").filter(Boolean) : [];
 
     const toggle = (opt: string) => {
-      if (field.type === "select") {
-        onChange({ [key]: current === opt ? "" : opt });
-      } else {
-        const next = selected.includes(opt)
-          ? selected.filter((s) => s !== opt)
-          : [...selected, opt];
-        onChange({ [key]: next.join(",") });
-      }
+      const next = selected.includes(opt)
+        ? selected.filter((s) => s !== opt)
+        : [...selected, opt];
+      onChange({ [key]: next.join(",") });
     };
 
     return (
@@ -145,6 +188,39 @@ function FilterControl({
             );
           })}
         </div>
+      </div>
+    );
+  }
+
+  if (field.type === "select") {
+    const key = paramKey(field);
+    const listId = `dl-${field.table}-${field.field}`;
+    return (
+      <div>
+        <div style={{ fontSize: 11, color: "#6b7280", fontWeight: 600, marginBottom: 4 }}>{field.label}</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+          <input
+            type="text"
+            list={listId}
+            style={{ ...inputStyle, width: 200 }}
+            placeholder={`${field.label} 검색...`}
+            value={value[key] ?? ""}
+            onChange={(e) => onChange({ [key]: e.target.value })}
+          />
+          {value[key] && (
+            <button
+              onClick={() => onChange({ [key]: "" })}
+              style={{ background: "none", border: "none", cursor: "pointer", color: "#9ca3af", fontSize: 14, padding: "0 2px", lineHeight: 1 }}
+            >
+              ✕
+            </button>
+          )}
+        </div>
+        <datalist id={listId}>
+          {(field.options ?? []).map((opt) => (
+            <option key={opt} value={opt} />
+          ))}
+        </datalist>
       </div>
     );
   }
@@ -225,27 +301,64 @@ function FilterControl({
     );
   }
 
-  if (field.type === "date_range") {
+  if (field.type === "date_single_or_range") {
     const fromKey = paramKey(field, "from");
     const toKey = paramKey(field, "to");
+
+    const handleModeChange = (mode: "single" | "range") => {
+      setDateMode(mode);
+      onChange({ [fromKey]: "", [toKey]: "" });
+    };
+
     return (
       <div>
         <div style={{ fontSize: 11, color: "#6b7280", fontWeight: 600, marginBottom: 4 }}>{field.label}</div>
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+        <div style={{ display: "flex", gap: 10, marginBottom: 5 }}>
+          <label style={{ display: "flex", alignItems: "center", gap: 3, fontSize: 11, cursor: "pointer", color: "#6b7280" }}>
+            <input
+              type="radio"
+              name={`mode-${field.table}-${field.field}`}
+              checked={dateMode === "single"}
+              onChange={() => handleModeChange("single")}
+              style={{ cursor: "pointer" }}
+            />
+            단일
+          </label>
+          <label style={{ display: "flex", alignItems: "center", gap: 3, fontSize: 11, cursor: "pointer", color: "#6b7280" }}>
+            <input
+              type="radio"
+              name={`mode-${field.table}-${field.field}`}
+              checked={dateMode === "range"}
+              onChange={() => handleModeChange("range")}
+              style={{ cursor: "pointer" }}
+            />
+            범위
+          </label>
+        </div>
+        {dateMode === "single" ? (
           <input
             type="date"
             style={{ ...inputStyle, width: 130 }}
             value={value[fromKey] ?? ""}
-            onChange={(e) => onChange({ [fromKey]: e.target.value })}
+            onChange={(e) => onChange({ [fromKey]: e.target.value, [toKey]: e.target.value })}
           />
-          <span style={{ color: "#9ca3af", fontSize: 12 }}>~</span>
-          <input
-            type="date"
-            style={{ ...inputStyle, width: 130 }}
-            value={value[toKey] ?? ""}
-            onChange={(e) => onChange({ [toKey]: e.target.value })}
-          />
-        </div>
+        ) : (
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <input
+              type="date"
+              style={{ ...inputStyle, width: 130 }}
+              value={value[fromKey] ?? ""}
+              onChange={(e) => onChange({ [fromKey]: e.target.value })}
+            />
+            <span style={{ color: "#9ca3af", fontSize: 12 }}>~</span>
+            <input
+              type="date"
+              style={{ ...inputStyle, width: 130 }}
+              value={value[toKey] ?? ""}
+              onChange={(e) => onChange({ [toKey]: e.target.value })}
+            />
+          </div>
+        )}
       </div>
     );
   }
@@ -265,6 +378,7 @@ export default function CasesPage() {
   const [selectedCaseType, setSelectedCaseType] = useState("");
   const [activeFilters, setActiveFilters] = useState<Record<string, string>>({});
   const [search, setSearch] = useState("");
+  const [showJurisdiction, setShowJurisdiction] = useState(false);
 
   const tfList = selectedBranch ? TF_BY_BRANCH[selectedBranch] ?? [] : [];
   const filterFields: FilterField[] = selectedCaseType
@@ -295,7 +409,6 @@ export default function CasesPage() {
     }
   }, [selectedTf, selectedCaseType, search, activeFilters]);
 
-  // Auto-fetch when filters change
   useEffect(() => {
     fetchCases();
   }, [fetchCases]);
@@ -317,6 +430,8 @@ export default function CasesPage() {
 
   return (
     <div style={{ padding: 24, minHeight: "100%", background: "#f1f5f9", fontFamily: "'Malgun Gothic', 'Apple SD Gothic Neo', 'Segoe UI', sans-serif" }}>
+      {showJurisdiction && <JurisdictionModal onClose={() => setShowJurisdiction(false)} />}
+
       {/* Header */}
       <div style={{ marginBottom: 16, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div>
@@ -330,12 +445,20 @@ export default function CasesPage() {
             )}
           </div>
         </div>
-        <button
-          onClick={() => router.push("/cases/new")}
-          style={{ background: "#2563eb", color: "white", border: "none", borderRadius: 6, padding: "8px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
-        >
-          + 새 사건 등록
-        </button>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button
+            onClick={() => setShowJurisdiction(true)}
+            style={{ background: "white", color: "#374151", border: "1px solid #e5e7eb", borderRadius: 6, padding: "8px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
+          >
+            관할표 보기
+          </button>
+          <button
+            onClick={() => router.push("/cases/new")}
+            style={{ background: "#2563eb", color: "white", border: "none", borderRadius: 6, padding: "8px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
+          >
+            + 새 사건 등록
+          </button>
+        </div>
       </div>
 
       {/* Step 1 & 2: 지사 → TF 선택 */}
@@ -441,10 +564,10 @@ export default function CasesPage() {
       <div style={{ background: "white", borderRadius: 10, border: "1px solid #e5e7eb", padding: "12px 16px", marginBottom: 16, display: "flex", gap: 10, alignItems: "center", boxShadow: "0 1px 3px rgba(0,0,0,0.05)" }}>
         <input
           type="text"
-          placeholder="이름 또는 주민번호 검색..."
+          placeholder="이름, 주민번호, 전화번호 뒷 4자리 검색..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          style={{ border: "1px solid #e5e7eb", borderRadius: 6, padding: "6px 12px", fontSize: 13, color: "#374151", outline: "none", width: 240, background: "#f9fafb" }}
+          style={{ border: "1px solid #e5e7eb", borderRadius: 6, padding: "6px 12px", fontSize: 13, color: "#374151", outline: "none", width: 280, background: "#f9fafb" }}
         />
       </div>
 
