@@ -13,7 +13,7 @@ export async function GET(
         patient: true,
         hearingLoss: true,
         copd: { select: { id: true, status: true, reExamPossibleDate: true } },
-        pneumoconiosis: { select: { status: true } },
+        pneumoconiosis: { select: { id: true, status: true, reExamPossibleDate: true } },
         musculoskeletal: { select: { status: true } },
         occupationalAccident: { select: { status: true } },
         occupationalCancer: { select: { status: true } },
@@ -22,15 +22,28 @@ export async function GET(
     });
     if (!c) return NextResponse.json({ error: "없음" }, { status: 404 });
 
+    const now = new Date();
+
     // COPD 수치미달 → 재진행가능 자동 업데이트
     if (
       c.caseType === "COPD" &&
       c.copd?.status === "수치미달" &&
       c.copd.reExamPossibleDate != null &&
-      c.copd.reExamPossibleDate <= new Date()
+      c.copd.reExamPossibleDate <= now
     ) {
       await prisma.copdDetail.update({ where: { id: c.copd.id }, data: { status: "재진행가능" } });
       return NextResponse.json({ ...c, copd: { ...c.copd, status: "재진행가능" } });
+    }
+
+    // 진폐 수치미달 → 재진행가능 자동 업데이트
+    if (
+      c.caseType === "PNEUMOCONIOSIS" &&
+      c.pneumoconiosis?.status === "수치미달" &&
+      c.pneumoconiosis.reExamPossibleDate != null &&
+      c.pneumoconiosis.reExamPossibleDate <= now
+    ) {
+      await prisma.pneumoconiosisDetail.update({ where: { id: c.pneumoconiosis.id }, data: { status: "재진행가능" } });
+      return NextResponse.json({ ...c, pneumoconiosis: { ...c.pneumoconiosis, status: "재진행가능" } });
     }
 
     return NextResponse.json(c);
@@ -88,7 +101,7 @@ export async function PATCH(
         patient: true,
         hearingLoss: true,
         copd: { select: { id: true, status: true, reExamPossibleDate: true } },
-        pneumoconiosis: { select: { status: true } },
+        pneumoconiosis: { select: { id: true, status: true, reExamPossibleDate: true } },
         musculoskeletal: { select: { status: true } },
         occupationalAccident: { select: { status: true } },
         occupationalCancer: { select: { status: true } },

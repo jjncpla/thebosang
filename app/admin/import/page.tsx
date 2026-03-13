@@ -19,6 +19,12 @@ const DISEASE_OPTIONS = [
     apiPath: "/api/import/copd",
     matchSheet: (n: string) => n.toUpperCase().includes("COPD"),
   },
+  {
+    value: "PNEUMOCONIOSIS",
+    label: "진폐",
+    apiPath: "/api/import/pneumoconiosis",
+    matchSheet: (n: string) => n.includes("진폐"),
+  },
 ];
 
 function sanitizeRows(rows: unknown[][]): (string | null)[][] {

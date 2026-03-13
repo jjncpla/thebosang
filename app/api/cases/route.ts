@@ -89,7 +89,7 @@ export async function GET(req: NextRequest) {
         patient: { select: { id: true, name: true, ssn: true, phone: true } },
         hearingLoss: true,
         copd: { select: { id: true, status: true, reExamPossibleDate: true } },
-        pneumoconiosis: { select: { status: true } },
+        pneumoconiosis: { select: { id: true, status: true, reExamPossibleDate: true } },
         musculoskeletal: { select: { status: true } },
         occupationalAccident: { select: { status: true } },
         occupationalCancer: { select: { status: true } },
@@ -114,12 +114,31 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    const resultCases = copdToUpdate.length > 0
-      ? cases.map(c =>
-          c.copd && copdToUpdate.includes(c.copd.id)
-            ? { ...c, copd: { ...c.copd, status: "재진행가능" } }
-            : c
-        )
+    // 진폐 수치미달 → 재진행가능 자동 업데이트
+    const pneumoToUpdate = cases
+      .filter(c =>
+        c.caseType === "PNEUMOCONIOSIS" &&
+        c.pneumoconiosis?.status === "수치미달" &&
+        c.pneumoconiosis?.reExamPossibleDate != null &&
+        c.pneumoconiosis.reExamPossibleDate <= today
+      )
+      .map(c => c.pneumoconiosis!.id);
+
+    if (pneumoToUpdate.length > 0) {
+      await prisma.pneumoconiosisDetail.updateMany({
+        where: { id: { in: pneumoToUpdate } },
+        data: { status: "재진행가능" },
+      });
+    }
+
+    const resultCases = (copdToUpdate.length > 0 || pneumoToUpdate.length > 0)
+      ? cases.map(c => {
+          if (c.copd && copdToUpdate.includes(c.copd.id))
+            return { ...c, copd: { ...c.copd, status: "재진행가능" } };
+          if (c.pneumoconiosis && pneumoToUpdate.includes(c.pneumoconiosis.id))
+            return { ...c, pneumoconiosis: { ...c.pneumoconiosis, status: "재진행가능" } };
+          return c;
+        })
       : cases;
 
     return NextResponse.json(resultCases);

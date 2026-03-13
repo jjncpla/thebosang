@@ -27,7 +27,7 @@ export const COPD_STATUS = [
 export const PNEUMOCONIOSIS_STATUS = [
   "접수대기", "접수완료",
   "정밀진행중", "정밀완료",
-  "승인", "불승인", "수치미달",
+  "승인", "불승인", "수치미달", "재진행가능",
   "반려", "보류", "파기",
 ] as const;
 

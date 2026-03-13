@@ -229,7 +229,7 @@ model PneumoconiosisDetail {
   status                String    @default("접수대기")
   firstClinic           String?
   firstExamDate         DateTime?
-  noticeReceivedDate    DateTime?
+  isNoticeReceived      Boolean   @default(false)
   precisionExamDate     DateTime?
   precisionResult       String?
   precisionHospital     String?
@@ -240,6 +240,8 @@ model PneumoconiosisDetail {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@map("pneumoconiosis_details")
 }
 
 model MusculoskeletalDetail {
