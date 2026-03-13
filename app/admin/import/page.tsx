@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { TF_BY_BRANCH, TF_TO_BRANCH } from "@/lib/constants/tf";
 
 type ImportResult = {
   success: boolean;
@@ -16,6 +17,9 @@ export default function ImportPage() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<ImportResult | null>(null);
   const [serverError, setServerError] = useState<string | null>(null);
+  const [selectedTf, setSelectedTf] = useState<string>("");
+
+  const selectedBranch = selectedTf ? TF_TO_BRANCH[selectedTf] ?? "" : "";
 
   const handleFile = (f: File) => {
     setFile(f);
@@ -31,13 +35,15 @@ export default function ImportPage() {
   };
 
   const handleSubmit = async () => {
-    if (!file) return;
+    if (!file || !selectedTf) return;
     setLoading(true);
     setResult(null);
     setServerError(null);
     try {
       const formData = new FormData();
       formData.append("file", file);
+      formData.append("tfName", selectedTf);
+      formData.append("branch", selectedBranch);
       const res = await fetch("/api/import/hearing-loss", { method: "POST", body: formData });
       const data = await res.json();
       if (!res.ok) { setServerError(data.error ?? "오류가 발생했습니다"); return; }
@@ -64,6 +70,36 @@ export default function ImportPage() {
           >
             <option value="HEARING_LOSS">소음성 난청</option>
           </select>
+        </div>
+
+        {/* TF 선택 */}
+        <div style={{ marginBottom: 20, display: "flex", gap: 12, alignItems: "flex-end" }}>
+          <div style={{ flex: 1 }}>
+            <label style={{ fontSize: 12, color: "#6b7280", fontWeight: 600, display: "block", marginBottom: 6 }}>TF 선택 <span style={{ color: "#ef4444" }}>*</span></label>
+            <select
+              value={selectedTf}
+              onChange={(e) => setSelectedTf(e.target.value)}
+              style={{ border: `1px solid ${!selectedTf ? "#fca5a5" : "#e5e7eb"}`, borderRadius: 6, padding: "7px 12px", fontSize: 13, color: selectedTf ? "#374151" : "#9ca3af", background: "#f9fafb", width: "100%" }}
+            >
+              <option value="">TF를 선택하세요</option>
+              {Object.entries(TF_BY_BRANCH).map(([branch, tfs]) => (
+                <optgroup key={branch} label={branch}>
+                  {tfs.map((tf) => (
+                    <option key={tf} value={tf}>{tf}</option>
+                  ))}
+                </optgroup>
+              ))}
+            </select>
+          </div>
+          <div style={{ flex: 1 }}>
+            <label style={{ fontSize: 12, color: "#6b7280", fontWeight: 600, display: "block", marginBottom: 6 }}>지사</label>
+            <input
+              readOnly
+              value={selectedBranch}
+              placeholder="TF 선택 시 자동 표시"
+              style={{ border: "1px solid #e5e7eb", borderRadius: 6, padding: "7px 12px", fontSize: 13, color: "#6b7280", background: "#f3f4f6", width: "100%", boxSizing: "border-box" }}
+            />
+          </div>
         </div>
 
         {/* 파일 드롭존 */}
@@ -113,23 +149,23 @@ export default function ImportPage() {
             <li>같은 주민번호의 재해자가 이미 있으면 재사용됩니다</li>
             <li>같은 연번의 사건이 이미 있으면 건너뜁니다</li>
             <li>성명 뒤의 숫자(중복 구분용)는 자동으로 제거됩니다</li>
-            <li>TF명은 임포트 후 직접 지정해주세요</li>
+            <li>선택한 TF와 지사가 모든 임포트 데이터에 적용됩니다</li>
           </ul>
         </div>
 
         {/* 버튼 */}
         <button
           onClick={handleSubmit}
-          disabled={!file || loading}
+          disabled={!file || !selectedTf || loading}
           style={{
-            background: !file || loading ? "#9ca3af" : "#2563eb",
+            background: !file || !selectedTf || loading ? "#9ca3af" : "#2563eb",
             color: "white",
             border: "none",
             borderRadius: 6,
             padding: "10px 24px",
             fontSize: 14,
             fontWeight: 700,
-            cursor: !file || loading ? "not-allowed" : "pointer",
+            cursor: !file || !selectedTf || loading ? "not-allowed" : "pointer",
             display: "flex",
             alignItems: "center",
             gap: 8,

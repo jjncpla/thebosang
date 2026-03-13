@@ -63,6 +63,9 @@ export async function POST(req: NextRequest) {
     const file = formData.get("file") as File | null;
     if (!file) return NextResponse.json({ error: "파일 없음" }, { status: 400 });
 
+    const tfName = formData.get("tfName") as string | null;
+    const branch = formData.get("branch") as string | null;
+
     const buffer = Buffer.from(await file.arrayBuffer());
     const wb = XLSX.read(buffer, { type: "buffer", cellDates: true });
 
@@ -162,8 +165,8 @@ export async function POST(req: NextRequest) {
             patientId: patient.id,
             caseType: "HEARING_LOSS",
             caseNumber: caseNumber ?? null,
-            branch: row[C.branch] ? String(row[C.branch]).trim() : null,
-            tfName: null,
+            branch: branch ?? (row[C.branch] ? String(row[C.branch]).trim() : null),
+            tfName: tfName ?? null,
             subAgent: row[C.subAgent] ? String(row[C.subAgent]).trim() : null,
             salesManager: row[C.salesManager] ? String(row[C.salesManager]).trim() : null,
             caseManager: row[C.caseManager] ? String(row[C.caseManager]).trim() : null,
