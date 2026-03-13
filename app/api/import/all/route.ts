@@ -924,16 +924,26 @@ export async function POST(req: NextRequest) {
 
     const tfName = formData.get("tfName") as string | null;
     const branch = formData.get("branch") as string | null;
+    const targetSheet = formData.get("sheetName") as string | null;
 
     const buffer = Buffer.from(await file.arrayBuffer());
     const wb = XLSX.read(buffer, { type: "buffer", cellDates: true });
 
-    const results: Record<string, SheetResult> = {};
+    // 특정 시트만 처리
+    if (targetSheet) {
+      const matcher = SHEET_MATCHERS.find((m) => m.match(targetSheet));
+      if (!matcher) return NextResponse.json({ error: `알 수 없는 시트: ${targetSheet}` }, { status: 400 });
+      const ws = wb.Sheets[targetSheet];
+      if (!ws) return NextResponse.json({ error: `시트를 찾을 수 없음: ${targetSheet}` }, { status: 400 });
+      const result = await matcher.process(ws, tfName, branch);
+      return NextResponse.json({ success: true, caseType: matcher.caseType, result });
+    }
 
+    // sheetName 없으면 전체 처리 (fallback)
+    const results: Record<string, SheetResult> = {};
     for (const sheetName of wb.SheetNames) {
       const matcher = SHEET_MATCHERS.find((m) => m.match(sheetName));
       if (!matcher) continue;
-
       const ws = wb.Sheets[sheetName];
       const result = await matcher.process(ws, tfName, branch);
       results[matcher.caseType] = result;

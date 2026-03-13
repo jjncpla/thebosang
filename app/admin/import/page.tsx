@@ -1,31 +1,36 @@
 "use client";
 
 import { useRef, useState } from "react";
+import * as XLSX from "xlsx";
 import { TF_BY_BRANCH, TF_TO_BRANCH } from "@/lib/constants/tf";
 
 type SheetResult = { created: number; skipped: number; errors: string[] };
 
-type ImportResult = {
-  success: boolean;
-  results: Record<string, SheetResult>;
-};
+const SHEET_PATTERNS: Array<{
+  match: (n: string) => boolean;
+  caseType: string;
+  label: string;
+}> = [
+  { match: (n) => n.includes("소음성난청") || n.includes("소음성 난청"), caseType: "HEARING_LOSS",          label: "소음성 난청" },
+  { match: (n) => n.includes("진폐"),                                    caseType: "PNEUMOCONIOSIS",        label: "진폐" },
+  { match: (n) => n.toUpperCase().includes("COPD"),                      caseType: "COPD",                  label: "COPD" },
+  { match: (n) => n.includes("직업성 암") || n.includes("직업성암"),     caseType: "OCCUPATIONAL_CANCER",   label: "직업성 암" },
+  { match: (n) => n.includes("유족"),                                    caseType: "BEREAVED",              label: "유족" },
+  { match: (n) => n.includes("근골격계"),                                caseType: "MUSCULOSKELETAL",       label: "근골격계" },
+  { match: (n) => n.includes("업무상 사고") || n.includes("업무상사고"), caseType: "OCCUPATIONAL_ACCIDENT", label: "업무상 사고" },
+];
 
-const CASE_TYPE_LABELS: Record<string, string> = {
-  HEARING_LOSS:          "소음성 난청",
-  PNEUMOCONIOSIS:        "진폐",
-  COPD:                  "COPD",
-  OCCUPATIONAL_CANCER:   "직업성 암",
-  BEREAVED:              "유족",
-  MUSCULOSKELETAL:       "근골격계",
-  OCCUPATIONAL_ACCIDENT: "업무상 사고",
-};
+const CASE_TYPE_LABELS: Record<string, string> = Object.fromEntries(
+  SHEET_PATTERNS.map((p) => [p.caseType, p.label])
+);
 
 export default function ImportPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const [dragging, setDragging] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<ImportResult | null>(null);
+  const [results, setResults] = useState<Record<string, SheetResult> | null>(null);
+  const [progress, setProgress] = useState<{ label: string; step: number; total: number } | null>(null);
   const [serverError, setServerError] = useState<string | null>(null);
   const [selectedTf, setSelectedTf] = useState<string>("");
 
@@ -33,8 +38,9 @@ export default function ImportPage() {
 
   const handleFile = (f: File) => {
     setFile(f);
-    setResult(null);
+    setResults(null);
     setServerError(null);
+    setProgress(null);
   };
 
   const handleDrop = (e: React.DragEvent) => {
@@ -47,32 +53,68 @@ export default function ImportPage() {
   const handleSubmit = async () => {
     if (!file || !selectedTf) return;
     setLoading(true);
-    setResult(null);
+    setResults(null);
     setServerError(null);
+    setProgress(null);
+
     try {
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("tfName", selectedTf);
-      formData.append("branch", selectedBranch);
-      const res = await fetch("/api/import/all", { method: "POST", body: formData });
-      const data = await res.json();
-      if (!res.ok) { setServerError(data.error ?? "오류가 발생했습니다"); return; }
-      setResult(data);
+      // 파일을 클라이언트에서 읽어 시트 목록 파악
+      const arrayBuffer = await file.arrayBuffer();
+      const wb = XLSX.read(arrayBuffer, { type: "array" });
+
+      const matchingSheets = wb.SheetNames
+        .map((sheetName) => {
+          const pattern = SHEET_PATTERNS.find((p) => p.match(sheetName));
+          return pattern ? { sheetName, caseType: pattern.caseType, label: pattern.label } : null;
+        })
+        .filter(Boolean) as Array<{ sheetName: string; caseType: string; label: string }>;
+
+      if (matchingSheets.length === 0) {
+        setServerError("처리할 시트가 없습니다 (소음성난청·진폐·COPD·직업성암·유족·근골격계·업무상사고)");
+        return;
+      }
+
+      const accumulated: Record<string, SheetResult> = {};
+
+      for (let i = 0; i < matchingSheets.length; i++) {
+        const { sheetName, caseType, label } = matchingSheets[i];
+        setProgress({ label, step: i + 1, total: matchingSheets.length });
+
+        const formData = new FormData();
+        formData.append("file", file);
+        formData.append("tfName", selectedTf);
+        formData.append("branch", selectedBranch);
+        formData.append("sheetName", sheetName);
+
+        const res = await fetch("/api/import/all", { method: "POST", body: formData });
+        const data = await res.json();
+
+        if (!res.ok) {
+          accumulated[caseType] = { created: 0, skipped: 0, errors: [data.error ?? "오류"] };
+        } else {
+          accumulated[caseType] = data.result as SheetResult;
+        }
+
+        setResults({ ...accumulated });
+      }
+
+      setProgress(null);
     } catch {
       setServerError("네트워크 오류가 발생했습니다");
     } finally {
       setLoading(false);
+      setProgress(null);
     }
   };
 
-  const allErrors = result
-    ? Object.entries(result.results).flatMap(([caseType, r]) =>
+  const allErrors = results
+    ? Object.entries(results).flatMap(([caseType, r]) =>
         r.errors.map((e) => `[${CASE_TYPE_LABELS[caseType] ?? caseType}] ${e}`)
       )
     : [];
 
-  const totalCreated = result ? Object.values(result.results).reduce((s, r) => s + r.created, 0) : 0;
-  const totalSkipped = result ? Object.values(result.results).reduce((s, r) => s + r.skipped, 0) : 0;
+  const totalCreated = results ? Object.values(results).reduce((s, r) => s + r.created, 0) : 0;
+  const totalSkipped = results ? Object.values(results).reduce((s, r) => s + r.skipped, 0) : 0;
 
   return (
     <div style={{ maxWidth: 640 }}>
@@ -154,7 +196,7 @@ export default function ImportPage() {
         <div style={{ background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 8, padding: "12px 16px", marginBottom: 20, fontSize: 13 }}>
           <div style={{ fontWeight: 700, color: "#92400e", marginBottom: 6 }}>⚠ 주의사항</div>
           <ul style={{ margin: 0, paddingLeft: 18, color: "#78350f", lineHeight: 1.8 }}>
-            <li>파일의 모든 시트(소음성난청·진폐·COPD·직업성암·유족·근골격계·업무상사고)를 한 번에 임포트합니다</li>
+            <li>파일의 시트를 하나씩 순차 처리합니다 (타임아웃 방지)</li>
             <li>같은 주민번호의 재해자가 이미 있으면 재사용됩니다</li>
             <li>같은 연번의 사건이 이미 있으면 건너뜁니다</li>
             <li>성명 뒤의 숫자(중복 구분용)는 자동으로 제거됩니다</li>
@@ -187,6 +229,21 @@ export default function ImportPage() {
         </button>
       </div>
 
+      {/* 진행상황 */}
+      {progress && (
+        <div style={{ background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: 8, padding: "14px 16px", marginBottom: 16, display: "flex", alignItems: "center", gap: 12 }}>
+          <span style={{ display: "inline-block", width: 16, height: 16, border: "2px solid #93c5fd", borderTopColor: "#2563eb", borderRadius: "50%", animation: "spin 0.8s linear infinite", flexShrink: 0 }} />
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "#1d4ed8" }}>
+              {progress.label} 처리 중... ({progress.step}/{progress.total})
+            </div>
+            <div style={{ fontSize: 12, color: "#3b82f6", marginTop: 2 }}>
+              완료된 시트는 아래에서 확인할 수 있습니다
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 에러 */}
       {serverError && (
         <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, padding: "12px 16px", color: "#dc2626", fontSize: 13, marginBottom: 16 }}>
@@ -195,9 +252,12 @@ export default function ImportPage() {
       )}
 
       {/* 결과 */}
-      {result && (
+      {results && Object.keys(results).length > 0 && (
         <div style={{ background: "white", borderRadius: 10, border: "1px solid #e5e7eb", padding: 24, boxShadow: "0 1px 3px rgba(0,0,0,0.05)" }}>
-          <div style={{ fontSize: 15, fontWeight: 700, color: "#111827", marginBottom: 16 }}>임포트 결과</div>
+          <div style={{ fontSize: 15, fontWeight: 700, color: "#111827", marginBottom: 16 }}>
+            임포트 결과
+            {progress && <span style={{ fontSize: 12, fontWeight: 400, color: "#6b7280", marginLeft: 8 }}>(처리 중...)</span>}
+          </div>
 
           {/* 합계 */}
           <div style={{ display: "flex", gap: 12, marginBottom: 20 }}>
@@ -219,7 +279,7 @@ export default function ImportPage() {
           <div style={{ marginBottom: allErrors.length > 0 ? 16 : 0 }}>
             <div style={{ fontSize: 12, fontWeight: 700, color: "#374151", marginBottom: 8 }}>상병별 결과</div>
             <div style={{ border: "1px solid #e5e7eb", borderRadius: 8, overflow: "hidden" }}>
-              {Object.entries(result.results).map(([caseType, r], i) => (
+              {Object.entries(results).map(([caseType, r], i) => (
                 <div
                   key={caseType}
                   style={{
