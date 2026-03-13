@@ -13,12 +13,14 @@ import {
 
 type Patient = { id: string; name: string; ssn: string; phone: string | null };
 type HearingLoss = {
+  status: string;
   firstClinic: string | null;
   specialClinic: string | null;
   disposalType: string | null;
   grade: number | null;
   gradeType: string | null;
 };
+type DetailStatus = { status: string } | null;
 type Case = {
   id: string;
   patientId: string;
@@ -30,10 +32,26 @@ type Case = {
   salesManager: string | null;
   caseManager: string | null;
   receptionDate: string | null;
-  status: string;
   createdAt: string;
   hearingLoss: HearingLoss | null;
+  copd: DetailStatus;
+  pneumoconiosis: DetailStatus;
+  musculoskeletal: DetailStatus;
+  occupationalAccident: DetailStatus;
+  occupationalCancer: DetailStatus;
+  bereaved: DetailStatus;
 };
+
+function getCaseStatus(c: Case): string {
+  if (c.caseType === "HEARING_LOSS") return c.hearingLoss?.status ?? "-";
+  if (c.caseType === "COPD") return c.copd?.status ?? "-";
+  if (c.caseType === "PNEUMOCONIOSIS") return c.pneumoconiosis?.status ?? "-";
+  if (c.caseType === "MUSCULOSKELETAL") return c.musculoskeletal?.status ?? "-";
+  if (c.caseType === "OCCUPATIONAL_ACCIDENT") return c.occupationalAccident?.status ?? "-";
+  if (c.caseType === "OCCUPATIONAL_CANCER") return c.occupationalCancer?.status ?? "-";
+  if (c.caseType === "BEREAVED") return c.bereaved?.status ?? "-";
+  return "-";
+}
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -619,7 +637,7 @@ export default function CasesPage() {
                     <td style={{ padding: "12px 16px", color: "#6b7280" }}>{c.tfName ?? "-"}</td>
                     <td style={{ padding: "12px 16px", color: "#374151" }}>{c.salesManager ?? "-"}</td>
                     <td style={{ padding: "12px 16px", color: "#374151" }}>{c.caseManager ?? "-"}</td>
-                    <td style={{ padding: "12px 16px" }}><StatusBadge status={c.status} /></td>
+                    <td style={{ padding: "12px 16px" }}><StatusBadge status={getCaseStatus(c)} /></td>
                     <td style={{ padding: "12px 16px", color: "#6b7280" }}>{c.hearingLoss?.firstClinic ?? "-"}</td>
                     <td style={{ padding: "12px 16px", color: "#6b7280" }}>{c.hearingLoss?.specialClinic ?? "-"}</td>
                     <td style={{ padding: "12px 16px", color: "#374151" }}>{c.hearingLoss?.disposalType ?? "-"}</td>
@@ -635,7 +653,7 @@ export default function CasesPage() {
                     <td style={{ padding: "12px 16px", color: "#374151" }}>{CASE_TYPE_LABELS[c.caseType] ?? c.caseType}</td>
                     <td style={{ padding: "12px 16px", color: "#6b7280" }}>{c.tfName ?? "-"}</td>
                     <td style={{ padding: "12px 16px", color: "#374151" }}>{c.caseManager ?? "-"}</td>
-                    <td style={{ padding: "12px 16px" }}><StatusBadge status={c.status} /></td>
+                    <td style={{ padding: "12px 16px" }}><StatusBadge status={getCaseStatus(c)} /></td>
                     <td style={{ padding: "12px 16px", color: "#9ca3af", fontFamily: "monospace", fontSize: 12 }}>{formatDate(c.receptionDate ?? c.createdAt)}</td>
                   </>
                 )}

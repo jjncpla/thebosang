@@ -18,7 +18,7 @@ export async function GET(req: NextRequest) {
       include: {
         _count: { select: { cases: true } },
         cases: {
-          select: { id: true, caseType: true, status: true },
+          select: { id: true, caseType: true },
           orderBy: { createdAt: "desc" },
         },
       },

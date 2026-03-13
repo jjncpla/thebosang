@@ -3,7 +3,6 @@ import { prisma } from "@/lib/prisma";
 
 export async function GET(req: NextRequest) {
   const sp = req.nextUrl.searchParams;
-  const statusParam = sp.get("status") ?? "";
   const caseType = sp.get("caseType") ?? "";
   const tfName = sp.get("tfName") ?? "";
   const search = sp.get("search") ?? "";
@@ -15,8 +14,6 @@ export async function GET(req: NextRequest) {
   const contractDateTo = sp.get("contractDate_to") ?? "";
   const receptionDateFrom = sp.get("receptionDate_from") ?? "";
   const receptionDateTo = sp.get("receptionDate_to") ?? "";
-
-  const statusList = statusParam ? statusParam.split(",").filter(Boolean) : [];
 
   // Build hearingLoss where from hl_ prefixed params
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -68,7 +65,6 @@ export async function GET(req: NextRequest) {
   try {
     const cases = await prisma.case.findMany({
       where: {
-        ...(statusList.length > 0 && { status: { in: statusList } }),
         ...(caseType && { caseType }),
         ...(tfName && { tfName }),
         ...(salesManager && { salesManager: { contains: salesManager } }),
@@ -92,6 +88,12 @@ export async function GET(req: NextRequest) {
       include: {
         patient: { select: { id: true, name: true, ssn: true, phone: true } },
         hearingLoss: true,
+        copd: { select: { status: true } },
+        pneumoconiosis: { select: { status: true } },
+        musculoskeletal: { select: { status: true } },
+        occupationalAccident: { select: { status: true } },
+        occupationalCancer: { select: { status: true } },
+        bereaved: { select: { status: true } },
       },
     });
     return NextResponse.json(cases);
@@ -118,7 +120,6 @@ export async function POST(req: NextRequest) {
       contractDate,
       receptionDate,
       isOneStop,
-      status,
       memo,
     } = body;
 
@@ -141,7 +142,6 @@ export async function POST(req: NextRequest) {
         contractDate: contractDate ? new Date(contractDate) : null,
         receptionDate: receptionDate ? new Date(receptionDate) : null,
         isOneStop: isOneStop ?? false,
-        status: status ?? "접수대기",
         memo: memo ?? null,
       },
       include: {

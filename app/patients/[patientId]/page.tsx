@@ -2,12 +2,13 @@
 
 import { useEffect, useState, useCallback, Suspense } from "react";
 import { useRouter, useParams, useSearchParams } from "next/navigation";
-import { CASE_STATUS, CASE_TYPE_LABELS, DISPOSAL_TYPE, GRADE_TYPE } from "@/lib/constants/case";
+import { CASE_TYPE_LABELS, DISPOSAL_TYPE, GRADE_TYPE, STATUS_BY_CASE_TYPE, HEARING_LOSS_STATUS } from "@/lib/constants/case";
 
 const S = { fontFamily: "'Malgun Gothic', 'Apple SD Gothic Neo', 'Segoe UI', sans-serif" };
 
 type HearingLossData = Record<string, string | number | boolean | null>;
 
+type DetailStatus = { status: string } | null;
 type CaseData = {
   id: string;
   caseType: string;
@@ -22,12 +23,28 @@ type CaseData = {
   contractDate: string | null;
   receptionDate: string | null;
   isOneStop: boolean;
-  status: string;
   memo: string | null;
   createdAt: string;
   updatedAt: string;
   hearingLoss: HearingLossData | null;
+  copd: DetailStatus;
+  pneumoconiosis: DetailStatus;
+  musculoskeletal: DetailStatus;
+  occupationalAccident: DetailStatus;
+  occupationalCancer: DetailStatus;
+  bereaved: DetailStatus;
 };
+
+function getCaseStatus(c: CaseData): string {
+  if (c.caseType === "HEARING_LOSS") return (c.hearingLoss as Record<string, unknown>)?.status as string ?? "접수대기";
+  if (c.caseType === "COPD") return c.copd?.status ?? "접수대기";
+  if (c.caseType === "PNEUMOCONIOSIS") return c.pneumoconiosis?.status ?? "접수대기";
+  if (c.caseType === "MUSCULOSKELETAL") return c.musculoskeletal?.status ?? "접수대기";
+  if (c.caseType === "OCCUPATIONAL_ACCIDENT") return c.occupationalAccident?.status ?? "접수대기";
+  if (c.caseType === "OCCUPATIONAL_CANCER") return c.occupationalCancer?.status ?? "접수대기";
+  if (c.caseType === "BEREAVED") return c.bereaved?.status ?? "접수대기";
+  return "접수대기";
+}
 
 type PatientData = {
   id: string;
@@ -284,7 +301,7 @@ function CaseCommonInfoSection({ caseItem, onUpdated }: { caseItem: CaseData; on
     contractDate: toInputDate(caseItem.contractDate),
     receptionDate: toInputDate(caseItem.receptionDate),
     isOneStop: caseItem.isOneStop,
-    status: caseItem.status,
+    status: getCaseStatus(caseItem),
     memo: caseItem.memo ?? "",
   });
   const [saving, setSaving] = useState(false);
@@ -364,7 +381,7 @@ function CaseCommonInfoSection({ caseItem, onUpdated }: { caseItem: CaseData; on
                   onChange={(e) => updateStatus(e.target.value)}
                   style={{ ...inputStyle, width: 160 }}
                 >
-                  {CASE_STATUS.map((s) => <option key={s} value={s}>{s}</option>)}
+                  {(STATUS_BY_CASE_TYPE[caseItem.caseType] ?? HEARING_LOSS_STATUS).map((s) => <option key={s} value={s}>{s}</option>)}
                 </select>
               </div>
               {caseItem.memo && (
@@ -413,7 +430,7 @@ function CaseCommonInfoSection({ caseItem, onUpdated }: { caseItem: CaseData; on
               <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
                 <label style={{ fontSize: 11, color: "#9ca3af" }}>진행상황</label>
                 <select style={inputStyle} value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
-                  {CASE_STATUS.map((s) => <option key={s} value={s}>{s}</option>)}
+                  {(STATUS_BY_CASE_TYPE[caseItem.caseType] ?? HEARING_LOSS_STATUS).map((s) => <option key={s} value={s}>{s}</option>)}
                 </select>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 8, paddingTop: 16 }}>
@@ -644,7 +661,7 @@ function PatientPageInner() {
         <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 10, padding: "12px 0", flexWrap: "wrap" }}>
           <span style={{ fontSize: 16, fontWeight: 700, color: "#111827" }}>{patient.name}</span>
           {patient.cases.map((c) => (
-            <StatusBadge key={c.id} status={c.status} />
+            <StatusBadge key={c.id} status={getCaseStatus(c)} />
           ))}
         </div>
       </div>

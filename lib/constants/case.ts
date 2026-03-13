@@ -1,25 +1,57 @@
-export const CASE_STATUS = [
-  "접수대기",
-  "접수완료",
-  "특진예정",
-  "특진중",
-  "특진완료",
-  "재특진예정",
-  "재특진중",
-  "재특진완료",
-  "재재특진예정",
-  "재재특진중",
-  "재재특진완료",
-  "전문예정",
-  "전문완료",
-  "승인",
-  "불승인",
-  "반려",
-  "보류",
-  "파기",
+export const HEARING_LOSS_STATUS = [
+  "접수대기", "접수완료",
+  "특진예정", "특진중", "특진완료",
+  "재특진예정", "재특진중", "재특진완료",
+  "재재특진예정", "재재특진중", "재재특진완료",
+  "전문예정", "전문의뢰", "전문완료",
+  "승인", "불승인", "반려", "보류", "파기",
 ] as const;
 
-export type CaseStatus = typeof CASE_STATUS[number];
+export const MUSCULOSKELETAL_STATUS = [
+  "접수대기", "접수완료",
+  "전문완료", "질판위의뢰",
+  "요양승인", "요양중", "요양종결", "장해승인",
+  "불승인", "반려", "기각종결", "송무인계", "이산인계", "파기",
+] as const;
+
+export const OCCUPATIONAL_ACCIDENT_STATUS = [...MUSCULOSKELETAL_STATUS] as const;
+
+export const COPD_STATUS = [
+  "접수대기", "접수완료",
+  "특진중", "특진완료",
+  "전문의뢰", "전문완료",
+  "승인", "불승인", "수치미달", "직력미달",
+  "반려", "보류", "파기", "이의제기", "종결",
+] as const;
+
+export const PNEUMOCONIOSIS_STATUS = [
+  "접수대기", "접수완료",
+  "정밀진행중", "정밀완료",
+  "승인", "불승인", "수치미달",
+  "반려", "보류", "파기",
+] as const;
+
+export const GENERAL_STATUS = [
+  "접수대기", "접수완료",
+  "진행중", "처분완료",
+  "승인", "불승인", "반려", "보류", "파기",
+] as const;
+
+export const STATUS_BY_CASE_TYPE: Record<string, readonly string[]> = {
+  HEARING_LOSS: HEARING_LOSS_STATUS,
+  MUSCULOSKELETAL: MUSCULOSKELETAL_STATUS,
+  OCCUPATIONAL_ACCIDENT: OCCUPATIONAL_ACCIDENT_STATUS,
+  COPD: COPD_STATUS,
+  PNEUMOCONIOSIS: PNEUMOCONIOSIS_STATUS,
+  OCCUPATIONAL_CANCER: GENERAL_STATUS,
+  BEREAVED: GENERAL_STATUS,
+  OTHER: GENERAL_STATUS,
+};
+
+// 하위 호환용
+export const CASE_STATUS = HEARING_LOSS_STATUS;
+
+export type CaseStatus = typeof HEARING_LOSS_STATUS[number];
 
 export const CASE_TYPE_LABELS: Record<string, string> = {
   HEARING_LOSS: "소음성 난청",
@@ -33,5 +65,4 @@ export const CASE_TYPE_LABELS: Record<string, string> = {
 };
 
 export const DISPOSAL_TYPE = ["승인", "불승인", "반려", "보류", "파기"] as const;
-
 export const GRADE_TYPE = ["일반", "조정", "가중", "준용"] as const;

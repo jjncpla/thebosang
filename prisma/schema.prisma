@@ -37,21 +37,30 @@ model Case {
   contractDate   DateTime?
   receptionDate  DateTime?
   isOneStop      Boolean   @default(false)
-  status         String    @default("접수대기")
   memo           String?
 
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
-  hearingLoss    HearingLossDetail?
-  messages       Message[]
-  timelines      TimelineEvent[]
+  hearingLoss          HearingLossDetail?
+  copd                 CopdDetail?
+  pneumoconiosis       PneumoconiosisDetail?
+  musculoskeletal      MusculoskeletalDetail?
+  occupationalAccident OccupationalAccidentDetail?
+  occupationalCancer   OccupationalCancerDetail?
+  bereaved             BereavedDetail?
+  holidayBenefits      HolidayBenefit[]
+  messages             Message[]
+  timelines            TimelineEvent[]
 }
 
 model HearingLossDetail {
   id      String @id @default(cuid())
   caseId  String @unique
   case    Case   @relation(fields: [caseId], references: [id])
+
+  status                 String  @default("접수대기")
+  isDisabilityRegistered Boolean @default(false)
 
   firstClinic        String?
   firstExamDate      DateTime?
@@ -174,4 +183,160 @@ model Notice {
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model CopdDetail {
+  id      String @id @default(cuid())
+  caseId  String @unique
+  case    Case   @relation(fields: [caseId], references: [id])
+
+  status             String    @default("접수대기")
+  firstClinic        String?
+  firstExamDate      DateTime?
+  specialClinic      String?
+  exam1Date          DateTime?
+  exam2Date          DateTime?
+  examResult         String?
+  expertOrgDate      DateTime?
+  reExamPossibleDate DateTime?
+  disposalType       String?
+  disposalDate       DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model PneumoconiosisDetail {
+  id      String @id @default(cuid())
+  caseId  String @unique
+  case    Case   @relation(fields: [caseId], references: [id])
+
+  status                String    @default("접수대기")
+  firstClinic           String?
+  firstExamDate         DateTime?
+  noticeReceivedDate    DateTime?
+  precisionExamDate     DateTime?
+  precisionResult       String?
+  precisionHospital     String?
+  precisionPossibleDate DateTime?
+  reExamPossibleDate    DateTime?
+  disposalType          String?
+  disposalDate          DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model MusculoskeletalDetail {
+  id      String @id @default(cuid())
+  caseId  String @unique
+  case    Case   @relation(fields: [caseId], references: [id])
+
+  status                 String    @default("접수대기")
+  bodyPart               String?
+  diseaseName            String?
+  occupation             String?
+  workHistory            String?
+  expertType             String?
+  expertRequestDate      DateTime?
+  expertScheduleDate     DateTime?
+  hasMedicalCommittee    Boolean   @default(false)
+  committeeSubmitDate    DateTime?
+  committeeReviewDate    DateTime?
+  disposalType           String?
+  approvalDate           DateTime?
+  disabilityApprovalDate DateTime?
+  hospitalName           String?
+  managingBranch         String?
+  treatmentStartDate     DateTime?
+  treatmentEndDate       DateTime?
+  claimCycle             String?
+  memo                   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model OccupationalAccidentDetail {
+  id      String @id @default(cuid())
+  caseId  String @unique
+  case    Case   @relation(fields: [caseId], references: [id])
+
+  status                 String    @default("접수대기")
+  caseName               String?
+  bodyPart               String?
+  diseaseName            String?
+  occupation             String?
+  workHistory            String?
+  expertType             String?
+  expertRequestDate      DateTime?
+  expertScheduleDate     DateTime?
+  hasMedicalCommittee    Boolean   @default(false)
+  committeeSubmitDate    DateTime?
+  committeeReviewDate    DateTime?
+  disposalType           String?
+  approvalDate           DateTime?
+  disabilityApprovalDate DateTime?
+  hospitalName           String?
+  managingBranch         String?
+  treatmentStartDate     DateTime?
+  treatmentEndDate       DateTime?
+  claimCycle             String?
+  memo                   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model OccupationalCancerDetail {
+  id      String @id @default(cuid())
+  caseId  String @unique
+  case    Case   @relation(fields: [caseId], references: [id])
+
+  status               String    @default("접수대기")
+  diseaseName          String?
+  firstDiagnosisDate   DateTime?
+  lastWorkplace        String?
+  disposalType         String?
+  disposalDate         DateTime?
+  treatmentPeriod      String?
+  holidayBenefitPeriod String?
+  paymentStatus        String?
+  memo                 String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model BereavedDetail {
+  id      String @id @default(cuid())
+  caseId  String @unique
+  case    Case   @relation(fields: [caseId], references: [id])
+
+  status               String    @default("접수대기")
+  originCaseType       String?
+  diseaseName          String?
+  firstDiagnosisDate   DateTime?
+  lastWorkplace        String?
+  disposalType         String?
+  disposalDate         DateTime?
+  treatmentPeriod      String?
+  holidayBenefitPeriod String?
+  paymentStatus        String?
+  memo                 String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model HolidayBenefit {
+  id        String   @id @default(cuid())
+  caseId    String
+  case      Case     @relation(fields: [caseId], references: [id])
+
+  round     Int
+  claimDate DateTime
+  memo      String?
+
+  createdAt DateTime @default(now())
 }

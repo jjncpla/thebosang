@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { CASE_STATUS, CASE_TYPE_LABELS } from "@/lib/constants/case";
+import { CASE_TYPE_LABELS } from "@/lib/constants/case";
 import { TF_BY_BRANCH, TF_TO_BRANCH } from "@/lib/constants/tf";
 import { ALL_STAFF } from "@/lib/constants/staff";
 
@@ -52,7 +52,6 @@ export default function NewCasePage() {
     salesRoute: "",
     contractDate: "",
     isOneStop: false,
-    status: "접수대기",
     memo: "",
   });
 
@@ -322,11 +321,6 @@ export default function NewCasePage() {
                 <select style={inputStyle} value={caseForm.salesRoute} onChange={(e) => setCaseForm({ ...caseForm, salesRoute: e.target.value })}>
                   <option value="">선택</option>
                   {SALES_ROUTES.map((r) => <option key={r} value={r}>{r}</option>)}
-                </select>
-              </LabelInput>
-              <LabelInput label="진행상황">
-                <select style={inputStyle} value={caseForm.status} onChange={(e) => setCaseForm({ ...caseForm, status: e.target.value })}>
-                  {CASE_STATUS.map((s) => <option key={s} value={s}>{s}</option>)}
                 </select>
               </LabelInput>
               <LabelInput label="약정일자">

@@ -19,7 +19,7 @@ export type FilterField = {
 };
 
 export const COMMON_FILTERS: FilterField[] = [
-  { field: "status", table: "case", label: "진행상황", type: "multi_select", options: CASE_STATUS },
+  { field: "status", table: "hearingLoss", label: "진행상황", type: "multi_select", options: CASE_STATUS },
   { field: "salesManager", table: "case", label: "영업 담당자", type: "select", options: ALL_STAFF },
   { field: "salesRoute", table: "case", label: "영업 경로", type: "text" },
   { field: "isOneStop", table: "case", label: "원스톱", type: "boolean" },
