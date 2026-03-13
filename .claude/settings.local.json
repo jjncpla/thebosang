@@ -21,7 +21,8 @@
       "Bash(mkdir -p \"C:\\\\Users\\\\LG\\\\thebosang\\\\lib\\\\constants\" && mkdir -p \"C:\\\\Users\\\\LG\\\\thebosang\\\\app\\\\api\\\\patients\\\\[patientId]\" && mkdir -p \"C:\\\\Users\\\\LG\\\\thebosang\\\\app\\\\api\\\\cases\\\\[caseId]\\\\hearing-loss\")",
       "Bash(ls \"C:\\\\Users\\\\LG\\\\thebosang\\\\app\\\\cases\\\\\" 2>/dev/null || echo \"DIR_NOT_FOUND\")",
       "Bash(taskkill /F /IM node.exe 2>&1; echo \"done\")",
-      "Bash(taskkill //F //IM node.exe 2>&1; echo \"done\")"
+      "Bash(taskkill //F //IM node.exe 2>&1; echo \"done\")",
+      "Bash(npm install:*)"
     ]
   }
 }
