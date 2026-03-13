@@ -66,7 +66,7 @@ function strVal(val: unknown): string | null {
   return s;
 }
 
-type SheetResult = { created: number; skipped: number; errors: string[] };
+type SheetResult = { created: number; skipped: number; errors: string[]; totalRows: number };
 
 function findHeaderRow(rows: unknown[][]): number {
   for (let i = 0; i < Math.min(10, rows.length); i++) {
@@ -83,10 +83,12 @@ async function processHearingLoss(
   ws: XLSX.WorkSheet,
   tfName: string | null,
   branchOverride: string | null,
+  offset: number,
+  limit: number,
 ): Promise<SheetResult> {
   const rows: unknown[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null });
   const headerRowIdx = findHeaderRow(rows);
-  if (headerRowIdx === -1) return { created: 0, skipped: 0, errors: ["헤더 행을 찾을 수 없습니다"] };
+  if (headerRowIdx === -1) return { created: 0, skipped: 0, errors: ["헤더 행을 찾을 수 없습니다"], totalRows: 0 };
 
   const header = rows[headerRowIdx] as unknown[];
   const prevHeader = headerRowIdx > 0 ? (rows[headerRowIdx - 1] as unknown[]) : [];
@@ -130,7 +132,10 @@ async function processHearingLoss(
   let created = 0, skipped = 0;
   const errors: string[] = [];
 
-  for (const rawRow of rows.slice(headerRowIdx + 1)) {
+  const allDataRows = rows.slice(headerRowIdx + 1);
+  const totalRows = allDataRows.length;
+
+  for (const rawRow of allDataRows.slice(offset, offset + limit)) {
     const row = rawRow as unknown[];
     const name = normalizeName(row[C.name]);
     const ssn = row[C.ssn] ? String(row[C.ssn]).trim() : null;
@@ -199,17 +204,19 @@ async function processHearingLoss(
     }
   }
 
-  return { created, skipped, errors: errors.slice(0, 20) };
+  return { created, skipped, errors: errors.slice(0, 20), totalRows };
 }
 
 async function processPneumoconiosis(
   ws: XLSX.WorkSheet,
   tfName: string | null,
   branchOverride: string | null,
+  offset: number,
+  limit: number,
 ): Promise<SheetResult> {
   const rows: unknown[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null });
   const headerRowIdx = findHeaderRow(rows);
-  if (headerRowIdx === -1) return { created: 0, skipped: 0, errors: ["헤더 행을 찾을 수 없습니다"] };
+  if (headerRowIdx === -1) return { created: 0, skipped: 0, errors: ["헤더 행을 찾을 수 없습니다"], totalRows: 0 };
 
   const header = rows[headerRowIdx] as unknown[];
 
@@ -242,7 +249,10 @@ async function processPneumoconiosis(
   let created = 0, skipped = 0;
   const errors: string[] = [];
 
-  for (const rawRow of rows.slice(headerRowIdx + 1)) {
+  const allDataRows = rows.slice(headerRowIdx + 1);
+  const totalRows = allDataRows.length;
+
+  for (const rawRow of allDataRows.slice(offset, offset + limit)) {
     const row = rawRow as unknown[];
     const name = normalizeName(row[C.name]);
     const ssn = row[C.ssn] ? String(row[C.ssn]).trim() : null;
@@ -306,17 +316,19 @@ async function processPneumoconiosis(
     }
   }
 
-  return { created, skipped, errors: errors.slice(0, 20) };
+  return { created, skipped, errors: errors.slice(0, 20), totalRows };
 }
 
 async function processCopd(
   ws: XLSX.WorkSheet,
   tfName: string | null,
   branchOverride: string | null,
+  offset: number,
+  limit: number,
 ): Promise<SheetResult> {
   const rows: unknown[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null });
   const headerRowIdx = findHeaderRow(rows);
-  if (headerRowIdx === -1) return { created: 0, skipped: 0, errors: ["헤더 행을 찾을 수 없습니다"] };
+  if (headerRowIdx === -1) return { created: 0, skipped: 0, errors: ["헤더 행을 찾을 수 없습니다"], totalRows: 0 };
 
   const header = rows[headerRowIdx] as unknown[];
 
@@ -349,7 +361,10 @@ async function processCopd(
   let created = 0, skipped = 0;
   const errors: string[] = [];
 
-  for (const rawRow of rows.slice(headerRowIdx + 1)) {
+  const allDataRows = rows.slice(headerRowIdx + 1);
+  const totalRows = allDataRows.length;
+
+  for (const rawRow of allDataRows.slice(offset, offset + limit)) {
     const row = rawRow as unknown[];
     const name = normalizeName(row[C.name]);
     const ssn = row[C.ssn] ? String(row[C.ssn]).trim() : null;
@@ -413,17 +428,19 @@ async function processCopd(
     }
   }
 
-  return { created, skipped, errors: errors.slice(0, 20) };
+  return { created, skipped, errors: errors.slice(0, 20), totalRows };
 }
 
 async function processOccupationalCancer(
   ws: XLSX.WorkSheet,
   tfName: string | null,
   branchOverride: string | null,
+  offset: number,
+  limit: number,
 ): Promise<SheetResult> {
   const rows: unknown[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null });
   const headerRowIdx = findHeaderRow(rows);
-  if (headerRowIdx === -1) return { created: 0, skipped: 0, errors: ["헤더 행을 찾을 수 없습니다"] };
+  if (headerRowIdx === -1) return { created: 0, skipped: 0, errors: ["헤더 행을 찾을 수 없습니다"], totalRows: 0 };
 
   const header = rows[headerRowIdx] as unknown[];
 
@@ -454,7 +471,10 @@ async function processOccupationalCancer(
   let created = 0, skipped = 0;
   const errors: string[] = [];
 
-  for (const rawRow of rows.slice(headerRowIdx + 1)) {
+  const allDataRows = rows.slice(headerRowIdx + 1);
+  const totalRows = allDataRows.length;
+
+  for (const rawRow of allDataRows.slice(offset, offset + limit)) {
     const row = rawRow as unknown[];
     const name = normalizeName(row[C.name]);
     const ssn = row[C.ssn] ? String(row[C.ssn]).trim() : null;
@@ -516,17 +536,19 @@ async function processOccupationalCancer(
     }
   }
 
-  return { created, skipped, errors: errors.slice(0, 20) };
+  return { created, skipped, errors: errors.slice(0, 20), totalRows };
 }
 
 async function processBereaved(
   ws: XLSX.WorkSheet,
   tfName: string | null,
   branchOverride: string | null,
+  offset: number,
+  limit: number,
 ): Promise<SheetResult> {
   const rows: unknown[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null });
   const headerRowIdx = findHeaderRow(rows);
-  if (headerRowIdx === -1) return { created: 0, skipped: 0, errors: ["헤더 행을 찾을 수 없습니다"] };
+  if (headerRowIdx === -1) return { created: 0, skipped: 0, errors: ["헤더 행을 찾을 수 없습니다"], totalRows: 0 };
 
   const header = rows[headerRowIdx] as unknown[];
 
@@ -557,7 +579,10 @@ async function processBereaved(
   let created = 0, skipped = 0;
   const errors: string[] = [];
 
-  for (const rawRow of rows.slice(headerRowIdx + 1)) {
+  const allDataRows = rows.slice(headerRowIdx + 1);
+  const totalRows = allDataRows.length;
+
+  for (const rawRow of allDataRows.slice(offset, offset + limit)) {
     const row = rawRow as unknown[];
     const name = normalizeName(row[C.name]);
     const ssn = row[C.ssn] ? String(row[C.ssn]).trim() : null;
@@ -619,17 +644,19 @@ async function processBereaved(
     }
   }
 
-  return { created, skipped, errors: errors.slice(0, 20) };
+  return { created, skipped, errors: errors.slice(0, 20), totalRows };
 }
 
 async function processMusculoskeletal(
   ws: XLSX.WorkSheet,
   tfName: string | null,
   branchOverride: string | null,
+  offset: number,
+  limit: number,
 ): Promise<SheetResult> {
   const rows: unknown[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null });
   const headerRowIdx = findHeaderRow(rows);
-  if (headerRowIdx === -1) return { created: 0, skipped: 0, errors: ["헤더 행을 찾을 수 없습니다"] };
+  if (headerRowIdx === -1) return { created: 0, skipped: 0, errors: ["헤더 행을 찾을 수 없습니다"], totalRows: 0 };
 
   const header = rows[headerRowIdx] as unknown[];
 
@@ -670,7 +697,10 @@ async function processMusculoskeletal(
   let created = 0, skipped = 0;
   const errors: string[] = [];
 
-  for (const rawRow of rows.slice(headerRowIdx + 1)) {
+  const allDataRows = rows.slice(headerRowIdx + 1);
+  const totalRows = allDataRows.length;
+
+  for (const rawRow of allDataRows.slice(offset, offset + limit)) {
     const row = rawRow as unknown[];
     const name = normalizeName(row[C.name]);
     const ssn = row[C.ssn] ? String(row[C.ssn]).trim() : null;
@@ -742,17 +772,19 @@ async function processMusculoskeletal(
     }
   }
 
-  return { created, skipped, errors: errors.slice(0, 20) };
+  return { created, skipped, errors: errors.slice(0, 20), totalRows };
 }
 
 async function processOccupationalAccident(
   ws: XLSX.WorkSheet,
   tfName: string | null,
   branchOverride: string | null,
+  offset: number,
+  limit: number,
 ): Promise<SheetResult> {
   const rows: unknown[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null });
   const headerRowIdx = findHeaderRow(rows);
-  if (headerRowIdx === -1) return { created: 0, skipped: 0, errors: ["헤더 행을 찾을 수 없습니다"] };
+  if (headerRowIdx === -1) return { created: 0, skipped: 0, errors: ["헤더 행을 찾을 수 없습니다"], totalRows: 0 };
 
   const header = rows[headerRowIdx] as unknown[];
 
@@ -794,7 +826,10 @@ async function processOccupationalAccident(
   let created = 0, skipped = 0;
   const errors: string[] = [];
 
-  for (const rawRow of rows.slice(headerRowIdx + 1)) {
+  const allDataRows = rows.slice(headerRowIdx + 1);
+  const totalRows = allDataRows.length;
+
+  for (const rawRow of allDataRows.slice(offset, offset + limit)) {
     const row = rawRow as unknown[];
     const name = normalizeName(row[C.name]);
     const ssn = row[C.ssn] ? String(row[C.ssn]).trim() : null;
@@ -867,7 +902,7 @@ async function processOccupationalAccident(
     }
   }
 
-  return { created, skipped, errors: errors.slice(0, 20) };
+  return { created, skipped, errors: errors.slice(0, 20), totalRows };
 }
 
 // ---- Sheet → caseType 매핑 ----
@@ -875,7 +910,7 @@ async function processOccupationalAccident(
 const SHEET_MATCHERS: Array<{
   match: (name: string) => boolean;
   caseType: string;
-  process: (ws: XLSX.WorkSheet, tfName: string | null, branch: string | null) => Promise<SheetResult>;
+  process: (ws: XLSX.WorkSheet, tfName: string | null, branch: string | null, offset: number, limit: number) => Promise<SheetResult>;
 }> = [
   {
     match: (n) => n.includes("소음성난청") || n.includes("소음성 난청"),
@@ -925,6 +960,8 @@ export async function POST(req: NextRequest) {
     const tfName = formData.get("tfName") as string | null;
     const branch = formData.get("branch") as string | null;
     const targetSheet = formData.get("sheetName") as string | null;
+    const offset = parseInt((formData.get("offset") as string) ?? "0") || 0;
+    const limit  = parseInt((formData.get("limit")  as string) ?? "100") || 100;
 
     const buffer = Buffer.from(await file.arrayBuffer());
     const wb = XLSX.read(buffer, { type: "buffer", cellDates: true });
@@ -935,7 +972,7 @@ export async function POST(req: NextRequest) {
       if (!matcher) return NextResponse.json({ error: `알 수 없는 시트: ${targetSheet}` }, { status: 400 });
       const ws = wb.Sheets[targetSheet];
       if (!ws) return NextResponse.json({ error: `시트를 찾을 수 없음: ${targetSheet}` }, { status: 400 });
-      const result = await matcher.process(ws, tfName, branch);
+      const result = await matcher.process(ws, tfName, branch, offset, limit);
       return NextResponse.json({ success: true, caseType: matcher.caseType, result });
     }
 
@@ -945,7 +982,7 @@ export async function POST(req: NextRequest) {
       const matcher = SHEET_MATCHERS.find((m) => m.match(sheetName));
       if (!matcher) continue;
       const ws = wb.Sheets[sheetName];
-      const result = await matcher.process(ws, tfName, branch);
+      const result = await matcher.process(ws, tfName, branch, 0, 999999);
       results[matcher.caseType] = result;
     }
 

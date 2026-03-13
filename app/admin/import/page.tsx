@@ -4,7 +4,9 @@ import { useRef, useState } from "react";
 import * as XLSX from "xlsx";
 import { TF_BY_BRANCH, TF_TO_BRANCH } from "@/lib/constants/tf";
 
-type SheetResult = { created: number; skipped: number; errors: string[] };
+const BATCH_SIZE = 100;
+
+type SheetResult = { created: number; skipped: number; errors: string[]; totalRows: number };
 
 const SHEET_PATTERNS: Array<{
   match: (n: string) => boolean;
@@ -30,7 +32,7 @@ export default function ImportPage() {
   const [dragging, setDragging] = useState(false);
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState<Record<string, SheetResult> | null>(null);
-  const [progress, setProgress] = useState<{ label: string; step: number; total: number } | null>(null);
+  const [progress, setProgress] = useState<{ label: string; done: number; total: number; sheetStep: number; sheetTotal: number } | null>(null);
   const [serverError, setServerError] = useState<string | null>(null);
   const [selectedTf, setSelectedTf] = useState<string>("");
 
@@ -78,24 +80,46 @@ export default function ImportPage() {
 
       for (let i = 0; i < matchingSheets.length; i++) {
         const { sheetName, caseType, label } = matchingSheets[i];
-        setProgress({ label, step: i + 1, total: matchingSheets.length });
 
-        const formData = new FormData();
-        formData.append("file", file);
-        formData.append("tfName", selectedTf);
-        formData.append("branch", selectedBranch);
-        formData.append("sheetName", sheetName);
+        let offset = 0;
+        let totalRows = Infinity;
+        let sheetCreated = 0, sheetSkipped = 0;
+        const sheetErrors: string[] = [];
 
-        const res = await fetch("/api/import/all", { method: "POST", body: formData });
-        const data = await res.json();
+        while (offset < totalRows) {
+          setProgress({ label, done: offset, total: totalRows === Infinity ? 0 : totalRows, sheetStep: i + 1, sheetTotal: matchingSheets.length });
 
-        if (!res.ok) {
-          accumulated[caseType] = { created: 0, skipped: 0, errors: [data.error ?? "오류"] };
-        } else {
-          accumulated[caseType] = data.result as SheetResult;
+          const formData = new FormData();
+          formData.append("file", file);
+          formData.append("tfName", selectedTf);
+          formData.append("branch", selectedBranch);
+          formData.append("sheetName", sheetName);
+          formData.append("offset", String(offset));
+          formData.append("limit", String(BATCH_SIZE));
+
+          const res = await fetch("/api/import/all", { method: "POST", body: formData });
+          const data = await res.json();
+
+          if (!res.ok) {
+            sheetErrors.push(data.error ?? "오류");
+            break;
+          }
+
+          const batch = data.result as SheetResult;
+          sheetCreated += batch.created;
+          sheetSkipped += batch.skipped;
+          sheetErrors.push(...batch.errors);
+          totalRows = batch.totalRows;
+          offset += BATCH_SIZE;
+
+          accumulated[caseType] = {
+            created: sheetCreated,
+            skipped: sheetSkipped,
+            errors: sheetErrors.slice(0, 20),
+            totalRows,
+          };
+          setResults({ ...accumulated });
         }
-
-        setResults({ ...accumulated });
       }
 
       setProgress(null);
@@ -235,7 +259,9 @@ export default function ImportPage() {
           <span style={{ display: "inline-block", width: 16, height: 16, border: "2px solid #93c5fd", borderTopColor: "#2563eb", borderRadius: "50%", animation: "spin 0.8s linear infinite", flexShrink: 0 }} />
           <div>
             <div style={{ fontSize: 13, fontWeight: 700, color: "#1d4ed8" }}>
-              {progress.label} 처리 중... ({progress.step}/{progress.total})
+              {progress.label} 처리 중...
+              {progress.total > 0 && ` ${Math.min(progress.done + BATCH_SIZE, progress.total)}/${progress.total}건`}
+              {" "}({progress.sheetStep}/{progress.sheetTotal} 시트)
             </div>
             <div style={{ fontSize: 12, color: "#3b82f6", marginTop: 2 }}>
               완료된 시트는 아래에서 확인할 수 있습니다
