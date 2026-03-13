@@ -88,7 +88,7 @@ export async function GET(req: NextRequest) {
       include: {
         patient: { select: { id: true, name: true, ssn: true, phone: true } },
         hearingLoss: true,
-        copd: { select: { status: true } },
+        copd: { select: { id: true, status: true, reExamPossibleDate: true } },
         pneumoconiosis: { select: { status: true } },
         musculoskeletal: { select: { status: true } },
         occupationalAccident: { select: { status: true } },
@@ -96,7 +96,33 @@ export async function GET(req: NextRequest) {
         bereaved: { select: { status: true } },
       },
     });
-    return NextResponse.json(cases);
+    // COPD 수치미달 → 재진행가능 자동 업데이트
+    const today = new Date();
+    const copdToUpdate = cases
+      .filter(c =>
+        c.caseType === "COPD" &&
+        c.copd?.status === "수치미달" &&
+        c.copd?.reExamPossibleDate != null &&
+        c.copd.reExamPossibleDate <= today
+      )
+      .map(c => c.copd!.id);
+
+    if (copdToUpdate.length > 0) {
+      await prisma.copdDetail.updateMany({
+        where: { id: { in: copdToUpdate } },
+        data: { status: "재진행가능" },
+      });
+    }
+
+    const resultCases = copdToUpdate.length > 0
+      ? cases.map(c =>
+          c.copd && copdToUpdate.includes(c.copd.id)
+            ? { ...c, copd: { ...c.copd, status: "재진행가능" } }
+            : c
+        )
+      : cases;
+
+    return NextResponse.json(resultCases);
   } catch (err) {
     console.error("[GET /api/cases]", err);
     return NextResponse.json({ error: "조회 오류" }, { status: 500 });

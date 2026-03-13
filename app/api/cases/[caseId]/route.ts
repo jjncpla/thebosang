@@ -12,7 +12,7 @@ export async function GET(
       include: {
         patient: true,
         hearingLoss: true,
-        copd: { select: { status: true } },
+        copd: { select: { id: true, status: true, reExamPossibleDate: true } },
         pneumoconiosis: { select: { status: true } },
         musculoskeletal: { select: { status: true } },
         occupationalAccident: { select: { status: true } },
@@ -21,6 +21,18 @@ export async function GET(
       },
     });
     if (!c) return NextResponse.json({ error: "없음" }, { status: 404 });
+
+    // COPD 수치미달 → 재진행가능 자동 업데이트
+    if (
+      c.caseType === "COPD" &&
+      c.copd?.status === "수치미달" &&
+      c.copd.reExamPossibleDate != null &&
+      c.copd.reExamPossibleDate <= new Date()
+    ) {
+      await prisma.copdDetail.update({ where: { id: c.copd.id }, data: { status: "재진행가능" } });
+      return NextResponse.json({ ...c, copd: { ...c.copd, status: "재진행가능" } });
+    }
+
     return NextResponse.json(c);
   } catch (err) {
     console.error("[GET /api/cases/[caseId]]", err);
@@ -75,7 +87,7 @@ export async function PATCH(
       include: {
         patient: true,
         hearingLoss: true,
-        copd: { select: { status: true } },
+        copd: { select: { id: true, status: true, reExamPossibleDate: true } },
         pneumoconiosis: { select: { status: true } },
         musculoskeletal: { select: { status: true } },
         occupationalAccident: { select: { status: true } },

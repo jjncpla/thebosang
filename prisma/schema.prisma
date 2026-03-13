@@ -186,24 +186,39 @@ model Notice {
 }
 
 model CopdDetail {
-  id      String @id @default(cuid())
-  caseId  String @unique
-  case    Case   @relation(fields: [caseId], references: [id])
-
+  id                 String    @id @default(cuid())
+  caseId             String    @unique
+  case               Case      @relation(fields: [caseId], references: [id])
   status             String    @default("접수대기")
+
+  // 초진
   firstClinic        String?
   firstExamDate      DateTime?
+
+  // 특진
   specialClinic      String?
   exam1Date          DateTime?
+  exam1Rate          Float?
+  exam1Volume        Float?
   exam2Date          DateTime?
-  examResult         String?
+  exam2Rate          Float?
+  exam2Volume        Float?
+  examMemo           String?
+
+  // 전문조사
   expertOrgDate      DateTime?
-  reExamPossibleDate DateTime?
+
+  // 처분
   disposalType       String?
   disposalDate       DateTime?
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  // 재진행
+  reExamPossibleDate DateTime?
+
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
+
+  @@map("copd_details")
 }
 
 model PneumoconiosisDetail {

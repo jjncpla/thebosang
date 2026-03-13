@@ -7,8 +7,18 @@ import { TF_BY_BRANCH, TF_TO_BRANCH } from "@/lib/constants/tf";
 const BATCH_SIZE = 50;
 
 const DISEASE_OPTIONS = [
-  { value: "HEARING_LOSS", label: "소음성 난청", apiPath: "/api/import/hearing-loss" },
-  // 추후 확장 예정
+  {
+    value: "HEARING_LOSS",
+    label: "소음성 난청",
+    apiPath: "/api/import/hearing-loss",
+    matchSheet: (n: string) => n.includes("소음성난청") || n.includes("소음성 난청"),
+  },
+  {
+    value: "COPD",
+    label: "COPD",
+    apiPath: "/api/import/copd",
+    matchSheet: (n: string) => n.toUpperCase().includes("COPD"),
+  },
 ];
 
 function sanitizeRows(rows: unknown[][]): (string | null)[][] {
@@ -56,7 +66,7 @@ export default function ImportPage() {
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const [serverError, setServerError] = useState<string | null>(null);
   const [selectedTf, setSelectedTf] = useState<string>("");
-  const [selectedDisease] = useState(DISEASE_OPTIONS[0]);
+  const [selectedDisease, setSelectedDisease] = useState(DISEASE_OPTIONS[0]);
 
   const [deleteTf, setDeleteTf] = useState<string>("");
   const [deleteModal, setDeleteModal] = useState(false);
@@ -90,10 +100,10 @@ export default function ImportPage() {
       const arrayBuffer = await file.arrayBuffer();
       const wb = XLSX.read(arrayBuffer, { type: "array", cellDates: true });
 
-      // 소음성 난청 시트 찾기
-      const sheetName = wb.SheetNames.find(n => n.includes("소음성난청") || n.includes("소음성 난청"));
+      // 상병에 맞는 시트 찾기
+      const sheetName = wb.SheetNames.find(n => selectedDisease.matchSheet(n));
       if (!sheetName) {
-        setServerError("소음성난청 시트를 찾을 수 없습니다");
+        setServerError(`${selectedDisease.label} 시트를 찾을 수 없습니다`);
         return;
       }
 
@@ -191,8 +201,11 @@ export default function ImportPage() {
           <label style={{ fontSize: 12, color: "#6b7280", fontWeight: 600, display: "block", marginBottom: 6 }}>상병</label>
           <select
             value={selectedDisease.value}
-            disabled
-            style={{ border: "1px solid #e5e7eb", borderRadius: 6, padding: "7px 12px", fontSize: 13, color: "#374151", background: "#f3f4f6", width: "100%" }}
+            onChange={(e) => {
+              const opt = DISEASE_OPTIONS.find(o => o.value === e.target.value);
+              if (opt) { setSelectedDisease(opt); setResult(null); setServerError(null); }
+            }}
+            style={{ border: "1px solid #e5e7eb", borderRadius: 6, padding: "7px 12px", fontSize: 13, color: "#374151", background: "#f9fafb", width: "100%", cursor: "pointer" }}
           >
             {DISEASE_OPTIONS.map(opt => (
               <option key={opt.value} value={opt.value}>{opt.label}</option>
