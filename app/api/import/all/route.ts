@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import * as XLSX from "xlsx";
 
 // ---- Helpers ----
 
@@ -39,15 +38,9 @@ function parseDisposal(val: unknown): { disposalType: string | null; gradeType: 
   return { disposalType: null, gradeType: null, grade: null };
 }
 
+// 클라이언트가 cellDates:true로 파싱 → Date → JSON → ISO 문자열로 전달됨
 function toDate(val: unknown): Date | null {
   if (!val) return null;
-  if (val instanceof Date) return isNaN(val.getTime()) ? null : val;
-  if (typeof val === "number") {
-    try {
-      const date = XLSX.SSF.parse_date_code(val);
-      if (date) return new Date(date.y, date.m - 1, date.d);
-    } catch { return null; }
-  }
   if (typeof val === "string") {
     const d = new Date(val);
     if (!isNaN(d.getTime())) return d;
@@ -66,33 +59,17 @@ function strVal(val: unknown): string | null {
   return s;
 }
 
-type SheetResult = { created: number; skipped: number; errors: string[]; totalRows: number };
+type SheetResult = { created: number; skipped: number; errors: string[] };
 
-function findHeaderRow(rows: unknown[][]): number {
-  for (let i = 0; i < Math.min(10, rows.length); i++) {
-    if ((rows[i] as unknown[]).some(c => c === "연번" || c === "성명" || c === "재해자명")) {
-      return i;
-    }
-  }
-  return -1;
-}
-
-// ---- Sheet processors ----
+// ---- Sheet processors (rows/header/prevHeader 수신, WS 파싱 없음) ----
 
 async function processHearingLoss(
-  ws: XLSX.WorkSheet,
+  rows: unknown[][],
+  header: unknown[],
+  prevHeader: unknown[],
   tfName: string | null,
   branchOverride: string | null,
-  offset: number,
-  limit: number,
 ): Promise<SheetResult> {
-  const rows: unknown[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null });
-  const headerRowIdx = findHeaderRow(rows);
-  if (headerRowIdx === -1) return { created: 0, skipped: 0, errors: ["헤더 행을 찾을 수 없습니다"], totalRows: 0 };
-
-  const header = rows[headerRowIdx] as unknown[];
-  const prevHeader = headerRowIdx > 0 ? (rows[headerRowIdx - 1] as unknown[]) : [];
-
   let exam1DateCol = -1;
   const firstSpecialGroupStart = prevHeader.findIndex(h => h && String(h).includes("최초 특진"));
   if (firstSpecialGroupStart !== -1) {
@@ -102,40 +79,37 @@ async function processHearingLoss(
   }
 
   const C = {
-    caseNumber:    header.indexOf("연번"),
-    name:          header.indexOf("성명"),
-    ssn:           header.indexOf("주민번호"),
-    phone:         header.indexOf("연락처"),
-    salesManager:  colIdx(header, "영업", "담당"),
-    caseManager:   colIdx(header, "접수", "담당"),
-    contractDate:  colIdx(header, "약정"),
-    salesRoute:    colIdx(header, "영업", "경로"),
-    branch:        header.indexOf("지사"),
-    subAgent:      colIdx(header, "소속"),
-    isOneStop:     header.indexOf("원스톱"),
-    status:        header.indexOf("진행상황"),
-    receptionDate: header.indexOf("접수일자"),
-    memo:          header.indexOf("비고"),
-    firstClinic:   header.indexOf("초진병원"),
-    firstExamDate: colIdx(header, "1차 초진"),
+    caseNumber:     header.indexOf("연번"),
+    name:           header.indexOf("성명"),
+    ssn:            header.indexOf("주민번호"),
+    phone:          header.indexOf("연락처"),
+    salesManager:   colIdx(header, "영업", "담당"),
+    caseManager:    colIdx(header, "접수", "담당"),
+    contractDate:   colIdx(header, "약정"),
+    salesRoute:     colIdx(header, "영업", "경로"),
+    branch:         header.indexOf("지사"),
+    subAgent:       colIdx(header, "소속"),
+    isOneStop:      header.indexOf("원스톱"),
+    status:         header.indexOf("진행상황"),
+    receptionDate:  header.indexOf("접수일자"),
+    memo:           header.indexOf("비고"),
+    firstClinic:    header.indexOf("초진병원"),
+    firstExamDate:  colIdx(header, "1차 초진"),
     firstExamRight: header.indexOf("우측"),
     firstExamLeft:  header.indexOf("좌측"),
-    specialClinic: header.indexOf("특진병원"),
-    exam1Date:     exam1DateCol,
-    reExamClinic:  header.indexOf("재특진병원"),
-    expertOrg:     header.indexOf("전문조사기관"),
-    expertDate:    colIdx(header, "전문조사", "일정"),
-    disposal:      header.indexOf("처분결과"),
-    disposalDate:  header.indexOf("처분일자"),
+    specialClinic:  header.indexOf("특진병원"),
+    exam1Date:      exam1DateCol,
+    reExamClinic:   header.indexOf("재특진병원"),
+    expertOrg:      header.indexOf("전문조사기관"),
+    expertDate:     colIdx(header, "전문조사", "일정"),
+    disposal:       header.indexOf("처분결과"),
+    disposalDate:   header.indexOf("처분일자"),
   };
 
   let created = 0, skipped = 0;
   const errors: string[] = [];
 
-  const allDataRows = rows.slice(headerRowIdx + 1);
-  const totalRows = allDataRows.length;
-
-  for (const rawRow of allDataRows.slice(offset, offset + limit)) {
+  for (const rawRow of rows) {
     const row = rawRow as unknown[];
     const name = normalizeName(row[C.name]);
     const ssn = row[C.ssn] ? String(row[C.ssn]).trim() : null;
@@ -204,55 +178,46 @@ async function processHearingLoss(
     }
   }
 
-  return { created, skipped, errors: errors.slice(0, 20), totalRows };
+  return { created, skipped, errors: errors.slice(0, 20) };
 }
 
 async function processPneumoconiosis(
-  ws: XLSX.WorkSheet,
+  rows: unknown[][],
+  header: unknown[],
+  _prevHeader: unknown[],
   tfName: string | null,
   branchOverride: string | null,
-  offset: number,
-  limit: number,
 ): Promise<SheetResult> {
-  const rows: unknown[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null });
-  const headerRowIdx = findHeaderRow(rows);
-  if (headerRowIdx === -1) return { created: 0, skipped: 0, errors: ["헤더 행을 찾을 수 없습니다"], totalRows: 0 };
-
-  const header = rows[headerRowIdx] as unknown[];
-
   const C = {
-    caseNumber:           header.indexOf("연번"),
-    name:                 header.indexOf("성명"),
-    ssn:                  header.indexOf("주민번호"),
-    phone:                header.indexOf("연락처"),
-    salesManager:         colIdx(header, "영업", "담당"),
-    caseManager:          colIdx(header, "접수", "담당"),
-    contractDate:         colIdx(header, "약정"),
-    salesRoute:           colIdx(header, "영업", "경로"),
-    branch:               header.indexOf("지사"),
-    subAgent:             colIdx(header, "소속"),
-    status:               header.indexOf("진행상황"),
-    receptionDate:        header.indexOf("접수일자"),
-    memo:                 header.indexOf("비고"),
-    noticeReceivedDate:   colIdx(header, "진폐정밀", "통지"),
-    firstClinic:          header.indexOf("초진병원"),
-    firstExamDate:        header.indexOf("초진일자"),
-    precisionExamDate:    header.indexOf("진폐정밀실시일"),
-    precisionResult:      header.indexOf("정밀결과"),
-    precisionHospital:    header.indexOf("진폐정밀병원"),
+    caseNumber:            header.indexOf("연번"),
+    name:                  header.indexOf("성명"),
+    ssn:                   header.indexOf("주민번호"),
+    phone:                 header.indexOf("연락처"),
+    salesManager:          colIdx(header, "영업", "담당"),
+    caseManager:           colIdx(header, "접수", "담당"),
+    contractDate:          colIdx(header, "약정"),
+    salesRoute:            colIdx(header, "영업", "경로"),
+    branch:                header.indexOf("지사"),
+    subAgent:              colIdx(header, "소속"),
+    status:                header.indexOf("진행상황"),
+    receptionDate:         header.indexOf("접수일자"),
+    memo:                  header.indexOf("비고"),
+    noticeReceivedDate:    colIdx(header, "진폐정밀", "통지"),
+    firstClinic:           header.indexOf("초진병원"),
+    firstExamDate:         header.indexOf("초진일자"),
+    precisionExamDate:     header.indexOf("진폐정밀실시일"),
+    precisionResult:       header.indexOf("정밀결과"),
+    precisionHospital:     header.indexOf("진폐정밀병원"),
     precisionPossibleDate: header.indexOf("진폐정밀가능일자"),
-    reExamPossibleDate:   header.indexOf("재진행가능일자"),
-    disposal:             header.indexOf("처분결과"),
-    disposalDate:         header.indexOf("처분일자"),
+    reExamPossibleDate:    header.indexOf("재진행가능일자"),
+    disposal:              header.indexOf("처분결과"),
+    disposalDate:          header.indexOf("처분일자"),
   };
 
   let created = 0, skipped = 0;
   const errors: string[] = [];
 
-  const allDataRows = rows.slice(headerRowIdx + 1);
-  const totalRows = allDataRows.length;
-
-  for (const rawRow of allDataRows.slice(offset, offset + limit)) {
+  for (const rawRow of rows) {
     const row = rawRow as unknown[];
     const name = normalizeName(row[C.name]);
     const ssn = row[C.ssn] ? String(row[C.ssn]).trim() : null;
@@ -295,18 +260,18 @@ async function processPneumoconiosis(
 
       await prisma.pneumoconiosisDetail.create({
         data: {
-          caseId:               newCase.id,
+          caseId:                newCase.id,
           status,
-          firstClinic:          strVal(row[C.firstClinic]),
-          firstExamDate:        toDate(row[C.firstExamDate]),
-          noticeReceivedDate:   toDate(row[C.noticeReceivedDate]),
-          precisionExamDate:    toDate(row[C.precisionExamDate]),
-          precisionResult:      strVal(row[C.precisionResult]),
-          precisionHospital:    strVal(row[C.precisionHospital]),
+          firstClinic:           strVal(row[C.firstClinic]),
+          firstExamDate:         toDate(row[C.firstExamDate]),
+          noticeReceivedDate:    toDate(row[C.noticeReceivedDate]),
+          precisionExamDate:     toDate(row[C.precisionExamDate]),
+          precisionResult:       strVal(row[C.precisionResult]),
+          precisionHospital:     strVal(row[C.precisionHospital]),
           precisionPossibleDate: toDate(row[C.precisionPossibleDate]),
-          reExamPossibleDate:   toDate(row[C.reExamPossibleDate]),
+          reExamPossibleDate:    toDate(row[C.reExamPossibleDate]),
           disposalType,
-          disposalDate:         toDate(row[C.disposalDate]),
+          disposalDate:          toDate(row[C.disposalDate]),
         },
       });
 
@@ -316,55 +281,46 @@ async function processPneumoconiosis(
     }
   }
 
-  return { created, skipped, errors: errors.slice(0, 20), totalRows };
+  return { created, skipped, errors: errors.slice(0, 20) };
 }
 
 async function processCopd(
-  ws: XLSX.WorkSheet,
+  rows: unknown[][],
+  header: unknown[],
+  _prevHeader: unknown[],
   tfName: string | null,
   branchOverride: string | null,
-  offset: number,
-  limit: number,
 ): Promise<SheetResult> {
-  const rows: unknown[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null });
-  const headerRowIdx = findHeaderRow(rows);
-  if (headerRowIdx === -1) return { created: 0, skipped: 0, errors: ["헤더 행을 찾을 수 없습니다"], totalRows: 0 };
-
-  const header = rows[headerRowIdx] as unknown[];
-
   const C = {
-    caseNumber:        header.findIndex(h => h === "연번"),
-    name:              header.indexOf("성명"),
-    ssn:               header.indexOf("주민번호"),
-    phone:             header.indexOf("연락처"),
-    salesManager:      colIdx(header, "영업", "담당"),
-    caseManager:       colIdx(header, "접수", "담당"),
-    contractDate:      colIdx(header, "약정"),
-    salesRoute:        colIdx(header, "영업", "경로"),
-    branch:            header.indexOf("지사"),
-    subAgent:          colIdx(header, "소속"),
-    status:            header.indexOf("진행상황"),
-    receptionDate:     header.findIndex((h: unknown, i: number) => h === "접수일자" && i > 10),
-    memo:              header.lastIndexOf("비고"),
-    firstClinic:       header.indexOf("초진병원"),
-    firstExamDate:     header.indexOf("초진일자"),
-    specialClinic:     header.indexOf("특진병원"),
-    exam1Date:         header.indexOf("1차특진"),
-    exam2Date:         header.indexOf("2차특진"),
-    examResult:        header.indexOf("특진결과"),
-    expertOrgDate:     colIdx(header, "직업환경"),
+    caseNumber:         header.findIndex(h => h === "연번"),
+    name:               header.indexOf("성명"),
+    ssn:                header.indexOf("주민번호"),
+    phone:              header.indexOf("연락처"),
+    salesManager:       colIdx(header, "영업", "담당"),
+    caseManager:        colIdx(header, "접수", "담당"),
+    contractDate:       colIdx(header, "약정"),
+    salesRoute:         colIdx(header, "영업", "경로"),
+    branch:             header.indexOf("지사"),
+    subAgent:           colIdx(header, "소속"),
+    status:             header.indexOf("진행상황"),
+    receptionDate:      header.findIndex((h: unknown, i: number) => h === "접수일자" && i > 10),
+    memo:               header.lastIndexOf("비고"),
+    firstClinic:        header.indexOf("초진병원"),
+    firstExamDate:      header.indexOf("초진일자"),
+    specialClinic:      header.indexOf("특진병원"),
+    exam1Date:          header.indexOf("1차특진"),
+    exam2Date:          header.indexOf("2차특진"),
+    examResult:         header.indexOf("특진결과"),
+    expertOrgDate:      colIdx(header, "직업환경"),
     reExamPossibleDate: header.lastIndexOf("재진행가능일"),
-    disposal:          header.indexOf("처분결과"),
-    disposalDate:      header.indexOf("처분일자"),
+    disposal:           header.indexOf("처분결과"),
+    disposalDate:       header.indexOf("처분일자"),
   };
 
   let created = 0, skipped = 0;
   const errors: string[] = [];
 
-  const allDataRows = rows.slice(headerRowIdx + 1);
-  const totalRows = allDataRows.length;
-
-  for (const rawRow of allDataRows.slice(offset, offset + limit)) {
+  for (const rawRow of rows) {
     const row = rawRow as unknown[];
     const name = normalizeName(row[C.name]);
     const ssn = row[C.ssn] ? String(row[C.ssn]).trim() : null;
@@ -407,18 +363,18 @@ async function processCopd(
 
       await prisma.copdDetail.create({
         data: {
-          caseId:            newCase.id,
+          caseId:             newCase.id,
           status,
-          firstClinic:       strVal(row[C.firstClinic]),
-          firstExamDate:     toDate(row[C.firstExamDate]),
-          specialClinic:     strVal(row[C.specialClinic]),
-          exam1Date:         toDate(row[C.exam1Date]),
-          exam2Date:         toDate(row[C.exam2Date]),
-          examResult:        strVal(row[C.examResult]),
-          expertOrgDate:     toDate(row[C.expertOrgDate]),
+          firstClinic:        strVal(row[C.firstClinic]),
+          firstExamDate:      toDate(row[C.firstExamDate]),
+          specialClinic:      strVal(row[C.specialClinic]),
+          exam1Date:          toDate(row[C.exam1Date]),
+          exam2Date:          toDate(row[C.exam2Date]),
+          examResult:         strVal(row[C.examResult]),
+          expertOrgDate:      toDate(row[C.expertOrgDate]),
           reExamPossibleDate: toDate(row[C.reExamPossibleDate]),
           disposalType,
-          disposalDate:      toDate(row[C.disposalDate]),
+          disposalDate:       toDate(row[C.disposalDate]),
         },
       });
 
@@ -428,22 +384,16 @@ async function processCopd(
     }
   }
 
-  return { created, skipped, errors: errors.slice(0, 20), totalRows };
+  return { created, skipped, errors: errors.slice(0, 20) };
 }
 
 async function processOccupationalCancer(
-  ws: XLSX.WorkSheet,
+  rows: unknown[][],
+  header: unknown[],
+  _prevHeader: unknown[],
   tfName: string | null,
   branchOverride: string | null,
-  offset: number,
-  limit: number,
 ): Promise<SheetResult> {
-  const rows: unknown[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null });
-  const headerRowIdx = findHeaderRow(rows);
-  if (headerRowIdx === -1) return { created: 0, skipped: 0, errors: ["헤더 행을 찾을 수 없습니다"], totalRows: 0 };
-
-  const header = rows[headerRowIdx] as unknown[];
-
   const C = {
     caseNumber:           header.indexOf("연번"),
     name:                 header.findIndex((h: unknown) => h === "재해자명" || h === "성명"),
@@ -471,10 +421,7 @@ async function processOccupationalCancer(
   let created = 0, skipped = 0;
   const errors: string[] = [];
 
-  const allDataRows = rows.slice(headerRowIdx + 1);
-  const totalRows = allDataRows.length;
-
-  for (const rawRow of allDataRows.slice(offset, offset + limit)) {
+  for (const rawRow of rows) {
     const row = rawRow as unknown[];
     const name = normalizeName(row[C.name]);
     const ssn = row[C.ssn] ? String(row[C.ssn]).trim() : null;
@@ -536,22 +483,16 @@ async function processOccupationalCancer(
     }
   }
 
-  return { created, skipped, errors: errors.slice(0, 20), totalRows };
+  return { created, skipped, errors: errors.slice(0, 20) };
 }
 
 async function processBereaved(
-  ws: XLSX.WorkSheet,
+  rows: unknown[][],
+  header: unknown[],
+  _prevHeader: unknown[],
   tfName: string | null,
   branchOverride: string | null,
-  offset: number,
-  limit: number,
 ): Promise<SheetResult> {
-  const rows: unknown[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null });
-  const headerRowIdx = findHeaderRow(rows);
-  if (headerRowIdx === -1) return { created: 0, skipped: 0, errors: ["헤더 행을 찾을 수 없습니다"], totalRows: 0 };
-
-  const header = rows[headerRowIdx] as unknown[];
-
   const C = {
     caseNumber:           header.indexOf("연번"),
     name:                 header.findIndex((h: unknown) => h === "재해자명" || h === "성명"),
@@ -579,10 +520,7 @@ async function processBereaved(
   let created = 0, skipped = 0;
   const errors: string[] = [];
 
-  const allDataRows = rows.slice(headerRowIdx + 1);
-  const totalRows = allDataRows.length;
-
-  for (const rawRow of allDataRows.slice(offset, offset + limit)) {
+  for (const rawRow of rows) {
     const row = rawRow as unknown[];
     const name = normalizeName(row[C.name]);
     const ssn = row[C.ssn] ? String(row[C.ssn]).trim() : null;
@@ -644,63 +582,54 @@ async function processBereaved(
     }
   }
 
-  return { created, skipped, errors: errors.slice(0, 20), totalRows };
+  return { created, skipped, errors: errors.slice(0, 20) };
 }
 
 async function processMusculoskeletal(
-  ws: XLSX.WorkSheet,
+  rows: unknown[][],
+  header: unknown[],
+  _prevHeader: unknown[],
   tfName: string | null,
   branchOverride: string | null,
-  offset: number,
-  limit: number,
 ): Promise<SheetResult> {
-  const rows: unknown[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null });
-  const headerRowIdx = findHeaderRow(rows);
-  if (headerRowIdx === -1) return { created: 0, skipped: 0, errors: ["헤더 행을 찾을 수 없습니다"], totalRows: 0 };
-
-  const header = rows[headerRowIdx] as unknown[];
-
   const C = {
-    caseNumber:            header.indexOf("연번"),
-    name:                  header.indexOf("성명"),
-    ssn:                   header.indexOf("주민번호"),
-    phone:                 header.indexOf("연락처"),
-    salesManager:          colIdx(header, "영업", "담당"),
-    caseManager:           header.findIndex((h: unknown) => h === "접수자"),
-    contractDate:          colIdx(header, "약정"),
-    salesRoute:            colIdx(header, "영업", "경로"),
-    branch:                header.indexOf("지사"),
-    subAgent:              header.findIndex((h: unknown) => h === "대리인"),
-    status:                header.indexOf("진행상황"),
-    receptionDate:         header.findIndex((h: unknown) => h === "접수일" || h === "접수일자"),
-    memo:                  header.findIndex((h: unknown) => typeof h === "string" && (h.includes("비고") || h.includes("불승인사유"))),
-    bodyPart:              header.indexOf("부위"),
-    diseaseName:           header.indexOf("상병명"),
-    occupation:            header.indexOf("직종"),
-    workHistory:           header.indexOf("직력"),
-    expertType:            colIdx(header, "전문조사/지사조사"),
-    expertRequestDate:     colIdx(header, "진찰요구서"),
-    expertScheduleDate:    header.findIndex((h: unknown) => typeof h === "string" && h.includes("전문조사") && h.includes("일정")),
-    hasMedicalCommittee:   header.findIndex((h: unknown) => h === "질판위"),
-    committeeSubmitDate:   header.findIndex((h: unknown) => typeof h === "string" && (h.includes("질판위접수") || h.includes("질판위 접수"))),
-    committeeReviewDate:   header.findIndex((h: unknown) => typeof h === "string" && (h.includes("질판위심의") || h.includes("질판위 심의"))),
-    disposal:              header.indexOf("처분결과"),
-    approvalDate:          header.findIndex((h: unknown) => typeof h === "string" && h.includes("요양") && h.includes("승인") && h.includes("일자")),
+    caseNumber:             header.indexOf("연번"),
+    name:                   header.indexOf("성명"),
+    ssn:                    header.indexOf("주민번호"),
+    phone:                  header.indexOf("연락처"),
+    salesManager:           colIdx(header, "영업", "담당"),
+    caseManager:            header.findIndex((h: unknown) => h === "접수자"),
+    contractDate:           colIdx(header, "약정"),
+    salesRoute:             colIdx(header, "영업", "경로"),
+    branch:                 header.indexOf("지사"),
+    subAgent:               header.findIndex((h: unknown) => h === "대리인"),
+    status:                 header.indexOf("진행상황"),
+    receptionDate:          header.findIndex((h: unknown) => h === "접수일" || h === "접수일자"),
+    memo:                   header.findIndex((h: unknown) => typeof h === "string" && (h.includes("비고") || h.includes("불승인사유"))),
+    bodyPart:               header.indexOf("부위"),
+    diseaseName:            header.indexOf("상병명"),
+    occupation:             header.indexOf("직종"),
+    workHistory:            header.indexOf("직력"),
+    expertType:             colIdx(header, "전문조사/지사조사"),
+    expertRequestDate:      colIdx(header, "진찰요구서"),
+    expertScheduleDate:     header.findIndex((h: unknown) => typeof h === "string" && h.includes("전문조사") && h.includes("일정")),
+    hasMedicalCommittee:    header.findIndex((h: unknown) => h === "질판위"),
+    committeeSubmitDate:    header.findIndex((h: unknown) => typeof h === "string" && (h.includes("질판위접수") || h.includes("질판위 접수"))),
+    committeeReviewDate:    header.findIndex((h: unknown) => typeof h === "string" && (h.includes("질판위심의") || h.includes("질판위 심의"))),
+    disposal:               header.indexOf("처분결과"),
+    approvalDate:           header.findIndex((h: unknown) => typeof h === "string" && h.includes("요양") && h.includes("승인") && h.includes("일자")),
     disabilityApprovalDate: header.findIndex((h: unknown) => typeof h === "string" && h.includes("장해승인")),
-    hospitalName:          header.indexOf("의료기관명"),
-    managingBranch:        header.indexOf("요양관할지사"),
-    treatmentStartDate:    header.indexOf("요양시작일"),
-    treatmentEndDate:      header.indexOf("요양종결일"),
-    claimCycle:            header.indexOf("청구주기"),
+    hospitalName:           header.indexOf("의료기관명"),
+    managingBranch:         header.indexOf("요양관할지사"),
+    treatmentStartDate:     header.indexOf("요양시작일"),
+    treatmentEndDate:       header.indexOf("요양종결일"),
+    claimCycle:             header.indexOf("청구주기"),
   };
 
   let created = 0, skipped = 0;
   const errors: string[] = [];
 
-  const allDataRows = rows.slice(headerRowIdx + 1);
-  const totalRows = allDataRows.length;
-
-  for (const rawRow of allDataRows.slice(offset, offset + limit)) {
+  for (const rawRow of rows) {
     const row = rawRow as unknown[];
     const name = normalizeName(row[C.name]);
     const ssn = row[C.ssn] ? String(row[C.ssn]).trim() : null;
@@ -772,64 +701,55 @@ async function processMusculoskeletal(
     }
   }
 
-  return { created, skipped, errors: errors.slice(0, 20), totalRows };
+  return { created, skipped, errors: errors.slice(0, 20) };
 }
 
 async function processOccupationalAccident(
-  ws: XLSX.WorkSheet,
+  rows: unknown[][],
+  header: unknown[],
+  _prevHeader: unknown[],
   tfName: string | null,
   branchOverride: string | null,
-  offset: number,
-  limit: number,
 ): Promise<SheetResult> {
-  const rows: unknown[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null });
-  const headerRowIdx = findHeaderRow(rows);
-  if (headerRowIdx === -1) return { created: 0, skipped: 0, errors: ["헤더 행을 찾을 수 없습니다"], totalRows: 0 };
-
-  const header = rows[headerRowIdx] as unknown[];
-
   const C = {
-    caseNumber:            header.indexOf("연번"),
-    name:                  header.indexOf("성명"),
-    ssn:                   header.indexOf("주민번호"),
-    phone:                 header.indexOf("연락처"),
-    salesManager:          colIdx(header, "영업", "담당"),
-    caseManager:           header.findIndex((h: unknown) => h === "접수자"),
-    contractDate:          colIdx(header, "약정"),
-    salesRoute:            colIdx(header, "영업", "경로"),
-    branch:                header.indexOf("지사"),
-    subAgent:              header.findIndex((h: unknown) => h === "대리인"),
-    status:                header.indexOf("진행상황"),
-    receptionDate:         header.findIndex((h: unknown) => h === "접수일" || h === "접수일자"),
-    memo:                  header.findIndex((h: unknown) => typeof h === "string" && (h.includes("비고") || h.includes("불승인사유"))),
-    caseName:              header.indexOf("사건명"),
-    bodyPart:              header.indexOf("부위"),
-    diseaseName:           header.indexOf("상병명"),
-    occupation:            header.indexOf("직종"),
-    workHistory:           header.indexOf("직력"),
-    expertType:            colIdx(header, "전문조사/지사조사"),
-    expertRequestDate:     colIdx(header, "진찰요구서"),
-    expertScheduleDate:    header.findIndex((h: unknown) => typeof h === "string" && h.includes("전문조사") && h.includes("일정")),
-    hasMedicalCommittee:   header.findIndex((h: unknown) => h === "질판위"),
-    committeeSubmitDate:   header.findIndex((h: unknown) => typeof h === "string" && (h.includes("질판위접수") || h.includes("질판위 접수"))),
-    committeeReviewDate:   header.findIndex((h: unknown) => typeof h === "string" && (h.includes("질판위심의") || h.includes("질판위 심의"))),
-    disposal:              header.indexOf("처분결과"),
-    approvalDate:          header.findIndex((h: unknown) => typeof h === "string" && h.includes("요양") && h.includes("승인") && h.includes("일자")),
+    caseNumber:             header.indexOf("연번"),
+    name:                   header.indexOf("성명"),
+    ssn:                    header.indexOf("주민번호"),
+    phone:                  header.indexOf("연락처"),
+    salesManager:           colIdx(header, "영업", "담당"),
+    caseManager:            header.findIndex((h: unknown) => h === "접수자"),
+    contractDate:           colIdx(header, "약정"),
+    salesRoute:             colIdx(header, "영업", "경로"),
+    branch:                 header.indexOf("지사"),
+    subAgent:               header.findIndex((h: unknown) => h === "대리인"),
+    status:                 header.indexOf("진행상황"),
+    receptionDate:          header.findIndex((h: unknown) => h === "접수일" || h === "접수일자"),
+    memo:                   header.findIndex((h: unknown) => typeof h === "string" && (h.includes("비고") || h.includes("불승인사유"))),
+    caseName:               header.indexOf("사건명"),
+    bodyPart:               header.indexOf("부위"),
+    diseaseName:            header.indexOf("상병명"),
+    occupation:             header.indexOf("직종"),
+    workHistory:            header.indexOf("직력"),
+    expertType:             colIdx(header, "전문조사/지사조사"),
+    expertRequestDate:      colIdx(header, "진찰요구서"),
+    expertScheduleDate:     header.findIndex((h: unknown) => typeof h === "string" && h.includes("전문조사") && h.includes("일정")),
+    hasMedicalCommittee:    header.findIndex((h: unknown) => h === "질판위"),
+    committeeSubmitDate:    header.findIndex((h: unknown) => typeof h === "string" && (h.includes("질판위접수") || h.includes("질판위 접수"))),
+    committeeReviewDate:    header.findIndex((h: unknown) => typeof h === "string" && (h.includes("질판위심의") || h.includes("질판위 심의"))),
+    disposal:               header.indexOf("처분결과"),
+    approvalDate:           header.findIndex((h: unknown) => typeof h === "string" && h.includes("요양") && h.includes("승인") && h.includes("일자")),
     disabilityApprovalDate: header.findIndex((h: unknown) => typeof h === "string" && h.includes("장해승인")),
-    hospitalName:          header.indexOf("의료기관명"),
-    managingBranch:        header.indexOf("요양관할지사"),
-    treatmentStartDate:    header.indexOf("요양시작일"),
-    treatmentEndDate:      header.indexOf("요양종결일"),
-    claimCycle:            header.indexOf("청구주기"),
+    hospitalName:           header.indexOf("의료기관명"),
+    managingBranch:         header.indexOf("요양관할지사"),
+    treatmentStartDate:     header.indexOf("요양시작일"),
+    treatmentEndDate:       header.indexOf("요양종결일"),
+    claimCycle:             header.indexOf("청구주기"),
   };
 
   let created = 0, skipped = 0;
   const errors: string[] = [];
 
-  const allDataRows = rows.slice(headerRowIdx + 1);
-  const totalRows = allDataRows.length;
-
-  for (const rawRow of allDataRows.slice(offset, offset + limit)) {
+  for (const rawRow of rows) {
     const row = rawRow as unknown[];
     const name = normalizeName(row[C.name]);
     const ssn = row[C.ssn] ? String(row[C.ssn]).trim() : null;
@@ -902,91 +822,50 @@ async function processOccupationalAccident(
     }
   }
 
-  return { created, skipped, errors: errors.slice(0, 20), totalRows };
+  return { created, skipped, errors: errors.slice(0, 20) };
 }
 
-// ---- Sheet → caseType 매핑 ----
+// ---- Dispatch map ----
 
-const SHEET_MATCHERS: Array<{
-  match: (name: string) => boolean;
-  caseType: string;
-  process: (ws: XLSX.WorkSheet, tfName: string | null, branch: string | null, offset: number, limit: number) => Promise<SheetResult>;
-}> = [
-  {
-    match: (n) => n.includes("소음성난청") || n.includes("소음성 난청"),
-    caseType: "HEARING_LOSS",
-    process: processHearingLoss,
-  },
-  {
-    match: (n) => n.includes("진폐"),
-    caseType: "PNEUMOCONIOSIS",
-    process: processPneumoconiosis,
-  },
-  {
-    match: (n) => n.toUpperCase().includes("COPD"),
-    caseType: "COPD",
-    process: processCopd,
-  },
-  {
-    match: (n) => n.includes("직업성 암") || n.includes("직업성암"),
-    caseType: "OCCUPATIONAL_CANCER",
-    process: processOccupationalCancer,
-  },
-  {
-    match: (n) => n.includes("유족"),
-    caseType: "BEREAVED",
-    process: processBereaved,
-  },
-  {
-    match: (n) => n.includes("근골격계"),
-    caseType: "MUSCULOSKELETAL",
-    process: processMusculoskeletal,
-  },
-  {
-    match: (n) => n.includes("업무상 사고") || n.includes("업무상사고"),
-    caseType: "OCCUPATIONAL_ACCIDENT",
-    process: processOccupationalAccident,
-  },
-];
+type Processor = (
+  rows: unknown[][],
+  header: unknown[],
+  prevHeader: unknown[],
+  tfName: string | null,
+  branch: string | null,
+) => Promise<SheetResult>;
+
+const PROCESSORS: Record<string, Processor> = {
+  HEARING_LOSS:          processHearingLoss,
+  PNEUMOCONIOSIS:        processPneumoconiosis,
+  COPD:                  processCopd,
+  OCCUPATIONAL_CANCER:   processOccupationalCancer,
+  BEREAVED:              processBereaved,
+  MUSCULOSKELETAL:       processMusculoskeletal,
+  OCCUPATIONAL_ACCIDENT: processOccupationalAccident,
+};
 
 // ---- POST handler ----
 
 export async function POST(req: NextRequest) {
   try {
-    const formData = await req.formData();
-    const file = formData.get("file") as File | null;
-    if (!file) return NextResponse.json({ error: "파일 없음" }, { status: 400 });
+    const body = await req.json();
+    const { caseType, tfName, branch, header, prevHeader = [], rows } = body as {
+      caseType: string;
+      tfName: string | null;
+      branch: string | null;
+      header: unknown[];
+      prevHeader: unknown[];
+      rows: unknown[][];
+    };
 
-    const tfName = formData.get("tfName") as string | null;
-    const branch = formData.get("branch") as string | null;
-    const targetSheet = formData.get("sheetName") as string | null;
-    const offset = parseInt((formData.get("offset") as string) ?? "0") || 0;
-    const limit  = parseInt((formData.get("limit")  as string) ?? "100") || 100;
-
-    const buffer = Buffer.from(await file.arrayBuffer());
-    const wb = XLSX.read(buffer, { type: "buffer", cellDates: true });
-
-    // 특정 시트만 처리
-    if (targetSheet) {
-      const matcher = SHEET_MATCHERS.find((m) => m.match(targetSheet));
-      if (!matcher) return NextResponse.json({ error: `알 수 없는 시트: ${targetSheet}` }, { status: 400 });
-      const ws = wb.Sheets[targetSheet];
-      if (!ws) return NextResponse.json({ error: `시트를 찾을 수 없음: ${targetSheet}` }, { status: 400 });
-      const result = await matcher.process(ws, tfName, branch, offset, limit);
-      return NextResponse.json({ success: true, caseType: matcher.caseType, result });
+    const processor = PROCESSORS[caseType];
+    if (!processor) {
+      return NextResponse.json({ error: `알 수 없는 caseType: ${caseType}` }, { status: 400 });
     }
 
-    // sheetName 없으면 전체 처리 (fallback)
-    const results: Record<string, SheetResult> = {};
-    for (const sheetName of wb.SheetNames) {
-      const matcher = SHEET_MATCHERS.find((m) => m.match(sheetName));
-      if (!matcher) continue;
-      const ws = wb.Sheets[sheetName];
-      const result = await matcher.process(ws, tfName, branch, 0, 999999);
-      results[matcher.caseType] = result;
-    }
-
-    return NextResponse.json({ success: true, results });
+    const result = await processor(rows, header, prevHeader, tfName, branch);
+    return NextResponse.json({ success: true, result });
   } catch (err) {
     console.error("[POST /api/import/all]", err);
     return NextResponse.json({ error: "임포트 오류" }, { status: 500 });

@@ -62,7 +62,7 @@ export default function ImportPage() {
     try {
       // 파일을 클라이언트에서 읽어 시트 목록 파악
       const arrayBuffer = await file.arrayBuffer();
-      const wb = XLSX.read(arrayBuffer, { type: "array" });
+      const wb = XLSX.read(arrayBuffer, { type: "array", cellDates: true });
 
       const matchingSheets = wb.SheetNames
         .map((sheetName) => {
@@ -76,28 +76,42 @@ export default function ImportPage() {
         return;
       }
 
+      // 시트별 rows 추출 (클라이언트에서 파싱 — 서버 OOM 방지)
       const accumulated: Record<string, SheetResult> = {};
 
       for (let i = 0; i < matchingSheets.length; i++) {
         const { sheetName, caseType, label } = matchingSheets[i];
 
-        let offset = 0;
-        let totalRows = Infinity;
+        const ws = wb.Sheets[sheetName];
+        const allRows: unknown[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null });
+
+        // 헤더 행 탐색
+        const headerRowIdx = allRows.findIndex(row =>
+          (row as unknown[]).some(c => c === "연번" || c === "성명" || c === "재해자명")
+        );
+        if (headerRowIdx === -1) {
+          accumulated[caseType] = { created: 0, skipped: 0, errors: ["헤더 행을 찾을 수 없습니다"], totalRows: 0 };
+          setResults({ ...accumulated });
+          continue;
+        }
+
+        const header = allRows[headerRowIdx] as unknown[];
+        const prevHeader = headerRowIdx > 0 ? (allRows[headerRowIdx - 1] as unknown[]) : [];
+        const dataRows = allRows.slice(headerRowIdx + 1);
+        const totalRows = dataRows.length;
+
         let sheetCreated = 0, sheetSkipped = 0;
         const sheetErrors: string[] = [];
 
-        while (offset < totalRows) {
-          setProgress({ label, done: offset, total: totalRows === Infinity ? 0 : totalRows, sheetStep: i + 1, sheetTotal: matchingSheets.length });
+        for (let offset = 0; offset < totalRows; offset += BATCH_SIZE) {
+          setProgress({ label, done: offset, total: totalRows, sheetStep: i + 1, sheetTotal: matchingSheets.length });
 
-          const formData = new FormData();
-          formData.append("file", file);
-          formData.append("tfName", selectedTf);
-          formData.append("branch", selectedBranch);
-          formData.append("sheetName", sheetName);
-          formData.append("offset", String(offset));
-          formData.append("limit", String(BATCH_SIZE));
-
-          const res = await fetch("/api/import/all", { method: "POST", body: formData });
+          const batch = dataRows.slice(offset, offset + BATCH_SIZE);
+          const res = await fetch("/api/import/all", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ caseType, tfName: selectedTf, branch: selectedBranch, header, prevHeader, rows: batch }),
+          });
           const data = await res.json();
 
           if (!res.ok) {
@@ -105,12 +119,10 @@ export default function ImportPage() {
             break;
           }
 
-          const batch = data.result as SheetResult;
-          sheetCreated += batch.created;
-          sheetSkipped += batch.skipped;
-          sheetErrors.push(...batch.errors);
-          totalRows = batch.totalRows;
-          offset += BATCH_SIZE;
+          const result = data.result as SheetResult;
+          sheetCreated += result.created;
+          sheetSkipped += result.skipped;
+          sheetErrors.push(...result.errors);
 
           accumulated[caseType] = {
             created: sheetCreated,
