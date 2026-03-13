@@ -577,6 +577,30 @@ function PatientSidebar({ patient, onUpdated }: { patient: PatientData; onUpdate
   );
 }
 
+function ConfirmModal({ message, onConfirm, onCancel, confirming }: {
+  message: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+  confirming: boolean;
+}) {
+  return (
+    <>
+      <div onClick={onCancel} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 999 }} />
+      <div style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)", background: "white", borderRadius: 12, padding: 28, zIndex: 1000, minWidth: 340, boxShadow: "0 20px 60px rgba(0,0,0,0.25)", fontFamily: "'Malgun Gothic', 'Apple SD Gothic Neo', 'Segoe UI', sans-serif" }}>
+        <div style={{ fontSize: 15, fontWeight: 800, color: "#111827", marginBottom: 12 }}>삭제 확인</div>
+        <div style={{ fontSize: 13, color: "#374151", lineHeight: 1.7, marginBottom: 8, whiteSpace: "pre-line" }}>{message}</div>
+        <div style={{ fontSize: 12, color: "#dc2626", marginBottom: 24 }}>이 작업은 되돌릴 수 없습니다.</div>
+        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+          <button onClick={onCancel} disabled={confirming} style={{ border: "1px solid #e5e7eb", borderRadius: 6, padding: "8px 18px", fontSize: 13, color: "#374151", background: "white", cursor: "pointer" }}>취소</button>
+          <button onClick={onConfirm} disabled={confirming} style={{ background: "#dc2626", color: "white", border: "none", borderRadius: 6, padding: "8px 18px", fontSize: 13, fontWeight: 700, cursor: "pointer", opacity: confirming ? 0.6 : 1 }}>
+            {confirming ? "삭제 중..." : "삭제"}
+          </button>
+        </div>
+      </div>
+    </>
+  );
+}
+
 /* ── 메인 페이지 (inner) ── */
 function PatientPageInner() {
   const router = useRouter();
@@ -588,6 +612,8 @@ function PatientPageInner() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<string>("");
+  const [deleteModal, setDeleteModal] = useState(false);
+  const [deleteConfirming, setDeleteConfirming] = useState(false);
 
   const fetchPatient = useCallback(async () => {
     if (!patientId) return;
@@ -606,6 +632,20 @@ function PatientPageInner() {
   }, [patientId]);
 
   useEffect(() => { fetchPatient(); }, [fetchPatient]);
+
+  const handleDelete = async () => {
+    setDeleteConfirming(true);
+    try {
+      const res = await fetch(`/api/patients/${patientId}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("삭제 실패");
+      router.push("/patients");
+    } catch {
+      alert("삭제 중 오류가 발생했습니다");
+    } finally {
+      setDeleteConfirming(false);
+      setDeleteModal(false);
+    }
+  };
 
   useEffect(() => {
     if (!patient) return;
@@ -652,6 +692,14 @@ function PatientPageInner() {
 
   return (
     <div style={{ ...S, minHeight: "100%", background: "#f1f5f9" }}>
+      {deleteModal && (
+        <ConfirmModal
+          message={`${patient.name} 재해자와 연결된 모든 사건을 삭제합니다.`}
+          onConfirm={handleDelete}
+          onCancel={() => setDeleteModal(false)}
+          confirming={deleteConfirming}
+        />
+      )}
       {/* 헤더 */}
       <div style={{ background: "white", borderBottom: "1px solid #e5e7eb", padding: "0 24px", display: "flex", alignItems: "stretch", gap: 16, position: "sticky", top: 0, zIndex: 10 }}>
         <button onClick={() => router.push("/cases")} style={{ background: "none", border: "none", color: "#6b7280", fontSize: 13, cursor: "pointer", display: "flex", alignItems: "center", gap: 6, padding: "16px 0", flexShrink: 0 }}>
@@ -663,6 +711,14 @@ function PatientPageInner() {
           {patient.cases.map((c) => (
             <StatusBadge key={c.id} status={getCaseStatus(c)} />
           ))}
+        </div>
+        <div style={{ display: "flex", alignItems: "center" }}>
+          <button
+            onClick={() => setDeleteModal(true)}
+            style={{ background: "white", color: "#dc2626", border: "1px solid #fca5a5", borderRadius: 6, padding: "6px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
+          >
+            재해자 삭제
+          </button>
         </div>
       </div>
 

@@ -23,6 +23,30 @@ function sanitizeRows(rows: unknown[][]): (string | null)[][] {
 
 type ImportResult = { created: number; skipped: number; errors: string[] };
 
+function ConfirmModal({ message, onConfirm, onCancel, confirming }: {
+  message: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+  confirming: boolean;
+}) {
+  return (
+    <>
+      <div onClick={onCancel} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 999 }} />
+      <div style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)", background: "white", borderRadius: 12, padding: 28, zIndex: 1000, minWidth: 340, boxShadow: "0 20px 60px rgba(0,0,0,0.25)" }}>
+        <div style={{ fontSize: 15, fontWeight: 800, color: "#111827", marginBottom: 12 }}>삭제 확인</div>
+        <div style={{ fontSize: 13, color: "#374151", lineHeight: 1.7, marginBottom: 8, whiteSpace: "pre-line" }}>{message}</div>
+        <div style={{ fontSize: 12, color: "#dc2626", marginBottom: 24 }}>이 작업은 되돌릴 수 없습니다.</div>
+        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+          <button onClick={onCancel} disabled={confirming} style={{ border: "1px solid #e5e7eb", borderRadius: 6, padding: "8px 18px", fontSize: 13, color: "#374151", background: "white", cursor: "pointer" }}>취소</button>
+          <button onClick={onConfirm} disabled={confirming} style={{ background: "#dc2626", color: "white", border: "none", borderRadius: 6, padding: "8px 18px", fontSize: 13, fontWeight: 700, cursor: "pointer", opacity: confirming ? 0.6 : 1 }}>
+            {confirming ? "삭제 중..." : "삭제"}
+          </button>
+        </div>
+      </div>
+    </>
+  );
+}
+
 export default function ImportPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
@@ -33,6 +57,11 @@ export default function ImportPage() {
   const [serverError, setServerError] = useState<string | null>(null);
   const [selectedTf, setSelectedTf] = useState<string>("");
   const [selectedDisease] = useState(DISEASE_OPTIONS[0]);
+
+  const [deleteTf, setDeleteTf] = useState<string>("");
+  const [deleteModal, setDeleteModal] = useState(false);
+  const [deleteConfirming, setDeleteConfirming] = useState(false);
+  const [deleteResult, setDeleteResult] = useState<string | null>(null);
 
   const selectedBranch = selectedTf ? TF_TO_BRANCH[selectedTf] ?? "" : "";
 
@@ -129,6 +158,25 @@ export default function ImportPage() {
     } finally {
       setLoading(false);
       setProgress(null);
+    }
+  };
+
+  const handleDeleteTf = async () => {
+    setDeleteConfirming(true);
+    try {
+      const res = await fetch("/api/admin/delete-tf", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tfName: deleteTf }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setDeleteResult(`오류: ${data.error ?? "삭제 실패"}`); }
+      else { setDeleteResult(`${deleteTf} TF의 ${data.deletedCases}건이 삭제되었습니다.`); setDeleteTf(""); }
+    } catch {
+      setDeleteResult("네트워크 오류가 발생했습니다");
+    } finally {
+      setDeleteConfirming(false);
+      setDeleteModal(false);
     }
   };
 
@@ -308,6 +356,49 @@ export default function ImportPage() {
             </div>
           )}
         </div>
+      )}
+
+      {/* TF 데이터 삭제 */}
+      <div style={{ background: "white", borderRadius: 10, border: "1px solid #fecaca", padding: 24, boxShadow: "0 1px 3px rgba(0,0,0,0.05)", marginTop: 24 }}>
+        <div style={{ fontSize: 13, fontWeight: 800, color: "#dc2626", marginBottom: 16 }}>TF 데이터 삭제</div>
+        <div style={{ display: "flex", gap: 12, alignItems: "flex-end" }}>
+          <div style={{ flex: 1 }}>
+            <label style={{ fontSize: 12, color: "#6b7280", fontWeight: 600, display: "block", marginBottom: 6 }}>삭제할 TF 선택</label>
+            <select
+              value={deleteTf}
+              onChange={(e) => { setDeleteTf(e.target.value); setDeleteResult(null); }}
+              style={{ border: "1px solid #e5e7eb", borderRadius: 6, padding: "7px 12px", fontSize: 13, color: deleteTf ? "#374151" : "#9ca3af", background: "#f9fafb", width: "100%" }}
+            >
+              <option value="">TF를 선택하세요</option>
+              {Object.entries(TF_BY_BRANCH).map(([branch, tfs]) => (
+                <optgroup key={branch} label={branch}>
+                  {tfs.map((tf) => <option key={tf} value={tf}>{tf}</option>)}
+                </optgroup>
+              ))}
+            </select>
+          </div>
+          <button
+            onClick={() => { setDeleteResult(null); setDeleteModal(true); }}
+            disabled={!deleteTf}
+            style={{ background: !deleteTf ? "#9ca3af" : "#dc2626", color: "white", border: "none", borderRadius: 6, padding: "10px 20px", fontSize: 13, fontWeight: 700, cursor: !deleteTf ? "not-allowed" : "pointer", whiteSpace: "nowrap" }}
+          >
+            선택한 TF 전체 삭제
+          </button>
+        </div>
+        {deleteResult && (
+          <div style={{ marginTop: 12, fontSize: 13, color: deleteResult.startsWith("오류") ? "#dc2626" : "#16a34a", background: deleteResult.startsWith("오류") ? "#fef2f2" : "#f0fdf4", border: `1px solid ${deleteResult.startsWith("오류") ? "#fecaca" : "#bbf7d0"}`, borderRadius: 6, padding: "8px 12px" }}>
+            {deleteResult}
+          </div>
+        )}
+      </div>
+
+      {deleteModal && (
+        <ConfirmModal
+          message={`${deleteTf} TF의 모든 사건을 삭제합니다.`}
+          onConfirm={handleDeleteTf}
+          onCancel={() => setDeleteModal(false)}
+          confirming={deleteConfirming}
+        />
       )}
 
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>

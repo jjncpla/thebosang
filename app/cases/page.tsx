@@ -384,6 +384,32 @@ function FilterControl({
   return null;
 }
 
+// ─── Confirm Modal ────────────────────────────────────────────────────────────
+
+function ConfirmModal({ message, onConfirm, onCancel, confirming }: {
+  message: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+  confirming: boolean;
+}) {
+  return (
+    <>
+      <div onClick={onCancel} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 999 }} />
+      <div style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)", background: "white", borderRadius: 12, padding: 28, zIndex: 1000, minWidth: 340, boxShadow: "0 20px 60px rgba(0,0,0,0.25)", fontFamily: "'Malgun Gothic', 'Apple SD Gothic Neo', 'Segoe UI', sans-serif" }}>
+        <div style={{ fontSize: 15, fontWeight: 800, color: "#111827", marginBottom: 12 }}>삭제 확인</div>
+        <div style={{ fontSize: 13, color: "#374151", lineHeight: 1.7, marginBottom: 8, whiteSpace: "pre-line" }}>{message}</div>
+        <div style={{ fontSize: 12, color: "#dc2626", marginBottom: 24 }}>이 작업은 되돌릴 수 없습니다.</div>
+        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+          <button onClick={onCancel} disabled={confirming} style={{ border: "1px solid #e5e7eb", borderRadius: 6, padding: "8px 18px", fontSize: 13, color: "#374151", background: "white", cursor: "pointer" }}>취소</button>
+          <button onClick={onConfirm} disabled={confirming} style={{ background: "#dc2626", color: "white", border: "none", borderRadius: 6, padding: "8px 18px", fontSize: 13, fontWeight: 700, cursor: "pointer", opacity: confirming ? 0.6 : 1 }}>
+            {confirming ? "삭제 중..." : "삭제"}
+          </button>
+        </div>
+      </div>
+    </>
+  );
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function CasesPage() {
   const router = useRouter();
@@ -397,6 +423,10 @@ export default function CasesPage() {
   const [activeFilters, setActiveFilters] = useState<Record<string, string>>({});
   const [search, setSearch] = useState("");
   const [showJurisdiction, setShowJurisdiction] = useState(false);
+
+  const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
+  const [deleteModal, setDeleteModal] = useState(false);
+  const [deleteConfirming, setDeleteConfirming] = useState(false);
 
   const tfList = selectedBranch ? TF_BY_BRANCH[selectedBranch] ?? [] : [];
   const filterFields: FilterField[] = selectedCaseType
@@ -440,6 +470,38 @@ export default function CasesPage() {
     setSearch("");
   };
 
+  const allChecked = cases.length > 0 && checkedIds.size === cases.length;
+  const toggleAll = () => {
+    setCheckedIds(allChecked ? new Set() : new Set(cases.map(c => c.id)));
+  };
+  const toggleOne = (id: string) => {
+    setCheckedIds(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  const handleBulkDelete = async () => {
+    setDeleteConfirming(true);
+    try {
+      const res = await fetch("/api/cases/bulk-delete", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ caseIds: [...checkedIds] }),
+      });
+      if (!res.ok) throw new Error("삭제 실패");
+      setCheckedIds(new Set());
+      setDeleteModal(false);
+      fetchCases();
+    } catch {
+      alert("삭제 중 오류가 발생했습니다");
+    } finally {
+      setDeleteConfirming(false);
+      setDeleteModal(false);
+    }
+  };
+
   // ─── Columns ─────────────────────────────────────────────────────────────
   const isHearingLoss = selectedCaseType === "HEARING_LOSS";
   const COLUMNS = isHearingLoss
@@ -449,6 +511,14 @@ export default function CasesPage() {
   return (
     <div style={{ padding: 24, minHeight: "100%", background: "#f1f5f9", fontFamily: "'Malgun Gothic', 'Apple SD Gothic Neo', 'Segoe UI', sans-serif" }}>
       {showJurisdiction && <JurisdictionModal onClose={() => setShowJurisdiction(false)} />}
+      {deleteModal && (
+        <ConfirmModal
+          message={`선택한 ${checkedIds.size}건의 사건을 삭제합니다.`}
+          onConfirm={handleBulkDelete}
+          onCancel={() => setDeleteModal(false)}
+          confirming={deleteConfirming}
+        />
+      )}
 
       {/* Header */}
       <div style={{ marginBottom: 16, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
@@ -463,7 +533,15 @@ export default function CasesPage() {
             )}
           </div>
         </div>
-        <div style={{ display: "flex", gap: 8 }}>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          {checkedIds.size > 0 && (
+            <button
+              onClick={() => setDeleteModal(true)}
+              style={{ background: "#dc2626", color: "white", border: "none", borderRadius: 6, padding: "8px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
+            >
+              선택 {checkedIds.size}건 삭제
+            </button>
+          )}
           <button
             onClick={() => setShowJurisdiction(true)}
             style={{ background: "white", color: "#374151", border: "1px solid #e5e7eb", borderRadius: 6, padding: "8px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
@@ -600,6 +678,9 @@ export default function CasesPage() {
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
           <thead>
             <tr style={{ background: "#f8fafc", borderBottom: "2px solid #e5e7eb" }}>
+              <th style={{ padding: "10px 12px", width: 36 }}>
+                <input type="checkbox" checked={allChecked} onChange={toggleAll} style={{ cursor: "pointer" }} />
+              </th>
               {COLUMNS.map((h) => (
                 <th key={h} style={{ padding: "10px 16px", textAlign: "left", fontSize: 11, fontWeight: 700, color: "#6b7280", letterSpacing: 1, whiteSpace: "nowrap" }}>{h}</th>
               ))}
@@ -608,6 +689,7 @@ export default function CasesPage() {
           <tbody>
             {loading && Array.from({ length: 6 }).map((_, i) => (
               <tr key={i} style={{ borderBottom: "1px solid #f1f5f9" }}>
+                <td style={{ padding: "14px 12px" }} />
                 {COLUMNS.map((_, j) => (
                   <td key={j} style={{ padding: "14px 16px" }}>
                     <div style={{ height: 12, background: "#f1f5f9", borderRadius: 4, width: 60 + (j % 3) * 20 }} />
@@ -617,7 +699,7 @@ export default function CasesPage() {
             ))}
             {!loading && cases.length === 0 && (
               <tr>
-                <td colSpan={COLUMNS.length} style={{ padding: "48px 16px", textAlign: "center", color: "#9ca3af", fontSize: 14 }}>
+                <td colSpan={COLUMNS.length + 1} style={{ padding: "48px 16px", textAlign: "center", color: "#9ca3af", fontSize: 14 }}>
                   등록된 사건이 없습니다
                 </td>
               </tr>
@@ -626,10 +708,13 @@ export default function CasesPage() {
               <tr
                 key={c.id}
                 onClick={() => router.push(`/patients/${c.patient.id}?tab=${c.caseType}`)}
-                style={{ borderBottom: "1px solid #f1f5f9", cursor: "pointer" }}
-                onMouseEnter={(e) => (e.currentTarget.style.background = "#f8fafc")}
-                onMouseLeave={(e) => (e.currentTarget.style.background = "white")}
+                style={{ borderBottom: "1px solid #f1f5f9", cursor: "pointer", background: checkedIds.has(c.id) ? "#fef2f2" : "white" }}
+                onMouseEnter={(e) => { if (!checkedIds.has(c.id)) e.currentTarget.style.background = "#f8fafc"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = checkedIds.has(c.id) ? "#fef2f2" : "white"; }}
               >
+                <td style={{ padding: "12px 12px" }} onClick={(e) => { e.stopPropagation(); toggleOne(c.id); }}>
+                  <input type="checkbox" checked={checkedIds.has(c.id)} onChange={() => toggleOne(c.id)} style={{ cursor: "pointer" }} />
+                </td>
                 {isHearingLoss ? (
                   <>
                     <td style={{ padding: "12px 16px", color: "#9ca3af", fontSize: 12 }}>{idx + 1}</td>
