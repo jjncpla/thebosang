@@ -849,7 +849,14 @@ const PROCESSORS: Record<string, Processor> = {
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
+    const rawText = await req.text();
+    let body;
+    try {
+      body = JSON.parse(rawText);
+    } catch (err) {
+      console.error("[POST /api/import/all] JSON parse error. Raw body (first 500):", rawText.slice(0, 500));
+      return NextResponse.json({ error: "JSON 파싱 오류: " + String(err) }, { status: 400 });
+    }
     const { caseType, tfName, branch, header, prevHeader = [], rows } = body as {
       caseType: string;
       tfName: string | null;

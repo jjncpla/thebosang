@@ -4,7 +4,7 @@ import { useRef, useState } from "react";
 import * as XLSX from "xlsx";
 import { TF_BY_BRANCH, TF_TO_BRANCH } from "@/lib/constants/tf";
 
-const BATCH_SIZE = 100;
+const BATCH_SIZE = 30;
 
 type SheetResult = { created: number; skipped: number; errors: string[]; totalRows: number };
 
