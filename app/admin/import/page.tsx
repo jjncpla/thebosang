@@ -26,6 +26,16 @@ const CASE_TYPE_LABELS: Record<string, string> = Object.fromEntries(
   SHEET_PATTERNS.map((p) => [p.caseType, p.label])
 );
 
+function sanitizeRows(rows: unknown[][]): (string | null)[][] {
+  return rows.map(row =>
+    (row as unknown[]).map(val => {
+      if (val === null || val === undefined) return null;
+      if (val instanceof Date) return val.toISOString();
+      return String(val);
+    })
+  );
+}
+
 export default function ImportPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
@@ -106,11 +116,11 @@ export default function ImportPage() {
         for (let offset = 0; offset < totalRows; offset += BATCH_SIZE) {
           setProgress({ label, done: offset, total: totalRows, sheetStep: i + 1, sheetTotal: matchingSheets.length });
 
-          const batch = dataRows.slice(offset, offset + BATCH_SIZE);
+          const batch = sanitizeRows(dataRows.slice(offset, offset + BATCH_SIZE));
           const res = await fetch("/api/import/all", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ caseType, tfName: selectedTf, branch: selectedBranch, header, prevHeader, rows: batch }),
+            body: JSON.stringify({ caseType, tfName: selectedTf, branch: selectedBranch, header: sanitizeRows([header])[0], prevHeader: sanitizeRows([prevHeader])[0], rows: batch }),
           });
           const data = await res.json();
 
