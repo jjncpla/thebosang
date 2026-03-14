@@ -14,8 +14,8 @@ export async function GET(
           orderBy: { createdAt: "desc" },
           include: {
             hearingLoss: true,
-            copd: { select: { status: true } },
-            pneumoconiosis: { select: { status: true } },
+            copd: true,
+            pneumoconiosis: true,
             musculoskeletal: { select: { status: true } },
             occupationalAccident: { select: { status: true } },
             occupationalCancer: { select: { status: true } },

@@ -9,6 +9,39 @@ const S = { fontFamily: "'Malgun Gothic', 'Apple SD Gothic Neo', 'Segoe UI', san
 type HearingLossData = Record<string, string | number | boolean | null>;
 
 type DetailStatus = { status: string } | null;
+
+type CopdDetailData = {
+  status: string;
+  firstClinic: string | null;
+  firstExamDate: string | null;
+  specialClinic: string | null;
+  exam1Date: string | null;
+  exam1Rate: number | null;
+  exam1Volume: number | null;
+  exam2Date: string | null;
+  exam2Rate: number | null;
+  exam2Volume: number | null;
+  examMemo: string | null;
+  expertOrgDate: string | null;
+  disposalType: string | null;
+  disposalDate: string | null;
+  reExamPossibleDate: string | null;
+} | null;
+
+type PneumoconiosisDetailData = {
+  status: string;
+  firstClinic: string | null;
+  firstExamDate: string | null;
+  isNoticeReceived: boolean;
+  precisionExamDate: string | null;
+  precisionResult: string | null;
+  precisionHospital: string | null;
+  precisionPossibleDate: string | null;
+  reExamPossibleDate: string | null;
+  disposalType: string | null;
+  disposalDate: string | null;
+} | null;
+
 type CaseData = {
   id: string;
   caseType: string;
@@ -27,8 +60,8 @@ type CaseData = {
   createdAt: string;
   updatedAt: string;
   hearingLoss: HearingLossData | null;
-  copd: DetailStatus;
-  pneumoconiosis: DetailStatus;
+  copd: CopdDetailData;
+  pneumoconiosis: PneumoconiosisDetailData;
   musculoskeletal: DetailStatus;
   occupationalAccident: DetailStatus;
   occupationalCancer: DetailStatus;
@@ -267,6 +300,192 @@ function HearingLossTab({ caseId, initial }: { caseId: string; initial: HearingL
   );
 }
 
+/* ── COPD 상세 ── */
+function CopdTab({ caseId, initial }: { caseId: string; initial: CopdDetailData }) {
+  const [form, setForm] = useState<Record<string, string | number | boolean | null>>(
+    (initial as Record<string, string | number | boolean | null>) ?? {}
+  );
+  const [saving, setSaving] = useState(false);
+  const [saveMsg, setSaveMsg] = useState<string | null>(null);
+
+  const f = (key: string) => String(form[key] ?? "");
+  const set = (key: string, val: string) => setForm((prev) => ({ ...prev, [key]: val }));
+
+  const save = async () => {
+    setSaving(true);
+    setSaveMsg(null);
+    try {
+      const res = await fetch(`/api/cases/${caseId}/copd`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(form),
+      });
+      if (!res.ok) throw new Error("저장 실패");
+      setSaveMsg("저장되었습니다");
+      setTimeout(() => setSaveMsg(null), 3000);
+    } catch {
+      setSaveMsg("오류가 발생했습니다");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const SectionTitle = ({ children }: { children: React.ReactNode }) => (
+    <div style={{ fontSize: 13, fontWeight: 700, color: "#374151", padding: "14px 0 8px 0", borderBottom: "2px solid #e5e7eb", marginBottom: 12 }}>{children}</div>
+  );
+  const Row = ({ label, fieldKey, type = "text" }: { label: string; fieldKey: string; type?: string }) => (
+    <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+      <label style={{ fontSize: 11, color: "#9ca3af", fontWeight: 600 }}>{label}</label>
+      <input type={type} style={inputStyle} value={f(fieldKey)} onChange={(e) => set(fieldKey, e.target.value)} />
+    </div>
+  );
+
+  return (
+    <div>
+      <SectionTitle>초진</SectionTitle>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 20 }}>
+        <Row label="초진병원" fieldKey="firstClinic" />
+        <Row label="초진일자" fieldKey="firstExamDate" type="date" />
+      </div>
+
+      <SectionTitle>특진</SectionTitle>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 20 }}>
+        <Row label="특진병원" fieldKey="specialClinic" />
+        <Row label="1차특진일" fieldKey="exam1Date" type="date" />
+        <div />
+        <Row label="1차 1초율 (%)" fieldKey="exam1Rate" type="number" />
+        <Row label="1차 1초량 (L)" fieldKey="exam1Volume" type="number" />
+        <div />
+        <Row label="2차특진일" fieldKey="exam2Date" type="date" />
+        <Row label="2차 1초율 (%)" fieldKey="exam2Rate" type="number" />
+        <Row label="2차 1초량 (L)" fieldKey="exam2Volume" type="number" />
+      </div>
+
+      <SectionTitle>전문조사</SectionTitle>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 20 }}>
+        <Row label="전문조사기관의뢰일" fieldKey="expertOrgDate" type="date" />
+      </div>
+
+      <SectionTitle>처분</SectionTitle>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 20 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+          <label style={{ fontSize: 11, color: "#9ca3af", fontWeight: 600 }}>처분결과</label>
+          <select style={inputStyle} value={f("disposalType")} onChange={(e) => set("disposalType", e.target.value)}>
+            <option value="">선택</option>
+            {DISPOSAL_TYPE.map((t) => <option key={t} value={t}>{t}</option>)}
+          </select>
+        </div>
+        <Row label="처분일자" fieldKey="disposalDate" type="date" />
+        <Row label="재진행가능일" fieldKey="reExamPossibleDate" type="date" />
+      </div>
+
+      <SectionTitle>특이사항</SectionTitle>
+      <div style={{ marginBottom: 20 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+          <label style={{ fontSize: 11, color: "#9ca3af", fontWeight: 600 }}>특이사항 메모</label>
+          <textarea style={{ ...inputStyle, minHeight: 80, resize: "vertical" }} value={f("examMemo")} onChange={(e) => set("examMemo", e.target.value)} />
+        </div>
+      </div>
+
+      <div style={{ display: "flex", alignItems: "center", gap: 12, paddingTop: 16, borderTop: "1px solid #e5e7eb" }}>
+        <button onClick={save} disabled={saving} style={{ background: "#2563eb", color: "white", border: "none", borderRadius: 6, padding: "8px 20px", fontSize: 13, fontWeight: 600, cursor: "pointer", opacity: saving ? 0.6 : 1 }}>
+          {saving ? "저장중..." : "전체 저장"}
+        </button>
+        {saveMsg && <span style={{ fontSize: 13, color: saveMsg.includes("오류") ? "#dc2626" : "#16a34a" }}>{saveMsg}</span>}
+      </div>
+    </div>
+  );
+}
+
+/* ── 진폐 상세 ── */
+function PneumoconiosisTab({ caseId, initial }: { caseId: string; initial: PneumoconiosisDetailData }) {
+  const [form, setForm] = useState<Record<string, string | number | boolean | null>>(
+    (initial as Record<string, string | number | boolean | null>) ?? {}
+  );
+  const [saving, setSaving] = useState(false);
+  const [saveMsg, setSaveMsg] = useState<string | null>(null);
+
+  const f = (key: string) => String(form[key] ?? "");
+  const set = (key: string, val: string) => setForm((prev) => ({ ...prev, [key]: val }));
+  const setBool = (key: string, val: boolean) => setForm((prev) => ({ ...prev, [key]: val }));
+
+  const save = async () => {
+    setSaving(true);
+    setSaveMsg(null);
+    try {
+      const res = await fetch(`/api/cases/${caseId}/pneumoconiosis`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(form),
+      });
+      if (!res.ok) throw new Error("저장 실패");
+      setSaveMsg("저장되었습니다");
+      setTimeout(() => setSaveMsg(null), 3000);
+    } catch {
+      setSaveMsg("오류가 발생했습니다");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const SectionTitle = ({ children }: { children: React.ReactNode }) => (
+    <div style={{ fontSize: 13, fontWeight: 700, color: "#374151", padding: "14px 0 8px 0", borderBottom: "2px solid #e5e7eb", marginBottom: 12 }}>{children}</div>
+  );
+  const Row = ({ label, fieldKey, type = "text" }: { label: string; fieldKey: string; type?: string }) => (
+    <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+      <label style={{ fontSize: 11, color: "#9ca3af", fontWeight: 600 }}>{label}</label>
+      <input type={type} style={inputStyle} value={f(fieldKey)} onChange={(e) => set(fieldKey, e.target.value)} />
+    </div>
+  );
+
+  return (
+    <div>
+      <SectionTitle>초진</SectionTitle>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 20 }}>
+        <Row label="초진병원" fieldKey="firstClinic" />
+        <Row label="초진일자" fieldKey="firstExamDate" type="date" />
+      </div>
+
+      <SectionTitle>진폐정밀</SectionTitle>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+        <input
+          type="checkbox"
+          id="isNoticeReceived"
+          checked={Boolean(form.isNoticeReceived)}
+          onChange={(e) => setBool("isNoticeReceived", e.target.checked)}
+        />
+        <label htmlFor="isNoticeReceived" style={{ fontSize: 12, color: "#374151", cursor: "pointer" }}>진폐정밀 통지서 수신 완료</label>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 20 }}>
+        <Row label="진폐정밀실시일" fieldKey="precisionExamDate" type="date" />
+        <Row label="정밀결과" fieldKey="precisionResult" />
+        <Row label="진폐정밀병원" fieldKey="precisionHospital" />
+        <Row label="진폐정밀가능일자" fieldKey="precisionPossibleDate" type="date" />
+        <Row label="재진행가능일자" fieldKey="reExamPossibleDate" type="date" />
+      </div>
+
+      <SectionTitle>처분</SectionTitle>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 20 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+          <label style={{ fontSize: 11, color: "#9ca3af", fontWeight: 600 }}>처분결과</label>
+          <select style={inputStyle} value={f("disposalType")} onChange={(e) => set("disposalType", e.target.value)}>
+            <option value="">선택</option>
+            {DISPOSAL_TYPE.map((t) => <option key={t} value={t}>{t}</option>)}
+          </select>
+        </div>
+        <Row label="처분일자" fieldKey="disposalDate" type="date" />
+      </div>
+
+      <div style={{ display: "flex", alignItems: "center", gap: 12, paddingTop: 16, borderTop: "1px solid #e5e7eb" }}>
+        <button onClick={save} disabled={saving} style={{ background: "#2563eb", color: "white", border: "none", borderRadius: 6, padding: "8px 20px", fontSize: 13, fontWeight: 600, cursor: "pointer", opacity: saving ? 0.6 : 1 }}>
+          {saving ? "저장중..." : "전체 저장"}
+        </button>
+        {saveMsg && <span style={{ fontSize: 13, color: saveMsg.includes("오류") ? "#dc2626" : "#16a34a" }}>{saveMsg}</span>}
+      </div>
+    </div>
+  );
+}
+
 /* ── 서식 생성 ── */
 function FormTab({ caseId }: { caseId: string }) {
   const forms = ["요양급여신청서", "장해급여청구서", "간병급여청구서", "휴업급여청구서", "유족급여청구서", "장의비청구서"];
@@ -455,17 +674,147 @@ function CaseCommonInfoSection({ caseItem, onUpdated }: { caseItem: CaseData; on
   );
 }
 
+/* ── 요양 섹션 (빈 껍데기) ── */
+function YoyangSection() {
+  const SubTitle = ({ children }: { children: React.ReactNode }) => (
+    <div style={{ fontSize: 12, fontWeight: 700, color: "#6b7280", padding: "10px 0 8px", borderBottom: "1px solid #e5e7eb", marginBottom: 12, marginTop: 8 }}>{children}</div>
+  );
+  const PlaceholderField = ({ label }: { label: string }) => (
+    <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+      <label style={{ fontSize: 11, color: "#9ca3af", fontWeight: 600 }}>{label}</label>
+      <div style={{ border: "1px solid #e5e7eb", borderRadius: 6, padding: "7px 10px", fontSize: 12, color: "#d1d5db", background: "#f9fafb" }}>준비 중</div>
+    </div>
+  );
+  return (
+    <div>
+      <SubTitle>── 요양 승인 전 ──</SubTitle>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 16 }}>
+        <PlaceholderField label="최초 접수일" />
+        <PlaceholderField label="특진 여부" />
+        <PlaceholderField label="특진일" />
+        <PlaceholderField label="질판위 의뢰일" />
+        <PlaceholderField label="질판위 심의일" />
+        <PlaceholderField label="결정" />
+      </div>
+      <SubTitle>── 요양 승인 후 ──</SubTitle>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 16 }}>
+        <PlaceholderField label="최초 요양 시작일" />
+        <PlaceholderField label="최초 요양 종료일" />
+        <PlaceholderField label="이종요양비 청구" />
+        <PlaceholderField label="최종 요양 종결일" />
+      </div>
+      <SubTitle>── 휴업급여 ──</SubTitle>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
+        <PlaceholderField label="요양기간" />
+        <PlaceholderField label="청구기간 시작일" />
+        <PlaceholderField label="청구기간 종료일" />
+        <PlaceholderField label="지급제한 사유" />
+      </div>
+    </div>
+  );
+}
+
+/* ── 사건 상세 패널 (4섹션 구조) ── */
+function CaseDetailPanel({ caseItem }: { caseItem: CaseData }) {
+  const [openSections, setOpenSections] = useState<Set<number>>(new Set());
+
+  const toggle = (n: number) => setOpenSections((prev) => {
+    const next = new Set(prev);
+    if (next.has(n)) next.delete(n); else next.add(n);
+    return next;
+  });
+
+  const sectionStyle: React.CSSProperties = {
+    background: "white", borderRadius: 10, border: "1px solid #e5e7eb",
+    marginBottom: 12, overflow: "hidden", boxShadow: "0 1px 3px rgba(0,0,0,0.05)",
+  };
+
+  const AccordionBtn = ({ n, title }: { n: number; title: string }) => {
+    const isOpen = openSections.has(n);
+    return (
+      <button
+        onClick={() => toggle(n)}
+        style={{
+          width: "100%", display: "flex", alignItems: "center", gap: 8,
+          padding: "12px 16px", background: isOpen ? "#eff6ff" : "#f9fafb",
+          border: "none", borderBottom: isOpen ? "1px solid #bfdbfe" : "none",
+          cursor: "pointer", fontFamily: "inherit",
+        }}
+      >
+        <span style={{ fontSize: 11, color: isOpen ? "#1d4ed8" : "#9ca3af" }}>{isOpen ? "▼" : "▶"}</span>
+        <span style={{ fontSize: 14, fontWeight: 700, color: isOpen ? "#1d4ed8" : "#374151" }}>{title}</span>
+      </button>
+    );
+  };
+
+  const { caseType } = caseItem;
+
+  return (
+    <div>
+      {/* (1) 사건 초기 — 항상 펼쳐진 상태 */}
+      <div style={sectionStyle}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "12px 16px", background: "#eff6ff", borderBottom: "1px solid #bfdbfe" }}>
+          <span style={{ fontSize: 14, fontWeight: 700, color: "#1d4ed8" }}>(1) 사건 초기</span>
+        </div>
+        <div style={{ padding: 20 }}>
+          {caseType === "HEARING_LOSS" && (
+            <HearingLossTab caseId={caseItem.id} initial={caseItem.hearingLoss} />
+          )}
+          {caseType === "COPD" && (
+            <CopdTab caseId={caseItem.id} initial={caseItem.copd} />
+          )}
+          {caseType === "PNEUMOCONIOSIS" && (
+            <PneumoconiosisTab caseId={caseItem.id} initial={caseItem.pneumoconiosis} />
+          )}
+          {!["HEARING_LOSS", "COPD", "PNEUMOCONIOSIS"].includes(caseType) && (
+            <div style={{ fontSize: 13, color: "#9ca3af", textAlign: "center", padding: 24 }}>
+              사건 초기 정보가 없습니다.
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* (2) 요양 */}
+      <div style={sectionStyle}>
+        <AccordionBtn n={2} title="(2) 요양" />
+        {openSections.has(2) && (
+          <div style={{ padding: 20 }}>
+            <YoyangSection />
+          </div>
+        )}
+      </div>
+
+      {/* (3) 장해 */}
+      <div style={sectionStyle}>
+        <AccordionBtn n={3} title="(3) 장해" />
+        {openSections.has(3) && (
+          <div style={{ padding: 20, fontSize: 13, color: "#9ca3af", textAlign: "center" }}>
+            <div>준비 중입니다.</div>
+            <div style={{ marginTop: 4 }}>장해 정보는 요양 종결 후 입력됩니다.</div>
+          </div>
+        )}
+      </div>
+
+      {/* (4) 유족 */}
+      <div style={sectionStyle}>
+        <AccordionBtn n={4} title="(4) 유족" />
+        {openSections.has(4) && (
+          <div style={{ padding: 20, fontSize: 13, color: "#9ca3af", textAlign: "center" }}>
+            <div>준비 중입니다.</div>
+            <div style={{ marginTop: 4 }}>유족 정보는 별도 설계 후 구현됩니다.</div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 /* ── 탭 콘텐츠 ── */
 function CaseTabContent({ caseItem, onCaseUpdated }: { caseItem: CaseData; onCaseUpdated: (c: CaseData) => void }) {
   return (
     <div>
       <CaseCommonInfoSection caseItem={caseItem} onUpdated={onCaseUpdated} />
-      {caseItem.caseType === "HEARING_LOSS" && (
-        <div style={{ background: "white", borderRadius: 10, border: "1px solid #e5e7eb", padding: 20, marginBottom: 16, boxShadow: "0 1px 3px rgba(0,0,0,0.05)" }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: "#6b7280", letterSpacing: 1, marginBottom: 16 }}>난청 상세</div>
-          <HearingLossTab caseId={caseItem.id} initial={caseItem.hearingLoss} />
-        </div>
-      )}
+      <CaseDetailPanel caseItem={caseItem} />
       <div style={{ background: "white", borderRadius: 10, border: "1px solid #e5e7eb", padding: 20, boxShadow: "0 1px 3px rgba(0,0,0,0.05)" }}>
         <div style={{ fontSize: 11, fontWeight: 700, color: "#6b7280", letterSpacing: 1, marginBottom: 16 }}>서식 생성</div>
         <FormTab caseId={caseItem.id} />
