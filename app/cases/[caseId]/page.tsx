@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { CASE_TYPE_LABELS, DISPOSAL_TYPE, GRADE_TYPE, STATUS_BY_CASE_TYPE } from "@/lib/constants/case";
+import { OCC_DISEASE_COMMITTEES } from "@/constants/occDiseaseCommittees";
 
 const S = { fontFamily: "'Malgun Gothic', 'Apple SD Gothic Neo', 'Segoe UI', sans-serif" };
 
@@ -321,12 +322,6 @@ function HearingLossTab({ caseId, initial }: { caseId: string; initial: HearingL
 }
 
 /* ── COPD 상세 탭 ── */
-const OCC_DISEASE_COMMITTEES = [
-  "서울남부업무상질병판정위원회", "서울북부업무상질병판정위원회", "부산업무상질병판정위원회",
-  "경남업무상질병판정위원회", "대구업무상질병판정위원회", "경인북부업무상질병판정위원회",
-  "경인남부업무상질병판정위원회", "광주업무상질병판정위원회", "대전업무상질병판정위원회",
-] as const;
-
 type CopdForm = Record<string, string | number | null>;
 
 function CopdTab({ caseId }: { caseId: string }) {
