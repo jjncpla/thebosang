@@ -2,12 +2,13 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useRouter, useParams } from "next/navigation";
-import { CASE_STATUS, CASE_TYPE_LABELS, DISPOSAL_TYPE, GRADE_TYPE } from "@/lib/constants/case";
+import { CASE_TYPE_LABELS, DISPOSAL_TYPE, GRADE_TYPE, STATUS_BY_CASE_TYPE } from "@/lib/constants/case";
 
 const S = { fontFamily: "'Malgun Gothic', 'Apple SD Gothic Neo', 'Segoe UI', sans-serif" };
 
 type Patient = { id: string; name: string; ssn: string; phone: string | null; address: string | null };
 type HearingLoss = Record<string, string | number | null>;
+type DetailStatus = { status: string } | null;
 type CaseData = {
   id: string;
   patientId: string;
@@ -24,12 +25,28 @@ type CaseData = {
   contractDate: string | null;
   receptionDate: string | null;
   isOneStop: boolean;
-  status: string;
   memo: string | null;
   createdAt: string;
   updatedAt: string;
   hearingLoss: HearingLoss | null;
+  copd: DetailStatus;
+  pneumoconiosis: DetailStatus;
+  musculoskeletal: DetailStatus;
+  occupationalAccident: DetailStatus;
+  occupationalCancer: DetailStatus;
+  bereaved: DetailStatus;
 };
+
+function getCaseStatus(c: CaseData): string {
+  if (c.caseType === "HEARING_LOSS") return String(c.hearingLoss?.status ?? "접수대기");
+  if (c.caseType === "COPD") return c.copd?.status ?? "접수대기";
+  if (c.caseType === "PNEUMOCONIOSIS") return c.pneumoconiosis?.status ?? "접수대기";
+  if (c.caseType === "MUSCULOSKELETAL") return c.musculoskeletal?.status ?? "접수대기";
+  if (c.caseType === "OCCUPATIONAL_ACCIDENT") return c.occupationalAccident?.status ?? "접수대기";
+  if (c.caseType === "OCCUPATIONAL_CANCER") return c.occupationalCancer?.status ?? "접수대기";
+  if (c.caseType === "BEREAVED") return c.bereaved?.status ?? "접수대기";
+  return "접수대기";
+}
 
 function formatDate(iso: string | null | undefined): string {
   if (!iso) return "-";
@@ -703,7 +720,7 @@ function BasicInfoTab({ caseData, onUpdated }: { caseData: CaseData; onUpdated: 
     contractDate: toInputDate(caseData.contractDate),
     receptionDate: toInputDate(caseData.receptionDate),
     isOneStop: caseData.isOneStop,
-    status: caseData.status,
+    status: getCaseStatus(caseData),
     memo: caseData.memo ?? "",
   });
   const [saving, setSaving] = useState(false);
@@ -782,7 +799,7 @@ function BasicInfoTab({ caseData, onUpdated }: { caseData: CaseData; onUpdated: 
         <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
           <label style={{ fontSize: 12, color: "#6b7280" }}>진행상황</label>
           <select style={inputStyle} value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
-            {CASE_STATUS.map((s) => <option key={s} value={s}>{s}</option>)}
+            {(STATUS_BY_CASE_TYPE[form.caseType] ?? STATUS_BY_CASE_TYPE["HEARING_LOSS"]).map((s) => <option key={s} value={s}>{s}</option>)}
           </select>
         </div>
         {([
@@ -915,7 +932,7 @@ export default function CaseDetailPage() {
         <div style={{ width: 1, background: "#e5e7eb", margin: "12px 0" }} />
         <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 10, padding: "12px 0", flexWrap: "wrap" }}>
           <span style={{ fontSize: 16, fontWeight: 700, color: "#111827" }}>{caseData.patient.name}</span>
-          <StatusBadge status={caseData.status} />
+          <StatusBadge status={getCaseStatus(caseData)} />
           <span style={{ fontSize: 12, color: "#9ca3af" }}>{CASE_TYPE_LABELS[caseData.caseType] ?? caseData.caseType}</span>
           {caseData.branch && <span style={{ fontSize: 12, color: "#6b7280", background: "#f1f5f9", padding: "2px 8px", borderRadius: 4 }}>{caseData.branch}</span>}
         </div>
