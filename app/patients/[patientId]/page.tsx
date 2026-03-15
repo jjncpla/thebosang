@@ -990,6 +990,11 @@ function CaseDetailPanel({ caseItem }: { caseItem: CaseData }) {
 
   const { caseType } = caseItem;
 
+  // 전문 케이스 탭은 자체 4섹션 아코디언을 가지므로 바깥 wrapper 없이 직접 렌더링
+  if (caseType === "HEARING_LOSS") return <HearingLossTab caseId={caseItem.id} initial={caseItem.hearingLoss} />;
+  if (caseType === "COPD") return <CopdTab caseId={caseItem.id} />;
+  if (caseType === "PNEUMOCONIOSIS") return <PneumoconiosisTab caseId={caseItem.id} />;
+
   return (
     <div>
       {/* (1) 사건 초기 — 항상 펼쳐진 상태 */}
@@ -998,20 +1003,9 @@ function CaseDetailPanel({ caseItem }: { caseItem: CaseData }) {
           <span style={{ fontSize: 14, fontWeight: 700, color: "#1d4ed8" }}>(1) 사건 초기</span>
         </div>
         <div style={{ padding: 20 }}>
-          {caseType === "HEARING_LOSS" && (
-            <HearingLossTab caseId={caseItem.id} initial={caseItem.hearingLoss} />
-          )}
-          {caseType === "COPD" && (
-            <CopdTab caseId={caseItem.id} />
-          )}
-          {caseType === "PNEUMOCONIOSIS" && (
-            <PneumoconiosisTab caseId={caseItem.id} />
-          )}
-          {!["HEARING_LOSS", "COPD", "PNEUMOCONIOSIS"].includes(caseType) && (
-            <div style={{ fontSize: 13, color: "#9ca3af", textAlign: "center", padding: 24 }}>
-              사건 초기 정보가 없습니다.
-            </div>
-          )}
+          <div style={{ fontSize: 13, color: "#9ca3af", textAlign: "center", padding: 24 }}>
+            사건 초기 정보가 없습니다.
+          </div>
         </div>
       </div>
 
