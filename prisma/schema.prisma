@@ -215,6 +215,25 @@ model CopdDetail {
   // 재진행
   reExamPossibleDate DateTime?
 
+  // 초진 수치
+  fev1Rate           Float?
+  fev1Volume         Float?
+
+  // 요양 - 업무상질병판정
+  occDiseaseCommittee         String?
+  occReferralDate             DateTime?
+  occReviewDate               DateTime?
+  occAttendanceType           String?
+  occAttendanceNote           String?
+
+  // 장해
+  disabilityClaimDate             DateTime?
+  disabilityDispositionType       String?
+  disabilityGradeType             String?
+  disabilityDispositionGrade      String?
+  disabilityDispositionDate       DateTime?
+  disabilityDispositionNoticeDate DateTime?
+
   createdAt          DateTime   @default(now())
   updatedAt          DateTime   @updatedAt
 
@@ -229,6 +248,8 @@ model PneumoconiosisDetail {
   status                String    @default("접수대기")
   firstClinic           String?
   firstExamDate         DateTime?
+  applicableLaw         String?
+  isRetired             String?
   isNoticeReceived      Boolean   @default(false)
   precisionExamDate     DateTime?
   precisionResult       String?

@@ -30,6 +30,8 @@ export async function PUT(
     const data = {
       firstClinic: body.firstClinic ?? null,
       firstExamDate: parseDate(body.firstExamDate),
+      fev1Rate: parseFloat_(body.fev1Rate),
+      fev1Volume: parseFloat_(body.fev1Volume),
       specialClinic: body.specialClinic ?? null,
       exam1Date: parseDate(body.exam1Date),
       exam1Rate: parseFloat_(body.exam1Rate),
@@ -39,9 +41,20 @@ export async function PUT(
       exam2Volume: parseFloat_(body.exam2Volume),
       examMemo: body.examMemo ?? null,
       expertOrgDate: parseDate(body.expertOrgDate),
+      occDiseaseCommittee: body.occDiseaseCommittee ?? null,
+      occReferralDate: parseDate(body.occReferralDate),
+      occReviewDate: parseDate(body.occReviewDate),
+      occAttendanceType: body.occAttendanceType ?? null,
+      occAttendanceNote: body.occAttendanceNote ?? null,
       disposalType: body.disposalType ?? null,
       disposalDate: parseDate(body.disposalDate),
       reExamPossibleDate: parseDate(body.reExamPossibleDate),
+      disabilityClaimDate: parseDate(body.disabilityClaimDate),
+      disabilityDispositionType: body.disabilityDispositionType ?? null,
+      disabilityGradeType: body.disabilityGradeType ?? null,
+      disabilityDispositionGrade: body.disabilityDispositionGrade ?? null,
+      disabilityDispositionDate: parseDate(body.disabilityDispositionDate),
+      disabilityDispositionNoticeDate: parseDate(body.disabilityDispositionNoticeDate),
     };
 
     const detail = await prisma.copdDetail.upsert({

@@ -28,6 +28,8 @@ export async function PUT(
     const data = {
       firstClinic: body.firstClinic ?? null,
       firstExamDate: parseDate(body.firstExamDate),
+      applicableLaw: body.applicableLaw ?? null,
+      isRetired: body.isRetired ?? null,
       isNoticeReceived: body.isNoticeReceived === true,
       precisionExamDate: parseDate(body.precisionExamDate),
       precisionResult: body.precisionResult ?? null,
