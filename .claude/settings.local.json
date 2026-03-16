@@ -22,7 +22,11 @@
       "Bash(ls \"C:\\\\Users\\\\LG\\\\thebosang\\\\app\\\\cases\\\\\" 2>/dev/null || echo \"DIR_NOT_FOUND\")",
       "Bash(taskkill /F /IM node.exe 2>&1; echo \"done\")",
       "Bash(taskkill //F //IM node.exe 2>&1; echo \"done\")",
-      "Bash(npm install:*)"
+      "Bash(npm install:*)",
+      "Bash(cd:*)",
+      "Bash(taskkill:*)",
+      "Bash(powershell -Command \"Get-Process -Name node | Stop-Process -Force\" 2>&1)",
+      "Bash(powershell -Command \"Get-Process -Name node -ErrorAction SilentlyContinue | Stop-Process -Force\" 2>&1 && rm -rf .next)"
     ]
   }
 }

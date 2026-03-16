@@ -21,6 +21,27 @@ type WorkHistoryItem = {
   source: string;
 };
 
+type WorkHistoryRawEntry = {
+  company: string;
+  department: string;
+  jobType: string;
+  startYear: number;
+  startMonth: number;
+  endYear: number;
+  endMonth: number;
+  noiseExposure: boolean;
+  noiseLevel: number | null;
+  workHours: string;
+};
+
+type WorkHistoryRaw = {
+  고용산재: WorkHistoryRawEntry[];
+  건보: WorkHistoryRawEntry[];
+  소득금액: WorkHistoryRawEntry[];
+  연금: WorkHistoryRawEntry[];
+  건근공: WorkHistoryRawEntry[];
+};
+
 type HearingLossExam = {
   id: string;
   examSet: string;
@@ -53,8 +74,11 @@ type HearingLossDetail = {
   firstExamSpeech: number | null;
   passedInitialCriteria: boolean;
   isDisabilityRegistered: boolean;
-  isBig3: boolean;
+  disabilityRegistrationDate: string | null;
+  disabilityDiagnosisDate: string | null;
+  disabilityRegistrationLevel: string | null;
   workHistory: WorkHistoryItem[] | null;
+  workHistoryRaw: WorkHistoryRaw | null;
   workHistoryMemo: string | null;
   lastNoiseWorkEndDate: string | null;
   claimSubmittedAt: string | null;
@@ -280,8 +304,9 @@ function calc6분법(v500: number | null, v1k: number | null, v2k: number | null
 
 const EMPTY_DETAIL: HearingLossDetail = {
   id: "", firstClinic: null, firstExamDate: null, firstExamRight: null, firstExamLeft: null,
-  firstExamSpeech: null, passedInitialCriteria: false, isDisabilityRegistered: false, isBig3: false,
-  workHistory: null, workHistoryMemo: null, lastNoiseWorkEndDate: null,
+  firstExamSpeech: null, passedInitialCriteria: false, isDisabilityRegistered: false,
+  disabilityRegistrationDate: null, disabilityDiagnosisDate: null, disabilityRegistrationLevel: null,
+  workHistory: null, workHistoryRaw: null, workHistoryMemo: null, lastNoiseWorkEndDate: null,
   claimSubmittedAt: null, claimNasPath: null, telegramSharedAt: null,
   examRequestReceivedAt: null, examPeriodStart: null, examPeriodEnd: null,
   specialClinic: null, examClinicSelectionSubmittedAt: null,
@@ -528,6 +553,63 @@ function HearingLossTab({ caseId, initial }: { caseId: string; initial: HearingL
   const years = Array.from({ length: 60 }, (_, i) => new Date().getFullYear() - i);
   const months = Array.from({ length: 12 }, (_, i) => i + 1);
 
+  const RAW_SOURCES = ["고용산재", "건보", "소득금액", "연금", "건근공"] as const;
+  type RawSource = typeof RAW_SOURCES[number];
+  const [activeRawSource, setActiveRawSource] = useState<RawSource>("고용산재");
+
+  const rawData: WorkHistoryRaw = detail.workHistoryRaw ?? {
+    고용산재: [], 건보: [], 소득금액: [], 연금: [], 건근공: [],
+  };
+
+  const EMPTY_RAW_ENTRY = (): WorkHistoryRawEntry => ({
+    company: "", department: "", jobType: "",
+    startYear: new Date().getFullYear(), startMonth: 1,
+    endYear: new Date().getFullYear(), endMonth: 12,
+    noiseExposure: false, noiseLevel: null, workHours: "",
+  });
+
+  const addRawRow = (source: RawSource) => {
+    const updated = { ...rawData, [source]: [...(rawData[source] ?? []), EMPTY_RAW_ENTRY()] };
+    setD("workHistoryRaw", updated);
+  };
+  const removeRawRow = (source: RawSource, i: number) => {
+    const updated = { ...rawData, [source]: rawData[source].filter((_, idx) => idx !== i) };
+    setD("workHistoryRaw", updated);
+  };
+  const setRawField = (source: RawSource, i: number, key: keyof WorkHistoryRawEntry, val: unknown) => {
+    const rows = [...(rawData[source] ?? [])];
+    rows[i] = { ...rows[i], [key]: val };
+    setD("workHistoryRaw", { ...rawData, [source]: rows });
+  };
+
+  const mergeWorkHistory = () => {
+    const all: (WorkHistoryRawEntry & { source: string })[] = [];
+    RAW_SOURCES.forEach((src) => {
+      (rawData[src] ?? []).forEach((entry) => all.push({ ...entry, source: src }));
+    });
+    if (all.length === 0) return;
+    const toMonths = (y: number, m: number) => y * 12 + m;
+    all.sort((a, b) => toMonths(a.startYear, a.startMonth) - toMonths(b.startYear, b.startMonth));
+    const deduped: typeof all = [];
+    for (const entry of all) {
+      const isDuplicate = deduped.some((existing) => {
+        if (existing.company.trim() !== entry.company.trim()) return false;
+        const eStart = toMonths(entry.startYear, entry.startMonth);
+        const eEnd = toMonths(entry.endYear, entry.endMonth);
+        const xStart = toMonths(existing.startYear, existing.startMonth);
+        const xEnd = toMonths(existing.endYear, existing.endMonth);
+        return xStart <= eStart && xEnd >= eEnd;
+      });
+      if (!isDuplicate) deduped.push(entry);
+    }
+    const merged: WorkHistoryItem[] = deduped.map(({ source, ...entry }) => ({
+      ...entry,
+      workHours: entry.workHours || "",
+      source,
+    }));
+    setD("workHistory", merged);
+  };
+
   return (
     <div>
       {/* (1) 사건초기 */}
@@ -544,63 +626,190 @@ function HearingLossTab({ caseId, initial }: { caseId: string; initial: HearingL
               <DField label="좌측 PTA (dB)" k="firstExamLeft" type="number" />
               <DField label="어음명료도 (%)" k="firstExamSpeech" type="number" />
             </div>
-            <div style={{ display: "flex", gap: 20, marginBottom: 20 }}>
-              {([["passedInitialCriteria","편측 40dB 기준 통과"],["isDisabilityRegistered","국가장애 등록 이력"],["isBig3","Big3 병원"]] as [keyof HearingLossDetail, string][]).map(([k, label]) => (
+            <div style={{ display: "flex", gap: 20, marginBottom: 8 }}>
+              {([["passedInitialCriteria","편측 40dB 기준 통과"]] as [keyof HearingLossDetail, string][]).map(([k, label]) => (
                 <label key={k} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, cursor: "pointer" }}>
-                  <input type="checkbox" checked={Boolean(detail[k])} onChange={(e) => setD(k, e.target.checked)} />{label}
+                  <input type="checkbox" checked={Boolean(detail[k])} onChange={(e) => setD(k, e.target.checked)} />
+                  {label}
                 </label>
               ))}
             </div>
+            <div style={{ marginTop: 8, marginBottom: 16 }}>
+              <label style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, cursor: "pointer", marginBottom: 8 }}>
+                <input
+                  type="checkbox"
+                  checked={Boolean(detail.isDisabilityRegistered)}
+                  onChange={(e) => setD("isDisabilityRegistered", e.target.checked)}
+                />
+                국가장애 등록 이력
+              </label>
+              {detail.isDisabilityRegistered && (
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, paddingLeft: 20, borderLeft: "2px solid #e0e7ff" }}>
+                  <DField label="등록일자" k="disabilityRegistrationDate" type="date" />
+                  <DField label="진단일자" k="disabilityDiagnosisDate" type="date" />
+                  <Field label="급수">
+                    <input
+                      style={inputStyle}
+                      value={d("disabilityRegistrationLevel")}
+                      placeholder="예: 2급, 3급"
+                      onChange={(e) => setD("disabilityRegistrationLevel", e.target.value || null)}
+                    />
+                  </Field>
+                </div>
+              )}
+            </div>
             <SectionTitle>직업력</SectionTitle>
-            <div style={{ overflowX: "auto", marginBottom: 12 }}>
+            {/* 소스별 탭 */}
+            <div style={{ display: "flex", gap: 4, marginBottom: 12, flexWrap: "wrap" }}>
+              {RAW_SOURCES.map((src) => (
+                <button key={src} onClick={() => setActiveRawSource(src)} style={{
+                  padding: "5px 12px", fontSize: 12, fontWeight: 600, borderRadius: 6, cursor: "pointer", border: "1px solid",
+                  background: activeRawSource === src ? "#2563eb" : "white",
+                  color: activeRawSource === src ? "white" : "#374151",
+                  borderColor: activeRawSource === src ? "#2563eb" : "#d1d5db",
+                }}>
+                  {src === "고용산재" ? "고용/산재보험" : src === "건보" ? "건강보험" : src === "소득금액" ? "소득금액증명원" : src === "연금" ? "국민연금" : "건설근로자공제회"}
+                  {(rawData[src]?.length ?? 0) > 0 && (
+                    <span style={{ marginLeft: 4, background: activeRawSource === src ? "rgba(255,255,255,0.3)" : "#e0e7ff", color: activeRawSource === src ? "white" : "#3730a3", borderRadius: 999, padding: "1px 6px", fontSize: 11 }}>
+                      {rawData[src].length}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+            {/* 현재 소스 테이블 */}
+            <div style={{ overflowX: "auto", marginBottom: 8 }}>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
                 <thead>
                   <tr style={{ background: "#f9fafb" }}>
-                    {["회사명","직종","작업내용","시작년월","종료년월","소음노출","소음(dB)","근무시간","출처",""].map((h) => (
-                      <th key={h} style={{ padding: "6px 8px", border: "1px solid #e5e7eb", fontWeight: 600, color: "#6b7280", whiteSpace: "nowrap" }}>{h}</th>
+                    {["회사명", "직종", "작업내용", "시작년월", "종료년월", "소음노출", "소음(dB)", "근무시간", ""].map((h) => (
+                      <th key={h} style={{ padding: "5px 6px", border: "1px solid #e5e7eb", fontWeight: 600, color: "#6b7280", whiteSpace: "nowrap" }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {(rawData[activeRawSource] ?? []).map((row, i) => (
+                    <tr key={i}>
+                      {(["company", "department", "jobType"] as (keyof WorkHistoryRawEntry)[]).map((k) => (
+                        <td key={k} style={{ padding: 3, border: "1px solid #f1f5f9" }}>
+                          <input style={{ ...inputStyle, minWidth: 75, fontSize: 12 }} value={String(row[k] ?? "")} onChange={(e) => setRawField(activeRawSource, i, k, e.target.value)} />
+                        </td>
+                      ))}
+                      <td style={{ padding: 3, border: "1px solid #f1f5f9" }}>
+                        <div style={{ display: "flex", gap: 2 }}>
+                          <select style={{ ...inputStyle, width: 65, fontSize: 12 }} value={row.startYear} onChange={(e) => setRawField(activeRawSource, i, "startYear", Number(e.target.value))}>
+                            {years.map((y) => <option key={y} value={y}>{y}</option>)}
+                          </select>
+                          <select style={{ ...inputStyle, width: 48, fontSize: 12 }} value={row.startMonth} onChange={(e) => setRawField(activeRawSource, i, "startMonth", Number(e.target.value))}>
+                            {months.map((m) => <option key={m} value={m}>{m}월</option>)}
+                          </select>
+                        </div>
+                      </td>
+                      <td style={{ padding: 3, border: "1px solid #f1f5f9" }}>
+                        <div style={{ display: "flex", gap: 2 }}>
+                          <select style={{ ...inputStyle, width: 65, fontSize: 12 }} value={row.endYear} onChange={(e) => setRawField(activeRawSource, i, "endYear", Number(e.target.value))}>
+                            {years.map((y) => <option key={y} value={y}>{y}</option>)}
+                          </select>
+                          <select style={{ ...inputStyle, width: 48, fontSize: 12 }} value={row.endMonth} onChange={(e) => setRawField(activeRawSource, i, "endMonth", Number(e.target.value))}>
+                            {months.map((m) => <option key={m} value={m}>{m}월</option>)}
+                          </select>
+                        </div>
+                      </td>
+                      <td style={{ padding: 3, border: "1px solid #f1f5f9", textAlign: "center" }}>
+                        <input type="checkbox" checked={row.noiseExposure} onChange={(e) => setRawField(activeRawSource, i, "noiseExposure", e.target.checked)} />
+                      </td>
+                      <td style={{ padding: 3, border: "1px solid #f1f5f9" }}>
+                        <input type="number" style={{ ...inputStyle, width: 56, fontSize: 12 }} value={row.noiseLevel ?? ""} onChange={(e) => setRawField(activeRawSource, i, "noiseLevel", e.target.value === "" ? null : Number(e.target.value))} />
+                      </td>
+                      <td style={{ padding: 3, border: "1px solid #f1f5f9" }}>
+                        <input style={{ ...inputStyle, minWidth: 65, fontSize: 12 }} value={String(row.workHours ?? "")} onChange={(e) => setRawField(activeRawSource, i, "workHours", e.target.value)} />
+                      </td>
+                      <td style={{ padding: 3, border: "1px solid #f1f5f9", textAlign: "center" }}>
+                        <button onClick={() => removeRawRow(activeRawSource, i)} style={{ background: "none", border: "none", color: "#dc2626", cursor: "pointer", fontSize: 14 }}>✕</button>
+                      </td>
+                    </tr>
+                  ))}
+                  {(rawData[activeRawSource]?.length ?? 0) === 0 && (
+                    <tr><td colSpan={9} style={{ padding: "12px", textAlign: "center", color: "#9ca3af", fontSize: 12 }}>항목 없음</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+            <button onClick={() => addRawRow(activeRawSource)} style={{ background: "white", border: "1px solid #d1d5db", borderRadius: 6, padding: "4px 12px", fontSize: 12, cursor: "pointer", marginBottom: 16 }}>
+              + 행 추가
+            </button>
+            {/* 합산 버튼 */}
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16, padding: "10px 14px", background: "#f0fdf4", borderRadius: 8, border: "1px solid #bbf7d0" }}>
+              <button onClick={mergeWorkHistory} style={{ background: "#16a34a", color: "white", border: "none", borderRadius: 6, padding: "7px 18px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+                ▶ 최종 직업력 합산하기
+              </button>
+              <span style={{ fontSize: 12, color: "#15803d" }}>
+                전체 {RAW_SOURCES.reduce((sum, src) => sum + (rawData[src]?.length ?? 0), 0)}개 항목 → 중복 제거 후 최종 직업력 생성
+              </span>
+            </div>
+            {/* 최종 직업력 */}
+            <div style={{ fontSize: 12, fontWeight: 700, color: "#374151", marginBottom: 8 }}>최종 직업력 (합산 결과)</div>
+            <div style={{ overflowX: "auto", marginBottom: 12 }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                <thead>
+                  <tr style={{ background: "#f0fdf4" }}>
+                    {["회사명", "직종", "작업내용", "시작년월", "종료년월", "소음노출", "소음(dB)", "근무시간", "출처", ""].map((h) => (
+                      <th key={h} style={{ padding: "5px 6px", border: "1px solid #bbf7d0", fontWeight: 600, color: "#15803d", whiteSpace: "nowrap" }}>{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {workHistory.map((row, i) => (
                     <tr key={i}>
-                      {(["company","department","jobType"] as (keyof WorkHistoryItem)[]).map((k) => (
-                        <td key={k} style={{ padding: 4, border: "1px solid #f1f5f9" }}>
-                          <input style={{ ...inputStyle, minWidth: 80 }} value={String(row[k] ?? "")} onChange={(e) => setWorkField(i, k, e.target.value)} />
+                      {(["company", "department", "jobType"] as (keyof WorkHistoryItem)[]).map((k) => (
+                        <td key={k} style={{ padding: 3, border: "1px solid #f1f5f9" }}>
+                          <input style={{ ...inputStyle, minWidth: 75, fontSize: 12 }} value={String(row[k] ?? "")} onChange={(e) => setWorkField(i, k, e.target.value)} />
                         </td>
                       ))}
-                      <td style={{ padding: 4, border: "1px solid #f1f5f9" }}>
+                      <td style={{ padding: 3, border: "1px solid #f1f5f9" }}>
                         <div style={{ display: "flex", gap: 2 }}>
-                          <select style={{ ...inputStyle, width: 70 }} value={row.startYear} onChange={(e) => setWorkField(i, "startYear", Number(e.target.value))}>{years.map((y) => <option key={y} value={y}>{y}</option>)}</select>
-                          <select style={{ ...inputStyle, width: 50 }} value={row.startMonth} onChange={(e) => setWorkField(i, "startMonth", Number(e.target.value))}>{months.map((m) => <option key={m} value={m}>{m}월</option>)}</select>
+                          <select style={{ ...inputStyle, width: 65, fontSize: 12 }} value={row.startYear} onChange={(e) => setWorkField(i, "startYear", Number(e.target.value))}>
+                            {years.map((y) => <option key={y} value={y}>{y}</option>)}
+                          </select>
+                          <select style={{ ...inputStyle, width: 48, fontSize: 12 }} value={row.startMonth} onChange={(e) => setWorkField(i, "startMonth", Number(e.target.value))}>
+                            {months.map((m) => <option key={m} value={m}>{m}월</option>)}
+                          </select>
                         </div>
                       </td>
-                      <td style={{ padding: 4, border: "1px solid #f1f5f9" }}>
+                      <td style={{ padding: 3, border: "1px solid #f1f5f9" }}>
                         <div style={{ display: "flex", gap: 2 }}>
-                          <select style={{ ...inputStyle, width: 70 }} value={row.endYear} onChange={(e) => setWorkField(i, "endYear", Number(e.target.value))}>{years.map((y) => <option key={y} value={y}>{y}</option>)}</select>
-                          <select style={{ ...inputStyle, width: 50 }} value={row.endMonth} onChange={(e) => setWorkField(i, "endMonth", Number(e.target.value))}>{months.map((m) => <option key={m} value={m}>{m}월</option>)}</select>
+                          <select style={{ ...inputStyle, width: 65, fontSize: 12 }} value={row.endYear} onChange={(e) => setWorkField(i, "endYear", Number(e.target.value))}>
+                            {years.map((y) => <option key={y} value={y}>{y}</option>)}
+                          </select>
+                          <select style={{ ...inputStyle, width: 48, fontSize: 12 }} value={row.endMonth} onChange={(e) => setWorkField(i, "endMonth", Number(e.target.value))}>
+                            {months.map((m) => <option key={m} value={m}>{m}월</option>)}
+                          </select>
                         </div>
                       </td>
-                      <td style={{ padding: 4, border: "1px solid #f1f5f9", textAlign: "center" }}>
+                      <td style={{ padding: 3, border: "1px solid #f1f5f9", textAlign: "center" }}>
                         <input type="checkbox" checked={row.noiseExposure} onChange={(e) => setWorkField(i, "noiseExposure", e.target.checked)} />
                       </td>
-                      <td style={{ padding: 4, border: "1px solid #f1f5f9" }}>
-                        <input type="number" style={{ ...inputStyle, width: 60 }} value={row.noiseLevel ?? ""} onChange={(e) => setWorkField(i, "noiseLevel", e.target.value === "" ? null : Number(e.target.value))} />
+                      <td style={{ padding: 3, border: "1px solid #f1f5f9" }}>
+                        <input type="number" style={{ ...inputStyle, width: 56, fontSize: 12 }} value={row.noiseLevel ?? ""} onChange={(e) => setWorkField(i, "noiseLevel", e.target.value === "" ? null : Number(e.target.value))} />
                       </td>
-                      {(["workHours","source"] as (keyof WorkHistoryItem)[]).map((k) => (
-                        <td key={k} style={{ padding: 4, border: "1px solid #f1f5f9" }}>
-                          <input style={{ ...inputStyle, minWidth: 70 }} value={String(row[k] ?? "")} onChange={(e) => setWorkField(i, k, e.target.value)} />
-                        </td>
-                      ))}
-                      <td style={{ padding: 4, border: "1px solid #f1f5f9", textAlign: "center" }}>
+                      <td style={{ padding: 3, border: "1px solid #f1f5f9" }}>
+                        <input style={{ ...inputStyle, minWidth: 65, fontSize: 12 }} value={String(row.workHours ?? "")} onChange={(e) => setWorkField(i, "workHours", e.target.value)} />
+                      </td>
+                      <td style={{ padding: 3, border: "1px solid #f1f5f9" }}>
+                        <input style={{ ...inputStyle, minWidth: 65, fontSize: 12 }} value={String(row.source ?? "")} onChange={(e) => setWorkField(i, "source", e.target.value)} />
+                      </td>
+                      <td style={{ padding: 3, border: "1px solid #f1f5f9", textAlign: "center" }}>
                         <button onClick={() => removeWorkRow(i)} style={{ background: "none", border: "none", color: "#dc2626", cursor: "pointer", fontSize: 14 }}>✕</button>
                       </td>
                     </tr>
                   ))}
+                  {workHistory.length === 0 && (
+                    <tr><td colSpan={10} style={{ padding: "12px", textAlign: "center", color: "#9ca3af", fontSize: 12 }}>합산하기 버튼을 눌러 최종 직업력을 생성하세요</td></tr>
+                  )}
                 </tbody>
               </table>
             </div>
-            <button onClick={addWorkRow} style={{ background: "white", border: "1px solid #d1d5db", borderRadius: 6, padding: "5px 14px", fontSize: 12, cursor: "pointer", marginBottom: 16 }}>+ 행 추가</button>
+            <button onClick={addWorkRow} style={{ background: "white", border: "1px solid #bbf7d0", borderRadius: 6, padding: "4px 12px", fontSize: 12, cursor: "pointer", marginBottom: 16, color: "#15803d" }}>+ 직접 추가</button>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 8 }}>
               <DField label="마지막 소음작업 중단 시기" k="lastNoiseWorkEndDate" type="date" />
             </div>

@@ -1,32 +1,38 @@
-generator client {
-  provider = "prisma-client-js"
-}
+# TBSS 사건관리 스키마 재설계 — Claude Code 지시사항
 
-datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
-}
+## 작업 개요
+`prisma/schema.prisma`의 사건관리 관련 모델을 PRD 기반으로 재설계한다.
+기존에 존재하는 비사건관리 모델(User, SignupRequest, Notice, Message, TimelineEvent)은 절대 건드리지 않는다.
 
-model Patient {
-  id        String   @id @default(cuid())
-  name      String
-  ssn       String   @unique
-  phone     String?
-  address   String?
-  memo      String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+---
 
-  cases Case[]
-}
+## 삭제할 기존 모델
+아래 모델들을 schema.prisma에서 제거한다:
+- HearingLossDetail
+- CopdDetail
+- PneumoconiosisDetail
+- MusculoskeletalDetail
+- OccupationalAccidentDetail
+- OccupationalCancerDetail
+- BereavedDetail
+- HolidayBenefit
 
+---
+
+## 수정할 기존 모델
+
+### Patient — 변경 없음 (유지)
+
+### Case — 아래 내용으로 교체
+
+```prisma
 model Case {
-  id        String  @id @default(cuid())
-  patientId String
-  patient   Patient @relation(fields: [patientId], references: [id])
+  id            String    @id @default(cuid())
+  patientId     String
+  patient       Patient   @relation(fields: [patientId], references: [id])
 
-  caseType String // HEARING_LOSS / COPD / PNEUMOCONIOSIS / MUSCULOSKELETAL / OCCUPATIONAL_ACCIDENT / OCCUPATIONAL_CANCER / BEREAVED / OTHER
-  status   String @default("CONSULTING")
+  caseType      String    // HEARING_LOSS / COPD / PNEUMOCONIOSIS / MUSCULOSKELETAL / OCCUPATIONAL_ACCIDENT / OCCUPATIONAL_CANCER / BEREAVED / OTHER
+  status        String    @default("CONSULTING")
   // 기획사건 상태값: CONSULTING / CONTRACTED / DOC_COLLECTING / SUBMITTED /
   // EXAM_REQUESTED / EXAM_CLINIC_SELECTED / EXAM_SCHEDULED / IN_EXAM / EXAM_DONE /
   // EXPERT_REQUESTED / EXPERT_CLINIC_SELECTED / EXPERT_DONE /
@@ -34,37 +40,37 @@ model Case {
   // REVIEWING / INFO_REQUESTED / APPROVED / REJECTED / CLOSED / OBJECTION / WAGE_CORRECTION
 
   // 파생 사건 연결 (평균임금 정정 청구 등)
-  parentCaseId String?
-  parentCase   Case?   @relation("CaseDerivation", fields: [parentCaseId], references: [id])
-  derivedCases Case[]  @relation("CaseDerivation")
+  parentCaseId  String?
+  parentCase    Case?     @relation("CaseDerivation", fields: [parentCaseId], references: [id])
+  derivedCases  Case[]    @relation("CaseDerivation")
 
   // TF / 지사
-  tfName String?
-  branch String?
+  tfName        String?
+  branch        String?
 
   // 담당자 (User FK)
-  salesManagerId  String?
-  salesManager    User?   @relation("SalesManager", fields: [salesManagerId], references: [id])
-  caseManagerId   String?
-  caseManager     User?   @relation("CaseManager", fields: [caseManagerId], references: [id])
-  branchManagerId String?
-  branchManager   User?   @relation("BranchManager", fields: [branchManagerId], references: [id])
+  salesManagerId   String?
+  salesManager     User?   @relation("SalesManager", fields: [salesManagerId], references: [id])
+  caseManagerId    String?
+  caseManager      User?   @relation("CaseManager", fields: [caseManagerId], references: [id])
+  branchManagerId  String?
+  branchManager    User?   @relation("BranchManager", fields: [branchManagerId], references: [id])
 
   // 영업 정보
-  salesRoute String?
-  subAgent   String? // 소속/대리인
-  isOneStop  Boolean @default(false)
+  salesRoute    String?
+  subAgent      String?   // 소속/대리인
+  isOneStop     Boolean   @default(false)
 
   // 약정
-  contractDate DateTime?
+  contractDate  DateTime?
 
   // 접수
   receptionDate DateTime?
 
-  memo String?
+  memo          String?
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   // 상병별 확장 테이블
   hearingLoss          HearingLossDetail?
@@ -75,10 +81,18 @@ model Case {
   occupationalCancer   OccupationalCancerDetail?
   bereaved             BereavedDetail?
 
-  messages  Message[]
-  timelines TimelineEvent[]
+  messages      Message[]
+  timelines     TimelineEvent[]
 }
+```
 
+---
+
+## 추가할 신규 모델
+
+### HearingLossDetail
+
+```prisma
 model HearingLossDetail {
   id     String @id @default(cuid())
   caseId String @unique
@@ -92,30 +106,26 @@ model HearingLossDetail {
   firstExamSpeech        Float?
   passedInitialCriteria  Boolean   @default(false)
   isDisabilityRegistered Boolean   @default(false)
-
-  disabilityRegistrationDate  DateTime? // 국가장애 등록일자
-  disabilityDiagnosisDate     DateTime? // 국가장애 진단일자
-  disabilityRegistrationLevel String?   // 국가장애 급수
+  isBig3                 Boolean   @default(false)
 
   // 직업력
-  workHistory          Json?
-  workHistoryRaw       Json?  // 기초자료별 원시 직업력 (소스별 분리 저장)
-  workHistoryMemo      String?
-  lastNoiseWorkEndDate DateTime?
+  workHistory            Json?
+  workHistoryMemo        String?
+  lastNoiseWorkEndDate   DateTime?
 
   // 접수/청구
-  claimSubmittedAt DateTime?
-  claimNasPath     String?
-  telegramSharedAt DateTime?
+  claimSubmittedAt       DateTime?
+  claimNasPath           String?
+  telegramSharedAt       DateTime?
 
   // 특진진찰요구서
-  examRequestReceivedAt DateTime?
-  examPeriodStart       DateTime?
-  examPeriodEnd         DateTime?
+  examRequestReceivedAt  DateTime?
+  examPeriodStart        DateTime?
+  examPeriodEnd          DateTime?
 
   // 특진병원 선택
-  specialClinic                  String?
-  examClinicSelectionSubmittedAt DateTime?
+  specialClinic                    String?
+  examClinicSelectionSubmittedAt   DateTime?
 
   // 전문조사
   expertRequestReceivedAt          DateTime?
@@ -127,26 +137,26 @@ model HearingLossDetail {
   expertMemo                       String?
 
   // 결정
-  bankAccountRequestedAt DateTime?
-  bankAccountSubmittedAt DateTime?
-  decisionType           String? // APPROVED / REJECTED
-  decisionReceivedAt     DateTime?
-  approvedDisease        String?
-  disabilityGrade        String?
-  disabilityStatus       String?
-  baseAssessment         String?
-  finalAssessment        String?
-  lumpSumAmount          Int?
-  avgWage                Int?
-  compensationPaidAt     DateTime?
+  bankAccountRequestedAt  DateTime?
+  bankAccountSubmittedAt  DateTime?
+  decisionType            String?   // APPROVED / REJECTED
+  decisionReceivedAt      DateTime?
+  approvedDisease         String?
+  disabilityGrade         String?
+  disabilityStatus        String?
+  baseAssessment          String?
+  finalAssessment         String?
+  lumpSumAmount           Int?
+  avgWage                 Int?
+  compensationPaidAt      DateTime?
 
   // 검토/정공
-  wageReviewMemo             String?
-  adaptedWorkplaceReviewMemo String?
-  infoDisclosureRequestedAt  DateTime?
-  infoDisclosureReceivedAt   DateTime?
-  rejectionReason            String?
-  reviewMemo                 String?
+  wageReviewMemo                  String?
+  adaptedWorkplaceReviewMemo      String?
+  infoDisclosureRequestedAt       DateTime?
+  infoDisclosureReceivedAt        DateTime?
+  rejectionReason                 String?
+  reviewMemo                      String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -155,50 +165,35 @@ model HearingLossDetail {
 
   @@map("hearing_loss_details")
 }
+```
 
+### HearingLossExam
+
+```prisma
 model HearingLossExam {
-  id                  String            @id @default(cuid())
-  hearingLossDetailId String
-  hearingLossDetail   HearingLossDetail @relation(fields: [hearingLossDetailId], references: [id])
+  id                   String             @id @default(cuid())
+  hearingLossDetailId  String
+  hearingLossDetail    HearingLossDetail  @relation(fields: [hearingLossDetailId], references: [id])
 
-  examSet   String // INITIAL(최초특진) / RE(재특진) / RE2(재재특진)
-  examRound Int // 1 / 2 / 3
+  examSet    String  // INITIAL(최초특진) / RE(재특진) / RE2(재재특진)
+  examRound  Int     // 1 / 2 / 3
 
-  examDate        DateTime?
-  attendedStaffId String?
+  examDate              DateTime?
+  attendedStaffId       String?
 
-  // 기도청력역치 우측 (dB) — 주파수별
-  air500R   Float?
-  air1kR    Float?
-  air2kR    Float?
-  air4kR    Float?
-  // 기도청력역치 좌측 (dB)
-  air500L   Float?
-  air1kL    Float?
-  air2kL    Float?
-  air4kL    Float?
-  // 골도청력역치 우측 (dB)
-  bone500R  Float?
-  bone1kR   Float?
-  bone2kR   Float?
-  bone4kR   Float?
-  // 골도청력역치 좌측 (dB)
-  bone500L  Float?
-  bone1kL   Float?
-  bone2kL   Float?
-  bone4kL   Float?
-  // 어음청취역치 (dB) — SRT
-  srtRight  Float?
-  srtLeft   Float?
-  speechRight    Float?
-  speechLeft     Float?
-  abrRight       Float?
-  abrLeft        Float?
-  impedanceRight String?
-  impedanceLeft  String?
+  airRight              Float?
+  airLeft               Float?
+  boneRight             Float?
+  boneLeft              Float?
+  speechRight           Float?
+  speechLeft            Float?
+  abrRight              Float?
+  abrLeft               Float?
+  impedanceRight        String?
+  impedanceLeft         String?
 
   isReliable            Boolean?
-  medicalRecordObtained Boolean  @default(false)
+  medicalRecordObtained Boolean   @default(false)
   predictedGrade        String?
   memo                  String?
 
@@ -207,7 +202,11 @@ model HearingLossExam {
 
   @@map("hearing_loss_exams")
 }
+```
 
+### CopdDetail (기존 필드 유지 + 상태값 제거)
+
+```prisma
 model CopdDetail {
   id     String @id @default(cuid())
   caseId String @unique
@@ -234,15 +233,15 @@ model CopdDetail {
   reExamPossibleDate DateTime?
 
   // 업무상질병판정위원회
-  occDiseaseCommittee String?
-  occReferralDate     DateTime?
-  occReviewDate       DateTime?
-  occAttendanceType   String?
-  occAttendanceNote   String?
+  occDiseaseCommittee  String?
+  occReferralDate      DateTime?
+  occReviewDate        DateTime?
+  occAttendanceType    String?
+  occAttendanceNote    String?
 
   // 처분
-  disposalType String?
-  disposalDate DateTime?
+  disposalType    String?
+  disposalDate    DateTime?
 
   // 장해
   disabilityClaimDate             DateTime?
@@ -257,7 +256,11 @@ model CopdDetail {
 
   @@map("copd_details")
 }
+```
 
+### PneumoconiosisDetail (기존 유지)
+
+```prisma
 model PneumoconiosisDetail {
   id     String @id @default(cuid())
   caseId String @unique
@@ -281,7 +284,11 @@ model PneumoconiosisDetail {
 
   @@map("pneumoconiosis_details")
 }
+```
 
+### MusculoskeletalDetail (기존 유지)
+
+```prisma
 model MusculoskeletalDetail {
   id     String @id @default(cuid())
   caseId String @unique
@@ -312,7 +319,11 @@ model MusculoskeletalDetail {
 
   @@map("musculoskeletal_details")
 }
+```
 
+### OccupationalAccidentDetail (기존 유지)
+
+```prisma
 model OccupationalAccidentDetail {
   id     String @id @default(cuid())
   caseId String @unique
@@ -344,7 +355,11 @@ model OccupationalAccidentDetail {
 
   @@map("occupational_accident_details")
 }
+```
 
+### OccupationalCancerDetail (기존 유지)
+
+```prisma
 model OccupationalCancerDetail {
   id     String @id @default(cuid())
   caseId String @unique
@@ -365,7 +380,11 @@ model OccupationalCancerDetail {
 
   @@map("occupational_cancer_details")
 }
+```
 
+### BereavedDetail (기존 유지)
+
+```prisma
 model BereavedDetail {
   id     String @id @default(cuid())
   caseId String @unique
@@ -387,29 +406,36 @@ model BereavedDetail {
 
   @@map("bereaved_details")
 }
+```
 
-model Message {
-  id        Int @id @default(autoincrement())
-  messageId Int @unique
+---
 
-  caseId String?
-  case   Case?   @relation(fields: [caseId], references: [id])
+## User 모델 수정
 
-  chatId BigInt
-  userId BigInt
+기존 User 모델에 Case 담당자 역방향 관계 추가:
 
-  username String?
-  name     String?
-  text     String?
-  type     String
+```prisma
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String
+  name      String
+  role      String   @default("READONLY")
+  createdAt DateTime @default(now())
 
-  fileId   String?
-  filename String?
-
-  createdAt DateTime
-  savedAt   DateTime @default(now())
+  salesCases   Case[] @relation("SalesManager")
+  managedCases Case[] @relation("CaseManager")
+  branchCases  Case[] @relation("BranchManager")
 }
+```
 
+---
+
+## TimelineEvent 모델 수정
+
+작성자 FK 추가:
+
+```prisma
 model TimelineEvent {
   id          Int      @id @default(autoincrement())
   caseId      String
@@ -420,39 +446,24 @@ model TimelineEvent {
   createdBy   User?    @relation(fields: [createdById], references: [id])
   createdAt   DateTime @default(now())
 }
+```
 
-model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  password  String
-  name      String
-  role      String   @default("READONLY")
-  createdAt DateTime @default(now())
+단, User 모델에 `timelineEvents TimelineEvent[]` 역방향 관계도 추가할 것.
 
-  salesCases     Case[]          @relation("SalesManager")
-  managedCases   Case[]          @relation("CaseManager")
-  branchCases    Case[]          @relation("BranchManager")
-  timelineEvents TimelineEvent[]
-}
+---
 
-model SignupRequest {
-  id         String   @id @default(cuid())
-  name       String
-  email      String   @unique
-  department String?
-  jobTitle   String?
-  message    String?
-  status     String   @default("PENDING")
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-}
+## 작업 순서
 
-model Notice {
-  id        String   @id @default(cuid())
-  type      String
-  title     String?
-  content   String
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
+1. `prisma/schema.prisma` 파일을 위 내용대로 수정
+2. `npx prisma format` 실행하여 문법 검증
+3. `npx prisma migrate dev --name redesign_case_management` 실행
+4. 마이그레이션 성공 시 보고
+
+---
+
+## 주의사항
+
+- `lib/generated/` 폴더는 git에 커밋하지 않는다 (.gitignore 확인)
+- 기존 Case, Patient, Message, Notice, SignupRequest 모델의 기존 필드는 건드리지 않는다
+- HolidayBenefit 모델은 삭제한다 (Case에서 relation 제거 포함)
+- 마이그레이션 실행 전 Railway DB에 실데이터가 없으므로 reset이 필요하면 `--force-reset` 사용 가능

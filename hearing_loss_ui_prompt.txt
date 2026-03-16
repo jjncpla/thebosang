@@ -1,0 +1,451 @@
+# 소음성 난청 상세 UI 재구현 — Claude Code 지시사항
+
+## 작업 개요
+`app/cases/[caseId]/page.tsx`의 `HearingLossTab` 컴포넌트와 관련 API 라우트를
+새로운 스키마(HearingLossDetail + HearingLossExam)에 맞게 재구현한다.
+
+## 절대 건드리지 말 것
+- HearingLossTab 이외의 모든 컴포넌트 (BasicInfoTab, CopdTab, PneumoconiosisTab, FormTab 등)
+- 헤더, 탭바, 라우팅, 로딩/에러 처리 로직
+- StatusBadge, InfoCard, InfoRow, AccordionHeader, DisabledSection 등 공통 UI
+- COPD, 진폐 관련 API 라우트
+- inputStyle, secWrap 등 공통 스타일 상수
+
+---
+
+## 1. page.tsx 수정 사항
+
+### 1-1. HearingLoss 타입 교체
+기존:
+```ts
+type HearingLoss = Record<string, string | number | null>;
+```
+교체:
+```ts
+type HearingLossExam = {
+  id: string;
+  examSet: string; // INITIAL | RE | RE2
+  examRound: number; // 1 | 2 | 3
+  examDate: string | null;
+  airRight: number | null;
+  airLeft: number | null;
+  boneRight: number | null;
+  boneLeft: number | null;
+  speechRight: number | null;
+  speechLeft: number | null;
+  abrRight: number | null;
+  abrLeft: number | null;
+  impedanceRight: string | null;
+  impedanceLeft: string | null;
+  isReliable: boolean | null;
+  medicalRecordObtained: boolean;
+  predictedGrade: string | null;
+  memo: string | null;
+};
+
+type HearingLossDetail = {
+  id: string;
+  // 초진
+  firstClinic: string | null;
+  firstExamDate: string | null;
+  firstExamRight: number | null;
+  firstExamLeft: number | null;
+  firstExamSpeech: number | null;
+  passedInitialCriteria: boolean;
+  isDisabilityRegistered: boolean;
+  isBig3: boolean;
+  // 직업력
+  workHistory: WorkHistoryItem[] | null;
+  workHistoryMemo: string | null;
+  lastNoiseWorkEndDate: string | null;
+  // 접수/청구
+  claimSubmittedAt: string | null;
+  claimNasPath: string | null;
+  telegramSharedAt: string | null;
+  // 특진진찰요구서
+  examRequestReceivedAt: string | null;
+  examPeriodStart: string | null;
+  examPeriodEnd: string | null;
+  // 특진병원 선택
+  specialClinic: string | null;
+  examClinicSelectionSubmittedAt: string | null;
+  // 전문조사
+  expertRequestReceivedAt: string | null;
+  expertClinic: string | null;
+  expertClinicSelectionSubmittedAt: string | null;
+  expertDate: string | null;
+  expertMemo: string | null;
+  // 결정
+  bankAccountRequestedAt: string | null;
+  bankAccountSubmittedAt: string | null;
+  decisionType: string | null;
+  decisionReceivedAt: string | null;
+  approvedDisease: string | null;
+  disabilityGrade: string | null;
+  disabilityStatus: string | null;
+  baseAssessment: string | null;
+  finalAssessment: string | null;
+  lumpSumAmount: number | null;
+  avgWage: number | null;
+  compensationPaidAt: string | null;
+  // 검토/정공
+  wageReviewMemo: string | null;
+  adaptedWorkplaceReviewMemo: string | null;
+  infoDisclosureRequestedAt: string | null;
+  infoDisclosureReceivedAt: string | null;
+  rejectionReason: string | null;
+  reviewMemo: string | null;
+  // 특진 회차
+  exams: HearingLossExam[];
+};
+
+type WorkHistoryItem = {
+  company: string;
+  department: string;
+  jobType: string;
+  startYear: number;
+  startMonth: number;
+  endYear: number;
+  endMonth: number;
+  noiseExposure: boolean;
+  noiseLevel: number | null;
+  workHours: string;
+  source: string;
+};
+```
+
+### 1-2. CaseData 타입에서 hearingLoss 타입 변경
+```ts
+hearingLoss: HearingLossDetail | null;
+```
+
+### 1-3. getCaseStatus 함수 수정
+기존에 `c.hearingLoss?.status`를 참조하는 부분을 `c.status`로 변경:
+```ts
+function getCaseStatus(c: CaseData): string {
+  return c.status ?? "CONSULTING";
+}
+```
+단, CaseData 타입에 `status: string` 필드가 없으면 추가할 것.
+
+### 1-4. HearingLossTab 컴포넌트 전면 교체
+
+아래 구조로 완전히 새로 작성한다. 기존 코드는 삭제한다.
+
+```
+HearingLossTab 구조:
+(1) 사건초기 [아코디언, 기본 열림]
+  - 초진 subsection
+  - 직업력 subsection
+(2) 요양 [DisabledSection — 비활성]
+(3) 장해 [아코디언, 기본 닫힘]
+  - 접수/청구 subsection
+  - 특진진찰요구서 subsection
+  - 특진병원 선택 subsection
+  - 최초특진 subsection (3 rounds)
+  - 재특진 subsection [기본 숨김, 토글 버튼으로 표시]
+  - 전문조사 subsection
+  - 결정 subsection
+  - 검토/정공 subsection
+(4) 유족 [DisabledSection — 비활성]
+```
+
+**컴포넌트 시그니처:**
+```ts
+function HearingLossTab({ caseId, initial }: { caseId: string; initial: HearingLossDetail | null })
+```
+
+**상태:**
+```ts
+const [detail, setDetail] = useState<HearingLossDetail>(
+  initial ?? { ...모든 필드 null/false/[] 초기값 }
+);
+const [exams, setExams] = useState<HearingLossExam[]>(initial?.exams ?? []);
+const [saving, setSaving] = useState(false);
+const [saveMsg, setSaveMsg] = useState<string | null>(null);
+const [sec1Open, setSec1Open] = useState(true);
+const [sec3Open, setSec3Open] = useState(false);
+const [showReExam, setShowReExam] = useState(false); // 재특진 표시 여부
+```
+
+**저장 함수:**
+```ts
+const saveDetail = async () => {
+  setSaving(true);
+  try {
+    const res = await fetch(`/api/cases/${caseId}/hearing-loss`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(detail),
+    });
+    if (!res.ok) throw new Error("저장 실패");
+    setSaveMsg("저장되었습니다");
+    setTimeout(() => setSaveMsg(null), 3000);
+  } catch { setSaveMsg("오류가 발생했습니다"); }
+  finally { setSaving(false); }
+};
+
+const saveExam = async (exam: Partial<HearingLossExam> & { examSet: string; examRound: number }) => {
+  const method = exam.id ? "PUT" : "POST";
+  const url = exam.id
+    ? `/api/cases/${caseId}/hearing-loss/exams/${exam.id}`
+    : `/api/cases/${caseId}/hearing-loss/exams`;
+  const res = await fetch(url, {
+    method,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(exam),
+  });
+  if (!res.ok) throw new Error("검사 저장 실패");
+  const updated: HearingLossExam = await res.json();
+  setExams((prev) => {
+    const idx = prev.findIndex((e) => e.examSet === exam.examSet && e.examRound === exam.examRound);
+    if (idx >= 0) { const next = [...prev]; next[idx] = updated; return next; }
+    return [...prev, updated];
+  });
+};
+```
+
+**헬퍼 함수:**
+```ts
+const d = (key: keyof HearingLossDetail) => String(detail[key] ?? "");
+const setD = (key: keyof HearingLossDetail, val: unknown) =>
+  setDetail((prev) => ({ ...prev, [key]: val }));
+
+// 특정 examSet+round의 exam 가져오기
+const getExam = (examSet: string, round: number): HearingLossExam | undefined =>
+  exams.find((e) => e.examSet === examSet && e.examRound === round);
+
+// exam 필드 수정 (로컬 상태만)
+const setExamField = (examSet: string, round: number, key: keyof HearingLossExam, val: unknown) =>
+  setExams((prev) => {
+    const idx = prev.findIndex((e) => e.examSet === examSet && e.examRound === round);
+    const exam = prev[idx] ?? { examSet, examRound: round, id: "", examDate: null, airRight: null, airLeft: null, boneRight: null, boneLeft: null, speechRight: null, speechLeft: null, abrRight: null, abrLeft: null, impedanceRight: null, impedanceLeft: null, isReliable: null, medicalRecordObtained: false, predictedGrade: null, memo: null };
+    const updated = { ...exam, [key]: val };
+    if (idx >= 0) { const next = [...prev]; next[idx] = updated; return next; }
+    return [...prev, updated];
+  });
+```
+
+**섹션별 UI 상세:**
+
+**초진 섹션:**
+- 초진 병원 (text), 초진일 (date), 우측 PTA (number), 좌측 PTA (number), 어음명료도 (number)
+- 편측 40dB 기준 통과 여부 (checkbox): passedInitialCriteria
+- 국가장애 등록 이력 (checkbox): isDisabilityRegistered
+- Big3 병원 여부 (checkbox): isBig3
+
+**직업력 섹션:**
+- workHistory는 동적 행 추가/삭제 방식으로 구현
+- 각 행: 회사명, 직종, 작업내용, 시작년월(year+month select), 종료년월, 소음노출여부(checkbox), 소음수준(dB), 출처
+- 행 추가 버튼, 각 행 삭제 버튼(✕)
+- 마지막 소음작업 중단 시기 (date): lastNoiseWorkEndDate
+- 특이사항 textarea: workHistoryMemo
+
+**접수/청구 섹션:**
+- 청구서 발송일 (date): claimSubmittedAt
+- NAS 경로 (text): claimNasPath
+- 텔레그램 공유일시 (datetime-local): telegramSharedAt
+
+**특진진찰요구서 섹션:**
+- 수령일 (date): examRequestReceivedAt
+- 진찰기간 시작 (date): examPeriodStart
+- 진찰기간 종료 (date): examPeriodEnd
+
+**특진병원 선택 섹션:**
+- 특진병원명 (text): specialClinic
+- 선택확인서 제출일 (date): examClinicSelectionSubmittedAt
+
+**최초특진 서브섹션 (3 rounds):**
+각 round를 ExamRoundBlock 컴포넌트로 렌더링:
+```
+ExamRoundBlock({ examSet: "INITIAL", round: 1|2|3, label: "1차"|"2차"|"3차" })
+  - 검사일 (date)
+  - 기도 우측/좌측 (number)
+  - 골도 우측/좌측 (number, round===3일 때만 노출 — 실무상 3차에 기골도 둘 다 기록)
+    → 실제로는 매 회차마다 입력. 단순히 모두 표시
+  - 어음명료도 우측/좌측 (number)
+  - ABR 우측/좌측 (number)
+  - 임피던스 우측/좌측 (text: A/B/C/AD/AS)
+  - 신뢰성 여부 (checkbox): isReliable
+  - round===3일 때: 의무기록지 발급 여부 (checkbox), 예상 장해등급 (text)
+  - 특이사항 (text): memo
+  - [이 회차 저장] 버튼 → saveExam 호출
+```
+
+**재특진 서브섹션:**
+- 기본 숨김. "재특진 입력" 토글 버튼으로 표시/숨김
+- 표시되면 최초특진과 동일한 구조 (examSet: "RE")
+- 재재특진도 동일 구조 (examSet: "RE2"), 재특진 블록 하단에 "재재특진 입력" 토글 추가
+
+**전문조사 섹션:**
+- 전문조사진찰요구서 수령일 (date): expertRequestReceivedAt
+- 전문조사기관 (text): expertClinic
+- 선택확인서 제출일 (date): expertClinicSelectionSubmittedAt
+- 전문조사 실시일 (date): expertDate
+- 특이사항 (textarea): expertMemo
+
+**결정 섹션:**
+- 통장사본 요청 수령일 (date): bankAccountRequestedAt
+- 통장사본 제출일 (date): bankAccountSubmittedAt
+- 처분 결과 select (승인/불승인): decisionType
+- 결정통지서 수령일 (date): decisionReceivedAt
+- 승인 상병명 (text): approvedDisease
+- 확정 장해등급 (text, 예: 14급01호): disabilityGrade
+- 장해급여 결정액 (number, 원): lumpSumAmount
+- 산정 평균임금 (number, 원/일): avgWage
+- 보상금 지급일 (date): compensationPaidAt
+- 기초산정 내용 (textarea): baseAssessment
+- 최종산정 내용 (textarea): finalAssessment
+
+**검토/정공 섹션:**
+- 평균임금 정정 실익 검토 (textarea): wageReviewMemo
+- 적사변 실익 검토 (textarea): adaptedWorkplaceReviewMemo
+- 정보공개청구일 (date): infoDisclosureRequestedAt
+- 정공 자료 수령일 (date): infoDisclosureReceivedAt
+- 불승인 사유 (textarea): rejectionReason
+- 종합 검토 메모 (textarea): reviewMemo
+
+**SaveBar는 (1) 사건초기와 (3) 장해 섹션 하단에 각각 배치.**
+단, 특진 회차별로는 개별 저장 버튼 사용.
+
+---
+
+## 2. API 라우트 생성/수정
+
+### 2-1. `app/api/cases/[caseId]/hearing-loss/route.ts` 수정
+
+GET: HearingLossDetail + exams 포함해서 반환
+```ts
+import { prisma } from "@/lib/prisma";
+import { NextResponse } from "next/server";
+
+export async function GET(req: Request, { params }: { params: { caseId: string } }) {
+  const detail = await prisma.hearingLossDetail.findUnique({
+    where: { caseId: params.caseId },
+    include: { exams: { orderBy: [{ examSet: "asc" }, { examRound: "asc" }] } },
+  });
+  return NextResponse.json(detail);
+}
+
+export async function PUT(req: Request, { params }: { params: { caseId: string } }) {
+  const body = await req.json();
+  // exams 필드는 별도 API로 처리하므로 제거
+  const { exams, id, caseId: _caseId, createdAt, updatedAt, ...data } = body;
+  const detail = await prisma.hearingLossDetail.upsert({
+    where: { caseId: params.caseId },
+    create: { caseId: params.caseId, ...data },
+    update: data,
+    include: { exams: { orderBy: [{ examSet: "asc" }, { examRound: "asc" }] } },
+  });
+  return NextResponse.json(detail);
+}
+```
+
+### 2-2. `app/api/cases/[caseId]/hearing-loss/exams/route.ts` 신규 생성
+
+POST: 새 exam 행 생성
+```ts
+import { prisma } from "@/lib/prisma";
+import { NextResponse } from "next/server";
+
+export async function POST(req: Request, { params }: { params: { caseId: string } }) {
+  const body = await req.json();
+  const detail = await prisma.hearingLossDetail.findUnique({ where: { caseId: params.caseId } });
+  if (!detail) return NextResponse.json({ error: "HearingLossDetail not found" }, { status: 404 });
+  const { id, hearingLossDetailId, createdAt, updatedAt, ...data } = body;
+  const exam = await prisma.hearingLossExam.create({
+    data: { hearingLossDetailId: detail.id, ...data },
+  });
+  return NextResponse.json(exam);
+}
+```
+
+### 2-3. `app/api/cases/[caseId]/hearing-loss/exams/[examId]/route.ts` 신규 생성
+
+PUT: exam 업데이트
+```ts
+import { prisma } from "@/lib/prisma";
+import { NextResponse } from "next/server";
+
+export async function PUT(req: Request, { params }: { params: { caseId: string; examId: string } }) {
+  const body = await req.json();
+  const { id, hearingLossDetailId, createdAt, updatedAt, ...data } = body;
+  const exam = await prisma.hearingLossExam.update({
+    where: { id: params.examId },
+    data,
+  });
+  return NextResponse.json(exam);
+}
+```
+
+---
+
+## 3. 기존 API 라우트 정리
+
+`app/api/cases/[caseId]/hearing-loss/route.ts`가 이미 존재하면 위 내용으로 교체.
+기존에 `status` 필드를 별도 업데이트하는 로직이 있으면 제거 (status는 Case 테이블로 이동됨).
+
+---
+
+## 4. lib/constants/case.ts 확인
+
+`STATUS_BY_CASE_TYPE` 상수가 있으면, HEARING_LOSS 항목을 새 상태값으로 업데이트:
+```ts
+HEARING_LOSS: [
+  "CONSULTING", "CONTRACTED", "DOC_COLLECTING", "SUBMITTED",
+  "EXAM_REQUESTED", "EXAM_CLINIC_SELECTED", "EXAM_SCHEDULED", "IN_EXAM", "EXAM_DONE",
+  "EXPERT_REQUESTED", "EXPERT_CLINIC_SELECTED", "EXPERT_DONE",
+  "BANK_REQUESTED", "BANK_SUBMITTED", "DECISION_RECEIVED",
+  "REVIEWING", "INFO_REQUESTED", "APPROVED", "REJECTED", "CLOSED",
+  "OBJECTION", "WAGE_CORRECTION",
+]
+```
+
+한글 레이블 매핑도 추가:
+```ts
+export const CASE_STATUS_LABELS: Record<string, string> = {
+  CONSULTING: "상담 중",
+  CONTRACTED: "약정 완료",
+  DOC_COLLECTING: "서류 수집 중",
+  SUBMITTED: "접수 완료",
+  EXAM_REQUESTED: "특진진찰요구서 수령",
+  EXAM_CLINIC_SELECTED: "특진병원 선택 완료",
+  EXAM_SCHEDULED: "특진 일정 확정",
+  IN_EXAM: "특진 진행 중",
+  EXAM_DONE: "특진 완료",
+  EXPERT_REQUESTED: "전문조사요구서 수령",
+  EXPERT_CLINIC_SELECTED: "전문조사기관 선택 완료",
+  EXPERT_DONE: "전문조사 완료",
+  BANK_REQUESTED: "통장사본 요청",
+  BANK_SUBMITTED: "통장사본 제출",
+  DECISION_RECEIVED: "결정통지서 수령",
+  REVIEWING: "검토 중",
+  INFO_REQUESTED: "정보공개청구 중",
+  APPROVED: "승인",
+  REJECTED: "불승인",
+  CLOSED: "종결",
+  OBJECTION: "이의제기",
+  WAGE_CORRECTION: "평균임금 정정",
+};
+```
+
+---
+
+## 5. 작업 순서
+
+1. `lib/constants/case.ts` — HEARING_LOSS 상태값 + 레이블 업데이트
+2. `app/api/cases/[caseId]/hearing-loss/route.ts` — GET/PUT 재작성
+3. `app/api/cases/[caseId]/hearing-loss/exams/route.ts` — POST 신규 생성
+4. `app/api/cases/[caseId]/hearing-loss/exams/[examId]/route.ts` — PUT 신규 생성
+5. `app/cases/[caseId]/page.tsx` — HearingLoss 타입 교체 + HearingLossTab 재작성
+6. 빌드 에러 확인 및 수정
+
+---
+
+## 주의사항
+
+- page.tsx의 HearingLossTab만 교체. 나머지 컴포넌트 절대 수정 금지.
+- 기존 `form` 패턴(Record<string, string | number | null>) 대신 타입이 명확한 `detail` 상태 사용.
+- 특진 회차 데이터는 `exams` 배열로 관리. HearingLossDetail의 flat 필드에 저장하지 않음.
+- prisma import 경로는 기존 파일들 참고해서 맞출 것 (`@/lib/prisma` 또는 `@/lib/db`).
+- TypeScript 에러 없이 빌드 통과할 것.
