@@ -163,10 +163,29 @@ model HearingLossExam {
   examDate        DateTime?
   attendedStaffId String?
 
-  airRight       Float?
-  airLeft        Float?
-  boneRight      Float?
-  boneLeft       Float?
+  // 기도청력역치 우측 (dB) — 주파수별
+  air500R   Float?
+  air1kR    Float?
+  air2kR    Float?
+  air4kR    Float?
+  // 기도청력역치 좌측 (dB)
+  air500L   Float?
+  air1kL    Float?
+  air2kL    Float?
+  air4kL    Float?
+  // 골도청력역치 우측 (dB)
+  bone500R  Float?
+  bone1kR   Float?
+  bone2kR   Float?
+  bone4kR   Float?
+  // 골도청력역치 좌측 (dB)
+  bone500L  Float?
+  bone1kL   Float?
+  bone2kL   Float?
+  bone4kL   Float?
+  // 어음청취역치 (dB) — SRT
+  srtRight  Float?
+  srtLeft   Float?
   speechRight    Float?
   speechLeft     Float?
   abrRight       Float?

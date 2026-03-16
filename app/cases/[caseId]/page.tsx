@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useRouter, useParams } from "next/navigation";
-import { CASE_TYPE_LABELS, DISPOSAL_TYPE, GRADE_TYPE, STATUS_BY_CASE_TYPE } from "@/lib/constants/case";
+import { CASE_TYPE_LABELS, DISPOSAL_TYPE, GRADE_TYPE, STATUS_BY_CASE_TYPE, CASE_STATUS_LABELS } from "@/lib/constants/case";
 import { OCC_DISEASE_COMMITTEES } from "@/constants/occDiseaseCommittees";
 
 const S = { fontFamily: "'Malgun Gothic', 'Apple SD Gothic Neo', 'Segoe UI', sans-serif" };
@@ -28,14 +28,23 @@ type HearingLossExam = {
   examSet: string;
   examRound: number;
   examDate: string | null;
-  airRight: number | null;
-  airLeft: number | null;
-  boneRight: number | null;
-  boneLeft: number | null;
+  // 기도 우측
+  air500R: number | null; air1kR: number | null; air2kR: number | null; air4kR: number | null;
+  // 기도 좌측
+  air500L: number | null; air1kL: number | null; air2kL: number | null; air4kL: number | null;
+  // 골도 우측
+  bone500R: number | null; bone1kR: number | null; bone2kR: number | null; bone4kR: number | null;
+  // 골도 좌측
+  bone500L: number | null; bone1kL: number | null; bone2kL: number | null; bone4kL: number | null;
+  // 어음
+  srtRight: number | null;
+  srtLeft: number | null;
   speechRight: number | null;
   speechLeft: number | null;
+  // ABR
   abrRight: number | null;
   abrLeft: number | null;
+  // 임피던스
   impedanceRight: string | null;
   impedanceLeft: string | null;
   isReliable: boolean | null;
@@ -157,14 +166,38 @@ const STATUS_COLOR: Record<string, { bg: string; color: string; border: string; 
   "반려":     { bg: "#450a0a", color: "#fca5a5", border: "1px solid #dc2626", dot: "#f87171" },
   "보류":     { bg: "#1c1917", color: "#d6d3d1", border: "1px solid #78716c", dot: "#a8a29e" },
   "파기":     { bg: "#1e293b", color: "#94a3b8", border: "1px solid #475569", dot: "#64748b" },
+  // 영문 키
+  "CONSULTING":             { bg: "#1e1b4b", color: "#a5b4fc", border: "1px solid #4338ca", dot: "#818cf8" },
+  "CONTRACTED":             { bg: "#082f49", color: "#7dd3fc", border: "1px solid #0369a1", dot: "#38bdf8" },
+  "DOC_COLLECTING":         { bg: "#082f49", color: "#bae6fd", border: "1px solid #0284c7", dot: "#38bdf8" },
+  "SUBMITTED":              { bg: "#1a2e05", color: "#86efac", border: "1px solid #15803d", dot: "#4ade80" },
+  "EXAM_REQUESTED":         { bg: "#1a2e05", color: "#86efac", border: "1px solid #15803d", dot: "#4ade80" },
+  "EXAM_CLINIC_SELECTED":   { bg: "#052e16", color: "#6ee7b7", border: "1px solid #059669", dot: "#34d399" },
+  "EXAM_SCHEDULED":         { bg: "#052e16", color: "#6ee7b7", border: "1px solid #059669", dot: "#34d399" },
+  "IN_EXAM":                { bg: "#052e16", color: "#6ee7b7", border: "1px solid #059669", dot: "#34d399" },
+  "EXAM_DONE":              { bg: "#052e16", color: "#86efac", border: "1px solid #15803d", dot: "#4ade80" },
+  "EXPERT_REQUESTED":       { bg: "#451a03", color: "#fcd34d", border: "1px solid #b45309", dot: "#fbbf24" },
+  "EXPERT_CLINIC_SELECTED": { bg: "#451a03", color: "#fcd34d", border: "1px solid #b45309", dot: "#fbbf24" },
+  "EXPERT_DONE":            { bg: "#451a03", color: "#fde68a", border: "1px solid #d97706", dot: "#fcd34d" },
+  "BANK_REQUESTED":         { bg: "#1e1b4b", color: "#c4b5fd", border: "1px solid #7c3aed", dot: "#a78bfa" },
+  "BANK_SUBMITTED":         { bg: "#1e1b4b", color: "#c4b5fd", border: "1px solid #7c3aed", dot: "#a78bfa" },
+  "DECISION_RECEIVED":      { bg: "#2e1065", color: "#d8b4fe", border: "1px solid #9333ea", dot: "#c084fc" },
+  "REVIEWING":              { bg: "#1c1917", color: "#d6d3d1", border: "1px solid #78716c", dot: "#a8a29e" },
+  "INFO_REQUESTED":         { bg: "#1c1917", color: "#d6d3d1", border: "1px solid #78716c", dot: "#a8a29e" },
+  "APPROVED":               { bg: "#052e16", color: "#86efac", border: "1px solid #16a34a", dot: "#4ade80" },
+  "REJECTED":               { bg: "#450a0a", color: "#fca5a5", border: "1px solid #b91c1c", dot: "#f87171" },
+  "CLOSED":                 { bg: "#1e293b", color: "#94a3b8", border: "1px solid #475569", dot: "#64748b" },
+  "OBJECTION":              { bg: "#450a0a", color: "#fca5a5", border: "1px solid #dc2626", dot: "#f87171" },
+  "WAGE_CORRECTION":        { bg: "#1e1b4b", color: "#c4b5fd", border: "1px solid #7c3aed", dot: "#a78bfa" },
 };
 
 function StatusBadge({ status }: { status: string }) {
-  const s = STATUS_COLOR[status] ?? { bg: "#1e293b", color: "#94a3b8", border: "1px solid #475569", dot: "#64748b" };
+  const label = CASE_STATUS_LABELS[status] ?? status;
+  const s = STATUS_COLOR[status] ?? STATUS_COLOR[label] ?? { bg: "#1e293b", color: "#94a3b8", border: "1px solid #475569", dot: "#64748b" };
   return (
     <span style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "3px 10px", borderRadius: 999, fontSize: 11, fontWeight: 700, background: s.bg, color: s.color, border: s.border }}>
       <span style={{ width: 6, height: 6, borderRadius: "50%", background: s.dot }} />
-      {status}
+      {label}
     </span>
   );
 }
@@ -235,22 +268,30 @@ const EMPTY_DETAIL: HearingLossDetail = {
 };
 
 const EMPTY_EXAM = (examSet: string, examRound: number): HearingLossExam => ({
-  id: "", examSet, examRound, examDate: null, airRight: null, airLeft: null,
-  boneRight: null, boneLeft: null, speechRight: null, speechLeft: null,
-  abrRight: null, abrLeft: null, impedanceRight: null, impedanceLeft: null,
+  id: "", examSet, examRound, examDate: null,
+  air500R: null, air1kR: null, air2kR: null, air4kR: null,
+  air500L: null, air1kL: null, air2kL: null, air4kL: null,
+  bone500R: null, bone1kR: null, bone2kR: null, bone4kR: null,
+  bone500L: null, bone1kL: null, bone2kL: null, bone4kL: null,
+  srtRight: null, srtLeft: null,
+  speechRight: null, speechLeft: null,
+  abrRight: null, abrLeft: null,
+  impedanceRight: null, impedanceLeft: null,
   isReliable: null, medicalRecordObtained: false, predictedGrade: null, memo: null,
 });
+
+function calc6분법(v500: number | null, v1k: number | null, v2k: number | null, v4k: number | null): string {
+  if (v500 === null || v1k === null || v2k === null || v4k === null) return "-";
+  return ((v500 + 2 * v1k + 2 * v2k + v4k) / 6).toFixed(1);
+}
 
 function ExamRoundBlock({
   caseId, examSet, round, label, exams, setExams,
 }: {
-  caseId: string;
-  examSet: string;
-  round: number;
-  label: string;
-  exams: HearingLossExam[];
-  setExams: React.Dispatch<React.SetStateAction<HearingLossExam[]>>;
+  caseId: string; examSet: string; round: number; label: string;
+  exams: HearingLossExam[]; setExams: React.Dispatch<React.SetStateAction<HearingLossExam[]>>;
 }) {
+  const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
@@ -271,11 +312,7 @@ function ExamRoundBlock({
       const url = exam.id
         ? `/api/cases/${caseId}/hearing-loss/exams/${exam.id}`
         : `/api/cases/${caseId}/hearing-loss/exams`;
-      const res = await fetch(url, {
-        method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(exam),
-      });
+      const res = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(exam) });
       if (!res.ok) throw new Error();
       const updated: HearingLossExam = await res.json();
       setExams((prev) => {
@@ -290,87 +327,227 @@ function ExamRoundBlock({
   };
 
   const n = (key: keyof HearingLossExam) => {
-    const v = exam[key];
-    return v === null || v === undefined ? "" : String(v);
+    const v = exam[key]; return (v === null || v === undefined) ? "" : String(v);
+  };
+  const numField = (key: keyof HearingLossExam) => (
+    <input type="number" style={{ ...inputStyle, width: 64 }} value={n(key)}
+      onChange={(e) => setField(key, e.target.value === "" ? null : Number(e.target.value))} />
+  );
+
+  const ptaR = calc6분법(exam.air500R, exam.air1kR, exam.air2kR, exam.air4kR);
+  const ptaL = calc6분법(exam.air500L, exam.air1kL, exam.air2kL, exam.air4kL);
+  const hasData = exam.air500R !== null || exam.air500L !== null;
+
+  const summary = hasData
+    ? `기도 우 ${ptaR} / 좌 ${ptaL} dB`
+    : "미입력";
+
+  const boneDiff = (airKey: keyof HearingLossExam, boneKey: keyof HearingLossExam) => {
+    const a = exam[airKey] as number | null;
+    const b = exam[boneKey] as number | null;
+    if (a === null || b === null) return "-";
+    return Math.abs(a - b).toFixed(0);
   };
 
+  const subTitle = (text: string) => (
+    <div style={{ fontSize: 12, fontWeight: 700, color: "#374151", marginBottom: 8, marginTop: 12, paddingBottom: 4, borderBottom: "1px solid #e5e7eb" }}>{text}</div>
+  );
+
+  const freqTableStyle: React.CSSProperties = { borderCollapse: "collapse", width: "100%", fontSize: 12 };
+  const thStyle: React.CSSProperties = { padding: "4px 6px", background: "#f9fafb", border: "1px solid #e5e7eb", fontWeight: 600, color: "#6b7280", textAlign: "center" };
+  const tdStyle: React.CSSProperties = { padding: 4, border: "1px solid #f1f5f9", textAlign: "center" };
+  const autoStyle: React.CSSProperties = { padding: "4px 6px", border: "1px solid #f1f5f9", background: "#f0fdf4", color: "#15803d", fontWeight: 700, textAlign: "center", fontSize: 13 };
+
   return (
-    <div style={{ border: "1px solid #e5e7eb", borderRadius: 6, padding: 16, marginBottom: 12 }}>
-      <div style={{ fontSize: 12, fontWeight: 700, color: "#4b5563", marginBottom: 10 }}>{label}</div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
-        <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-          <label style={{ fontSize: 11, color: "#9ca3af", fontWeight: 600 }}>검사일</label>
-          <input type="date" style={inputStyle} value={n("examDate")} onChange={(e) => setField("examDate", e.target.value || null)} />
-        </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-          <label style={{ fontSize: 11, color: "#9ca3af", fontWeight: 600 }}>기도 우측 (dB)</label>
-          <input type="number" style={inputStyle} value={n("airRight")} onChange={(e) => setField("airRight", e.target.value === "" ? null : Number(e.target.value))} />
-        </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-          <label style={{ fontSize: 11, color: "#9ca3af", fontWeight: 600 }}>기도 좌측 (dB)</label>
-          <input type="number" style={inputStyle} value={n("airLeft")} onChange={(e) => setField("airLeft", e.target.value === "" ? null : Number(e.target.value))} />
-        </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-          <label style={{ fontSize: 11, color: "#9ca3af", fontWeight: 600 }}>골도 우측 (dB)</label>
-          <input type="number" style={inputStyle} value={n("boneRight")} onChange={(e) => setField("boneRight", e.target.value === "" ? null : Number(e.target.value))} />
-        </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-          <label style={{ fontSize: 11, color: "#9ca3af", fontWeight: 600 }}>골도 좌측 (dB)</label>
-          <input type="number" style={inputStyle} value={n("boneLeft")} onChange={(e) => setField("boneLeft", e.target.value === "" ? null : Number(e.target.value))} />
-        </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-          <label style={{ fontSize: 11, color: "#9ca3af", fontWeight: 600 }}>어음명료도 우측 (%)</label>
-          <input type="number" style={inputStyle} value={n("speechRight")} onChange={(e) => setField("speechRight", e.target.value === "" ? null : Number(e.target.value))} />
-        </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-          <label style={{ fontSize: 11, color: "#9ca3af", fontWeight: 600 }}>어음명료도 좌측 (%)</label>
-          <input type="number" style={inputStyle} value={n("speechLeft")} onChange={(e) => setField("speechLeft", e.target.value === "" ? null : Number(e.target.value))} />
-        </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-          <label style={{ fontSize: 11, color: "#9ca3af", fontWeight: 600 }}>ABR 우측</label>
-          <input type="number" style={inputStyle} value={n("abrRight")} onChange={(e) => setField("abrRight", e.target.value === "" ? null : Number(e.target.value))} />
-        </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-          <label style={{ fontSize: 11, color: "#9ca3af", fontWeight: 600 }}>ABR 좌측</label>
-          <input type="number" style={inputStyle} value={n("abrLeft")} onChange={(e) => setField("abrLeft", e.target.value === "" ? null : Number(e.target.value))} />
-        </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-          <label style={{ fontSize: 11, color: "#9ca3af", fontWeight: 600 }}>임피던스 우측</label>
-          <input style={inputStyle} value={n("impedanceRight")} onChange={(e) => setField("impedanceRight", e.target.value || null)} />
-        </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-          <label style={{ fontSize: 11, color: "#9ca3af", fontWeight: 600 }}>임피던스 좌측</label>
-          <input style={inputStyle} value={n("impedanceLeft")} onChange={(e) => setField("impedanceLeft", e.target.value || null)} />
-        </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-          <label style={{ fontSize: 11, color: "#9ca3af", fontWeight: 600 }}>특이사항</label>
-          <input style={inputStyle} value={n("memo")} onChange={(e) => setField("memo", e.target.value || null)} />
-        </div>
-      </div>
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 10, flexWrap: "wrap" }}>
-        <label style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, cursor: "pointer" }}>
-          <input type="checkbox" checked={exam.isReliable === true} onChange={(e) => setField("isReliable", e.target.checked ? true : null)} />
-          신뢰성 있음
-        </label>
-        {round === 3 && (
-          <>
-            <label style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, cursor: "pointer" }}>
-              <input type="checkbox" checked={exam.medicalRecordObtained} onChange={(e) => setField("medicalRecordObtained", e.target.checked)} />
-              의무기록지 발급 완료
-            </label>
-            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              <label style={{ fontSize: 11, color: "#9ca3af", fontWeight: 600 }}>예상 장해등급</label>
-              <input style={{ ...inputStyle, width: 100 }} value={n("predictedGrade")} onChange={(e) => setField("predictedGrade", e.target.value || null)} />
+    <div style={{ border: "1px solid #e5e7eb", borderRadius: 6, marginBottom: 8, overflow: "hidden" }}>
+      {/* 아코디언 헤더 */}
+      <button onClick={() => setOpen((v) => !v)} style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 16px", background: open ? "#eff6ff" : "#fafafa", border: "none", cursor: "pointer", fontFamily: "inherit" }}>
+        <span style={{ fontSize: 13, fontWeight: 700, color: open ? "#1d4ed8" : "#374151" }}>{label}</span>
+        <span style={{ fontSize: 12, color: "#9ca3af" }}>{summary}  {open ? "▲" : "▼"}</span>
+      </button>
+
+      {open && (
+        <div style={{ padding: 16 }}>
+          {subTitle("기도청력역치 (dB)")}
+          <table style={freqTableStyle}>
+            <thead>
+              <tr>
+                <th style={thStyle}></th>
+                <th style={thStyle}>500Hz</th>
+                <th style={thStyle}>1kHz</th>
+                <th style={thStyle}>2kHz</th>
+                <th style={thStyle}>4kHz</th>
+                <th style={thStyle}>6분법</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td style={{ ...thStyle, width: 40 }}>우</td>
+                <td style={tdStyle}>{numField("air500R")}</td>
+                <td style={tdStyle}>{numField("air1kR")}</td>
+                <td style={tdStyle}>{numField("air2kR")}</td>
+                <td style={tdStyle}>{numField("air4kR")}</td>
+                <td style={autoStyle}>{ptaR}</td>
+              </tr>
+              <tr>
+                <td style={{ ...thStyle, width: 40 }}>좌</td>
+                <td style={tdStyle}>{numField("air500L")}</td>
+                <td style={tdStyle}>{numField("air1kL")}</td>
+                <td style={tdStyle}>{numField("air2kL")}</td>
+                <td style={tdStyle}>{numField("air4kL")}</td>
+                <td style={autoStyle}>{ptaL}</td>
+              </tr>
+            </tbody>
+          </table>
+
+          {subTitle("골도청력역치 (dB)")}
+          <table style={freqTableStyle}>
+            <thead>
+              <tr>
+                <th style={thStyle}></th>
+                <th style={thStyle}>500Hz</th>
+                <th style={thStyle}>1kHz</th>
+                <th style={thStyle}>2kHz</th>
+                <th style={thStyle}>4kHz</th>
+                <th style={thStyle}>6분법</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td style={{ ...thStyle, width: 40 }}>우</td>
+                <td style={tdStyle}>{numField("bone500R")}</td>
+                <td style={tdStyle}>{numField("bone1kR")}</td>
+                <td style={tdStyle}>{numField("bone2kR")}</td>
+                <td style={tdStyle}>{numField("bone4kR")}</td>
+                <td style={autoStyle}>{calc6분법(exam.bone500R, exam.bone1kR, exam.bone2kR, exam.bone4kR)}</td>
+              </tr>
+              <tr>
+                <td style={{ ...thStyle, width: 40 }}>좌</td>
+                <td style={tdStyle}>{numField("bone500L")}</td>
+                <td style={tdStyle}>{numField("bone1kL")}</td>
+                <td style={tdStyle}>{numField("bone2kL")}</td>
+                <td style={tdStyle}>{numField("bone4kL")}</td>
+                <td style={autoStyle}>{calc6분법(exam.bone500L, exam.bone1kL, exam.bone2kL, exam.bone4kL)}</td>
+              </tr>
+            </tbody>
+          </table>
+
+          {subTitle("기골도 편차 (dB)")}
+          <table style={freqTableStyle}>
+            <thead>
+              <tr>
+                <th style={thStyle}></th>
+                <th style={thStyle}>500Hz</th>
+                <th style={thStyle}>1kHz</th>
+                <th style={thStyle}>2kHz</th>
+                <th style={thStyle}>4kHz</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td style={{ ...thStyle, width: 40 }}>우</td>
+                {(["air500R","air1kR","air2kR","air4kR"] as const).map((ak, i) => {
+                  const bk = (["bone500R","bone1kR","bone2kR","bone4kR"] as const)[i];
+                  const diff = boneDiff(ak, bk);
+                  const over10 = diff !== "-" && Number(diff) > 10;
+                  return <td key={ak} style={{ ...autoStyle, color: over10 ? "#dc2626" : "#15803d" }}>{diff}</td>;
+                })}
+              </tr>
+              <tr>
+                <td style={{ ...thStyle, width: 40 }}>좌</td>
+                {(["air500L","air1kL","air2kL","air4kL"] as const).map((ak, i) => {
+                  const bk = (["bone500L","bone1kL","bone2kL","bone4kL"] as const)[i];
+                  const diff = boneDiff(ak, bk);
+                  const over10 = diff !== "-" && Number(diff) > 10;
+                  return <td key={ak} style={{ ...autoStyle, color: over10 ? "#dc2626" : "#15803d" }}>{diff}</td>;
+                })}
+              </tr>
+            </tbody>
+          </table>
+          <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 4 }}>※ 10dB 초과 시 빨간색 표시 (신뢰성 기준)</div>
+
+          {subTitle("어음청력검사")}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+              <label style={{ fontSize: 11, color: "#9ca3af", fontWeight: 600 }}>청취역치 우측 (dB)</label>
+              {numField("srtRight")}
             </div>
-          </>
-        )}
-      </div>
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 10 }}>
-        <button onClick={save} disabled={saving} style={{ background: "#2563eb", color: "white", border: "none", borderRadius: 6, padding: "6px 16px", fontSize: 12, fontWeight: 600, cursor: "pointer", opacity: saving ? 0.6 : 1 }}>
-          {saving ? "저장중..." : "이 회차 저장"}
-        </button>
-        {msg && <span style={{ fontSize: 12, color: msg.includes("오류") ? "#dc2626" : "#16a34a" }}>{msg}</span>}
-      </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+              <label style={{ fontSize: 11, color: "#9ca3af", fontWeight: 600 }}>어음명료도 우측 (%)</label>
+              {numField("speechRight")}
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+              <label style={{ fontSize: 11, color: "#9ca3af", fontWeight: 600 }}>청취역치 좌측 (dB)</label>
+              {numField("srtLeft")}
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+              <label style={{ fontSize: 11, color: "#9ca3af", fontWeight: 600 }}>어음명료도 좌측 (%)</label>
+              {numField("speechLeft")}
+            </div>
+          </div>
+
+          {subTitle("ABR (dBnHL)")}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 10 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+              <label style={{ fontSize: 11, color: "#9ca3af", fontWeight: 600 }}>ABR 우측</label>
+              {numField("abrRight")}
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+              <label style={{ fontSize: 11, color: "#9ca3af", fontWeight: 600 }}>ABR 좌측</label>
+              {numField("abrLeft")}
+            </div>
+          </div>
+
+          {subTitle("임피던스 청력검사")}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 10 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+              <label style={{ fontSize: 11, color: "#9ca3af", fontWeight: 600 }}>임피던스 우측</label>
+              <select style={inputStyle} value={n("impedanceRight")} onChange={(e) => setField("impedanceRight", e.target.value || null)}>
+                <option value="">-</option>
+                {["A", "As", "Ad", "B", "C"].map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+              <label style={{ fontSize: 11, color: "#9ca3af", fontWeight: 600 }}>임피던스 좌측</label>
+              <select style={inputStyle} value={n("impedanceLeft")} onChange={(e) => setField("impedanceLeft", e.target.value || null)}>
+                <option value="">-</option>
+                {["A", "As", "Ad", "B", "C"].map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
+            </div>
+          </div>
+
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 16, marginTop: 14, alignItems: "center" }}>
+            <label style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, cursor: "pointer" }}>
+              <input type="checkbox" checked={exam.isReliable === true} onChange={(e) => setField("isReliable", e.target.checked ? true : null)} />
+              신뢰성 있음
+            </label>
+            {round === 3 && (
+              <>
+                <label style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, cursor: "pointer" }}>
+                  <input type="checkbox" checked={exam.medicalRecordObtained} onChange={(e) => setField("medicalRecordObtained", e.target.checked)} />
+                  의무기록지 발급 완료
+                </label>
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <label style={{ fontSize: 11, color: "#9ca3af", fontWeight: 600 }}>예상 장해등급</label>
+                  <input style={{ ...inputStyle, width: 100 }} value={n("predictedGrade")} onChange={(e) => setField("predictedGrade", e.target.value || null)} />
+                </div>
+              </>
+            )}
+          </div>
+
+          <div style={{ marginTop: 12 }}>
+            <label style={{ fontSize: 11, color: "#9ca3af", fontWeight: 600 }}>특이사항</label>
+            <textarea style={{ ...inputStyle, minHeight: 50, resize: "vertical", marginTop: 3 }} value={n("memo")} onChange={(e) => setField("memo", e.target.value || null)} />
+          </div>
+
+          <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 12 }}>
+            <button onClick={save} disabled={saving} style={{ background: "#2563eb", color: "white", border: "none", borderRadius: 6, padding: "6px 16px", fontSize: 12, fontWeight: 600, cursor: "pointer", opacity: saving ? 0.6 : 1 }}>
+              {saving ? "저장중..." : "이 회차 저장"}
+            </button>
+            {msg && <span style={{ fontSize: 12, color: msg.includes("오류") ? "#dc2626" : "#16a34a" }}>{msg}</span>}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
