@@ -13,7 +13,9 @@ export async function GET(
         cases: {
           orderBy: { createdAt: "desc" },
           include: {
-            hearingLoss: true,
+            hearingLoss: {
+              include: { exams: { orderBy: [{ examSet: "asc" }, { examRound: "asc" }] } }
+            },
             copd: true,
             pneumoconiosis: true,
             musculoskeletal: { select: { id: true } },

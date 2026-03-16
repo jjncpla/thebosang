@@ -2,12 +2,94 @@
 
 import { useEffect, useState, useCallback, Suspense } from "react";
 import { useRouter, useParams, useSearchParams } from "next/navigation";
-import { CASE_TYPE_LABELS, DISPOSAL_TYPE, GRADE_TYPE, STATUS_BY_CASE_TYPE, HEARING_LOSS_STATUS } from "@/lib/constants/case";
+import { CASE_TYPE_LABELS, DISPOSAL_TYPE, GRADE_TYPE, STATUS_BY_CASE_TYPE, HEARING_LOSS_STATUS, CASE_STATUS_LABELS } from "@/lib/constants/case";
 import { OCC_DISEASE_COMMITTEES } from "@/constants/occDiseaseCommittees";
 
 const S = { fontFamily: "'Malgun Gothic', 'Apple SD Gothic Neo', 'Segoe UI', sans-serif" };
 
-type HearingLossData = Record<string, string | number | boolean | null>;
+type WorkHistoryItem = {
+  company: string;
+  department: string;
+  jobType: string;
+  startYear: number;
+  startMonth: number;
+  endYear: number;
+  endMonth: number;
+  noiseExposure: boolean;
+  noiseLevel: number | null;
+  workHours: string;
+  source: string;
+};
+
+type HearingLossExam = {
+  id: string;
+  examSet: string;
+  examRound: number;
+  examDate: string | null;
+  air500R: number | null; air1kR: number | null; air2kR: number | null; air4kR: number | null;
+  air500L: number | null; air1kL: number | null; air2kL: number | null; air4kL: number | null;
+  bone500R: number | null; bone1kR: number | null; bone2kR: number | null; bone4kR: number | null;
+  bone500L: number | null; bone1kL: number | null; bone2kL: number | null; bone4kL: number | null;
+  srtRight: number | null;
+  srtLeft: number | null;
+  speechRight: number | null;
+  speechLeft: number | null;
+  abrRight: number | null;
+  abrLeft: number | null;
+  impedanceRight: string | null;
+  impedanceLeft: string | null;
+  isReliable: boolean | null;
+  medicalRecordObtained: boolean;
+  predictedGrade: string | null;
+  memo: string | null;
+};
+
+type HearingLossDetail = {
+  id: string;
+  firstClinic: string | null;
+  firstExamDate: string | null;
+  firstExamRight: number | null;
+  firstExamLeft: number | null;
+  firstExamSpeech: number | null;
+  passedInitialCriteria: boolean;
+  isDisabilityRegistered: boolean;
+  isBig3: boolean;
+  workHistory: WorkHistoryItem[] | null;
+  workHistoryMemo: string | null;
+  lastNoiseWorkEndDate: string | null;
+  claimSubmittedAt: string | null;
+  claimNasPath: string | null;
+  telegramSharedAt: string | null;
+  examRequestReceivedAt: string | null;
+  examPeriodStart: string | null;
+  examPeriodEnd: string | null;
+  specialClinic: string | null;
+  examClinicSelectionSubmittedAt: string | null;
+  expertRequestReceivedAt: string | null;
+  expertClinic: string | null;
+  expertClinicSelectionSubmittedAt: string | null;
+  expertDate: string | null;
+  expertMemo: string | null;
+  bankAccountRequestedAt: string | null;
+  bankAccountSubmittedAt: string | null;
+  decisionType: string | null;
+  decisionReceivedAt: string | null;
+  approvedDisease: string | null;
+  disabilityGrade: string | null;
+  disabilityStatus: string | null;
+  baseAssessment: string | null;
+  finalAssessment: string | null;
+  lumpSumAmount: number | null;
+  avgWage: number | null;
+  compensationPaidAt: string | null;
+  wageReviewMemo: string | null;
+  adaptedWorkplaceReviewMemo: string | null;
+  infoDisclosureRequestedAt: string | null;
+  infoDisclosureReceivedAt: string | null;
+  rejectionReason: string | null;
+  reviewMemo: string | null;
+  exams: HearingLossExam[];
+};
 
 type DetailStatus = { status: string } | null;
 
@@ -46,6 +128,7 @@ type PneumoconiosisDetailData = {
 type CaseData = {
   id: string;
   caseType: string;
+  status: string;
   caseNumber: string | null;
   tfName: string | null;
   branch: string | null;
@@ -60,7 +143,7 @@ type CaseData = {
   memo: string | null;
   createdAt: string;
   updatedAt: string;
-  hearingLoss: HearingLossData | null;
+  hearingLoss: HearingLossDetail | null;
   copd: CopdDetailData;
   pneumoconiosis: PneumoconiosisDetailData;
   musculoskeletal: DetailStatus;
@@ -70,14 +153,7 @@ type CaseData = {
 };
 
 function getCaseStatus(c: CaseData): string {
-  if (c.caseType === "HEARING_LOSS") return (c.hearingLoss as Record<string, unknown>)?.status as string ?? "접수대기";
-  if (c.caseType === "COPD") return c.copd?.status ?? "접수대기";
-  if (c.caseType === "PNEUMOCONIOSIS") return c.pneumoconiosis?.status ?? "접수대기";
-  if (c.caseType === "MUSCULOSKELETAL") return c.musculoskeletal?.status ?? "접수대기";
-  if (c.caseType === "OCCUPATIONAL_ACCIDENT") return c.occupationalAccident?.status ?? "접수대기";
-  if (c.caseType === "OCCUPATIONAL_CANCER") return c.occupationalCancer?.status ?? "접수대기";
-  if (c.caseType === "BEREAVED") return c.bereaved?.status ?? "접수대기";
-  return "접수대기";
+  return c.status ?? "CONSULTING";
 }
 
 type PatientData = {
@@ -124,14 +200,38 @@ const STATUS_COLOR: Record<string, { bg: string; color: string; border: string; 
   "반려":        { bg: "#450a0a", color: "#fca5a5", border: "1px solid #dc2626", dot: "#f87171" },
   "보류":        { bg: "#1c1917", color: "#d6d3d1", border: "1px solid #78716c", dot: "#a8a29e" },
   "파기":        { bg: "#1e293b", color: "#94a3b8", border: "1px solid #475569", dot: "#64748b" },
+  // 영문 키
+  "CONSULTING":             { bg: "#1e1b4b", color: "#a5b4fc", border: "1px solid #4338ca", dot: "#818cf8" },
+  "CONTRACTED":             { bg: "#082f49", color: "#7dd3fc", border: "1px solid #0369a1", dot: "#38bdf8" },
+  "DOC_COLLECTING":         { bg: "#082f49", color: "#bae6fd", border: "1px solid #0284c7", dot: "#38bdf8" },
+  "SUBMITTED":              { bg: "#1a2e05", color: "#86efac", border: "1px solid #15803d", dot: "#4ade80" },
+  "EXAM_REQUESTED":         { bg: "#1a2e05", color: "#86efac", border: "1px solid #15803d", dot: "#4ade80" },
+  "EXAM_CLINIC_SELECTED":   { bg: "#052e16", color: "#6ee7b7", border: "1px solid #059669", dot: "#34d399" },
+  "EXAM_SCHEDULED":         { bg: "#052e16", color: "#6ee7b7", border: "1px solid #059669", dot: "#34d399" },
+  "IN_EXAM":                { bg: "#052e16", color: "#6ee7b7", border: "1px solid #059669", dot: "#34d399" },
+  "EXAM_DONE":              { bg: "#052e16", color: "#86efac", border: "1px solid #15803d", dot: "#4ade80" },
+  "EXPERT_REQUESTED":       { bg: "#451a03", color: "#fcd34d", border: "1px solid #b45309", dot: "#fbbf24" },
+  "EXPERT_CLINIC_SELECTED": { bg: "#451a03", color: "#fcd34d", border: "1px solid #b45309", dot: "#fbbf24" },
+  "EXPERT_DONE":            { bg: "#451a03", color: "#fde68a", border: "1px solid #d97706", dot: "#fcd34d" },
+  "BANK_REQUESTED":         { bg: "#1e1b4b", color: "#c4b5fd", border: "1px solid #7c3aed", dot: "#a78bfa" },
+  "BANK_SUBMITTED":         { bg: "#1e1b4b", color: "#c4b5fd", border: "1px solid #7c3aed", dot: "#a78bfa" },
+  "DECISION_RECEIVED":      { bg: "#2e1065", color: "#d8b4fe", border: "1px solid #9333ea", dot: "#c084fc" },
+  "REVIEWING":              { bg: "#1c1917", color: "#d6d3d1", border: "1px solid #78716c", dot: "#a8a29e" },
+  "INFO_REQUESTED":         { bg: "#1c1917", color: "#d6d3d1", border: "1px solid #78716c", dot: "#a8a29e" },
+  "APPROVED":               { bg: "#052e16", color: "#86efac", border: "1px solid #16a34a", dot: "#4ade80" },
+  "REJECTED":               { bg: "#450a0a", color: "#fca5a5", border: "1px solid #b91c1c", dot: "#f87171" },
+  "CLOSED":                 { bg: "#1e293b", color: "#94a3b8", border: "1px solid #475569", dot: "#64748b" },
+  "OBJECTION":              { bg: "#450a0a", color: "#fca5a5", border: "1px solid #dc2626", dot: "#f87171" },
+  "WAGE_CORRECTION":        { bg: "#1e1b4b", color: "#c4b5fd", border: "1px solid #7c3aed", dot: "#a78bfa" },
 };
 
 function StatusBadge({ status }: { status: string }) {
-  const s = STATUS_COLOR[status] ?? { bg: "#1e293b", color: "#94a3b8", border: "1px solid #475569", dot: "#64748b" };
+  const label = CASE_STATUS_LABELS[status] ?? status;
+  const s = STATUS_COLOR[status] ?? STATUS_COLOR[label] ?? { bg: "#1e293b", color: "#94a3b8", border: "1px solid #475569", dot: "#64748b" };
   return (
     <span style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "3px 10px", borderRadius: 999, fontSize: 11, fontWeight: 700, background: s.bg, color: s.color, border: s.border }}>
       <span style={{ width: 6, height: 6, borderRadius: "50%", background: s.dot }} />
-      {status}
+      {label}
     </span>
   );
 }
@@ -172,57 +272,261 @@ function DisabledSection({ label }: { label: string }) {
   );
 }
 
+/* ── 6분법 계산 ── */
+function calc6분법(v500: number | null, v1k: number | null, v2k: number | null, v4k: number | null): string {
+  if (v500 === null || v1k === null || v2k === null || v4k === null) return "-";
+  return ((v500 + 2 * v1k + 2 * v2k + v4k) / 6).toFixed(1);
+}
+
+const EMPTY_DETAIL: HearingLossDetail = {
+  id: "", firstClinic: null, firstExamDate: null, firstExamRight: null, firstExamLeft: null,
+  firstExamSpeech: null, passedInitialCriteria: false, isDisabilityRegistered: false, isBig3: false,
+  workHistory: null, workHistoryMemo: null, lastNoiseWorkEndDate: null,
+  claimSubmittedAt: null, claimNasPath: null, telegramSharedAt: null,
+  examRequestReceivedAt: null, examPeriodStart: null, examPeriodEnd: null,
+  specialClinic: null, examClinicSelectionSubmittedAt: null,
+  expertRequestReceivedAt: null, expertClinic: null, expertClinicSelectionSubmittedAt: null,
+  expertDate: null, expertMemo: null,
+  bankAccountRequestedAt: null, bankAccountSubmittedAt: null, decisionType: null,
+  decisionReceivedAt: null, approvedDisease: null, disabilityGrade: null, disabilityStatus: null,
+  baseAssessment: null, finalAssessment: null, lumpSumAmount: null, avgWage: null,
+  compensationPaidAt: null, wageReviewMemo: null, adaptedWorkplaceReviewMemo: null,
+  infoDisclosureRequestedAt: null, infoDisclosureReceivedAt: null,
+  rejectionReason: null, reviewMemo: null, exams: [],
+};
+
+const EMPTY_EXAM = (examSet: string, examRound: number): HearingLossExam => ({
+  id: "", examSet, examRound, examDate: null,
+  air500R: null, air1kR: null, air2kR: null, air4kR: null,
+  air500L: null, air1kL: null, air2kL: null, air4kL: null,
+  bone500R: null, bone1kR: null, bone2kR: null, bone4kR: null,
+  bone500L: null, bone1kL: null, bone2kL: null, bone4kL: null,
+  srtRight: null, srtLeft: null, speechRight: null, speechLeft: null,
+  abrRight: null, abrLeft: null,
+  impedanceRight: null, impedanceLeft: null,
+  isReliable: null, medicalRecordObtained: false, predictedGrade: null, memo: null,
+});
+
+/* ── 특진 회차 블록 ── */
+function ExamRoundBlock({
+  caseId, examSet, round, label, exams, setExams,
+}: {
+  caseId: string; examSet: string; round: number; label: string;
+  exams: HearingLossExam[]; setExams: React.Dispatch<React.SetStateAction<HearingLossExam[]>>;
+}) {
+  const [open, setOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+
+  const exam = exams.find((e) => e.examSet === examSet && e.examRound === round) ?? EMPTY_EXAM(examSet, round);
+
+  const setField = (key: keyof HearingLossExam, val: unknown) =>
+    setExams((prev) => {
+      const idx = prev.findIndex((e) => e.examSet === examSet && e.examRound === round);
+      const updated = { ...exam, [key]: val };
+      if (idx >= 0) { const next = [...prev]; next[idx] = updated; return next; }
+      return [...prev, updated];
+    });
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      const method = exam.id ? "PUT" : "POST";
+      const url = exam.id
+        ? `/api/cases/${caseId}/hearing-loss/exams/${exam.id}`
+        : `/api/cases/${caseId}/hearing-loss/exams`;
+      const res = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(exam) });
+      if (!res.ok) throw new Error();
+      const updated: HearingLossExam = await res.json();
+      setExams((prev) => {
+        const idx = prev.findIndex((e) => e.examSet === examSet && e.examRound === round);
+        if (idx >= 0) { const next = [...prev]; next[idx] = updated; return next; }
+        return [...prev, updated];
+      });
+      setMsg("저장되었습니다");
+      setTimeout(() => setMsg(null), 3000);
+    } catch { setMsg("오류가 발생했습니다"); }
+    finally { setSaving(false); }
+  };
+
+  const n = (key: keyof HearingLossExam) => {
+    const v = exam[key]; return (v === null || v === undefined) ? "" : String(v);
+  };
+  const numField = (key: keyof HearingLossExam) => (
+    <input type="number" style={{ ...inputStyle, width: 64 }} value={n(key)}
+      onChange={(e) => setField(key, e.target.value === "" ? null : Number(e.target.value))} />
+  );
+
+  const ptaR = calc6분법(exam.air500R, exam.air1kR, exam.air2kR, exam.air4kR);
+  const ptaL = calc6분법(exam.air500L, exam.air1kL, exam.air2kL, exam.air4kL);
+  const hasData = exam.air500R !== null || exam.air500L !== null;
+  const summary = hasData ? `기도 우 ${ptaR} / 좌 ${ptaL} dB` : "미입력";
+
+  const boneDiff = (airKey: keyof HearingLossExam, boneKey: keyof HearingLossExam) => {
+    const a = exam[airKey] as number | null;
+    const b = exam[boneKey] as number | null;
+    if (a === null || b === null) return "-";
+    return Math.abs(a - b).toFixed(0);
+  };
+
+  const subTitle = (text: string) => (
+    <div style={{ fontSize: 12, fontWeight: 700, color: "#374151", marginBottom: 8, marginTop: 12, paddingBottom: 4, borderBottom: "1px solid #e5e7eb" }}>{text}</div>
+  );
+  const freqTableStyle: React.CSSProperties = { borderCollapse: "collapse", width: "100%", fontSize: 12 };
+  const thStyle: React.CSSProperties = { padding: "4px 6px", background: "#f9fafb", border: "1px solid #e5e7eb", fontWeight: 600, color: "#6b7280", textAlign: "center" };
+  const tdStyle: React.CSSProperties = { padding: 4, border: "1px solid #f1f5f9", textAlign: "center" };
+  const autoStyle: React.CSSProperties = { padding: "4px 6px", border: "1px solid #f1f5f9", background: "#f0fdf4", color: "#15803d", fontWeight: 700, textAlign: "center", fontSize: 13 };
+
+  return (
+    <div style={{ border: "1px solid #e5e7eb", borderRadius: 6, marginBottom: 8, overflow: "hidden" }}>
+      <button onClick={() => setOpen((v) => !v)} style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 16px", background: open ? "#eff6ff" : "#fafafa", border: "none", cursor: "pointer", fontFamily: "inherit" }}>
+        <span style={{ fontSize: 13, fontWeight: 700, color: open ? "#1d4ed8" : "#374151" }}>{label}</span>
+        <span style={{ fontSize: 12, color: "#9ca3af" }}>{summary}  {open ? "▲" : "▼"}</span>
+      </button>
+      {open && (
+        <div style={{ padding: 16 }}>
+          {subTitle("기도청력역치 (dB)")}
+          <table style={freqTableStyle}>
+            <thead><tr><th style={thStyle}></th><th style={thStyle}>500Hz</th><th style={thStyle}>1kHz</th><th style={thStyle}>2kHz</th><th style={thStyle}>4kHz</th><th style={thStyle}>6분법</th></tr></thead>
+            <tbody>
+              <tr><td style={{ ...thStyle, width: 40 }}>우</td><td style={tdStyle}>{numField("air500R")}</td><td style={tdStyle}>{numField("air1kR")}</td><td style={tdStyle}>{numField("air2kR")}</td><td style={tdStyle}>{numField("air4kR")}</td><td style={autoStyle}>{ptaR}</td></tr>
+              <tr><td style={{ ...thStyle, width: 40 }}>좌</td><td style={tdStyle}>{numField("air500L")}</td><td style={tdStyle}>{numField("air1kL")}</td><td style={tdStyle}>{numField("air2kL")}</td><td style={tdStyle}>{numField("air4kL")}</td><td style={autoStyle}>{ptaL}</td></tr>
+            </tbody>
+          </table>
+          {subTitle("골도청력역치 (dB)")}
+          <table style={freqTableStyle}>
+            <thead><tr><th style={thStyle}></th><th style={thStyle}>500Hz</th><th style={thStyle}>1kHz</th><th style={thStyle}>2kHz</th><th style={thStyle}>4kHz</th><th style={thStyle}>6분법</th></tr></thead>
+            <tbody>
+              <tr><td style={{ ...thStyle, width: 40 }}>우</td><td style={tdStyle}>{numField("bone500R")}</td><td style={tdStyle}>{numField("bone1kR")}</td><td style={tdStyle}>{numField("bone2kR")}</td><td style={tdStyle}>{numField("bone4kR")}</td><td style={autoStyle}>{calc6분법(exam.bone500R, exam.bone1kR, exam.bone2kR, exam.bone4kR)}</td></tr>
+              <tr><td style={{ ...thStyle, width: 40 }}>좌</td><td style={tdStyle}>{numField("bone500L")}</td><td style={tdStyle}>{numField("bone1kL")}</td><td style={tdStyle}>{numField("bone2kL")}</td><td style={tdStyle}>{numField("bone4kL")}</td><td style={autoStyle}>{calc6분법(exam.bone500L, exam.bone1kL, exam.bone2kL, exam.bone4kL)}</td></tr>
+            </tbody>
+          </table>
+          {subTitle("기골도 편차 (dB)")}
+          <table style={freqTableStyle}>
+            <thead><tr><th style={thStyle}></th><th style={thStyle}>500Hz</th><th style={thStyle}>1kHz</th><th style={thStyle}>2kHz</th><th style={thStyle}>4kHz</th></tr></thead>
+            <tbody>
+              <tr><td style={{ ...thStyle, width: 40 }}>우</td>{(["air500R","air1kR","air2kR","air4kR"] as const).map((ak, i) => { const bk = (["bone500R","bone1kR","bone2kR","bone4kR"] as const)[i]; const diff = boneDiff(ak, bk); const over10 = diff !== "-" && Number(diff) > 10; return <td key={ak} style={{ ...autoStyle, color: over10 ? "#dc2626" : "#15803d" }}>{diff}</td>; })}</tr>
+              <tr><td style={{ ...thStyle, width: 40 }}>좌</td>{(["air500L","air1kL","air2kL","air4kL"] as const).map((ak, i) => { const bk = (["bone500L","bone1kL","bone2kL","bone4kL"] as const)[i]; const diff = boneDiff(ak, bk); const over10 = diff !== "-" && Number(diff) > 10; return <td key={ak} style={{ ...autoStyle, color: over10 ? "#dc2626" : "#15803d" }}>{diff}</td>; })}</tr>
+            </tbody>
+          </table>
+          <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 4 }}>※ 10dB 초과 시 빨간색 (신뢰성 기준)</div>
+          {subTitle("어음청력검사")}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 3 }}><label style={{ fontSize: 11, color: "#9ca3af", fontWeight: 600 }}>청취역치 우측 (dB)</label>{numField("srtRight")}</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 3 }}><label style={{ fontSize: 11, color: "#9ca3af", fontWeight: 600 }}>어음명료도 우측 (%)</label>{numField("speechRight")}</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 3 }}><label style={{ fontSize: 11, color: "#9ca3af", fontWeight: 600 }}>청취역치 좌측 (dB)</label>{numField("srtLeft")}</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 3 }}><label style={{ fontSize: 11, color: "#9ca3af", fontWeight: 600 }}>어음명료도 좌측 (%)</label>{numField("speechLeft")}</div>
+          </div>
+          {subTitle("ABR (dBnHL)")}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 10 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 3 }}><label style={{ fontSize: 11, color: "#9ca3af", fontWeight: 600 }}>ABR 우측</label>{numField("abrRight")}</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 3 }}><label style={{ fontSize: 11, color: "#9ca3af", fontWeight: 600 }}>ABR 좌측</label>{numField("abrLeft")}</div>
+          </div>
+          {subTitle("임피던스")}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 10 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+              <label style={{ fontSize: 11, color: "#9ca3af", fontWeight: 600 }}>임피던스 우측</label>
+              <select style={inputStyle} value={n("impedanceRight")} onChange={(e) => setField("impedanceRight", e.target.value || null)}>
+                <option value="">-</option>{["A","As","Ad","B","C"].map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+              <label style={{ fontSize: 11, color: "#9ca3af", fontWeight: 600 }}>임피던스 좌측</label>
+              <select style={inputStyle} value={n("impedanceLeft")} onChange={(e) => setField("impedanceLeft", e.target.value || null)}>
+                <option value="">-</option>{["A","As","Ad","B","C"].map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
+            </div>
+          </div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 16, marginTop: 14, alignItems: "center" }}>
+            <label style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, cursor: "pointer" }}>
+              <input type="checkbox" checked={exam.isReliable === true} onChange={(e) => setField("isReliable", e.target.checked ? true : null)} />신뢰성 있음
+            </label>
+            {round === 3 && (<>
+              <label style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, cursor: "pointer" }}>
+                <input type="checkbox" checked={exam.medicalRecordObtained} onChange={(e) => setField("medicalRecordObtained", e.target.checked)} />의무기록지 발급 완료
+              </label>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <label style={{ fontSize: 11, color: "#9ca3af", fontWeight: 600 }}>예상 장해등급</label>
+                <input style={{ ...inputStyle, width: 100 }} value={n("predictedGrade")} onChange={(e) => setField("predictedGrade", e.target.value || null)} />
+              </div>
+            </>)}
+          </div>
+          <div style={{ marginTop: 12 }}>
+            <label style={{ fontSize: 11, color: "#9ca3af", fontWeight: 600 }}>특이사항</label>
+            <textarea style={{ ...inputStyle, minHeight: 50, resize: "vertical", marginTop: 3 }} value={n("memo")} onChange={(e) => setField("memo", e.target.value || null)} />
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 12 }}>
+            <button onClick={save} disabled={saving} style={{ background: "#2563eb", color: "white", border: "none", borderRadius: 6, padding: "6px 16px", fontSize: 12, fontWeight: 600, cursor: "pointer", opacity: saving ? 0.6 : 1 }}>
+              {saving ? "저장중..." : "이 회차 저장"}
+            </button>
+            {msg && <span style={{ fontSize: 12, color: msg.includes("오류") ? "#dc2626" : "#16a34a" }}>{msg}</span>}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ── 난청 상세 탭 ── */
-function HearingLossTab({ caseId, initial }: { caseId: string; initial: HearingLossData | null }) {
-  const [form, setForm] = useState<HearingLossData>(initial ?? {});
+function HearingLossTab({ caseId, initial }: { caseId: string; initial: HearingLossDetail | null }) {
+  const [detail, setDetail] = useState<HearingLossDetail>(initial ?? EMPTY_DETAIL);
+  const [exams, setExams] = useState<HearingLossExam[]>(initial?.exams ?? []);
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
   const [sec1Open, setSec1Open] = useState(true);
   const [sec3Open, setSec3Open] = useState(false);
+  const [showReExam, setShowReExam] = useState(false);
+  const [showReReExam, setShowReReExam] = useState(false);
 
-  const f = (key: string) => String(form[key] ?? "");
-  const set = (key: string, val: string) => setForm((prev) => ({ ...prev, [key]: val }));
+  const d = (key: keyof HearingLossDetail) => {
+    const v = detail[key]; return v === null || v === undefined ? "" : String(v);
+  };
+  const setD = (key: keyof HearingLossDetail, val: unknown) =>
+    setDetail((prev) => ({ ...prev, [key]: val }));
 
-  const save = async () => {
+  const saveDetail = async () => {
     setSaving(true);
-    setSaveMsg(null);
     try {
       const res = await fetch(`/api/cases/${caseId}/hearing-loss`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+        method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(detail),
       });
       if (!res.ok) throw new Error("저장 실패");
       setSaveMsg("저장되었습니다");
       setTimeout(() => setSaveMsg(null), 3000);
-    } catch {
-      setSaveMsg("오류가 발생했습니다");
-    } finally {
-      setSaving(false);
-    }
+    } catch { setSaveMsg("오류가 발생했습니다"); }
+    finally { setSaving(false); }
   };
 
   const SectionTitle = ({ children }: { children: React.ReactNode }) => (
     <div style={{ fontSize: 13, fontWeight: 700, color: "#374151", padding: "14px 0 8px 0", borderBottom: "2px solid #e5e7eb", marginBottom: 12 }}>{children}</div>
   );
-
-  const Row = ({ label, fieldKey, type = "text" }: { label: string; fieldKey: string; type?: string }) => (
+  const Field = ({ label, children }: { label: string; children: React.ReactNode }) => (
     <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
       <label style={{ fontSize: 11, color: "#9ca3af", fontWeight: 600 }}>{label}</label>
-      <input type={type} style={inputStyle} value={f(fieldKey)} onChange={(e) => set(fieldKey, e.target.value)} />
+      {children}
     </div>
   );
-
+  const DField = ({ label, k, type = "text" }: { label: string; k: keyof HearingLossDetail; type?: string }) => (
+    <Field label={label}>
+      <input type={type} style={inputStyle} value={d(k)} onChange={(e) => setD(k, e.target.value || null)} />
+    </Field>
+  );
   const SaveBar = () => (
     <div style={{ display: "flex", alignItems: "center", gap: 12, paddingTop: 16, borderTop: "1px solid #e5e7eb" }}>
-      <button onClick={save} disabled={saving} style={{ background: "#2563eb", color: "white", border: "none", borderRadius: 6, padding: "8px 20px", fontSize: 13, fontWeight: 600, cursor: "pointer", opacity: saving ? 0.6 : 1 }}>
+      <button onClick={saveDetail} disabled={saving} style={{ background: "#2563eb", color: "white", border: "none", borderRadius: 6, padding: "8px 20px", fontSize: 13, fontWeight: 600, cursor: "pointer", opacity: saving ? 0.6 : 1 }}>
         {saving ? "저장중..." : "저장"}
       </button>
       {saveMsg && <span style={{ fontSize: 13, color: saveMsg.includes("오류") ? "#dc2626" : "#16a34a" }}>{saveMsg}</span>}
     </div>
   );
 
-  const disposalType = f("disposalType");
+  const workHistory: WorkHistoryItem[] = detail.workHistory ?? [];
+  const addWorkRow = () => setD("workHistory", [...workHistory, { company: "", department: "", jobType: "", startYear: new Date().getFullYear(), startMonth: 1, endYear: new Date().getFullYear(), endMonth: 12, noiseExposure: false, noiseLevel: null, workHours: "", source: "" }]);
+  const removeWorkRow = (i: number) => setD("workHistory", workHistory.filter((_, idx) => idx !== i));
+  const setWorkField = (i: number, key: keyof WorkHistoryItem, val: unknown) =>
+    setD("workHistory", workHistory.map((r, idx) => idx === i ? { ...r, [key]: val } : r));
+  const years = Array.from({ length: 60 }, (_, i) => new Date().getFullYear() - i);
+  const months = Array.from({ length: 12 }, (_, i) => i + 1);
 
   return (
     <div>
@@ -232,14 +536,78 @@ function HearingLossTab({ caseId, initial }: { caseId: string; initial: HearingL
         {sec1Open && (
           <div style={{ padding: 20 }}>
             <SectionTitle>초진</SectionTitle>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 20 }}>
-              <Row label="초진 병원" fieldKey="firstClinic" />
-              <Row label="초진 날짜" fieldKey="firstExamDate" type="date" />
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 16 }}>
+              <DField label="초진 병원" k="firstClinic" />
+              <DField label="초진일" k="firstExamDate" type="date" />
               <div />
-              <Row label="우측 청력 (dB)" fieldKey="firstExamRight" type="number" />
-              <Row label="좌측 청력 (dB)" fieldKey="firstExamLeft" type="number" />
+              <DField label="우측 PTA (dB)" k="firstExamRight" type="number" />
+              <DField label="좌측 PTA (dB)" k="firstExamLeft" type="number" />
+              <DField label="어음명료도 (%)" k="firstExamSpeech" type="number" />
             </div>
-            <SaveBar />
+            <div style={{ display: "flex", gap: 20, marginBottom: 20 }}>
+              {([["passedInitialCriteria","편측 40dB 기준 통과"],["isDisabilityRegistered","국가장애 등록 이력"],["isBig3","Big3 병원"]] as [keyof HearingLossDetail, string][]).map(([k, label]) => (
+                <label key={k} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, cursor: "pointer" }}>
+                  <input type="checkbox" checked={Boolean(detail[k])} onChange={(e) => setD(k, e.target.checked)} />{label}
+                </label>
+              ))}
+            </div>
+            <SectionTitle>직업력</SectionTitle>
+            <div style={{ overflowX: "auto", marginBottom: 12 }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                <thead>
+                  <tr style={{ background: "#f9fafb" }}>
+                    {["회사명","직종","작업내용","시작년월","종료년월","소음노출","소음(dB)","근무시간","출처",""].map((h) => (
+                      <th key={h} style={{ padding: "6px 8px", border: "1px solid #e5e7eb", fontWeight: 600, color: "#6b7280", whiteSpace: "nowrap" }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {workHistory.map((row, i) => (
+                    <tr key={i}>
+                      {(["company","department","jobType"] as (keyof WorkHistoryItem)[]).map((k) => (
+                        <td key={k} style={{ padding: 4, border: "1px solid #f1f5f9" }}>
+                          <input style={{ ...inputStyle, minWidth: 80 }} value={String(row[k] ?? "")} onChange={(e) => setWorkField(i, k, e.target.value)} />
+                        </td>
+                      ))}
+                      <td style={{ padding: 4, border: "1px solid #f1f5f9" }}>
+                        <div style={{ display: "flex", gap: 2 }}>
+                          <select style={{ ...inputStyle, width: 70 }} value={row.startYear} onChange={(e) => setWorkField(i, "startYear", Number(e.target.value))}>{years.map((y) => <option key={y} value={y}>{y}</option>)}</select>
+                          <select style={{ ...inputStyle, width: 50 }} value={row.startMonth} onChange={(e) => setWorkField(i, "startMonth", Number(e.target.value))}>{months.map((m) => <option key={m} value={m}>{m}월</option>)}</select>
+                        </div>
+                      </td>
+                      <td style={{ padding: 4, border: "1px solid #f1f5f9" }}>
+                        <div style={{ display: "flex", gap: 2 }}>
+                          <select style={{ ...inputStyle, width: 70 }} value={row.endYear} onChange={(e) => setWorkField(i, "endYear", Number(e.target.value))}>{years.map((y) => <option key={y} value={y}>{y}</option>)}</select>
+                          <select style={{ ...inputStyle, width: 50 }} value={row.endMonth} onChange={(e) => setWorkField(i, "endMonth", Number(e.target.value))}>{months.map((m) => <option key={m} value={m}>{m}월</option>)}</select>
+                        </div>
+                      </td>
+                      <td style={{ padding: 4, border: "1px solid #f1f5f9", textAlign: "center" }}>
+                        <input type="checkbox" checked={row.noiseExposure} onChange={(e) => setWorkField(i, "noiseExposure", e.target.checked)} />
+                      </td>
+                      <td style={{ padding: 4, border: "1px solid #f1f5f9" }}>
+                        <input type="number" style={{ ...inputStyle, width: 60 }} value={row.noiseLevel ?? ""} onChange={(e) => setWorkField(i, "noiseLevel", e.target.value === "" ? null : Number(e.target.value))} />
+                      </td>
+                      {(["workHours","source"] as (keyof WorkHistoryItem)[]).map((k) => (
+                        <td key={k} style={{ padding: 4, border: "1px solid #f1f5f9" }}>
+                          <input style={{ ...inputStyle, minWidth: 70 }} value={String(row[k] ?? "")} onChange={(e) => setWorkField(i, k, e.target.value)} />
+                        </td>
+                      ))}
+                      <td style={{ padding: 4, border: "1px solid #f1f5f9", textAlign: "center" }}>
+                        <button onClick={() => removeWorkRow(i)} style={{ background: "none", border: "none", color: "#dc2626", cursor: "pointer", fontSize: 14 }}>✕</button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <button onClick={addWorkRow} style={{ background: "white", border: "1px solid #d1d5db", borderRadius: 6, padding: "5px 14px", fontSize: 12, cursor: "pointer", marginBottom: 16 }}>+ 행 추가</button>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 8 }}>
+              <DField label="마지막 소음작업 중단 시기" k="lastNoiseWorkEndDate" type="date" />
+            </div>
+            <Field label="특이사항">
+              <textarea style={{ ...inputStyle, minHeight: 60, resize: "vertical" }} value={d("workHistoryMemo")} onChange={(e) => setD("workHistoryMemo", e.target.value || null)} />
+            </Field>
+            <div style={{ marginTop: 16 }}><SaveBar /></div>
           </div>
         )}
       </div>
@@ -252,94 +620,96 @@ function HearingLossTab({ caseId, initial }: { caseId: string; initial: HearingL
         <AccordionHeader open={sec3Open} onToggle={() => setSec3Open((o) => !o)} label="(3) 장해" />
         {sec3Open && (
           <div style={{ padding: 20 }}>
-            <SectionTitle>최초 특진</SectionTitle>
+            <SectionTitle>접수/청구</SectionTitle>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 20 }}>
-              <Row label="병원" fieldKey="specialClinic" />
-              <Row label="사전 예약일" fieldKey="preExamDate" type="date" />
-              <div />
-              <Row label="1차 검사일" fieldKey="exam1Date" type="date" />
-              <Row label="2차 검사일" fieldKey="exam2Date" type="date" />
-              <Row label="3차 검사일" fieldKey="exam3Date" type="date" />
-              <Row label="기도 우측 (dB)" fieldKey="airRight1" type="number" />
-              <Row label="기도 좌측 (dB)" fieldKey="airLeft1" type="number" />
-              <div />
-              <Row label="골도 우측 (dB)" fieldKey="boneRight1" type="number" />
-              <Row label="골도 좌측 (dB)" fieldKey="boneLeft1" type="number" />
-              <div />
-              <Row label="어음명료도 (%)" fieldKey="speechScore1" type="number" />
-              <Row label="ABR 우측" fieldKey="abrRight1" type="number" />
-              <Row label="ABR 좌측" fieldKey="abrLeft1" type="number" />
-              <Row label="임피던스 우측" fieldKey="impedanceRight1" />
-              <Row label="임피던스 좌측" fieldKey="impedanceLeft1" />
+              <DField label="청구서 발송일" k="claimSubmittedAt" type="date" />
+              <DField label="NAS 경로" k="claimNasPath" />
+              <DField label="텔레그램 공유일시" k="telegramSharedAt" type="datetime-local" />
             </div>
-
-            <SectionTitle>재특진</SectionTitle>
+            <SectionTitle>특진진찰요구서</SectionTitle>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 20 }}>
-              <Row label="병원" fieldKey="reExamClinic" />
-              <Row label="1차 검사일" fieldKey="reExam1Date" type="date" />
-              <Row label="2차 검사일" fieldKey="reExam2Date" type="date" />
-              <Row label="3차 검사일" fieldKey="reExam3Date" type="date" />
-              <Row label="기도 우측 (dB)" fieldKey="airRight2" type="number" />
-              <Row label="기도 좌측 (dB)" fieldKey="airLeft2" type="number" />
-              <div />
-              <Row label="골도 우측 (dB)" fieldKey="boneRight2" type="number" />
-              <Row label="골도 좌측 (dB)" fieldKey="boneLeft2" type="number" />
-              <div />
-              <Row label="어음명료도 (%)" fieldKey="speechScore2" type="number" />
-              <Row label="ABR 우측" fieldKey="abrRight2" type="number" />
-              <Row label="ABR 좌측" fieldKey="abrLeft2" type="number" />
-              <Row label="임피던스 우측" fieldKey="impedanceRight2" />
-              <Row label="임피던스 좌측" fieldKey="impedanceLeft2" />
+              <DField label="수령일" k="examRequestReceivedAt" type="date" />
+              <DField label="진찰기간 시작" k="examPeriodStart" type="date" />
+              <DField label="진찰기간 종료" k="examPeriodEnd" type="date" />
             </div>
-
-            <SectionTitle>재재특진</SectionTitle>
+            <SectionTitle>특진병원 선택</SectionTitle>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 20 }}>
-              <Row label="병원" fieldKey="reReExamClinic" />
-              <Row label="1차 검사일" fieldKey="reReExam1Date" type="date" />
-              <Row label="2차 검사일" fieldKey="reReExam2Date" type="date" />
-              <Row label="3차 검사일" fieldKey="reReExam3Date" type="date" />
-              <Row label="기도 우측 (dB)" fieldKey="airRight3" type="number" />
-              <Row label="기도 좌측 (dB)" fieldKey="airLeft3" type="number" />
-              <div />
-              <Row label="골도 우측 (dB)" fieldKey="boneRight3" type="number" />
-              <Row label="골도 좌측 (dB)" fieldKey="boneLeft3" type="number" />
-              <div />
-              <Row label="어음명료도 (%)" fieldKey="speechScore3" type="number" />
-              <Row label="ABR 우측" fieldKey="abrRight3" type="number" />
-              <Row label="ABR 좌측" fieldKey="abrLeft3" type="number" />
-              <Row label="임피던스 우측" fieldKey="impedanceRight3" />
-              <Row label="임피던스 좌측" fieldKey="impedanceLeft3" />
+              <DField label="특진병원명" k="specialClinic" />
+              <DField label="선택확인서 제출일" k="examClinicSelectionSubmittedAt" type="date" />
             </div>
-
+            <SectionTitle>최초특진</SectionTitle>
+            {([1, 2, 3] as const).map((r) => (
+              <ExamRoundBlock key={r} caseId={caseId} examSet="INITIAL" round={r} label={`${r}차`} exams={exams} setExams={setExams} />
+            ))}
+            <div style={{ marginBottom: 12 }}>
+              <button onClick={() => setShowReExam((v) => !v)} style={{ background: showReExam ? "#eff6ff" : "white", border: "1px solid #d1d5db", borderRadius: 6, padding: "6px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer", color: showReExam ? "#1d4ed8" : "#374151" }}>
+                {showReExam ? "▲ 재특진 숨기기" : "▼ 재특진 입력"}
+              </button>
+            </div>
+            {showReExam && (<>
+              <SectionTitle>재특진</SectionTitle>
+              {([1, 2, 3] as const).map((r) => (
+                <ExamRoundBlock key={r} caseId={caseId} examSet="RE" round={r} label={`${r}차`} exams={exams} setExams={setExams} />
+              ))}
+              <div style={{ marginBottom: 12 }}>
+                <button onClick={() => setShowReReExam((v) => !v)} style={{ background: showReReExam ? "#eff6ff" : "white", border: "1px solid #d1d5db", borderRadius: 6, padding: "6px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer", color: showReReExam ? "#1d4ed8" : "#374151" }}>
+                  {showReReExam ? "▲ 재재특진 숨기기" : "▼ 재재특진 입력"}
+                </button>
+              </div>
+              {showReReExam && (<>
+                <SectionTitle>재재특진</SectionTitle>
+                {([1, 2, 3] as const).map((r) => (
+                  <ExamRoundBlock key={r} caseId={caseId} examSet="RE2" round={r} label={`${r}차`} exams={exams} setExams={setExams} />
+                ))}
+              </>)}
+            </>)}
             <SectionTitle>전문조사</SectionTitle>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 20 }}>
-              <Row label="전문기관" fieldKey="expertOrg" />
-              <Row label="조사일" fieldKey="expertDate" type="date" />
+              <DField label="전문조사진찰요구서 수령일" k="expertRequestReceivedAt" type="date" />
+              <DField label="전문조사기관" k="expertClinic" />
+              <DField label="선택확인서 제출일" k="expertClinicSelectionSubmittedAt" type="date" />
+              <DField label="전문조사 실시일" k="expertDate" type="date" />
             </div>
-
-            <SectionTitle>처분</SectionTitle>
+            <Field label="전문조사 특이사항">
+              <textarea style={{ ...inputStyle, minHeight: 50, resize: "vertical" }} value={d("expertMemo")} onChange={(e) => setD("expertMemo", e.target.value || null)} />
+            </Field>
+            <SectionTitle>결정</SectionTitle>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 20 }}>
+              <DField label="통장사본 요청 수령일" k="bankAccountRequestedAt" type="date" />
+              <DField label="통장사본 제출일" k="bankAccountSubmittedAt" type="date" />
               <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
                 <label style={{ fontSize: 11, color: "#9ca3af", fontWeight: 600 }}>처분 결과</label>
-                <select style={inputStyle} value={f("disposalType")} onChange={(e) => set("disposalType", e.target.value)}>
+                <select style={inputStyle} value={d("decisionType")} onChange={(e) => setD("decisionType", e.target.value || null)}>
                   <option value="">선택</option>
-                  {DISPOSAL_TYPE.map((t) => <option key={t} value={t}>{t}</option>)}
+                  <option value="APPROVED">승인</option>
+                  <option value="REJECTED">불승인</option>
                 </select>
               </div>
-              <Row label="처분 결정일" fieldKey="disposalDecidedAt" type="date" />
-              <Row label="처분 수령일" fieldKey="disposalReceivedAt" type="date" />
-              {disposalType === "승인" && (
-                <>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-                    <label style={{ fontSize: 11, color: "#9ca3af", fontWeight: 600 }}>등급 구분</label>
-                    <select style={inputStyle} value={f("gradeType")} onChange={(e) => set("gradeType", e.target.value)}>
-                      <option value="">선택</option>
-                      {GRADE_TYPE.map((t) => <option key={t} value={t}>{t}</option>)}
-                    </select>
-                  </div>
-                  <Row label="등급" fieldKey="grade" type="number" />
-                </>
-              )}
+              <DField label="결정통지서 수령일" k="decisionReceivedAt" type="date" />
+              <DField label="승인 상병명" k="approvedDisease" />
+              <DField label="확정 장해등급" k="disabilityGrade" />
+              <DField label="장해급여 결정액 (원)" k="lumpSumAmount" type="number" />
+              <DField label="산정 평균임금 (원/일)" k="avgWage" type="number" />
+              <DField label="보상금 지급일" k="compensationPaidAt" type="date" />
+            </div>
+            <SectionTitle>검토/정공</SectionTitle>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 12, marginBottom: 12 }}>
+              <DField label="정보공개청구일" k="infoDisclosureRequestedAt" type="date" />
+              <DField label="정공 자료 수령일" k="infoDisclosureReceivedAt" type="date" />
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 12 }}>
+              <Field label="평균임금 정정 실익 검토">
+                <textarea style={{ ...inputStyle, minHeight: 60, resize: "vertical" }} value={d("wageReviewMemo")} onChange={(e) => setD("wageReviewMemo", e.target.value || null)} />
+              </Field>
+              <Field label="적사변 실익 검토">
+                <textarea style={{ ...inputStyle, minHeight: 60, resize: "vertical" }} value={d("adaptedWorkplaceReviewMemo")} onChange={(e) => setD("adaptedWorkplaceReviewMemo", e.target.value || null)} />
+              </Field>
+              <Field label="불승인 사유">
+                <textarea style={{ ...inputStyle, minHeight: 60, resize: "vertical" }} value={d("rejectionReason")} onChange={(e) => setD("rejectionReason", e.target.value || null)} />
+              </Field>
+              <Field label="종합 검토 메모">
+                <textarea style={{ ...inputStyle, minHeight: 60, resize: "vertical" }} value={d("reviewMemo")} onChange={(e) => setD("reviewMemo", e.target.value || null)} />
+              </Field>
             </div>
             <SaveBar />
           </div>
