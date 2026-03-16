@@ -110,36 +110,22 @@ export async function POST(req: NextRequest) {
           });
         }
 
-        if (caseNumber) {
-          const existing = await prisma.case.findFirst({ where: { caseNumber, caseType: "PNEUMOCONIOSIS" } });
-          if (existing) { skipped++; continue; }
-        }
+        // caseNumber 필드 제거됨 — ssn+caseType 기준으로 중복 체크
+        const existingByPatient = await prisma.case.findFirst({ where: { patientId: patient.id, caseType: "PNEUMOCONIOSIS" } });
+        if (existingByPatient) { skipped++; continue; }
 
-        const rawStatus = strVal(row[C.status]) ?? "접수대기";
         const isNoticeReceived = strVal(row[C.isNoticeReceived]) === "수신완료";
         const reExamPossibleDate = parseRangeStartDate(row[C.reExamPossibleDate]);
+        const rawStatus = strVal(row[C.status]) ?? "";
         const disposalType = parsePneumoDisposal(rawStatus);
-
-        // 수치미달 + reExamPossibleDate <= today 이면 재진행가능
-        let status = rawStatus;
-        if (
-          status === "수치미달" &&
-          reExamPossibleDate != null &&
-          reExamPossibleDate <= today
-        ) {
-          status = "재진행가능";
-        }
 
         const newCase = await prisma.case.create({
           data: {
             patientId:     patient.id,
             caseType:      "PNEUMOCONIOSIS",
-            caseNumber:    caseNumber ?? null,
             branch:        branch ?? strVal(row[C.branch]),
             tfName:        tfName ?? null,
             subAgent:      strVal(row[C.subAgent]),
-            salesManager:  strVal(row[C.salesManager]),
-            caseManager:   strVal(row[C.caseManager]),
             salesRoute:    strVal(row[C.salesRoute]),
             contractDate:  toDate(row[C.contractDate]),
             receptionDate: toDate(row[C.receptionDate]),
@@ -150,7 +136,6 @@ export async function POST(req: NextRequest) {
         await prisma.pneumoconiosisDetail.create({
           data: {
             caseId:               newCase.id,
-            status,
             firstClinic:          strVal(row[C.firstClinic]),
             firstExamDate:        toDate(row[C.firstExamDate]),
             isNoticeReceived,

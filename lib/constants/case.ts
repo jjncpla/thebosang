@@ -1,11 +1,36 @@
 export const HEARING_LOSS_STATUS = [
-  "접수대기", "접수완료",
-  "특진예정", "특진중", "특진완료",
-  "재특진예정", "재특진중", "재특진완료",
-  "재재특진예정", "재재특진중", "재재특진완료",
-  "전문예정", "전문의뢰", "전문완료",
-  "승인", "불승인", "반려", "보류", "파기",
+  "CONSULTING", "CONTRACTED", "DOC_COLLECTING", "SUBMITTED",
+  "EXAM_REQUESTED", "EXAM_CLINIC_SELECTED", "EXAM_SCHEDULED", "IN_EXAM", "EXAM_DONE",
+  "EXPERT_REQUESTED", "EXPERT_CLINIC_SELECTED", "EXPERT_DONE",
+  "BANK_REQUESTED", "BANK_SUBMITTED", "DECISION_RECEIVED",
+  "REVIEWING", "INFO_REQUESTED", "APPROVED", "REJECTED", "CLOSED",
+  "OBJECTION", "WAGE_CORRECTION",
 ] as const;
+
+export const CASE_STATUS_LABELS: Record<string, string> = {
+  CONSULTING: "상담 중",
+  CONTRACTED: "약정 완료",
+  DOC_COLLECTING: "서류 수집 중",
+  SUBMITTED: "접수 완료",
+  EXAM_REQUESTED: "특진진찰요구서 수령",
+  EXAM_CLINIC_SELECTED: "특진병원 선택 완료",
+  EXAM_SCHEDULED: "특진 일정 확정",
+  IN_EXAM: "특진 진행 중",
+  EXAM_DONE: "특진 완료",
+  EXPERT_REQUESTED: "전문조사요구서 수령",
+  EXPERT_CLINIC_SELECTED: "전문조사기관 선택 완료",
+  EXPERT_DONE: "전문조사 완료",
+  BANK_REQUESTED: "통장사본 요청",
+  BANK_SUBMITTED: "통장사본 제출",
+  DECISION_RECEIVED: "결정통지서 수령",
+  REVIEWING: "검토 중",
+  INFO_REQUESTED: "정보공개청구 중",
+  APPROVED: "승인",
+  REJECTED: "불승인",
+  CLOSED: "종결",
+  OBJECTION: "이의제기",
+  WAGE_CORRECTION: "평균임금 정정",
+};
 
 export const MUSCULOSKELETAL_STATUS = [
   "접수대기", "접수완료",

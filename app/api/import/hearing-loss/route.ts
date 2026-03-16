@@ -138,24 +138,19 @@ export async function POST(req: NextRequest) {
           });
         }
 
-        if (caseNumber) {
-          const existing = await prisma.case.findFirst({ where: { caseNumber, caseType: "HEARING_LOSS" } });
-          if (existing) { skipped++; continue; }
-        }
+        // caseNumber 필드 제거됨 — ssn+caseType 기준으로 중복 체크
+        const existingByPatient = await prisma.case.findFirst({ where: { patientId: patient.id, caseType: "HEARING_LOSS" } });
+        if (existingByPatient) { skipped++; continue; }
 
-        const { status, isDisabilityRegistered } = normalizeStatus(row[C.status]);
-        const { disposalType, gradeType, grade } = parseDisposal(row[C.disposal]);
+        const { isDisabilityRegistered } = normalizeStatus(row[C.status]);
 
         const newCase = await prisma.case.create({
           data: {
             patientId:     patient.id,
             caseType:      "HEARING_LOSS",
-            caseNumber:    caseNumber ?? null,
             branch:        branch ?? strVal(row[C.branch]),
             tfName:        tfName ?? null,
             subAgent:      strVal(row[C.subAgent]),
-            salesManager:  strVal(row[C.salesManager]),
-            caseManager:   strVal(row[C.caseManager]),
             salesRoute:    strVal(row[C.salesRoute]),
             contractDate:  toDate(row[C.contractDate]),
             receptionDate: toDate(row[C.receptionDate]),
@@ -167,21 +162,11 @@ export async function POST(req: NextRequest) {
         await prisma.hearingLossDetail.create({
           data: {
             caseId:                newCase.id,
-            status,
             isDisabilityRegistered,
             firstClinic:           strVal(row[C.firstClinic]),
             firstExamDate:         toDate(row[C.firstExamDate]),
             firstExamRight:        row[C.firstExamRight] ? parseFloat(String(row[C.firstExamRight])) || null : null,
             firstExamLeft:         row[C.firstExamLeft]  ? parseFloat(String(row[C.firstExamLeft]))  || null : null,
-            specialClinic:         strVal(row[C.specialClinic]),
-            exam1Date:             C.exam1Date !== -1 ? toDate(row[C.exam1Date]) : null,
-            reExamClinic:          strVal(row[C.reExamClinic]),
-            expertOrg:             strVal(row[C.expertOrg]),
-            expertDate:            toDate(row[C.expertDate]),
-            disposalType,
-            gradeType,
-            grade,
-            disposalDecidedAt:     toDate(row[C.disposalDate]),
           },
         });
 

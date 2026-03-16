@@ -173,29 +173,24 @@ export async function POST(req: NextRequest) {
           });
         }
 
-        if (caseNumber) {
-          const existing = await prisma.case.findFirst({ where: { caseNumber, caseType: "COPD" } });
-          if (existing) { skipped++; continue; }
-        }
+        // caseNumber 필드 제거됨 — ssn+caseType 기준으로 중복 체크
+        const existingByPatient = await prisma.case.findFirst({ where: { patientId: patient.id, caseType: "COPD" } });
+        if (existingByPatient) { skipped++; continue; }
 
-        const status = normalizeCopdStatus(row[C.status]);
         const disposalType = parseCopdDisposal(row[C.disposal]);
         const disposalDate = parseCopdDisposalDate(row[C.disposal]);
         const exam1Date = toDate(row[C.exam1Date]);
         const exam2Date = toDate(row[C.exam2Date]);
         const { exam1Rate, exam1Volume, exam2Rate, exam2Volume, examMemo } = parseExamResult(row[C.examResult]);
-        const reExamPossibleDate = calcReExamPossibleDate(status, exam1Date, exam2Date);
+        const reExamPossibleDate = calcReExamPossibleDate(strVal(row[C.status]) ?? "", exam1Date, exam2Date);
 
         const newCase = await prisma.case.create({
           data: {
             patientId:     patient.id,
             caseType:      "COPD",
-            caseNumber:    caseNumber ?? null,
             branch:        branch ?? strVal(row[C.branch]),
             tfName:        tfName ?? null,
             subAgent:      strVal(row[C.subAgent]),
-            salesManager:  strVal(row[C.salesManager]),
-            caseManager:   strVal(row[C.caseManager]),
             salesRoute:    strVal(row[C.salesRoute]),
             contractDate:  toDate(row[C.contractDate]),
             receptionDate: toDate(row[C.receptionDate]),
@@ -207,7 +202,6 @@ export async function POST(req: NextRequest) {
         await prisma.copdDetail.create({
           data: {
             caseId:            newCase.id,
-            status,
             firstClinic:       strVal(row[C.firstClinic]),
             firstExamDate:     toDate(row[C.firstExamDate]),
             specialClinic:     strVal(row[C.specialClinic]),

@@ -6,8 +6,6 @@ export async function GET(req: NextRequest) {
   const caseType = sp.get("caseType") ?? "";
   const tfName = sp.get("tfName") ?? "";
   const search = sp.get("search") ?? "";
-  const salesManager = sp.get("salesManager") ?? "";
-  const caseManager = sp.get("caseManager") ?? "";
   const salesRoute = sp.get("salesRoute") ?? "";
   const isOneStop = sp.get("isOneStop") ?? "";
   const contractDateFrom = sp.get("contractDate_from") ?? "";
@@ -52,12 +50,9 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  // Build contractDate / receptionDate range
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const contractDateFilter: Record<string, Date> = {};
   if (contractDateFrom) contractDateFilter.gte = new Date(contractDateFrom);
   if (contractDateTo) contractDateFilter.lte = new Date(contractDateTo);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const receptionDateFilter: Record<string, Date> = {};
   if (receptionDateFrom) receptionDateFilter.gte = new Date(receptionDateFrom);
   if (receptionDateTo) receptionDateFilter.lte = new Date(receptionDateTo);
@@ -67,8 +62,6 @@ export async function GET(req: NextRequest) {
       where: {
         ...(caseType && { caseType }),
         ...(tfName && { tfName }),
-        ...(salesManager && { salesManager: { contains: salesManager } }),
-        ...(caseManager && { caseManager: { contains: caseManager } }),
         ...(salesRoute && { salesRoute: { contains: salesRoute } }),
         ...(isOneStop && { isOneStop: isOneStop === "true" }),
         ...(Object.keys(contractDateFilter).length > 0 && { contractDate: contractDateFilter }),
@@ -88,60 +81,16 @@ export async function GET(req: NextRequest) {
       include: {
         patient: { select: { id: true, name: true, ssn: true, phone: true } },
         hearingLoss: true,
-        copd: { select: { id: true, status: true, reExamPossibleDate: true } },
-        pneumoconiosis: { select: { id: true, status: true, reExamPossibleDate: true } },
-        musculoskeletal: { select: { status: true } },
-        occupationalAccident: { select: { status: true } },
-        occupationalCancer: { select: { status: true } },
-        bereaved: { select: { status: true } },
+        copd: { select: { id: true } },
+        pneumoconiosis: { select: { id: true } },
+        musculoskeletal: { select: { id: true } },
+        occupationalAccident: { select: { id: true } },
+        occupationalCancer: { select: { id: true } },
+        bereaved: { select: { id: true } },
       },
     });
-    // COPD 수치미달 → 재진행가능 자동 업데이트
-    const today = new Date();
-    const copdToUpdate = cases
-      .filter(c =>
-        c.caseType === "COPD" &&
-        c.copd?.status === "수치미달" &&
-        c.copd?.reExamPossibleDate != null &&
-        c.copd.reExamPossibleDate <= today
-      )
-      .map(c => c.copd!.id);
 
-    if (copdToUpdate.length > 0) {
-      await prisma.copdDetail.updateMany({
-        where: { id: { in: copdToUpdate } },
-        data: { status: "재진행가능" },
-      });
-    }
-
-    // 진폐 수치미달 → 재진행가능 자동 업데이트
-    const pneumoToUpdate = cases
-      .filter(c =>
-        c.caseType === "PNEUMOCONIOSIS" &&
-        c.pneumoconiosis?.status === "수치미달" &&
-        c.pneumoconiosis?.reExamPossibleDate != null &&
-        c.pneumoconiosis.reExamPossibleDate <= today
-      )
-      .map(c => c.pneumoconiosis!.id);
-
-    if (pneumoToUpdate.length > 0) {
-      await prisma.pneumoconiosisDetail.updateMany({
-        where: { id: { in: pneumoToUpdate } },
-        data: { status: "재진행가능" },
-      });
-    }
-
-    const resultCases = (copdToUpdate.length > 0 || pneumoToUpdate.length > 0)
-      ? cases.map(c => {
-          if (c.copd && copdToUpdate.includes(c.copd.id))
-            return { ...c, copd: { ...c.copd, status: "재진행가능" } };
-          if (c.pneumoconiosis && pneumoToUpdate.includes(c.pneumoconiosis.id))
-            return { ...c, pneumoconiosis: { ...c.pneumoconiosis, status: "재진행가능" } };
-          return c;
-        })
-      : cases;
-
-    return NextResponse.json(resultCases);
+    return NextResponse.json(cases);
   } catch (err) {
     console.error("[GET /api/cases]", err);
     return NextResponse.json({ error: "조회 오류" }, { status: 500 });
@@ -154,13 +103,9 @@ export async function POST(req: NextRequest) {
     const {
       patientId,
       caseType,
-      caseNumber,
       tfName,
       branch,
       subAgent,
-      branchManager,
-      salesManager,
-      caseManager,
       salesRoute,
       contractDate,
       receptionDate,
@@ -176,13 +121,9 @@ export async function POST(req: NextRequest) {
       data: {
         patientId,
         caseType: caseType ?? "HEARING_LOSS",
-        caseNumber: caseNumber ?? null,
         tfName: tfName ?? null,
         branch: branch ?? null,
         subAgent: subAgent ?? null,
-        branchManager: branchManager ?? null,
-        salesManager: salesManager ?? null,
-        caseManager: caseManager ?? null,
         salesRoute: salesRoute ?? null,
         contractDate: contractDate ? new Date(contractDate) : null,
         receptionDate: receptionDate ? new Date(receptionDate) : null,

@@ -11,42 +11,29 @@ export async function GET(
       where: { id: caseId },
       include: {
         patient: true,
-        hearingLoss: true,
-        copd: { select: { id: true, status: true, reExamPossibleDate: true } },
-        pneumoconiosis: { select: { id: true, status: true, reExamPossibleDate: true } },
-        musculoskeletal: { select: { status: true } },
-        occupationalAccident: { select: { status: true } },
-        occupationalCancer: { select: { status: true } },
-        bereaved: { select: { status: true } },
+        salesManager: { select: { id: true, name: true } },
+        caseManager: { select: { id: true, name: true } },
+        branchManager: { select: { id: true, name: true } },
+        hearingLoss: {
+          include: { exams: { orderBy: [{ examSet: "asc" }, { examRound: "asc" }] } },
+        },
+        copd: { select: { id: true } },
+        pneumoconiosis: { select: { id: true } },
+        musculoskeletal: { select: { id: true } },
+        occupationalAccident: { select: { id: true } },
+        occupationalCancer: { select: { id: true } },
+        bereaved: { select: { id: true } },
       },
     });
     if (!c) return NextResponse.json({ error: "없음" }, { status: 404 });
 
-    const now = new Date();
-
-    // COPD 수치미달 → 재진행가능 자동 업데이트
-    if (
-      c.caseType === "COPD" &&
-      c.copd?.status === "수치미달" &&
-      c.copd.reExamPossibleDate != null &&
-      c.copd.reExamPossibleDate <= now
-    ) {
-      await prisma.copdDetail.update({ where: { id: c.copd.id }, data: { status: "재진행가능" } });
-      return NextResponse.json({ ...c, copd: { ...c.copd, status: "재진행가능" } });
-    }
-
-    // 진폐 수치미달 → 재진행가능 자동 업데이트
-    if (
-      c.caseType === "PNEUMOCONIOSIS" &&
-      c.pneumoconiosis?.status === "수치미달" &&
-      c.pneumoconiosis.reExamPossibleDate != null &&
-      c.pneumoconiosis.reExamPossibleDate <= now
-    ) {
-      await prisma.pneumoconiosisDetail.update({ where: { id: c.pneumoconiosis.id }, data: { status: "재진행가능" } });
-      return NextResponse.json({ ...c, pneumoconiosis: { ...c.pneumoconiosis, status: "재진행가능" } });
-    }
-
-    return NextResponse.json(c);
+    // BasicInfoTab 호환을 위해 manager 이름을 flat string으로 변환
+    return NextResponse.json({
+      ...c,
+      salesManager: c.salesManager?.name ?? null,
+      caseManager: c.caseManager?.name ?? null,
+      branchManager: c.branchManager?.name ?? null,
+    });
   } catch (err) {
     console.error("[GET /api/cases/[caseId]]", err);
     return NextResponse.json({ error: "조회 오류" }, { status: 500 });
@@ -61,54 +48,47 @@ export async function PATCH(
   try {
     const body = await req.json();
     const {
-      caseType: newCaseType, caseNumber, tfName, branch, subAgent,
-      branchManager, salesManager, caseManager, salesRoute,
-      contractDate, receptionDate, isOneStop, status, memo,
+      caseType: newCaseType, tfName, branch, subAgent,
+      salesRoute, contractDate, receptionDate, isOneStop, status, memo,
     } = body;
-
-    // Upsert status to the appropriate Detail first
-    if (status !== undefined) {
-      const existing = await prisma.case.findUnique({ where: { id: caseId }, select: { caseType: true } });
-      const ct = existing?.caseType ?? "HEARING_LOSS";
-      const detailArgs = { where: { caseId }, create: { caseId, status }, update: { status } };
-      if (ct === "HEARING_LOSS") await prisma.hearingLossDetail.upsert(detailArgs);
-      else if (ct === "COPD") await prisma.copdDetail.upsert(detailArgs);
-      else if (ct === "PNEUMOCONIOSIS") await prisma.pneumoconiosisDetail.upsert(detailArgs);
-      else if (ct === "MUSCULOSKELETAL") await prisma.musculoskeletalDetail.upsert(detailArgs);
-      else if (ct === "OCCUPATIONAL_ACCIDENT") await prisma.occupationalAccidentDetail.upsert(detailArgs);
-      else if (ct === "OCCUPATIONAL_CANCER") await prisma.occupationalCancerDetail.upsert(detailArgs);
-      else if (ct === "BEREAVED") await prisma.bereavedDetail.upsert(detailArgs);
-    }
 
     const updated = await prisma.case.update({
       where: { id: caseId },
       data: {
         ...(newCaseType !== undefined && { caseType: newCaseType }),
-        ...(caseNumber !== undefined && { caseNumber }),
         ...(tfName !== undefined && { tfName }),
         ...(branch !== undefined && { branch }),
         ...(subAgent !== undefined && { subAgent }),
-        ...(branchManager !== undefined && { branchManager }),
-        ...(salesManager !== undefined && { salesManager }),
-        ...(caseManager !== undefined && { caseManager }),
         ...(salesRoute !== undefined && { salesRoute }),
         ...(contractDate !== undefined && { contractDate: contractDate ? new Date(contractDate) : null }),
         ...(receptionDate !== undefined && { receptionDate: receptionDate ? new Date(receptionDate) : null }),
         ...(isOneStop !== undefined && { isOneStop }),
+        ...(status !== undefined && { status }),
         ...(memo !== undefined && { memo }),
       },
       include: {
         patient: true,
-        hearingLoss: true,
-        copd: { select: { id: true, status: true, reExamPossibleDate: true } },
-        pneumoconiosis: { select: { id: true, status: true, reExamPossibleDate: true } },
-        musculoskeletal: { select: { status: true } },
-        occupationalAccident: { select: { status: true } },
-        occupationalCancer: { select: { status: true } },
-        bereaved: { select: { status: true } },
+        salesManager: { select: { id: true, name: true } },
+        caseManager: { select: { id: true, name: true } },
+        branchManager: { select: { id: true, name: true } },
+        hearingLoss: {
+          include: { exams: { orderBy: [{ examSet: "asc" }, { examRound: "asc" }] } },
+        },
+        copd: { select: { id: true } },
+        pneumoconiosis: { select: { id: true } },
+        musculoskeletal: { select: { id: true } },
+        occupationalAccident: { select: { id: true } },
+        occupationalCancer: { select: { id: true } },
+        bereaved: { select: { id: true } },
       },
     });
-    return NextResponse.json(updated);
+
+    return NextResponse.json({
+      ...updated,
+      salesManager: updated.salesManager?.name ?? null,
+      caseManager: updated.caseManager?.name ?? null,
+      branchManager: updated.branchManager?.name ?? null,
+    });
   } catch (err) {
     console.error("[PATCH /api/cases/[caseId]]", err);
     return NextResponse.json({ error: "수정 오류" }, { status: 500 });
