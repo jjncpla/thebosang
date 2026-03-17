@@ -562,6 +562,9 @@ model ObjectionCase {
   litigationMemo        String?
   // 재처분 필요 여부 (제척 도과 시 자동 계산)
   needsReDecision       Boolean   @default(false)
+  // 소송 상태
+  litigationStatus      String?   // 소송 검토중 / 소송 검토 완료 / 소송 진행중 / 소송 종료
+  wageCorrectStatus     String?   // 접수 대기 / 진행중 / 처분완료
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
 }

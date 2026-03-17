@@ -30,6 +30,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       litigationHandover: !!body.litigationHandover,
       litigationMemo: body.litigationMemo || null,
       needsReDecision: !!body.needsReDecision,
+      litigationStatus: body.litigationStatus || null,
+      wageCorrectStatus: body.wageCorrectStatus || null,
     },
     include: { manager: { select: { id: true, name: true } } },
   });

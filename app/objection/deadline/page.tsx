@@ -2,17 +2,25 @@
 
 import { useCallback, useEffect, useState } from "react";
 
-const TF_OPTIONS = ["울산TF", "울산동부TF", "울산남부TF", "울산북부TF"];
 const BRANCH_TF_MAP: Record<string, string[]> = {
   "울산지사": ["울산TF", "이산울산북부TF"],
   "울산동부지사": ["울산동부TF", "이산울산동부TF"],
   "울산남부지사": ["울산남부TF", "이산울산남부TF"],
+  "부산경남지사": ["부산경남TF"],
+  "서울북부지사": ["서울북부TF"],
+  "경기안산지사": ["경기안산TF"],
+  "전북익산지사": ["전북익산TF"],
+  "경북구미지사": ["경북구미TF"],
 };
+
+const TF_OPTIONS = Object.values(BRANCH_TF_MAP).flat();
 const APPROVAL_OPTIONS = ["승인", "불승인", "일부승인"];
 const PROGRESS_OPTIONS = ["진행중", "종결", "송무인계", "검토중"];
 const EXAM_RESULT_OPTIONS = ["기각", "인용", "취하", "진행중"];
+const LITIGATION_STATUS_OPTIONS = ["소송 검토중", "소송 검토 완료", "소송 진행중", "소송 종료"];
 
 type Manager = { id: string; name: string };
+
 type ObjectionCase = {
   id: string;
   tfName: string;
@@ -33,7 +41,22 @@ type ObjectionCase = {
   memo: string | null;
   litigationHandover: boolean;
   litigationMemo: string | null;
+  litigationStatus: string | null;
   needsReDecision: boolean;
+  wageCorrectStatus: string | null;
+};
+
+type WageItem = {
+  id: string;
+  tfName: string;
+  patientName: string;
+  caseType: string;
+  decisionDate: string | null;
+  finalSelectedWage: number | null;
+  claimDate: string | null;
+  decisionResultDate: string | null;
+  reviewManagerName: string | null;
+  reviewResult: string | null;
 };
 
 function formatDate(iso: string | null | undefined) {
@@ -82,8 +105,6 @@ function ApprovalBadge({ status }: { status: string }) {
   const s = map[status] ?? { bg: "#1e293b", color: "#94a3b8" };
   return <span style={{ display: "inline-block", padding: "2px 8px", borderRadius: 999, fontSize: 10, fontWeight: 700, background: s.bg, color: s.color }}>{status}</span>;
 }
-
-// ─── Modal ────────────────────────────────────────────────────────────────────
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type CaseForm = Record<string, any>;
@@ -183,33 +204,106 @@ function CaseModal({ initial, managers, onClose, onSave }: {
   );
 }
 
-// ─── Main Page ────────────────────────────────────────────────────────────────
+// ── WageDateModal ──────────────────────────────────────────────────────────────
+function WageDateModal({ item, onClose, onSave }: {
+  item: WageItem;
+  onClose: () => void;
+  onSave: (id: string, claimDate: string, decisionResultDate: string) => Promise<void>;
+}) {
+  const [claimDate, setClaimDate] = useState(toInputDate(item.claimDate));
+  const [decisionResultDate, setDecisionResultDate] = useState(toInputDate(item.decisionResultDate));
+  const [saving, setSaving] = useState(false);
 
+  const handleSave = async () => {
+    setSaving(true);
+    try { await onSave(item.id, claimDate, decisionResultDate); onClose(); }
+    catch { alert("저장 오류"); }
+    finally { setSaving(false); }
+  };
+
+  const inputStyle = { border: "1px solid #e5e7eb", borderRadius: 6, padding: "6px 10px", fontSize: 12, color: "#374151", background: "#f9fafb", outline: "none", width: "100%" };
+  const labelStyle = { fontSize: 11, color: "#6b7280", fontWeight: 700 as const, display: "block" as const, marginBottom: 3 };
+
+  return (
+    <>
+      <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 999 }} />
+      <div style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)", background: "white", borderRadius: 12, padding: 24, zIndex: 1000, width: 340, boxShadow: "0 20px 60px rgba(0,0,0,0.3)", fontFamily: "'Malgun Gothic','Apple SD Gothic Neo','Segoe UI',sans-serif" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+          <h2 style={{ margin: 0, fontSize: 14, fontWeight: 800, color: "#111827" }}>{item.patientName} — 일정 업데이트</h2>
+          <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "#6b7280" }}>✕</button>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <div><label style={labelStyle}>청구일</label><input type="date" style={inputStyle} value={claimDate} onChange={e => setClaimDate(e.target.value)} /></div>
+          <div><label style={labelStyle}>결정일</label><input type="date" style={inputStyle} value={decisionResultDate} onChange={e => setDecisionResultDate(e.target.value)} /></div>
+        </div>
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 16 }}>
+          <button onClick={onClose} style={{ border: "1px solid #e5e7eb", borderRadius: 6, padding: "7px 14px", fontSize: 12, color: "#374151", background: "white", cursor: "pointer" }}>취소</button>
+          <button onClick={handleSave} disabled={saving} style={{ background: "#2563eb", color: "white", border: "none", borderRadius: 6, padding: "7px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer", opacity: saving ? 0.6 : 1 }}>
+            {saving ? "저장 중..." : "저장"}
+          </button>
+        </div>
+      </div>
+    </>
+  );
+}
+
+// ── Main Page ──────────────────────────────────────────────────────────────────
 export default function ObjectionDeadlinePage() {
+  const [tab, setTab] = useState<"objection" | "litigation" | "wage">("objection");
   const [items, setItems] = useState<ObjectionCase[]>([]);
+  const [litigationItems, setLitigationItems] = useState<ObjectionCase[]>([]);
+  const [wageItems, setWageItems] = useState<WageItem[]>([]);
   const [managers, setManagers] = useState<Manager[]>([]);
+
+  // 이의제기 탭 filters
   const [filterBranch, setFilterBranch] = useState("");
   const [filterTf, setFilterTf] = useState("");
   const [filterProgress, setFilterProgress] = useState("");
   const [search, setSearch] = useState("");
+  const [statsFilter, setStatsFilter] = useState("");
+
+  // Modal
   const [modal, setModal] = useState(false);
   const [target, setTarget] = useState<ObjectionCase | null>(null);
-  const [viewSection, setViewSection] = useState<"main" | "litigation">("main");
+
+  // Wage date modal
+  const [wageModal, setWageModal] = useState<WageItem | null>(null);
+
+  // Date info
+  const today = new Date();
+  const exclusionBase = new Date(today);
+  exclusionBase.setDate(exclusionBase.getDate() - 90);
+  const fmtKorDate = (d: Date) => {
+    const days = ["일","월","화","수","목","금","토"];
+    return `${d.getFullYear()}년 ${d.getMonth() + 1}월 ${d.getDate()}일 (${days[d.getDay()]})`;
+  };
 
   const fetchItems = useCallback(async () => {
     const p = new URLSearchParams();
     if (filterTf) p.set("tfName", filterTf);
-    if (filterProgress) p.set("progressStatus", filterProgress);
+    if (filterProgress && filterProgress !== "송무인계") p.set("progressStatus", filterProgress);
     if (search) p.set("search", search);
     const res = await fetch(`/api/objection/cases?${p}`);
     if (res.ok) setItems(await res.json());
   }, [filterTf, filterProgress, search]);
+
+  const fetchLitigation = useCallback(async () => {
+    const res = await fetch("/api/objection/cases?type=litigation");
+    if (res.ok) setLitigationItems(await res.json());
+  }, []);
+
+  const fetchWage = useCallback(async () => {
+    const res = await fetch("/api/objection/wage-review?reviewResult=평정청구%20진행");
+    if (res.ok) setWageItems(await res.json());
+  }, []);
 
   useEffect(() => {
     fetch("/api/users").then(r => r.json()).then(d => setManagers(Array.isArray(d) ? d : []));
   }, []);
 
   useEffect(() => { fetchItems(); }, [fetchItems]);
+  useEffect(() => { fetchLitigation(); }, [fetchLitigation]);
+  useEffect(() => { fetchWage(); }, [fetchWage]);
 
   const handleSave = async (form: CaseForm, id?: string) => {
     const method = id ? "PATCH" : "POST";
@@ -217,26 +311,95 @@ export default function ObjectionDeadlinePage() {
     const res = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(form) });
     if (!res.ok) throw new Error();
     await fetchItems();
+    await fetchLitigation();
+  };
+
+  const handleLitigationStatusChange = async (id: string, litigationStatus: string) => {
+    const item = litigationItems.find(i => i.id === id);
+    if (!item) return;
+    await fetch(`/api/objection/cases/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...item, managerId: item.manager?.id ?? null, litigationStatus }),
+    });
+    await fetchLitigation();
+  };
+
+  const handleWageDateSave = async (id: string, claimDate: string, decisionResultDate: string) => {
+    const fullRes = await fetch(`/api/objection/wage-review/${id}`);
+    if (!fullRes.ok) throw new Error();
+    const fullItem = await fullRes.json();
+    const res = await fetch(`/api/objection/wage-review/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...fullItem, claimDate: claimDate || null, decisionResultDate: decisionResultDate || null }),
+    });
+    if (!res.ok) throw new Error();
+    await fetchWage();
   };
 
   const tfList = filterBranch ? BRANCH_TF_MAP[filterBranch] ?? [] : [];
-
   const now = new Date();
-  const stats = {
-    ongoing: items.filter(i => i.progressStatus === "진행중").length,
-    urgent: items.filter(i => { const d = getDeadline(i); return d && (d.getTime() - now.getTime()) / (1000*60*60*24) <= 7 && (d.getTime() - now.getTime()) / (1000*60*60*24) >= 0; }).length,
-    expired: items.filter(i => { const d = getDeadline(i); return d && d < now; }).length,
+
+  // 이의제기 탭 stats
+  const objStats = {
+    waiting: items.filter(i => !i.examClaimDate && i.progressStatus !== "종결").length,
+    ongoing: items.filter(i => (i.examClaimDate && !i.examResult) || (i.reExamClaimDate && !i.reExamResult)).length,
+    urgent: items.filter(i => {
+      const d = getDeadline(i);
+      if (!d) return false;
+      const diff = (d.getTime() - now.getTime()) / (1000*60*60*24);
+      return diff >= 0 && diff <= 7;
+    }).length,
+    expired: items.filter(i => {
+      const d = getDeadline(i);
+      return d != null && d < now;
+    }).length,
     litigation: items.filter(i => i.progressStatus === "송무인계").length,
   };
 
-  const litigationItems = items.filter(i => i.progressStatus === "송무인계");
-  const needsRedecision = items.filter(i => { const d = getDeadline(i); return d && d < now; });
+  // Apply stats filter client-side
+  const filteredItems = statsFilter === "접수대기" ? items.filter(i => !i.examClaimDate && i.progressStatus !== "종결")
+    : statsFilter === "진행중" ? items.filter(i => (i.examClaimDate && !i.examResult) || (i.reExamClaimDate && !i.reExamResult))
+    : statsFilter === "제척임박" ? items.filter(i => { const d = getDeadline(i); if (!d) return false; const diff = (d.getTime() - now.getTime()) / (1000*60*60*24); return diff >= 0 && diff <= 7; })
+    : statsFilter === "제척도과" ? items.filter(i => { const d = getDeadline(i); return d != null && d < now; })
+    : statsFilter === "송무인계" ? items.filter(i => i.progressStatus === "송무인계")
+    : items;
+
+  // 소송 인계 stats
+  const litStats = {
+    검토중: litigationItems.filter(i => i.litigationStatus === "소송 검토중").length,
+    완료: litigationItems.filter(i => i.litigationStatus === "소송 검토 완료").length,
+    진행중: litigationItems.filter(i => i.litigationStatus === "소송 진행중").length,
+    종료: litigationItems.filter(i => i.litigationStatus === "소송 종료").length,
+  };
+
+  // 평균임금 정정 stats
+  const wageStats = {
+    waiting: wageItems.filter(i => !i.claimDate).length,
+    ongoing: wageItems.filter(i => i.claimDate && !i.decisionResultDate).length,
+    done: wageItems.filter(i => !!i.decisionResultDate).length,
+  };
+
+  const cardStyle = (color: string, active: boolean): React.CSSProperties => ({
+    background: active ? color + "15" : "white",
+    borderRadius: 10,
+    border: `1px solid ${active ? color : "#e5e7eb"}`,
+    padding: "14px 18px",
+    boxShadow: "0 1px 3px rgba(0,0,0,0.05)",
+    cursor: "pointer",
+  });
+
+  const inputStyle: React.CSSProperties = { border: "1px solid #e5e7eb", borderRadius: 6, padding: "6px 10px", fontSize: 12, color: "#374151", background: "#f9fafb" };
+  const thStyle: React.CSSProperties = { padding: "8px 10px", textAlign: "left", fontSize: 10, fontWeight: 700, color: "#6b7280", whiteSpace: "nowrap" };
 
   return (
     <div style={{ padding: 24, minHeight: "100%", background: "#f1f5f9", fontFamily: "'Malgun Gothic','Apple SD Gothic Neo','Segoe UI',sans-serif" }}>
       {modal && <CaseModal initial={target} managers={managers} onClose={() => { setModal(false); setTarget(null); }} onSave={handleSave} />}
+      {wageModal && <WageDateModal item={wageModal} onClose={() => setWageModal(null)} onSave={handleWageDateSave} />}
 
-      <div style={{ marginBottom: 16, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+      {/* Header */}
+      <div style={{ marginBottom: 12, display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
         <div>
           <p style={{ fontSize: 11, color: "#9ca3af", fontWeight: 700, letterSpacing: 2, margin: "0 0 4px 0" }}>OBJECTION DEADLINE</p>
           <h1 style={{ fontSize: 20, fontWeight: 800, color: "#111827", margin: 0 }}>이의제기 — 기일 관리</h1>
@@ -244,37 +407,56 @@ export default function ObjectionDeadlinePage() {
         <button onClick={() => { setTarget(null); setModal(true); }} style={{ background: "#2563eb", color: "white", border: "none", borderRadius: 6, padding: "8px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>+ 등록</button>
       </div>
 
-      {/* Stats */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 16 }}>
-        {[
-          { label: "진행 중", value: stats.ongoing, color: "#2563eb" },
-          { label: "제척 임박 (7일 이내)", value: stats.urgent, color: "#d97706" },
-          { label: "제척 도과 / 재처분 필요", value: stats.expired, color: "#dc2626" },
-          { label: "송무 인계", value: stats.litigation, color: "#9333ea" },
-        ].map(s => (
-          <div key={s.label} style={{ background: "white", borderRadius: 10, border: "1px solid #e5e7eb", padding: "14px 18px", boxShadow: "0 1px 3px rgba(0,0,0,0.05)" }}>
-            <div style={{ fontSize: 10, color: "#6b7280", fontWeight: 700, marginBottom: 4 }}>{s.label}</div>
-            <div style={{ fontSize: 24, fontWeight: 800, color: s.color }}>{s.value}</div>
-          </div>
-        ))}
+      {/* Date bar */}
+      <div style={{ background: "white", borderRadius: 10, border: "1px solid #e5e7eb", padding: "10px 16px", marginBottom: 14, display: "flex", gap: 32, alignItems: "center", fontSize: 13 }}>
+        <div>
+          <span style={{ fontWeight: 700, color: "#374151" }}>오늘: </span>
+          <span style={{ color: "#2563eb", fontWeight: 600 }}>{fmtKorDate(today)}</span>
+        </div>
+        <div title="이 날짜 이후 송달된 결정에 대해 제척기간이 진행 중입니다" style={{ cursor: "help" }}>
+          <span style={{ fontWeight: 700, color: "#374151" }}>제척 기준일: </span>
+          <span style={{ color: "#dc2626", fontWeight: 600 }}>{fmtKorDate(exclusionBase)}</span>
+          <span style={{ fontSize: 11, color: "#9ca3af", marginLeft: 6 }}>ⓘ 오늘 -90일</span>
+        </div>
       </div>
 
-      {/* Section toggle */}
-      <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-        {(["main", "litigation"] as const).map(v => (
-          <button key={v} onClick={() => setViewSection(v)} style={{ padding: "6px 16px", fontSize: 12, borderRadius: 6, cursor: "pointer", border: viewSection === v ? "1px solid #2563eb" : "1px solid #e5e7eb", background: viewSection === v ? "#eff6ff" : "white", color: viewSection === v ? "#2563eb" : "#374151", fontWeight: viewSection === v ? 700 : 400 }}>
-            {v === "main" ? "전체 기일 관리" : `소송 인계 (${litigationItems.length})`}
+      {/* Tabs */}
+      <div style={{ display: "flex", gap: 6, marginBottom: 14 }}>
+        {([
+          { id: "objection", label: "이의제기" },
+          { id: "litigation", label: `소송 인계 (${litigationItems.length})` },
+          { id: "wage", label: `평균임금 정정 (${wageItems.length})` },
+        ] as const).map(t => (
+          <button key={t.id} onClick={() => setTab(t.id as typeof tab)} style={{ padding: "7px 18px", fontSize: 13, borderRadius: 7, cursor: "pointer", border: tab === t.id ? "1px solid #2563eb" : "1px solid #e5e7eb", background: tab === t.id ? "#eff6ff" : "white", color: tab === t.id ? "#2563eb" : "#374151", fontWeight: tab === t.id ? 700 : 400 }}>
+            {t.label}
           </button>
         ))}
       </div>
 
-      {viewSection === "main" && (
+      {/* ── Tab: 이의제기 ── */}
+      {tab === "objection" && (
         <>
+          {/* Stats */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 10, marginBottom: 14 }}>
+            {[
+              { key: "접수대기", label: "접수 대기", value: objStats.waiting, color: "#6b7280" },
+              { key: "진행중", label: "진행 중", value: objStats.ongoing, color: "#2563eb" },
+              { key: "제척임박", label: "제척 임박 (7일 이내)", value: objStats.urgent, color: "#d97706" },
+              { key: "제척도과", label: "제척도과/재처분 필요", value: objStats.expired, color: "#dc2626" },
+              { key: "송무인계", label: "송무 인계", value: objStats.litigation, color: "#9333ea" },
+            ].map(s => (
+              <div key={s.key} onClick={() => setStatsFilter(statsFilter === s.key ? "" : s.key)} style={cardStyle(s.color, statsFilter === s.key)}>
+                <div style={{ fontSize: 10, color: "#6b7280", fontWeight: 700, marginBottom: 4 }}>{s.label}</div>
+                <div style={{ fontSize: 22, fontWeight: 800, color: s.color }}>{s.value}</div>
+              </div>
+            ))}
+          </div>
+
           {/* Filters */}
           <div style={{ background: "white", borderRadius: 10, border: "1px solid #e5e7eb", padding: "12px 16px", marginBottom: 12, display: "flex", gap: 12, flexWrap: "wrap", alignItems: "flex-end" }}>
             <div>
               <div style={{ fontSize: 11, color: "#6b7280", fontWeight: 700, marginBottom: 4 }}>지사</div>
-              <select value={filterBranch} onChange={e => { setFilterBranch(e.target.value); setFilterTf(""); }} style={{ border: "1px solid #e5e7eb", borderRadius: 6, padding: "6px 10px", fontSize: 12, color: "#374151", background: "#f9fafb" }}>
+              <select value={filterBranch} onChange={e => { setFilterBranch(e.target.value); setFilterTf(""); }} style={inputStyle}>
                 <option value="">전체</option>
                 {Object.keys(BRANCH_TF_MAP).map(b => <option key={b} value={b}>{b}</option>)}
               </select>
@@ -282,7 +464,7 @@ export default function ObjectionDeadlinePage() {
             {filterBranch && (
               <div>
                 <div style={{ fontSize: 11, color: "#6b7280", fontWeight: 700, marginBottom: 4 }}>TF</div>
-                <select value={filterTf} onChange={e => setFilterTf(e.target.value)} style={{ border: "1px solid #e5e7eb", borderRadius: 6, padding: "6px 10px", fontSize: 12, color: "#374151", background: "#f9fafb" }}>
+                <select value={filterTf} onChange={e => setFilterTf(e.target.value)} style={inputStyle}>
                   <option value="">전체</option>
                   {tfList.map(t => <option key={t} value={t}>{t}</option>)}
                 </select>
@@ -290,15 +472,20 @@ export default function ObjectionDeadlinePage() {
             )}
             <div>
               <div style={{ fontSize: 11, color: "#6b7280", fontWeight: 700, marginBottom: 4 }}>진행상태</div>
-              <select value={filterProgress} onChange={e => setFilterProgress(e.target.value)} style={{ border: "1px solid #e5e7eb", borderRadius: 6, padding: "6px 10px", fontSize: 12, color: "#374151", background: "#f9fafb" }}>
+              <select value={filterProgress} onChange={e => setFilterProgress(e.target.value)} style={inputStyle}>
                 <option value="">전체</option>
                 {PROGRESS_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
               </select>
             </div>
             <div>
               <div style={{ fontSize: 11, color: "#6b7280", fontWeight: 700, marginBottom: 4 }}>검색</div>
-              <input value={search} onChange={e => setSearch(e.target.value)} placeholder="성명 검색" style={{ border: "1px solid #e5e7eb", borderRadius: 6, padding: "6px 10px", fontSize: 12, color: "#374151", background: "#f9fafb", width: 140 }} />
+              <input value={search} onChange={e => setSearch(e.target.value)} placeholder="성명 검색" style={{ ...inputStyle, width: 140 }} />
             </div>
+            {statsFilter && (
+              <button onClick={() => setStatsFilter("")} style={{ padding: "6px 12px", fontSize: 11, borderRadius: 6, border: "1px solid #e5e7eb", background: "#fef9c3", color: "#92400e", cursor: "pointer" }}>
+                {statsFilter} 필터 해제
+              </button>
+            )}
           </div>
 
           {/* Main table */}
@@ -308,15 +495,15 @@ export default function ObjectionDeadlinePage() {
                 <thead>
                   <tr style={{ background: "#f8fafc", borderBottom: "2px solid #e5e7eb" }}>
                     {["승인여부","TF","성명","사건분류","처분일","제척도래일","심사청구일","심사결과","심사송달일","재심사청구일","재심사결과","재심사송달일","담당자","진행상태","관리"].map(h => (
-                      <th key={h} style={{ padding: "8px 10px", textAlign: "left", fontSize: 10, fontWeight: 700, color: "#6b7280", whiteSpace: "nowrap" }}>{h}</th>
+                      <th key={h} style={thStyle}>{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {items.length === 0 && (
+                  {filteredItems.length === 0 && (
                     <tr><td colSpan={15} style={{ padding: "40px 16px", textAlign: "center", color: "#9ca3af", fontSize: 13 }}>데이터가 없습니다</td></tr>
                   )}
-                  {items.map(item => {
+                  {filteredItems.map(item => {
                     const deadline = getDeadline(item);
                     const bg = getRowBg(item);
                     const diff = deadline ? (deadline.getTime() - now.getTime()) / (1000 * 60 * 60 * 24) : null;
@@ -350,52 +537,134 @@ export default function ObjectionDeadlinePage() {
               </table>
             </div>
           </div>
-
-          {/* 재처분 필요 패널 */}
-          {needsRedecision.length > 0 && (
-            <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 10, padding: "16px 18px", marginTop: 16 }}>
-              <div style={{ fontSize: 13, fontWeight: 700, color: "#dc2626", marginBottom: 12 }}>🔴 재처분 필요 사건 ({needsRedecision.length}건)</div>
-              {needsRedecision.map(item => (
-                <div key={item.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "6px 0", borderBottom: "1px solid #fecaca", fontSize: 12 }}>
-                  <span style={{ fontWeight: 600, color: "#111827" }}>{item.patientName}</span>
-                  <span style={{ color: "#6b7280" }}>{item.tfName} / {item.caseType}</span>
-                  <span style={{ color: "#9ca3af" }}>처분일: {formatDate(item.decisionDate)}</span>
-                  <button onClick={() => { setTarget(item); setModal(true); }} style={{ marginLeft: "auto", border: "1px solid #fecaca", borderRadius: 5, padding: "3px 10px", fontSize: 11, color: "#dc2626", background: "white", cursor: "pointer" }}>처분일 업데이트</button>
-                </div>
-              ))}
-            </div>
-          )}
         </>
       )}
 
-      {viewSection === "litigation" && (
-        <div style={{ background: "white", borderRadius: 10, border: "1px solid #e5e7eb", overflow: "hidden", boxShadow: "0 1px 3px rgba(0,0,0,0.05)" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
-            <thead>
-              <tr style={{ background: "#f8fafc", borderBottom: "2px solid #e5e7eb" }}>
-                {["TF","성명","사건분류","처분일","심사결과","재심사결과","소송인계메모"].map(h => (
-                  <th key={h} style={{ padding: "8px 12px", textAlign: "left", fontSize: 11, fontWeight: 700, color: "#6b7280", whiteSpace: "nowrap" }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {litigationItems.length === 0 && (
-                <tr><td colSpan={7} style={{ padding: "40px 16px", textAlign: "center", color: "#9ca3af", fontSize: 13 }}>소송 인계 사건이 없습니다</td></tr>
-              )}
-              {litigationItems.map(item => (
-                <tr key={item.id} style={{ borderBottom: "1px solid #f1f5f9" }}>
-                  <td style={{ padding: "10px 12px", color: "#374151" }}>{item.tfName}</td>
-                  <td style={{ padding: "10px 12px", fontWeight: 600, color: "#111827" }}>{item.patientName}</td>
-                  <td style={{ padding: "10px 12px", color: "#6b7280" }}>{item.caseType}</td>
-                  <td style={{ padding: "10px 12px", fontFamily: "monospace", fontSize: 11, color: "#6b7280" }}>{formatDate(item.decisionDate)}</td>
-                  <td style={{ padding: "10px 12px", color: "#374151" }}>{item.examResult ?? "-"}</td>
-                  <td style={{ padding: "10px 12px", color: "#374151" }}>{item.reExamResult ?? "-"}</td>
-                  <td style={{ padding: "10px 12px", color: "#6b7280", maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.litigationMemo ?? "-"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+      {/* ── Tab: 소송 인계 ── */}
+      {tab === "litigation" && (
+        <>
+          {/* Stats */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, marginBottom: 14 }}>
+            {[
+              { label: "소송 검토중", value: litStats.검토중, color: "#2563eb" },
+              { label: "소송 검토 완료", value: litStats.완료, color: "#0891b2" },
+              { label: "소송 진행중", value: litStats.진행중, color: "#9333ea" },
+              { label: "소송 종료", value: litStats.종료, color: "#6b7280" },
+            ].map(s => (
+              <div key={s.label} style={{ background: "white", borderRadius: 10, border: "1px solid #e5e7eb", padding: "14px 18px", boxShadow: "0 1px 3px rgba(0,0,0,0.05)" }}>
+                <div style={{ fontSize: 10, color: "#6b7280", fontWeight: 700, marginBottom: 4 }}>{s.label}</div>
+                <div style={{ fontSize: 22, fontWeight: 800, color: s.color }}>{s.value}</div>
+              </div>
+            ))}
+          </div>
+
+          <div style={{ background: "white", borderRadius: 10, border: "1px solid #e5e7eb", overflow: "hidden", boxShadow: "0 1px 3px rgba(0,0,0,0.05)" }}>
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                <thead>
+                  <tr style={{ background: "#f8fafc", borderBottom: "2px solid #e5e7eb" }}>
+                    {["TF","성명","사건분류","심사결과","재심사결과","소송 상태","소송 메모","관리"].map(h => (
+                      <th key={h} style={thStyle}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {litigationItems.length === 0 && (
+                    <tr><td colSpan={8} style={{ padding: "40px 16px", textAlign: "center", color: "#9ca3af", fontSize: 13 }}>소송 인계 사건이 없습니다</td></tr>
+                  )}
+                  {litigationItems.map(item => (
+                    <tr key={item.id} style={{ borderBottom: "1px solid #f1f5f9" }}>
+                      <td style={{ padding: "10px 12px", color: "#374151" }}>{item.tfName}</td>
+                      <td style={{ padding: "10px 12px", fontWeight: 600, color: "#111827" }}>{item.patientName}</td>
+                      <td style={{ padding: "10px 12px", color: "#6b7280" }}>{item.caseType}</td>
+                      <td style={{ padding: "10px 12px", color: "#374151" }}>{item.examResult ?? "-"}</td>
+                      <td style={{ padding: "10px 12px", color: "#374151" }}>{item.reExamResult ?? "-"}</td>
+                      <td style={{ padding: "10px 12px" }}>
+                        {item.litigationStatus
+                          ? <span style={{ display: "inline-block", padding: "2px 8px", borderRadius: 999, fontSize: 10, fontWeight: 600, background: "#f0f9ff", color: "#0369a1" }}>{item.litigationStatus}</span>
+                          : <span style={{ color: "#9ca3af", fontSize: 11 }}>미설정</span>}
+                      </td>
+                      <td style={{ padding: "10px 12px", color: "#6b7280", maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.litigationMemo ?? "-"}</td>
+                      <td style={{ padding: "10px 12px" }}>
+                        <select
+                          value={item.litigationStatus ?? ""}
+                          onChange={e => handleLitigationStatusChange(item.id, e.target.value)}
+                          onClick={e => e.stopPropagation()}
+                          style={{ border: "1px solid #e5e7eb", borderRadius: 5, padding: "3px 8px", fontSize: 11, color: "#374151", background: "#f9fafb", cursor: "pointer" }}
+                        >
+                          <option value="">-- 상태 변경 --</option>
+                          {LITIGATION_STATUS_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
+                        </select>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* ── Tab: 평균임금 정정 ── */}
+      {tab === "wage" && (
+        <>
+          {/* Stats */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, marginBottom: 14 }}>
+            {[
+              { label: "접수 대기", value: wageStats.waiting, color: "#6b7280" },
+              { label: "진행 중", value: wageStats.ongoing, color: "#2563eb" },
+              { label: "처분 완료", value: wageStats.done, color: "#16a34a" },
+            ].map(s => (
+              <div key={s.label} style={{ background: "white", borderRadius: 10, border: "1px solid #e5e7eb", padding: "14px 18px", boxShadow: "0 1px 3px rgba(0,0,0,0.05)" }}>
+                <div style={{ fontSize: 10, color: "#6b7280", fontWeight: 700, marginBottom: 4 }}>{s.label}</div>
+                <div style={{ fontSize: 22, fontWeight: 800, color: s.color }}>{s.value}</div>
+              </div>
+            ))}
+          </div>
+
+          <div style={{ background: "white", borderRadius: 10, border: "1px solid #e5e7eb", overflow: "hidden", boxShadow: "0 1px 3px rgba(0,0,0,0.05)" }}>
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                <thead>
+                  <tr style={{ background: "#f8fafc", borderBottom: "2px solid #e5e7eb" }}>
+                    {["TF","성명","사건분류","처분일","최종 적용임금","청구일","결정일","검토담당자","진행상태","관리"].map(h => (
+                      <th key={h} style={thStyle}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {wageItems.length === 0 && (
+                    <tr><td colSpan={10} style={{ padding: "40px 16px", textAlign: "center", color: "#9ca3af", fontSize: 13 }}>평정청구 진행 사건이 없습니다</td></tr>
+                  )}
+                  {wageItems.map(item => {
+                    const status = item.decisionResultDate ? "처분완료" : item.claimDate ? "진행중" : "접수대기";
+                    const statusColor = status === "처분완료" ? "#16a34a" : status === "진행중" ? "#2563eb" : "#6b7280";
+                    return (
+                      <tr key={item.id} style={{ borderBottom: "1px solid #f1f5f9" }}>
+                        <td style={{ padding: "10px 12px", color: "#374151" }}>{item.tfName}</td>
+                        <td style={{ padding: "10px 12px", fontWeight: 600, color: "#111827" }}>{item.patientName}</td>
+                        <td style={{ padding: "10px 12px", color: "#6b7280" }}>{item.caseType}</td>
+                        <td style={{ padding: "10px 12px", fontFamily: "monospace", fontSize: 11, color: "#6b7280" }}>{formatDate(item.decisionDate)}</td>
+                        <td style={{ padding: "10px 12px", fontFamily: "monospace", fontSize: 11, color: "#374151", fontWeight: 600 }}>
+                          {item.finalSelectedWage != null ? item.finalSelectedWage.toLocaleString("ko-KR") + "원/일" : "-"}
+                        </td>
+                        <td style={{ padding: "10px 12px", fontFamily: "monospace", fontSize: 11, color: item.claimDate ? "#374151" : "#9ca3af" }}>{formatDate(item.claimDate)}</td>
+                        <td style={{ padding: "10px 12px", fontFamily: "monospace", fontSize: 11, color: item.decisionResultDate ? "#374151" : "#9ca3af" }}>{formatDate(item.decisionResultDate)}</td>
+                        <td style={{ padding: "10px 12px", color: "#374151" }}>{item.reviewManagerName ?? "-"}</td>
+                        <td style={{ padding: "10px 12px" }}>
+                          <span style={{ display: "inline-block", padding: "2px 8px", borderRadius: 999, fontSize: 10, fontWeight: 600, background: statusColor + "15", color: statusColor }}>{status}</span>
+                        </td>
+                        <td style={{ padding: "10px 12px" }}>
+                          <button onClick={() => setWageModal(item)} style={{ border: "1px solid #e5e7eb", borderRadius: 5, padding: "3px 9px", fontSize: 11, color: "#2563eb", background: "white", cursor: "pointer" }}>일정 업데이트</button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
       )}
     </div>
   );

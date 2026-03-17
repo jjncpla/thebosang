@@ -11,9 +11,15 @@ export async function GET(req: NextRequest) {
   const progressStatus = searchParams.get("progressStatus");
   const search = searchParams.get("search");
 
+  const type = searchParams.get("type");
+
   const where: Record<string, unknown> = {};
+  if (type === "litigation") {
+    where.OR = [{ litigationHandover: true }, { progressStatus: "송무인계" }];
+  } else {
+    if (progressStatus) where.progressStatus = progressStatus;
+  }
   if (tfName) where.tfName = tfName;
-  if (progressStatus) where.progressStatus = progressStatus;
   if (search) where.patientName = { contains: search, mode: "insensitive" };
 
   const items = await prisma.objectionCase.findMany({
@@ -51,6 +57,8 @@ export async function POST(req: NextRequest) {
       litigationHandover: !!body.litigationHandover,
       litigationMemo: body.litigationMemo || null,
       needsReDecision: !!body.needsReDecision,
+      litigationStatus: body.litigationStatus || null,
+      wageCorrectStatus: body.wageCorrectStatus || null,
       reviewId: body.reviewId || null,
       caseId: body.caseId || null,
     },
