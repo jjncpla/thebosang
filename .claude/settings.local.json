@@ -28,5 +28,9 @@
       "Bash(powershell -Command \"Get-Process -Name node | Stop-Process -Force\" 2>&1)",
       "Bash(powershell -Command \"Get-Process -Name node -ErrorAction SilentlyContinue | Stop-Process -Force\" 2>&1 && rm -rf .next)"
     ]
-  }
+  },
+  "enabledMcpjsonServers": [
+    "postgres"
+  ],
+  "enableAllProjectMcpServers": true
 }
