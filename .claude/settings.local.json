@@ -23,21 +23,22 @@
       "Bash(taskkill /F /IM node.exe 2>&1; echo \"done\")",
       "Bash(taskkill //F //IM node.exe 2>&1; echo \"done\")",
       "Bash(npm install:*)",
-      "Bash(cd:*)",
-      "Bash(taskkill:*)",
-      "Bash(powershell -Command \"Get-Process -Name node | Stop-Process -Force\" 2>&1)",
-      "Bash(powershell -Command \"Get-Process -Name node -ErrorAction SilentlyContinue | Stop-Process -Force\" 2>&1 && rm -rf .next)",
-      "Bash(mkdir -p \"C:/dev/my-app/app/api/objection/review/[id]\")",
-      "Bash(mkdir -p \"C:/dev/my-app/app/api/objection/wage-review/[id]\")",
-      "Bash(mkdir -p \"C:/dev/my-app/app/api/objection/cases/[id]\")",
-      "Bash(for f:*)",
-      "Bash(do echo:*)",
-      "Read(//c/dev/my-app/**)",
-      "Bash(done)"
+      "Bash(find \"C:\\\\Users\\\\LG\\\\thebosang\" -path \"*/components/cases*\" -o -path \"*/cases/*/components*\" 2>/dev/null | head -20)",
+      "Bash(ls -la \"C:\\\\Users\\\\LG\\\\thebosang/components/\" | grep -E \"\\\\.\\(tsx|ts\\)$\")",
+      "Bash(ls /c/Users/LG/thebosang/app/api/cases/[caseId]/)",
+      "Bash(git diff:*)",
+      "Bash(curl -s http://localhost:3000/api/cases/cmmpkmbhm00k7n2cmnyr0fom5/pneumoconiosis 2>&1 | python -m json.tool 2>&1 | head -30)",
+      "Bash(curl -s \"http://localhost:3000/api/cases?caseType=COPD\" 2>&1 | python -m json.tool 2>&1 | grep -E '\"id\"|\"caseType\"' | head -10)",
+      "Bash(curl -s \"http://localhost:3000/api/cases/cmmph02cp00ma112znhomt8c9/copd\" 2>&1 && echo \"\" && curl -s \"http://localhost:3000/api/cases/cmmph02cp00ma112znhomt8c9\" 2>&1 | python -m json.tool 2>&1 | grep -E '\"caseType\"|\"copd\"|\"status\"' | head -10)",
+      "Bash(curl -s -X PUT \"http://localhost:3000/api/cases/cmmph02cp00ma112znhomt8c9/copd\" \\\\\n  -H \"Content-Type: application/json\" \\\\\n  -d '{\"firstClinic\":\"테스트병원\",\"firstExamDate\":\"2026-01-15\",\"fev1Rate\":65.5,\"fev1Volume\":2.1}' 2>&1 | python -m json.tool 2>&1 | head -20)",
+      "Bash(netstat -ano | findstr \":3000\" 2>&1)",
+      "Bash(taskkill /PID 31376 /F 2>&1 && sleep 3 && cd C:/Users/LG/thebosang && npm run build 2>&1 | tail -50)",
+      "Bash(cmd /c \"taskkill /PID 31376 /F\" 2>&1)",
+      "Bash(cmd /c \"taskkill /PID 31376 /F 2>&1\")",
+      "Bash(cmd /c \"taskkill /PID 31376 /F\" && echo \"killed\")",
+      "Bash(sleep 5 && cd C:/Users/LG/thebosang && npx next build --skip-env-check 2>&1 | grep -E \"error|Error|warning|Warning|Failed|✓|✗|λ\" | head -40)",
+      "Bash(netstat -ano 2>/dev/null | grep \":3000\" | head -3)",
+      "Bash(cmd //c \"taskkill /PID 31376 /F 2>&1\")"
     ]
-  },
-  "enableAllProjectMcpServers": true,
-  "enabledMcpjsonServers": [
-    "postgres"
-  ]
+  }
 }

@@ -2,7 +2,28 @@
 
 import { useCallback, useEffect, useState } from "react";
 
-const TF_LIST = ["더보상울산TF", "울산동부TF", "울산남부TF", "울산북부TF"];
+const BRANCH_TF_MAP: Record<string, string[]> = {
+  "울산지사": ["더보상울산TF", "이산울산북부TF"],
+  "울산동부지사": ["더보상울산동부TF", "이산울산동부TF"],
+  "울산남부지사": ["더보상울산남부TF", "이산울산남부TF"],
+  "부산경남지사": ["더보상부산경남TF"],
+  "서울북부지사": ["더보상서울북부TF"],
+  "경기안산지사": ["더보상경기안산TF"],
+  "전북익산지사": ["더보상전북익산TF"],
+  "경북구미지사": ["더보상경북구미TF"],
+};
+const BRANCH_LIST = Object.keys(BRANCH_TF_MAP);
+
+type MsgCategory = "상담문의" | "문서수신" | "업무완료" | "일정안내" | "기타";
+
+function categorizeMsg(content: string | null): MsgCategory {
+  if (!content) return "기타";
+  if (content.includes("상담문의") || content.includes("문의자")) return "상담문의";
+  if (content.includes("전달드립니다") && (content.includes("요구서") || content.includes("통지서") || content.includes("결정서") || content.includes("팩스") || content.includes("서류"))) return "문서수신";
+  if (content.includes("완료") || content.includes("송부하였습니다") || content.includes("제출하였습니다")) return "업무완료";
+  if (content.includes("예정") || content.includes("일정")) return "일정안내";
+  return "기타";
+}
 
 type TelegramMsg = {
   id: string;
@@ -161,7 +182,8 @@ function LinkCasePopup({
 
 export default function TFMonitorPage() {
   const today = new Date();
-  const [selectedTf, setSelectedTf] = useState(TF_LIST[0]);
+  const [selectedBranch, setSelectedBranch] = useState(BRANCH_LIST[0]);
+  const [selectedTf, setSelectedTf] = useState(BRANCH_TF_MAP[BRANCH_LIST[0]][0]);
   const [year, setYear] = useState(today.getFullYear());
   const [month, setMonth] = useState(today.getMonth());
   const [selectedDay, setSelectedDay] = useState<number | null>(today.getDate());
@@ -169,6 +191,7 @@ export default function TFMonitorPage() {
   const [loading, setLoading] = useState(false);
   const [unprocessedCount, setUnprocessedCount] = useState(0);
   const [linkPopup, setLinkPopup] = useState<string | null>(null);
+  const [statsFilter, setStatsFilter] = useState<MsgCategory | null>(null);
 
   // 달력에서 메시지가 있는 날짜 집합
   const daysWithMessages = new Set(
@@ -204,9 +227,22 @@ export default function TFMonitorPage() {
     fetchUnprocessed();
   }, [fetchMessages, fetchUnprocessed]);
 
-  const filteredMessages = selectedDay
+  const dayMessages = selectedDay
     ? messages.filter((m) => isSameDay(m.sentAt, year, month, selectedDay))
     : messages;
+
+  const MSG_CATEGORIES: MsgCategory[] = ["상담문의", "문서수신", "업무완료", "일정안내", "기타"];
+
+  const statsCount = selectedDay
+    ? MSG_CATEGORIES.reduce((acc, cat) => {
+        acc[cat] = dayMessages.filter((m) => categorizeMsg(m.content) === cat).length;
+        return acc;
+      }, {} as Record<MsgCategory, number>)
+    : null;
+
+  const filteredMessages = statsFilter
+    ? dayMessages.filter((m) => categorizeMsg(m.content) === statsFilter)
+    : dayMessages;
 
   const handleLinked = (msgId: string) => {
     setMessages((prev) => prev.map((m) => m.id === msgId ? { ...m, isProcessed: true } : m));
@@ -239,23 +275,54 @@ export default function TFMonitorPage() {
         </div>
       </div>
 
+      {/* 지사 선택 */}
+      <div style={{ marginBottom: 8 }}>
+        <div style={{ fontSize: 11, color: "#9ca3af", fontWeight: 700, marginBottom: 4 }}>지사</div>
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          {BRANCH_LIST.map((branch) => (
+            <button
+              key={branch}
+              onClick={() => {
+                setSelectedBranch(branch);
+                const firstTf = BRANCH_TF_MAP[branch][0];
+                setSelectedTf(firstTf);
+                setSelectedDay(null);
+                setStatsFilter(null);
+              }}
+              style={{
+                padding: "5px 14px", fontSize: 12, borderRadius: 6, cursor: "pointer",
+                border: selectedBranch === branch ? "1px solid #2563eb" : "1px solid #e5e7eb",
+                background: selectedBranch === branch ? "#2563eb" : "white",
+                color: selectedBranch === branch ? "white" : "#374151",
+                fontWeight: selectedBranch === branch ? 700 : 400,
+              }}
+            >
+              {branch}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {/* TF 선택 */}
-      <div style={{ display: "flex", gap: 6, marginBottom: 16 }}>
-        {TF_LIST.map((tf) => (
-          <button
-            key={tf}
-            onClick={() => { setSelectedTf(tf); setSelectedDay(null); }}
-            style={{
-              padding: "6px 16px", fontSize: 13, borderRadius: 6, cursor: "pointer",
-              border: selectedTf === tf ? "1px solid #2563eb" : "1px solid #e5e7eb",
-              background: selectedTf === tf ? "#eff6ff" : "white",
-              color: selectedTf === tf ? "#2563eb" : "#374151",
-              fontWeight: selectedTf === tf ? 700 : 400,
-            }}
-          >
-            {tf}
-          </button>
-        ))}
+      <div style={{ marginBottom: 16 }}>
+        <div style={{ fontSize: 11, color: "#9ca3af", fontWeight: 700, marginBottom: 4 }}>TF</div>
+        <div style={{ display: "flex", gap: 6 }}>
+          {(BRANCH_TF_MAP[selectedBranch] ?? []).map((tf) => (
+            <button
+              key={tf}
+              onClick={() => { setSelectedTf(tf); setSelectedDay(null); setStatsFilter(null); }}
+              style={{
+                padding: "6px 16px", fontSize: 13, borderRadius: 6, cursor: "pointer",
+                border: selectedTf === tf ? "1px solid #2563eb" : "1px solid #e5e7eb",
+                background: selectedTf === tf ? "#eff6ff" : "white",
+                color: selectedTf === tf ? "#2563eb" : "#374151",
+                fontWeight: selectedTf === tf ? 700 : 400,
+              }}
+            >
+              {tf}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Layout */}
@@ -321,12 +388,51 @@ export default function TFMonitorPage() {
         </div>
 
         {/* Right: Message Feed */}
-        <div style={{ flex: 1, background: "white", borderRadius: 10, border: "1px solid #e5e7eb", overflow: "hidden", boxShadow: "0 1px 3px rgba(0,0,0,0.05)" }}>
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 10 }}>
+          {/* 통계 카드 패널 */}
+          {selectedDay && statsCount && (
+            <div style={{ display: "flex", gap: 8 }}>
+              {MSG_CATEGORIES.map((cat) => {
+                const isActive = statsFilter === cat;
+                const catColors: Record<MsgCategory, { bg: string; color: string; border: string }> = {
+                  "상담문의": { bg: "#eff6ff", color: "#1d4ed8", border: "#bfdbfe" },
+                  "문서수신": { bg: "#f0fdf4", color: "#15803d", border: "#bbf7d0" },
+                  "업무완료": { bg: "#fdf4ff", color: "#7e22ce", border: "#e9d5ff" },
+                  "일정안내": { bg: "#fff7ed", color: "#c2410c", border: "#fed7aa" },
+                  "기타": { bg: "#f8fafc", color: "#475569", border: "#e2e8f0" },
+                };
+                const c = catColors[cat];
+                return (
+                  <button
+                    key={cat}
+                    onClick={() => setStatsFilter(isActive ? null : cat)}
+                    style={{
+                      flex: 1, padding: "10px 8px", borderRadius: 8, cursor: "pointer",
+                      border: `1px solid ${isActive ? c.color : c.border}`,
+                      background: isActive ? c.color : c.bg,
+                      color: isActive ? "white" : c.color,
+                      textAlign: "center",
+                      boxShadow: isActive ? "0 2px 6px rgba(0,0,0,0.15)" : "none",
+                    }}
+                  >
+                    <div style={{ fontSize: 18, fontWeight: 800 }}>{statsCount[cat]}</div>
+                    <div style={{ fontSize: 11, fontWeight: 600, marginTop: 2 }}>{cat}</div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+        <div style={{ background: "white", borderRadius: 10, border: "1px solid #e5e7eb", overflow: "hidden", boxShadow: "0 1px 3px rgba(0,0,0,0.05)" }}>
           <div style={{ padding: "14px 16px", borderBottom: "1px solid #f1f5f9", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
             <span style={{ fontSize: 13, fontWeight: 700, color: "#374151" }}>
               {selectedDay ? `${year}년 ${month + 1}월 ${selectedDay}일 메시지` : `${monthLabel} 전체 메시지`}
               <span style={{ marginLeft: 8, fontSize: 11, color: "#9ca3af", fontWeight: 400 }}>{filteredMessages.length}건</span>
+              {statsFilter && <span style={{ marginLeft: 6, fontSize: 11, color: "#2563eb", fontWeight: 600 }}>— {statsFilter} 필터 중</span>}
             </span>
+            {statsFilter && (
+              <button onClick={() => setStatsFilter(null)} style={{ fontSize: 11, color: "#6b7280", background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}>전체 보기</button>
+            )}
           </div>
 
           <div style={{ maxHeight: "calc(100vh - 280px)", overflowY: "auto", padding: "12px 16px" }}>
@@ -371,6 +477,7 @@ export default function TFMonitorPage() {
               </div>
             ))}
           </div>
+        </div>
         </div>
       </div>
     </div>

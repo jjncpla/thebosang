@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 
@@ -84,10 +84,14 @@ function StatusBadge({ status }: { status: string }) {
 export default function InquiryPage() {
   const { data: session } = useSession();
   const router = useRouter();
+  const [activeTab, setActiveTab] = useState<"search" | "myCase">("search");
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<PatientResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
+  const [myCaseResults, setMyCaseResults] = useState<PatientResult[]>([]);
+  const [myCaseLoading, setMyCaseLoading] = useState(false);
+  const [myCaseLoaded, setMyCaseLoaded] = useState(false);
 
   const role = (session?.user as { role?: string })?.role ?? "";
   const canViewDetail = role === "ADMIN" || role === "STAFF" || role === "조직관리자";
@@ -109,59 +113,115 @@ export default function InquiryPage() {
     }
   };
 
+  const fetchMyCase = async () => {
+    setMyCaseLoading(true);
+    try {
+      const res = await fetch("/api/inquiry?type=myCase");
+      if (!res.ok) throw new Error("조회 실패");
+      const data = await res.json();
+      setMyCaseResults(data);
+      setMyCaseLoaded(true);
+    } catch {
+      alert("조회 중 오류가 발생했습니다.");
+    } finally {
+      setMyCaseLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === "myCase" && !myCaseLoaded) {
+      fetchMyCase();
+    }
+  }, [activeTab]); // eslint-disable-line react-hooks/exhaustive-deps
+
   return (
     <div style={{ padding: 24, minHeight: "100%", background: "#f1f5f9", fontFamily: "'Malgun Gothic', 'Apple SD Gothic Neo', 'Segoe UI', sans-serif" }}>
       {/* Header */}
-      <div style={{ marginBottom: 24 }}>
+      <div style={{ marginBottom: 16 }}>
         <p style={{ fontSize: 11, color: "#9ca3af", fontWeight: 700, letterSpacing: 2, margin: "0 0 4px 0" }}>CASE INQUIRY</p>
         <h1 style={{ fontSize: 20, fontWeight: 800, color: "#111827", margin: 0 }}>사건 조회</h1>
       </div>
 
-      {/* Search Box */}
-      <div style={{
-        background: "white", borderRadius: 12, border: "1px solid #e5e7eb",
-        padding: "28px 24px", marginBottom: 24,
-        boxShadow: "0 1px 3px rgba(0,0,0,0.05)",
-      }}>
-        <div style={{ fontSize: 13, color: "#6b7280", marginBottom: 12, fontWeight: 500 }}>
-          성명, 생년월일(6자리), 또는 전화번호로 검색
-        </div>
-        <div style={{ display: "flex", gap: 10 }}>
-          <input
-            type="text"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter") handleSearch(); }}
-            placeholder="예) 홍길동 / 801215 / 010-1234-5678"
-            style={{
-              flex: 1, border: "2px solid #e5e7eb", borderRadius: 8,
-              padding: "10px 16px", fontSize: 15, color: "#111827",
-              outline: "none", background: "#f9fafb",
-            }}
-          />
+      {/* Tabs */}
+      <div style={{ display: "flex", gap: 4, marginBottom: 16 }}>
+        {(["search", "myCase"] as const).map((tab) => (
           <button
-            onClick={handleSearch}
-            disabled={loading}
+            key={tab}
+            onClick={() => setActiveTab(tab)}
             style={{
-              background: "#2563eb", color: "white", border: "none",
-              borderRadius: 8, padding: "10px 24px", fontSize: 14,
-              fontWeight: 700, cursor: loading ? "default" : "pointer",
-              opacity: loading ? 0.6 : 1,
+              padding: "8px 20px", fontSize: 13, fontWeight: activeTab === tab ? 700 : 400,
+              borderRadius: 6, cursor: "pointer",
+              border: activeTab === tab ? "1px solid #2563eb" : "1px solid #e5e7eb",
+              background: activeTab === tab ? "#2563eb" : "white",
+              color: activeTab === tab ? "white" : "#374151",
             }}
           >
-            {loading ? "조회 중..." : "검색"}
+            {tab === "search" ? "재해자 조회" : (
+              <span>내 담당 사건{myCaseLoaded && <span style={{ marginLeft: 6, background: "rgba(255,255,255,0.25)", borderRadius: 99, padding: "1px 7px", fontSize: 11 }}>{myCaseResults.length}건</span>}</span>
+            )}
           </button>
-        </div>
+        ))}
       </div>
 
-      {/* Results */}
-      {searched && !loading && results.length === 0 && (
+      {/* Search Box - 재해자 조회 탭 */}
+      {activeTab === "search" && (
+        <div style={{
+          background: "white", borderRadius: 12, border: "1px solid #e5e7eb",
+          padding: "28px 24px", marginBottom: 24,
+          boxShadow: "0 1px 3px rgba(0,0,0,0.05)",
+        }}>
+          <div style={{ fontSize: 13, color: "#6b7280", marginBottom: 12, fontWeight: 500 }}>
+            성명, 생년월일(6자리), 또는 전화번호로 검색
+          </div>
+          <div style={{ display: "flex", gap: 10 }}>
+            <input
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") handleSearch(); }}
+              placeholder="예) 홍길동 / 801215 / 010-1234-5678"
+              style={{
+                flex: 1, border: "2px solid #e5e7eb", borderRadius: 8,
+                padding: "10px 16px", fontSize: 15, color: "#111827",
+                outline: "none", background: "#f9fafb",
+              }}
+            />
+            <button
+              onClick={handleSearch}
+              disabled={loading}
+              style={{
+                background: "#2563eb", color: "white", border: "none",
+                borderRadius: 8, padding: "10px 24px", fontSize: 14,
+                fontWeight: 700, cursor: loading ? "default" : "pointer",
+                opacity: loading ? 0.6 : 1,
+              }}
+            >
+              {loading ? "조회 중..." : "검색"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 내 담당 사건 탭 */}
+      {activeTab === "myCase" && myCaseLoading && (
+        <div style={{ background: "white", borderRadius: 10, border: "1px solid #e5e7eb", padding: "48px 16px", textAlign: "center", color: "#9ca3af", fontSize: 14 }}>
+          조회 중...
+        </div>
+      )}
+      {activeTab === "myCase" && !myCaseLoading && myCaseLoaded && myCaseResults.length === 0 && (
+        <div style={{ background: "white", borderRadius: 10, border: "1px solid #e5e7eb", padding: "48px 16px", textAlign: "center", color: "#9ca3af", fontSize: 14 }}>
+          담당 사건이 없습니다.
+        </div>
+      )}
+
+      {/* Results - 재해자 조회 */}
+      {activeTab === "search" && searched && !loading && results.length === 0 && (
         <div style={{ background: "white", borderRadius: 10, border: "1px solid #e5e7eb", padding: "48px 16px", textAlign: "center", color: "#9ca3af", fontSize: 14 }}>
           검색 결과가 없습니다.
         </div>
       )}
 
-      {results.map((patient) => (
+      {(activeTab === "search" ? results : myCaseResults).map((patient) => (
         <div key={patient.id} style={{
           background: "white", borderRadius: 10, border: "1px solid #e5e7eb",
           marginBottom: 16, overflow: "hidden", boxShadow: "0 1px 3px rgba(0,0,0,0.05)",

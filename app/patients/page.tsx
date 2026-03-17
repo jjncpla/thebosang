@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import { CASE_TYPE_LABELS } from "@/lib/constants/case";
 
 type PatientListItem = {
@@ -40,6 +41,15 @@ const CASE_TYPE_COLORS: Record<string, { bg: string; color: string; border: stri
 
 export default function PatientsPage() {
   const router = useRouter();
+  const { data: session, status } = useSession();
+  const role = (session?.user as { role?: string })?.role ?? "";
+
+  useEffect(() => {
+    if (status === "authenticated" && role !== "ADMIN") {
+      router.replace("/cases");
+    }
+  }, [status, role, router]);
+
   const [patients, setPatients] = useState<PatientListItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);

@@ -88,6 +88,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     return "TBSS";
   };
 
+  const role = (session?.user as { role?: string })?.role ?? "";
+
   const toggleMenu = (id: string) => {
     setOpenMenus((prev) => {
       const next = new Set(prev);
@@ -270,7 +272,10 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                   {/* Submenu */}
                   {!collapsed && item.children && isOpen && (
                     <div>
-                      {item.children.map((child) => {
+                      {item.children.filter((child) => {
+                        if (child.id === "patients-list") return role === "ADMIN";
+                        return true;
+                      }).map((child) => {
                         const childActive =
                           !!pathname && (pathname === child.path || pathname.startsWith(child.path + "/"));
                         return (

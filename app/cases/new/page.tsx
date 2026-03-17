@@ -57,19 +57,49 @@ export default function NewCasePage() {
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [fromConsultationId, setFromConsultationId] = useState<string | null>(null);
+  const [autoFilledFields, setAutoFilledFields] = useState<Set<string>>(new Set());
 
-  // patientId 쿼리 파라미터가 있으면 Step 2부터 시작
+  // 쿼리 파라미터 처리
   useEffect(() => {
-    const pid = new URLSearchParams(window.location.search).get("patientId");
-    if (!pid) return;
-    fetch(`/api/patients/${pid}`)
-      .then((r) => r.json())
-      .then((p: Patient) => {
-        setSelectedPatient(p);
-        setStep(2);
-      })
-      .catch(() => {});
-  }, []);
+    const sp = new URLSearchParams(window.location.search);
+    const pid = sp.get("patientId");
+    const from = sp.get("from");
+    const consultId = sp.get("id");
+
+    if (pid) {
+      fetch(`/api/patients/${pid}`)
+        .then((r) => r.json())
+        .then((p: Patient) => { setSelectedPatient(p); setStep(2); })
+        .catch(() => {});
+    } else if (from === "consultation" && consultId) {
+      setFromConsultationId(consultId);
+      fetch(`/api/consultation/${consultId}`)
+        .then((r) => r.json())
+        .then((c: { name: string; phone: string; ssn?: string; address?: string; caseTypes?: string[] }) => {
+          const filled = new Set<string>();
+          const updates: Partial<typeof newPatient> = {};
+          if (c.name) { updates.name = c.name; filled.add("name"); }
+          if (c.phone) { updates.phone = c.phone; filled.add("phone"); }
+          if (c.ssn) { updates.ssn = c.ssn; filled.add("ssn"); }
+          if (c.address) { updates.address = c.address; filled.add("address"); }
+          setNewPatient((prev) => ({ ...prev, ...updates }));
+          setAutoFilledFields(filled);
+          if (c.caseTypes && c.caseTypes.length > 0) {
+            const typeMap: Record<string, string> = {
+              "소음성난청": "HEARING_LOSS", "COPD": "COPD", "진폐": "PNEUMOCONIOSIS",
+              "근골격계": "MUSCULOSKELETAL", "업무상사고": "OCCUPATIONAL_ACCIDENT",
+              "직업성암": "OCCUPATIONAL_CANCER", "뇌심혈관계": "CARDIOVASCULAR",
+              "유족": "BEREAVED", "기타": "OTHER",
+            };
+            const mapped = typeMap[c.caseTypes[0]];
+            if (mapped) setCaseForm((prev) => ({ ...prev, caseType: mapped }));
+          }
+          setShowNewPatientForm(true);
+        })
+        .catch(() => {});
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const searchPatients = async () => {
     if (!searchQuery.trim()) return;
@@ -125,7 +155,14 @@ export default function NewCasePage() {
         const d = await res.json();
         throw new Error(d.error ?? "등록 실패");
       }
-      await res.json();
+      const createdCase = await res.json();
+      if (fromConsultationId && createdCase?.id) {
+        await fetch(`/api/consultation/${fromConsultationId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ linkedCaseId: createdCase.id }),
+        }).catch(() => {});
+      }
       router.push(`/patients/${selectedPatient.id}?tab=${caseForm.caseType}`);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "오류");
@@ -216,17 +253,22 @@ export default function NewCasePage() {
 
           {showNewPatientForm && (
             <div style={{ marginTop: 16, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              {fromConsultationId && autoFilledFields.size > 0 && (
+                <div style={{ gridColumn: "1 / -1", background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: 6, padding: "6px 12px", fontSize: 12, color: "#1d4ed8" }}>
+                  💡 상담 내역에서 자동입력된 항목이 있습니다. 확인 후 등록하세요.
+                </div>
+              )}
               <LabelInput label="성명" required>
-                <input style={inputStyle} value={newPatient.name} onChange={(e) => setNewPatient({ ...newPatient, name: e.target.value })} placeholder="홍길동" />
+                <input style={{ ...inputStyle, background: autoFilledFields.has("name") ? "#eff6ff" : "white" }} value={newPatient.name} onChange={(e) => setNewPatient({ ...newPatient, name: e.target.value })} placeholder="홍길동" title={autoFilledFields.has("name") ? "상담 내역에서 자동입력됨" : undefined} />
               </LabelInput>
               <LabelInput label="주민번호" required>
-                <input style={inputStyle} value={newPatient.ssn} onChange={(e) => setNewPatient({ ...newPatient, ssn: e.target.value })} placeholder="000000-0000000" />
+                <input style={{ ...inputStyle, background: autoFilledFields.has("ssn") ? "#eff6ff" : "white" }} value={newPatient.ssn} onChange={(e) => setNewPatient({ ...newPatient, ssn: e.target.value })} placeholder="000000-0000000" title={autoFilledFields.has("ssn") ? "상담 내역에서 자동입력됨" : undefined} />
               </LabelInput>
               <LabelInput label="연락처">
-                <input style={inputStyle} value={newPatient.phone} onChange={(e) => setNewPatient({ ...newPatient, phone: e.target.value })} placeholder="010-0000-0000" />
+                <input style={{ ...inputStyle, background: autoFilledFields.has("phone") ? "#eff6ff" : "white" }} value={newPatient.phone} onChange={(e) => setNewPatient({ ...newPatient, phone: e.target.value })} placeholder="010-0000-0000" title={autoFilledFields.has("phone") ? "상담 내역에서 자동입력됨" : undefined} />
               </LabelInput>
               <LabelInput label="주소">
-                <input style={inputStyle} value={newPatient.address} onChange={(e) => setNewPatient({ ...newPatient, address: e.target.value })} placeholder="주소 입력" />
+                <input style={{ ...inputStyle, background: autoFilledFields.has("address") ? "#eff6ff" : "white" }} value={newPatient.address} onChange={(e) => setNewPatient({ ...newPatient, address: e.target.value })} placeholder="주소 입력" title={autoFilledFields.has("address") ? "상담 내역에서 자동입력됨" : undefined} />
               </LabelInput>
               <div style={{ gridColumn: "1 / -1" }}>
                 <button onClick={createNewPatientAndProceed} style={{ background: "#2563eb", color: "white", border: "none", borderRadius: 6, padding: "8px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>

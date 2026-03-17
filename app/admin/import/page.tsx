@@ -421,7 +421,7 @@ export default function ImportPage() {
       )}
 
       {/* ─── 업무 데이터 임포트 (상담/이의제기/평임) ─── */}
-      <div style={{ marginTop: 40 }}>
+      <div style={{ marginTop: 40 }} id="tf-import-main">
         <div style={{ fontSize: 11, fontWeight: 700, color: "#9ca3af", letterSpacing: 2, marginBottom: 4 }}>ADMIN</div>
         <h2 style={{ fontSize: 18, fontWeight: 800, color: "#111827", margin: "0 0 20px 0" }}>업무 데이터 임포트</h2>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
@@ -447,13 +447,16 @@ export default function ImportPage() {
             accept=".xlsx,.xlsm,.xls"
             apiPath="/api/admin/import/objection-case"
           />
-          <ImportCard
-            title="TF 데이터 임포트"
-            description="준비 중인 기능입니다."
-            accept=".xlsx,.xls"
-            apiPath=""
-            disabled
-          />
+          <div style={{ background: "white", border: "1px solid #e5e7eb", borderRadius: 10, padding: 20, boxShadow: "0 1px 3px rgba(0,0,0,0.05)", display: "flex", flexDirection: "column", gap: 10 }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: "#111827" }}>TF 데이터 임포트</div>
+            <div style={{ fontSize: 12, color: "#6b7280", lineHeight: 1.6 }}>상병별 TF를 선택하여 재해자·사건 데이터를 일괄 임포트합니다. 상단의 TF 임포트 섹션을 이용하세요.</div>
+            <button
+              onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+              style={{ background: "#2563eb", color: "white", border: "none", borderRadius: 6, padding: "8px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer", textAlign: "left" }}
+            >
+              ↑ 페이지 상단 TF 임포트로 이동
+            </button>
+          </div>
         </div>
       </div>
 
@@ -485,6 +488,7 @@ function ImportCard({
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [cardFile, setCardFile] = useState<File | null>(null);
+  const [cardDragging, setCardDragging] = useState(false);
   const [cardLoading, setCardLoading] = useState(false);
   const [cardResult, setCardResult] = useState<ImportCardResult | null>(null);
   const [cardResult2, setCardResult2] = useState<ImportCardResult | null>(null);
@@ -528,10 +532,25 @@ function ImportCard({
       <div style={{ fontSize: 12, color: "#6b7280", lineHeight: 1.6 }}>{description}</div>
       {!disabled && (
         <>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <div>
             <input ref={inputRef} type="file" accept={accept} style={{ display: "none" }} onChange={(e) => { const f = e.target.files?.[0]; if (f) { setCardFile(f); setCardResult(null); setCardResult2(null); setCardError(null); } }} />
-            <button onClick={() => inputRef.current?.click()} style={{ background: "#f1f5f9", border: "1px solid #e5e7eb", borderRadius: 6, padding: "6px 12px", fontSize: 12, cursor: "pointer", color: "#374151", flexShrink: 0 }}>파일 선택</button>
-            {cardFile && <span style={{ fontSize: 12, color: "#374151", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{cardFile.name}</span>}
+            <div
+              onClick={() => inputRef.current?.click()}
+              onDragOver={(e) => { e.preventDefault(); setCardDragging(true); }}
+              onDragLeave={() => setCardDragging(false)}
+              onDrop={(e) => { e.preventDefault(); setCardDragging(false); const f = e.dataTransfer.files[0]; if (f) { setCardFile(f); setCardResult(null); setCardResult2(null); setCardError(null); } }}
+              style={{ border: `2px dashed ${cardDragging ? "#2563eb" : "#d1d5db"}`, borderRadius: 8, padding: "20px 12px", textAlign: "center", cursor: "pointer", background: cardDragging ? "#eff6ff" : "#f9fafb", transition: "all 0.15s" }}
+            >
+              <div style={{ fontSize: 20, marginBottom: 4 }}>📁</div>
+              {cardFile ? (
+                <div style={{ fontSize: 12, fontWeight: 600, color: "#111827" }}>{cardFile.name}</div>
+              ) : (
+                <div>
+                  <div style={{ fontSize: 12, color: "#374151", marginBottom: 2 }}>파일을 드래그하거나 클릭하여 선택</div>
+                  <div style={{ fontSize: 11, color: "#9ca3af" }}>{accept}</div>
+                </div>
+              )}
+            </div>
           </div>
           {notice && <div style={{ fontSize: 11, color: "#6b7280", background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 6, padding: "6px 10px" }}>{notice}</div>}
           <button onClick={run} disabled={!cardFile || cardLoading} style={{ background: !cardFile || cardLoading ? "#9ca3af" : "#2563eb", color: "white", border: "none", borderRadius: 6, padding: "8px 16px", fontSize: 13, fontWeight: 600, cursor: !cardFile || cardLoading ? "not-allowed" : "pointer", display: "flex", alignItems: "center", gap: 6 }}>
