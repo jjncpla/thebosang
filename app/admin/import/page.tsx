@@ -420,7 +420,140 @@ export default function ImportPage() {
         />
       )}
 
+      {/* ─── 업무 데이터 임포트 (상담/이의제기/평임) ─── */}
+      <div style={{ marginTop: 40 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: "#9ca3af", letterSpacing: 2, marginBottom: 4 }}>ADMIN</div>
+        <h2 style={{ fontSize: 18, fontWeight: 800, color: "#111827", margin: "0 0 20px 0" }}>업무 데이터 임포트</h2>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+          <ImportCard
+            title="상담 내역 임포트"
+            description="엑셀 파일의 '총 접수현황' 시트를 읽어 상담 관리 DB에 등록합니다."
+            accept=".xlsx,.xls"
+            apiPath="/api/admin/import/consultation"
+            notice="동일 성명+연락처가 있으면 업데이트, 없으면 신규 등록합니다."
+          />
+          <ImportCard
+            title="최초총현황 + 평임검토 임포트"
+            description="승불자 관리파일의 '최초총현황' 시트와 '평임 데이터 검토' 시트를 읽어 등록합니다."
+            accept=".xlsx,.xlsm,.xls"
+            apiPath="/api/admin/import/objection-review"
+            secondApiPath="/api/admin/import/wage-review"
+            secondLabel="평임검토"
+            notice="최초총현황과 평임검토 데이터를 동시에 처리합니다."
+          />
+          <ImportCard
+            title="이의제기 기일 임포트"
+            description="승불자 관리파일의 '이의제기' 시트를 읽어 기일 관리 DB에 등록합니다."
+            accept=".xlsx,.xlsm,.xls"
+            apiPath="/api/admin/import/objection-case"
+          />
+          <ImportCard
+            title="TF 데이터 임포트"
+            description="준비 중인 기능입니다."
+            accept=".xlsx,.xls"
+            apiPath=""
+            disabled
+          />
+        </div>
+      </div>
+
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+    </div>
+  );
+}
+
+type ImportCardResult = { success?: number; skipped?: number; errors?: string[] };
+
+function ImportCard({
+  title,
+  description,
+  accept,
+  apiPath,
+  secondApiPath,
+  secondLabel,
+  notice,
+  disabled,
+}: {
+  title: string;
+  description: string;
+  accept: string;
+  apiPath: string;
+  secondApiPath?: string;
+  secondLabel?: string;
+  notice?: string;
+  disabled?: boolean;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [cardFile, setCardFile] = useState<File | null>(null);
+  const [cardLoading, setCardLoading] = useState(false);
+  const [cardResult, setCardResult] = useState<ImportCardResult | null>(null);
+  const [cardResult2, setCardResult2] = useState<ImportCardResult | null>(null);
+  const [cardError, setCardError] = useState<string | null>(null);
+
+  const run = async () => {
+    if (!cardFile || !apiPath) return;
+    setCardLoading(true);
+    setCardResult(null);
+    setCardResult2(null);
+    setCardError(null);
+    try {
+      const fd1 = new FormData();
+      fd1.append("file", cardFile);
+      const r1 = await fetch(apiPath, { method: "POST", body: fd1 });
+      const d1 = await r1.json();
+      if (!r1.ok) { setCardError(d1.error ?? "오류 발생"); return; }
+      setCardResult(d1);
+
+      if (secondApiPath) {
+        const fd2 = new FormData();
+        fd2.append("file", cardFile);
+        const r2 = await fetch(secondApiPath, { method: "POST", body: fd2 });
+        const d2 = await r2.json();
+        if (!r2.ok) { setCardError(d2.error ?? "두 번째 시트 오류"); return; }
+        setCardResult2(d2);
+      }
+    } catch {
+      setCardError("네트워크 오류가 발생했습니다");
+    } finally {
+      setCardLoading(false);
+    }
+  };
+
+  const cardBg = disabled ? "#f9fafb" : "white";
+  const cardBorder = disabled ? "1px solid #e5e7eb" : "1px solid #e5e7eb";
+
+  return (
+    <div style={{ background: cardBg, border: cardBorder, borderRadius: 10, padding: 20, boxShadow: "0 1px 3px rgba(0,0,0,0.05)", display: "flex", flexDirection: "column", gap: 10, opacity: disabled ? 0.7 : 1 }}>
+      <div style={{ fontSize: 14, fontWeight: 700, color: disabled ? "#9ca3af" : "#111827" }}>{title}</div>
+      <div style={{ fontSize: 12, color: "#6b7280", lineHeight: 1.6 }}>{description}</div>
+      {!disabled && (
+        <>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <input ref={inputRef} type="file" accept={accept} style={{ display: "none" }} onChange={(e) => { const f = e.target.files?.[0]; if (f) { setCardFile(f); setCardResult(null); setCardResult2(null); setCardError(null); } }} />
+            <button onClick={() => inputRef.current?.click()} style={{ background: "#f1f5f9", border: "1px solid #e5e7eb", borderRadius: 6, padding: "6px 12px", fontSize: 12, cursor: "pointer", color: "#374151", flexShrink: 0 }}>파일 선택</button>
+            {cardFile && <span style={{ fontSize: 12, color: "#374151", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{cardFile.name}</span>}
+          </div>
+          {notice && <div style={{ fontSize: 11, color: "#6b7280", background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 6, padding: "6px 10px" }}>{notice}</div>}
+          <button onClick={run} disabled={!cardFile || cardLoading} style={{ background: !cardFile || cardLoading ? "#9ca3af" : "#2563eb", color: "white", border: "none", borderRadius: 6, padding: "8px 16px", fontSize: 13, fontWeight: 600, cursor: !cardFile || cardLoading ? "not-allowed" : "pointer", display: "flex", alignItems: "center", gap: 6 }}>
+            {cardLoading && <span style={{ display: "inline-block", width: 12, height: 12, border: "2px solid rgba(255,255,255,0.3)", borderTopColor: "white", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />}
+            {cardLoading ? "처리중..." : "임포트 시작"}
+          </button>
+          {cardError && <div style={{ fontSize: 12, color: "#dc2626", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 6, padding: "6px 10px" }}>⚠ {cardError}</div>}
+          {cardResult && (
+            <div style={{ fontSize: 12, background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 6, padding: "8px 12px", lineHeight: 1.8 }}>
+              ✅ {secondApiPath ? "최초총현황 " : ""}성공: {cardResult.success ?? 0}건 / 건너뜀: {cardResult.skipped ?? 0}건 / 오류: {cardResult.errors?.length ?? 0}건
+              {cardResult.errors && cardResult.errors.length > 0 && <div style={{ color: "#dc2626", marginTop: 4 }}>{cardResult.errors.slice(0, 5).map((e, i) => <div key={i}>• {e}</div>)}</div>}
+            </div>
+          )}
+          {cardResult2 && (
+            <div style={{ fontSize: 12, background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 6, padding: "8px 12px", lineHeight: 1.8 }}>
+              ✅ {secondLabel ?? "두 번째"} 성공: {cardResult2.success ?? 0}건 / 건너뜀: {cardResult2.skipped ?? 0}건 / 오류: {cardResult2.errors?.length ?? 0}건
+              {cardResult2.errors && cardResult2.errors.length > 0 && <div style={{ color: "#dc2626", marginTop: 4 }}>{cardResult2.errors.slice(0, 5).map((e, i) => <div key={i}>• {e}</div>)}</div>}
+            </div>
+          )}
+        </>
+      )}
+      {disabled && <div style={{ fontSize: 12, color: "#9ca3af" }}>준비 중입니다.</div>}
     </div>
   );
 }

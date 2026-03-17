@@ -482,8 +482,11 @@ model Consultation {
   linkedCaseId   String?   // 약정 시 연결된 Case ID
   branchName     String?   // 담당 지사
   tfName         String?   // 담당 TF
+  managerName    String?   // 담당자 이름 (텍스트, 임포트용)
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
+
+  @@unique([name, phone])
 }
 
 // ─────────────────────────────────────────────

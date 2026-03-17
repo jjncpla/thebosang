@@ -1,0 +1,277 @@
+# TBSS 세션 4 — 관리자 페이지 데이터 임포트
+# 작성일: 2026-03-17
+# 개발경로: C:\dev\my-app
+
+## 수술적 수정 원칙 준수. 기존 파일 전체 재작성 금지.
+
+---
+
+## 배경 (엑셀 구조 요약)
+
+### 파일 1: 상담 내역 (노무법인_더보상_울산동부지사_상담내역.xlsx)
+- 핵심 시트: '총 접수현황' (행6이 헤더)
+- 컬럼: 연번 | 성명 | 주민번호 | 주소 | 연락처 | 사건종류 | 담당 | 상담경로(대분류) | 상담경로(중분류) | 상담경로(소분류) | 카운팅 | 방문일자 | 사건수임 | 비고 | 기준진행경과
+- 사건종류: 쉼표로 구분된 복수값 가능 (예: "소음성난청, 폐질환")
+- 사건수임 값: 약정 / 종결 / 연락 대기 / (기타 → 진행중)
+- 카운팅, 연번 컬럼 무시
+
+### 파일 2: 승불자 관리파일 (1__울산권역_승불자_관리파일_동작_파일_.xlsm)
+- 시트1 '최초총현황': 행2가 헤더
+  - 컬럼: 승인여부 | TF | 성명 | 사건분류 | 처분일 | 사건진행여부 | 정공
+  - → ObjectionReview 모델로 임포트
+- 시트2 '이의제기': 행2가 헤더
+  - 컬럼: 승인여부 | TF | 성명 | 사건분류 | 처분일(안날) | 심사청구/정정청구 | 재심사청구 | 담당자 | 사건진행여부 | 비고 | ...소송인계 관련
+  - 심사청구 값 형식: "기각(23-09-14)" 또는 "인용(23-09-07)" 또는 날짜만 또는 "제척도과" 또는 null
+  - → ObjectionCase 모델로 임포트
+- 시트3 '평임 데이터 검토': 행4가 헤더
+  - 컬럼: 연번 | TF | 성명 | 사건분류 | 처분일 | 정공 | 퇴직일자 | 산정사유발생일 | 국가장애여부 | 급수 | 일용/상용 | 비교임금 | 적용임금 | 적용사업장명 | 직종1 | 직종1직력 | 직종2 | 직종2직력 | 직종3 | 직종3직력 | 최초산출평균임금 | 산정근거 | 통상근로계수여부 | 증감률 | 적용평균임금 | 임금산정형태 | 성별 | 근속년수 | 총경력년수 | 업종 | 휴폐업일자 | 퇴직일자(2) | 진단일자 | 적용통계임금 | 동종평균임금 | 증감률(2) | 증감반영임금 | 적용평균임금(2) | 성별(2) | 규모 | 업종(2) | 직종 | 휴폐업일자(2) | 진단일자(2) | 적용분기 | 최초산정임금 | 증감률(3) | 적용평균임금(3) | (빈칸) | 검토담당자 | 검토결과 | 상세쟁점 | 진행경과 | 청구일 | 결정일 | 추가검토
+  - → WageReviewData 모델로 임포트
+
+---
+
+## TASK 1: npm 패키지 추가
+
+```bash
+npm install xlsx
+```
+
+xlsx 패키지: 브라우저/Node 모두에서 엑셀 파일 파싱 가능.
+
+---
+
+## TASK 2: 임포트 API 엔드포인트 4개 생성
+
+### 2-1. 상담 내역 임포트
+파일: `app/api/admin/import/consultation/route.ts`
+
+- POST multipart/form-data 수신 (파일 첨부)
+- xlsx로 파싱, '총 접수현황' 시트 읽기
+- 행6을 헤더로 인식 (0-indexed: row index 5)
+- 행7부터 데이터
+- 각 행을 Consultation 모델로 upsert
+  - name: 성명
+  - phone: 연락처 (없으면 "-" 처리)
+  - ssn: 주민번호
+  - address: 주소
+  - caseTypes: 사건종류 쉼표 분리하여 배열로
+  - routeMain: 상담경로(대분류)
+  - routeSub: 상담경로(중분류)
+  - routeDetail: 상담경로(소분류)
+  - visitDate: 방문일자
+  - status: 사건수임 매핑
+    - "약정" → "약정"
+    - "종결" → "종결"
+    - "연락 대기" 또는 "연락대기" → "연락대기"
+    - null / 기타 → "진행중"
+  - memo: 비고
+  - progressNote: 기준진행경과
+  - managerName을 별도 컬럼으로 저장 (User FK 매칭은 건너뜀, 이름 텍스트로만)
+- upsert 기준: name + phone 조합 (동일하면 업데이트, 아니면 신규)
+- 결과: { success: N, skipped: M, errors: [...] } 반환
+
+### 2-2. 최초총현황 임포트
+파일: `app/api/admin/import/objection-review/route.ts`
+
+- POST multipart/form-data
+- xlsx로 파싱, 시트명 '최초총현황' 읽기 (없으면 첫 번째 시트)
+- 행2가 헤더 (0-indexed: row index 1)
+- 행3부터 데이터
+- 각 행을 ObjectionReview 모델로 upsert
+  - approvalStatus: 승인여부
+  - tfName: TF (예: "울산" → "울산TF", "울동" → "울산동부TF" 변환)
+    - "울산" → "울산TF"
+    - "울동" 또는 "울산동부" → "울산동부TF"
+    - "울산남부" → "울산남부TF"
+    - "울산북부" → "울산북부TF"
+    - 그 외 → 원본값 + "TF"
+  - patientName: 성명
+  - caseType: 사건분류
+  - decisionDate: 처분일
+  - progressStatus: 사건진행여부
+    - "이의제기 진행" → "이의제기 진행"
+    - "송무 인계" → "송무 인계"
+    - "평정청구 진행" → "평정청구 진행"
+    - "검토중" → "검토중"
+    - "종결" → "종결"
+    - null → "검토중"
+  - hasInfoDisclosure: 정공 값 있으면 true
+- upsert 기준: patientName + tfName + caseType + decisionDate
+- 결과: { success, skipped, errors }
+
+### 2-3. 평임 데이터 검토 임포트
+파일: `app/api/admin/import/wage-review/route.ts`
+
+- POST multipart/form-data
+- xlsx로 파싱, 시트명 '평임 데이터 검토' 읽기
+- 행4가 헤더 (0-indexed: row index 3)
+- 행5부터 데이터
+- 각 행을 WageReviewData 모델로 upsert
+  - tfName: TF (위와 동일한 변환 로직)
+  - patientName: 성명
+  - caseType: 사건분류
+  - decisionDate: 처분일
+  - hasInfoDisclosure: 정공 값 있으면 true
+  - retirementDate: 퇴직일자
+  - diagnosisDate: 산정사유발생일
+  - hasNationalDisability: 국가장애여부 ("Y" 또는 "N" → boolean)
+  - disabilityGrade: 급수
+  - workerType: 일용/상용
+  - comparisonWage: 비교임금
+  - appliedWage: 적용임금
+  - workplaceName: 적용사업장명
+  - occupation1: 직종1
+  - occupation1Years: 직종1 직력
+  - occupation2: 직종2
+  - occupation2Years: 직종2 직력
+  - occupation3: 직종3
+  - occupation3Years: 직종3 직력
+  - baseAvgWage: 최초산출평균임금 (Float)
+  - basisNote: 산정근거
+  - hasCommuteCoef: 통상근로계수여부 ("N"/"Y" → boolean)
+  - changeRate: 증감률 (Float)
+  - finalAvgWage: 적용평균임금 (Float, 첫 번째 열)
+  - statWageGender: 성별(2)
+  - statWageSize: 규모
+  - statWageIndustry: 업종(2)
+  - statWageOccupation: 직종
+  - statWageQuarter: 적용분기
+  - statWageBase: 최초산정임금 (Float)
+  - statWageChangeRate: 증감률(3) (Float)
+  - statWageFinal: 적용평균임금(3) (Float)
+  - finalSelectedWage: 최종 채택 평균임금 (Float) - 마지막 적용평균임금
+  - reviewManagerName: 검토담당자
+  - reviewResult: 검토결과
+  - reviewDetail: 상세쟁점
+  - progressNote: 진행경과
+  - claimDate: 청구일
+  - decisionResultDate: 결정일
+  - additionalReview: 추가검토
+- upsert 기준: patientName + tfName + decisionDate
+- 결과: { success, skipped, errors }
+
+### 2-4. 이의제기 임포트
+파일: `app/api/admin/import/objection-case/route.ts`
+
+- POST multipart/form-data
+- xlsx로 파싱, 시트명 '이의제기' 읽기
+- 행2가 헤더 (0-indexed: row index 1)
+- 행3부터 데이터
+- 심사청구/재심사청구 값 파싱 함수 별도 작성:
+  ```
+  parseClaimField(value):
+  - null/undefined → { claimDate: null, result: null, resultDate: null }
+  - "기각(23-09-14)" → { result: "기각", resultDate: new Date("2023-09-14"), claimDate: null }
+  - "인용(23-09-07)" → { result: "인용", resultDate: new Date("2023-09-07"), claimDate: null }
+  - "제척도과" → { result: "제척도과", resultDate: null, claimDate: null }
+  - Date 객체 (날짜만) → { claimDate: Date, result: null, resultDate: null }
+  - 문자열 날짜 → claimDate로 파싱 시도
+  ```
+- 각 행을 ObjectionCase 모델로 upsert
+  - approvalStatus: 승인여부
+  - tfName: TF (동일한 변환 로직)
+  - patientName: 성명
+  - caseType: 사건분류
+  - decisionDate: 처분일(안날)
+  - examClaimDate / examResult / examResultDate: 심사청구 파싱 결과
+  - reExamClaimDate / reExamResult / reExamResultDate: 재심사청구 파싱 결과
+  - managerId: null (담당자 이름은 memo에 텍스트로 저장)
+  - memo: 담당자 이름 + 비고 합쳐서 저장 (예: "담당: 이정준 / " + 비고)
+  - progressStatus: 사건진행여부
+    - "진행중" → "진행중"
+    - "종결" → "종결"
+    - "송무인계" → "송무인계"
+    - "검토중" → "검토중"
+    - null → "진행중"
+  - litigationHandover: progressStatus === "송무인계"
+- upsert 기준: patientName + tfName + decisionDate
+- 결과: { success, skipped, errors }
+
+---
+
+## TASK 3: 관리자 페이지에 임포트 섹션 추가
+
+기존 `app/admin/page.tsx` (또는 관리자 페이지 경로) 확인 후 수술적 추가.
+
+### 추가할 섹션: 데이터 임포트
+
+기존 관리자 페이지 하단에 새 섹션 추가 (기존 계정관리/공지사항 영역 건드리지 말 것).
+
+섹션 제목: "데이터 임포트"
+
+4개 임포트 카드 (그리드 2x2 또는 세로 목록):
+
+---
+
+**카드 1: 상담 내역 임포트**
+- 설명: "엑셀 파일의 '총 접수현황' 시트를 읽어 상담 관리 DB에 등록합니다."
+- 파일 선택 input (accept=".xlsx,.xls")
+- [임포트 시작] 버튼
+- 결과 표시 영역 (성공 N건 / 실패 M건)
+- 주의문구: "동일 성명+연락처가 있으면 업데이트, 없으면 신규 등록합니다."
+
+**카드 2: 최초총현황 + 평임검토 임포트**
+- 설명: "승불자 관리파일의 '최초총현황' 시트와 '평임 데이터 검토' 시트를 읽어 등록합니다."
+- 파일 선택 input (accept=".xlsx,.xlsm,.xls")
+- [임포트 시작] 버튼 (클릭 시 두 시트 순차 처리)
+- 결과 표시 영역
+- 주의문구: "최초총현황과 평임검토 데이터를 동시에 처리합니다."
+
+**카드 3: 이의제기 기일 임포트**
+- 설명: "승불자 관리파일의 '이의제기' 시트를 읽어 기일 관리 DB에 등록합니다."
+- 파일 선택 input (accept=".xlsx,.xlsm,.xls")
+- [임포트 시작] 버튼
+- 결과 표시 영역
+
+**카드 4: TF 데이터 임포트** (추후 구현 예정)
+- 설명: "준비 중인 기능입니다."
+- 버튼 비활성화 처리
+- 회색 카드로 표시
+
+---
+
+### 임포트 동작 방식 (공통)
+- 파일 선택 후 [임포트 시작] 클릭 시:
+  1. 로딩 스피너 표시
+  2. FormData로 파일을 해당 API에 POST
+  3. 결과 { success, skipped, errors } 수신
+  4. "✅ 성공: N건 등록/업데이트 / ⚠️ 건너뜀: M건 / ❌ 오류: K건" 표시
+  5. errors가 있으면 펼쳐서 오류 내용 표시
+
+---
+
+## TASK 4: 파일 업로드 처리 유틸리티
+
+파일: `lib/excel-parser.ts` 신규 생성
+
+```typescript
+// xlsx 파싱 공통 유틸
+// - arrayBuffer를 받아서 시트별 데이터 반환
+// - 날짜 처리 (Excel 시리얼 넘버 → JS Date)
+// - 빈 행 스킵
+// - 심사청구 필드 파싱 함수
+```
+
+Next.js API Route에서 파일 업로드 받는 방법:
+```typescript
+// app/api/admin/import/.../route.ts
+export async function POST(req: NextRequest) {
+  const formData = await req.formData()
+  const file = formData.get('file') as File
+  const arrayBuffer = await file.arrayBuffer()
+  const buffer = Buffer.from(arrayBuffer)
+  // xlsx.read(buffer, { type: 'buffer', cellDates: true })
+}
+```
+
+cellDates: true 옵션 반드시 사용 (날짜 자동 변환).
+
+---
+
+## 작업 순서
+1. npm install xlsx
+2. lib/excel-parser.ts 유틸 생성
+3. TASK 2: API 4개 생성 (objection-review, wage-review, objection-case, consultation 순)
+4. TASK 3: 관리자 페이지 섹션 추가
+
+## 완료 후
+git add -A && git commit -m "feat: admin data import - consultation/objection/wage-review" && git push origin main
