@@ -29,7 +29,11 @@
       "Bash(powershell -Command \"Get-Process -Name node -ErrorAction SilentlyContinue | Stop-Process -Force\" 2>&1 && rm -rf .next)",
       "Bash(mkdir -p \"C:/dev/my-app/app/api/objection/review/[id]\")",
       "Bash(mkdir -p \"C:/dev/my-app/app/api/objection/wage-review/[id]\")",
-      "Bash(mkdir -p \"C:/dev/my-app/app/api/objection/cases/[id]\")"
+      "Bash(mkdir -p \"C:/dev/my-app/app/api/objection/cases/[id]\")",
+      "Bash(for f:*)",
+      "Bash(do echo:*)",
+      "Read(//c/dev/my-app/**)",
+      "Bash(done)"
     ]
   },
   "enableAllProjectMcpServers": true,
