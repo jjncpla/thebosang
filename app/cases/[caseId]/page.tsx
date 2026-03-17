@@ -75,9 +75,11 @@ type HearingLossDetail = {
   specialClinic: string | null;
   examClinicSelectionSubmittedAt: string | null;
   expertRequestReceivedAt: string | null;
+  expertClinicOptions: string | null;
   expertClinic: string | null;
   expertClinicSelectionSubmittedAt: string | null;
   expertDate: string | null;
+  expertAttendedStaffId: string | null;
   expertMemo: string | null;
   bankAccountRequestedAt: string | null;
   bankAccountSubmittedAt: string | null;
@@ -257,8 +259,8 @@ const EMPTY_DETAIL: HearingLossDetail = {
   claimSubmittedAt: null, claimNasPath: null, telegramSharedAt: null,
   examRequestReceivedAt: null, examPeriodStart: null, examPeriodEnd: null,
   specialClinic: null, examClinicSelectionSubmittedAt: null,
-  expertRequestReceivedAt: null, expertClinic: null, expertClinicSelectionSubmittedAt: null,
-  expertDate: null, expertMemo: null,
+  expertRequestReceivedAt: null, expertClinicOptions: null, expertClinic: null, expertClinicSelectionSubmittedAt: null,
+  expertDate: null, expertAttendedStaffId: null, expertMemo: null,
   bankAccountRequestedAt: null, bankAccountSubmittedAt: null, decisionType: null,
   decisionReceivedAt: null, approvedDisease: null, disabilityGrade: null, disabilityStatus: null,
   baseAssessment: null, finalAssessment: null, lumpSumAmount: null, avgWage: null,
@@ -552,7 +554,45 @@ function ExamRoundBlock({
   );
 }
 
-function HearingLossTab({ caseId, initial }: { caseId: string; initial: HearingLossDetail | null }) {
+const HL_STEPS: { label: string; statuses: string[] }[] = [
+  { label: "상담·약정",      statuses: ["CONSULTING", "CONTRACTED"] },
+  { label: "기본자료 수집",   statuses: ["DOC_COLLECTING"] },
+  { label: "청구서 발송",    statuses: ["SUBMITTED"] },
+  { label: "특진진찰요구서", statuses: ["EXAM_REQUESTED"] },
+  { label: "특진병원 선택",  statuses: ["EXAM_CLINIC_SELECTED", "EXAM_SCHEDULED"] },
+  { label: "특진 진행",      statuses: ["IN_EXAM", "EXAM_DONE"] },
+  { label: "전문조사",       statuses: ["EXPERT_REQUESTED", "EXPERT_CLINIC_SELECTED", "EXPERT_DONE"] },
+  { label: "통장사본",       statuses: ["BANK_REQUESTED", "BANK_SUBMITTED"] },
+  { label: "결정 수령",      statuses: ["DECISION_RECEIVED", "REVIEWING"] },
+  { label: "검토·종결",      statuses: ["APPROVED", "REJECTED", "OBJECTION", "WAGE_CORRECTION", "CLOSED"] },
+];
+
+function HearingStepBar({ status }: { status: string }) {
+  const currentIdx = HL_STEPS.findIndex((s) => s.statuses.includes(status));
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 0, padding: "16px 20px", background: "white", borderBottom: "1px solid #e5e7eb", overflowX: "auto" }}>
+      {HL_STEPS.map((step, i) => {
+        const done = i < currentIdx;
+        const active = i === currentIdx;
+        return (
+          <div key={i} style={{ display: "flex", alignItems: "center", flexShrink: 0 }}>
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
+              <div style={{ width: 28, height: 28, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, background: done ? "#16a34a" : active ? "#2563eb" : "#e5e7eb", color: done || active ? "white" : "#9ca3af", border: active ? "2px solid #1d4ed8" : "none" }}>
+                {done ? "✓" : i + 1}
+              </div>
+              <span style={{ fontSize: 10, color: active ? "#1d4ed8" : done ? "#16a34a" : "#9ca3af", fontWeight: active ? 700 : 400, whiteSpace: "nowrap" }}>{step.label}</span>
+            </div>
+            {i < HL_STEPS.length - 1 && (
+              <div style={{ width: 20, height: 2, background: i < currentIdx ? "#16a34a" : "#e5e7eb", marginBottom: 18, flexShrink: 0 }} />
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function HearingLossTab({ caseId, initial, status, onStatusChange }: { caseId: string; initial: HearingLossDetail | null; status?: string; onStatusChange?: (s: string) => void }) {
   const [detail, setDetail] = useState<HearingLossDetail>(initial ?? EMPTY_DETAIL);
   const [exams, setExams] = useState<HearingLossExam[]>(initial?.exams ?? []);
   const [saving, setSaving] = useState(false);
@@ -620,8 +660,32 @@ function HearingLossTab({ caseId, initial }: { caseId: string; initial: HearingL
   const years = Array.from({ length: 60 }, (_, i) => new Date().getFullYear() - i);
   const months = Array.from({ length: 12 }, (_, i) => i + 1);
 
+  const totalNoiseMonths = workHistory.filter((r) => r.noiseExposure).reduce((sum, r) => {
+    const start = r.startYear * 12 + (r.startMonth - 1);
+    const end = r.endYear * 12 + (r.endMonth - 1);
+    return sum + Math.max(0, end - start);
+  }, 0);
+  const totalNoiseYears = Math.floor(totalNoiseMonths / 12);
+  const totalNoiseRemMonths = totalNoiseMonths % 12;
+
+  const changeStatus = async (newStatus: string) => {
+    try {
+      const res = await fetch(`/api/cases/${caseId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: newStatus }),
+      });
+      if (!res.ok) throw new Error();
+      if (onStatusChange) onStatusChange(newStatus);
+      setSaveMsg(`상태가 '${newStatus}'(으)로 변경되었습니다`);
+      setTimeout(() => setSaveMsg(null), 3000);
+    } catch { setSaveMsg("상태 변경 실패"); }
+  };
+
   return (
     <div>
+      {status && <HearingStepBar status={status} />}
+
       {/* (1) 사건초기 */}
       <div style={secWrap}>
         <AccordionHeader open={sec1Open} onToggle={() => setSec1Open((o) => !o)} label="(1) 사건초기" />
@@ -693,11 +757,15 @@ function HearingLossTab({ caseId, initial }: { caseId: string; initial: HearingL
                       <td style={{ padding: 4, border: "1px solid #f1f5f9" }}>
                         <input type="number" style={{ ...inputStyle, width: 60 }} value={row.noiseLevel ?? ""} onChange={(e) => setWorkField(i, "noiseLevel", e.target.value === "" ? null : Number(e.target.value))} />
                       </td>
-                      {(["workHours", "source"] as (keyof WorkHistoryItem)[]).map((k) => (
-                        <td key={k} style={{ padding: 4, border: "1px solid #f1f5f9" }}>
-                          <input style={{ ...inputStyle, minWidth: 70 }} value={String(row[k] ?? "")} onChange={(e) => setWorkField(i, k, e.target.value)} />
-                        </td>
-                      ))}
+                      <td style={{ padding: 4, border: "1px solid #f1f5f9" }}>
+                        <input style={{ ...inputStyle, minWidth: 70 }} value={String(row.workHours ?? "")} onChange={(e) => setWorkField(i, "workHours", e.target.value)} />
+                      </td>
+                      <td style={{ padding: 4, border: "1px solid #f1f5f9" }}>
+                        <select style={{ ...inputStyle, minWidth: 100 }} value={String(row.source ?? "")} onChange={(e) => setWorkField(i, "source", e.target.value)}>
+                          <option value="">-</option>
+                          {["고용보험", "소득금액증명원", "국민연금", "건강보험자격득실", "경력증명서", "기타"].map((s) => <option key={s} value={s}>{s}</option>)}
+                        </select>
+                      </td>
                       <td style={{ padding: 4, border: "1px solid #f1f5f9", textAlign: "center" }}>
                         <button onClick={() => removeWorkRow(i)} style={{ background: "none", border: "none", color: "#dc2626", cursor: "pointer", fontSize: 14 }}>✕</button>
                       </td>
@@ -706,9 +774,16 @@ function HearingLossTab({ caseId, initial }: { caseId: string; initial: HearingL
                 </tbody>
               </table>
             </div>
-            <button onClick={addWorkRow} style={{ background: "white", border: "1px solid #d1d5db", borderRadius: 6, padding: "5px 14px", fontSize: 12, cursor: "pointer", marginBottom: 16 }}>
-              + 행 추가
-            </button>
+            <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 12 }}>
+              <button onClick={addWorkRow} style={{ background: "white", border: "1px solid #d1d5db", borderRadius: 6, padding: "5px 14px", fontSize: 12, cursor: "pointer" }}>
+                + 행 추가
+              </button>
+              {totalNoiseMonths > 0 && (
+                <div style={{ fontSize: 12, color: "#374151", background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: 6, padding: "4px 12px" }}>
+                  총 소음작업 경력: <strong>{totalNoiseYears > 0 ? `${totalNoiseYears}년 ` : ""}{totalNoiseRemMonths}개월</strong>
+                </div>
+              )}
+            </div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 8 }}>
               <DField label="마지막 소음작업 중단 시기" k="lastNoiseWorkEndDate" type="date" />
             </div>
@@ -786,7 +861,12 @@ function HearingLossTab({ caseId, initial }: { caseId: string; initial: HearingL
             <SectionTitle>전문조사</SectionTitle>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 20 }}>
               <DField label="전문조사진찰요구서 수령일" k="expertRequestReceivedAt" type="date" />
-              <DField label="전문조사기관" k="expertClinic" />
+              <div style={{ gridColumn: "1 / -1" }}>
+                <Field label="공단 제시 전문조사기관 목록">
+                  <textarea style={{ ...inputStyle, minHeight: 60, resize: "vertical" }} value={d("expertClinicOptions")} onChange={(e) => setD("expertClinicOptions", e.target.value || null)} />
+                </Field>
+              </div>
+              <DField label="선택된 전문조사기관" k="expertClinic" />
               <DField label="선택확인서 제출일" k="expertClinicSelectionSubmittedAt" type="date" />
               <DField label="전문조사 실시일" k="expertDate" type="date" />
               <div style={{ gridColumn: "1 / -1" }}>
@@ -810,6 +890,11 @@ function HearingLossTab({ caseId, initial }: { caseId: string; initial: HearingL
               <DField label="결정통지서 수령일" k="decisionReceivedAt" type="date" />
               <DField label="승인 상병명" k="approvedDisease" />
               <DField label="확정 장해등급 (예: 14급01호)" k="disabilityGrade" />
+              <div style={{ gridColumn: "1 / -1" }}>
+                <Field label="장해상태">
+                  <textarea style={{ ...inputStyle, minHeight: 50, resize: "vertical" }} value={d("disabilityStatus")} onChange={(e) => setD("disabilityStatus", e.target.value || null)} />
+                </Field>
+              </div>
               <DField label="장해급여 결정액 (원)" k="lumpSumAmount" type="number" />
               <DField label="산정 평균임금 (원/일)" k="avgWage" type="number" />
               <DField label="보상금 지급일" k="compensationPaidAt" type="date" />
@@ -852,6 +937,21 @@ function HearingLossTab({ caseId, initial }: { caseId: string; initial: HearingL
             </div>
 
             <SaveBar />
+
+            <div style={{ marginTop: 20, paddingTop: 16, borderTop: "2px solid #e5e7eb" }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "#6b7280", marginBottom: 10 }}>사건 상태 변경</div>
+              <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                <button onClick={() => changeStatus("CLOSED")} style={{ background: "#1e293b", color: "#94a3b8", border: "1px solid #475569", borderRadius: 6, padding: "7px 16px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+                  종결 처리
+                </button>
+                <button onClick={() => changeStatus("OBJECTION")} style={{ background: "#450a0a", color: "#fca5a5", border: "1px solid #b91c1c", borderRadius: 6, padding: "7px 16px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+                  이의제기 진행
+                </button>
+                <button onClick={() => changeStatus("WAGE_CORRECTION")} style={{ background: "#1e1b4b", color: "#c4b5fd", border: "1px solid #7c3aed", borderRadius: 6, padding: "7px 16px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+                  평균임금 정정 청구
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </div>
@@ -1494,7 +1594,7 @@ export default function CaseDetailPage() {
       {/* 탭 콘텐츠 */}
       <div style={{ padding: 24, maxWidth: 1000 }}>
         {activeTab === "기본 정보" && <BasicInfoTab caseData={caseData} onUpdated={setCaseData} />}
-        {activeTab === "난청 상세" && isHearingLoss && <HearingLossTab caseId={caseData.id} initial={caseData.hearingLoss} />}
+        {activeTab === "난청 상세" && isHearingLoss && <HearingLossTab caseId={caseData.id} initial={caseData.hearingLoss} status={getCaseStatus(caseData)} onStatusChange={(s) => setCaseData((prev) => prev ? { ...prev, status: s } : prev)} />}
         {activeTab === "COPD 상세" && isCopd && <CopdTab caseId={caseData.id} />}
         {activeTab === "진폐 상세" && isPneumo && <PneumoconiosisTab caseId={caseData.id} />}
         {activeTab === "서식 생성" && <FormTab caseId={caseData.id} />}

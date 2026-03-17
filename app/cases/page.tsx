@@ -866,7 +866,7 @@ export default function CasesPage() {
             {!loading && cases.map((c, idx) => (
               <tr
                 key={c.id}
-                onClick={() => router.push(`/patients/${c.patient.id}?tab=${c.caseType}`)}
+                onClick={() => router.push(c.caseType === "HEARING_LOSS" ? `/cases/${c.id}` : `/patients/${c.patient.id}?tab=${c.caseType}`)}
                 style={{ borderBottom: "1px solid #f1f5f9", cursor: "pointer", background: checkedIds.has(c.id) ? "#fef2f2" : "white" }}
                 onMouseEnter={(e) => { if (!checkedIds.has(c.id)) e.currentTarget.style.background = "#f8fafc"; }}
                 onMouseLeave={(e) => { e.currentTarget.style.background = checkedIds.has(c.id) ? "#fef2f2" : "white"; }}
