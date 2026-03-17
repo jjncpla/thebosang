@@ -1,0 +1,241 @@
+# TBSS 세션 1 개발 지시서
+# 작성일: 2026-03-17
+# 대상: Claude Code (bypass 모드)
+
+## 작업 전 확인사항
+- 기획서: thebosang_기획서.md 참조
+- 수술적 수정 원칙: 기존 파일 전체 재작성 금지, 필요한 부분만 추가/수정
+- 기존 스타일(Tailwind/인라인 혼재) 그대로 유지
+- 모든 새 파일은 App Router 구조 준수 (app/ 디렉토리)
+
+---
+
+## TASK 1: schema.prisma 모델 추가
+
+파일: prisma/schema.prisma
+기존 내용 건드리지 말고, 아래 3개 모델만 파일 끝에 추가할 것.
+
+```prisma
+// ─────────────────────────────────────────────
+// 상담 관리
+// ─────────────────────────────────────────────
+model Consultation {
+  id             String    @id @default(cuid())
+  name           String
+  ssn            String?
+  address        String?
+  phone          String
+  caseTypes      String[]  // 다중 상병 (예: ["소음성난청", "근골격계"])
+  managerId      String?
+  manager        User?     @relation("ConsultationManager", fields: [managerId], references: [id])
+  routeMain      String?   // 상담경로 대분류
+  routeSub       String?   // 상담경로 중분류
+  routeDetail    String?   // 상담경로 소분류
+  visitDate      DateTime?
+  status         String    @default("진행중") // 약정 / 종결 / 연락대기 / 진행중
+  memo           String?
+  progressNote   String?   // 기준 진행경과
+  reminderDate   DateTime? // 알림 지정일 (없으면 3주 주기 자동)
+  linkedCaseId   String?   // 약정 시 연결된 Case ID
+  branchName     String?   // 담당 지사
+  tfName         String?   // 담당 TF
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+}
+
+// ─────────────────────────────────────────────
+// TF 텔레그램 메시지 (webhook 저장)
+// ─────────────────────────────────────────────
+model TelegramMessage {
+  id          String   @id @default(cuid())
+  tfName      String   // 담당 TF명
+  messageId   String?  // 텔레그램 메시지 ID (중복 방지)
+  senderName  String?
+  content     String?  @db.Text
+  mediaType   String?  // photo / document / video / none
+  mediaUrl    String?  // 저장된 미디어 경로 (NAS 또는 로컬)
+  sentAt      DateTime
+  isProcessed Boolean  @default(false) // 재해자 DB 반영 여부
+  linkedCaseId String? // 연결된 Case ID
+  createdAt   DateTime @default(now())
+
+  @@unique([tfName, messageId])
+}
+
+// ─────────────────────────────────────────────
+// 이의제기 최초총현황 (결정 수신 후 검토)
+// ─────────────────────────────────────────────
+model ObjectionReview {
+  id             String    @id @default(cuid())
+  caseId         String?   // Case FK (연결된 경우)
+  tfName         String
+  patientName    String
+  caseType       String    // 소음성 난청 / COPD 등
+  decisionDate   DateTime? // 처분일 (제척기간 기산일)
+  approvalStatus String    // 승인 / 불승인 / 일부승인
+  progressStatus String    // 종결 / 검토중 / 이의제기 진행 / 송무 검토 / 송무 인계 / 평정 청구 진행
+  hasInfoDisclosure Boolean @default(false) // 정공 여부
+  memo           String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+}
+```
+
+추가 후 `npx prisma db push` 실행할 것 (--force-reset 없이).
+오류 발생 시 내용 보고.
+
+---
+
+## TASK 2: 상담 관리 목록 페이지
+
+### 파일 생성
+- `app/consultation/page.tsx` — 상담관리 목록 페이지
+- `app/api/consultation/route.ts` — GET(목록조회) + POST(등록)
+- `app/api/consultation/[id]/route.ts` — PATCH(수정) + DELETE(삭제)
+
+### 기능 명세
+
+#### 상단 통계 카드 (4개)
+- 총 상담 건수
+- 약정 건수
+- 연락대기 건수
+- 종결 건수
+
+#### 필터바 (상단 고정)
+- 사건수임 상태 필터: 전체 / 약정 / 종결 / 연락대기 / 진행중
+- 사건종류 필터: 전체 / 소음성난청 / COPD / 근골격계 / 업무상사고 / 직업성암 / 뇌심혈관계 / 유족 / 기타
+- 담당자 필터: DB의 User 목록에서 선택
+- 기간 필터: 방문일자 기준 시작일~종료일
+- 검색: 성명 / 연락처 텍스트 검색
+
+#### 테이블 컬럼
+성명 | 연락처 | 사건종류(badge 형태) | 담당자 | 상담경로(대/중/소) | 방문일자 | 사건수임(colored badge) | 비고
+
+- 사건수임 badge 색상:
+  - 약정: green
+  - 종결: gray
+  - 연락대기: orange
+  - 진행중: blue
+- 행 클릭 시 상세/수정 모달 오픈
+- 테이블 하단: 페이지네이션
+
+#### 등록 버튼 (우상단)
+클릭 시 등록 모달 오픈.
+
+#### 등록/수정 모달 필드
+- 성명 (필수)
+- 연락처 (필수)
+- 주민번호 (선택)
+- 주소
+- 사건종류: 다중 체크박스 (소음성난청 / COPD / 근골격계 / 업무상사고 / 직업성암 / 뇌심혈관계 / 유족 / 기타)
+- 담당자: User 목록 select
+- 상담경로 대분류: select (간판 / 소개 / 홍보 / 기타)
+- 상담경로 중분류: 대분류 선택에 따라 변동
+  - 간판 → (소분류만 있음: 워킹)
+  - 소개 → 기진행자 / 지인 / 기타
+  - 홍보 → 온라인 / 오프라인
+- 상담경로 소분류: 자유 텍스트 또는 select
+- 방문(연락)일자: 날짜 picker
+- 사건수임: select (진행중 / 약정 / 종결 / 연락대기)
+- 알림 지정일: 날짜 picker (비워두면 3주 주기 자동 알림)
+- 비고: textarea
+- 기준 진행경과: textarea
+
+#### 연락대기 알림 로직 (API)
+- `app/api/consultation/remind/route.ts` 생성
+- GET 요청 시 동작:
+  - status = "연락대기"인 Consultation 조회
+  - reminderDate 지정된 경우: 오늘이 reminderDate이면 알림 대상
+  - reminderDate 미지정인 경우: 마지막 업데이트일로부터 21일(3주) 경과 시 알림 대상
+  - 알림 대상 건들을 콘솔 로그 + 응답으로 반환 (To Do List 연동은 추후 구현)
+
+#### 약정→재해자 등록 연동
+- 사건수임이 "약정"으로 변경되는 경우, 모달 하단에 [재해자 등록하기] 버튼 표시
+- 클릭 시 `/cases/new?from=consultation&id={consultationId}` 로 이동 (실제 pre-fill 구현은 추후)
+
+---
+
+## TASK 3: 사건 조회 페이지
+
+### 파일 생성
+- `app/inquiry/page.tsx` — 사건 조회 페이지
+- `app/api/inquiry/route.ts` — 조회 전용 API
+
+### 권한 규칙
+세션에서 현재 로그인 유저의 role 확인:
+- role === "ADMIN" 또는 role === "STAFF" 또는 role === "조직관리자": 상세 사건 페이지(/cases/[id]) 이동 버튼 표시
+- role === "이산계정": 조회만 가능, 상세 이동 버튼 없음
+
+### 검색창 (상단 중앙, 크게)
+3가지 방식으로 검색:
+- 성명
+- 주민번호 앞자리(생년월일) — 6자리 숫자 입력
+- 전화번호
+
+검색 버튼 클릭 또는 Enter 시 Patient 테이블에서 조회.
+
+### 결과 표시
+검색 결과로 재해자 카드 표시 (카드 형태 or 테이블):
+- 성명 / 연락처 / 주소
+- 진행 중인 상병 목록 (caseType별 badge)
+- 상병별 현재 진행경과 (Case.status 한글 변환)
+- 영업 담당자 (salesManagerId → User.name)
+- 실무 담당자 (caseManagerId → User.name)
+- 담당 TF
+- 담당 지사 (더보상 지사)
+- [상세 사건으로 이동] 버튼 (권한 있는 경우만)
+
+### 주의
+- Patient 모델에 ssn(주민번호) 필드가 있는 경우 앞 6자리로 검색
+- 실제 주민번호 전체는 화면에 표시하지 않음 (앞 6자리만)
+- 이산계정은 주소, 연락처는 마스킹 처리 (010-****-**** 형태)
+
+---
+
+## TASK 4: TF 모니터링 페이지 개선
+
+### 대상 파일
+기존 TF 모니터링 페이지 경로 확인 후 해당 파일 수정.
+(없으면 `app/tf/monitoring/page.tsx` 신규 생성)
+
+### TF 선택 탭
+페이지 상단에 TF 선택 버튼 그룹:
+- 더보상울산TF / 울산동부TF / 울산남부TF / 울산북부TF (우선 하드코딩, 추후 DB 연동)
+- 선택된 TF에 해당하는 메시지만 표시
+
+### 레이아웃 (기존 달력+내용 구조 유지)
+- 좌측 1/3: 달력 (날짜 클릭 시 해당일 메시지 표시)
+- 우측 2/3: 메시지 피드
+
+### 메시지 피드
+- 텔레그램 채팅 형태 (발신자명 + 시간 + 내용)
+- 미디어가 있는 경우: [📎 첨부파일] 표시
+- 메시지 우측에 [DB 반영] 버튼
+  - 클릭 시 "어떤 재해자의 사건에 반영할까요?" 미니 검색창 팝업
+  - 재해자 검색 후 선택하면 TelegramMessage.linkedCaseId 업데이트 + isProcessed = true
+- isProcessed = false인 메시지가 있는 경우: 상단에 "미처리 메시지 N건" 뱃지 표시
+
+### 미처리 알림 (추후 ToDo 연동을 위한 준비)
+- 미처리(isProcessed=false) 메시지 수를 `/api/tf/unprocessed` API로 반환하는 엔드포인트 생성
+- 실제 To Do List 연동은 추후 구현, 지금은 API만 준비
+
+### Webhook 수신 API
+- `app/api/webhook/telegram/route.ts`가 있으면 확인
+- 없으면 신규 생성
+- POST 요청 수신 시 TelegramMessage 테이블에 저장
+- tfName은 query param으로 받음 (예: ?tf=울산동부TF)
+- 중복 메시지 방지: messageId + tfName unique 체크
+
+---
+
+## 작업 순서 권고
+1. schema.prisma 수정 + db push
+2. TASK 2 (상담관리): API 먼저, 페이지 후
+3. TASK 3 (사건조회): API 먼저, 페이지 후
+4. TASK 4 (TF모니터링): 기존 파일 확인 후 수정
+
+## 완료 후 보고 항목
+- 각 TASK 완료 여부
+- db push 결과
+- 생성/수정된 파일 목록
+- 오류 발생 시 내용

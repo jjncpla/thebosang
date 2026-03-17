@@ -433,6 +433,7 @@ model User {
   managedCases   Case[]          @relation("CaseManager")
   branchCases    Case[]          @relation("BranchManager")
   timelineEvents TimelineEvent[]
+  consultations  Consultation[]  @relation("ConsultationManager")
 }
 
 model SignupRequest {
@@ -455,4 +456,68 @@ model Notice {
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+// ─────────────────────────────────────────────
+// 상담 관리
+// ─────────────────────────────────────────────
+model Consultation {
+  id             String    @id @default(cuid())
+  name           String
+  ssn            String?
+  address        String?
+  phone          String
+  caseTypes      String[]  // 다중 상병 (예: ["소음성난청", "근골격계"])
+  managerId      String?
+  manager        User?     @relation("ConsultationManager", fields: [managerId], references: [id])
+  routeMain      String?   // 상담경로 대분류
+  routeSub       String?   // 상담경로 중분류
+  routeDetail    String?   // 상담경로 소분류
+  visitDate      DateTime?
+  status         String    @default("진행중") // 약정 / 종결 / 연락대기 / 진행중
+  memo           String?
+  progressNote   String?   // 기준 진행경과
+  reminderDate   DateTime? // 알림 지정일 (없으면 3주 주기 자동)
+  linkedCaseId   String?   // 약정 시 연결된 Case ID
+  branchName     String?   // 담당 지사
+  tfName         String?   // 담당 TF
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+}
+
+// ─────────────────────────────────────────────
+// TF 텔레그램 메시지 (webhook 저장)
+// ─────────────────────────────────────────────
+model TelegramMessage {
+  id          String   @id @default(cuid())
+  tfName      String   // 담당 TF명
+  messageId   String?  // 텔레그램 메시지 ID (중복 방지)
+  senderName  String?
+  content     String?  @db.Text
+  mediaType   String?  // photo / document / video / none
+  mediaUrl    String?  // 저장된 미디어 경로 (NAS 또는 로컬)
+  sentAt      DateTime
+  isProcessed Boolean  @default(false) // 재해자 DB 반영 여부
+  linkedCaseId String? // 연결된 Case ID
+  createdAt   DateTime @default(now())
+
+  @@unique([tfName, messageId])
+}
+
+// ─────────────────────────────────────────────
+// 이의제기 최초총현황 (결정 수신 후 검토)
+// ─────────────────────────────────────────────
+model ObjectionReview {
+  id             String    @id @default(cuid())
+  caseId         String?   // Case FK (연결된 경우)
+  tfName         String
+  patientName    String
+  caseType       String    // 소음성 난청 / COPD 등
+  decisionDate   DateTime? // 처분일 (제척기간 기산일)
+  approvalStatus String    // 승인 / 불승인 / 일부승인
+  progressStatus String    // 종결 / 검토중 / 이의제기 진행 / 송무 검토 / 송무 인계 / 평정 청구 진행
+  hasInfoDisclosure Boolean @default(false) // 정공 여부
+  memo           String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 }

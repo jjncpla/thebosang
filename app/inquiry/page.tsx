@@ -1,0 +1,226 @@
+"use client";
+
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
+
+const CASE_TYPE_LABELS: Record<string, string> = {
+  HEARING_LOSS: "소음성난청",
+  COPD: "COPD",
+  PNEUMOCONIOSIS: "진폐",
+  MUSCULOSKELETAL: "근골격계",
+  OCCUPATIONAL_ACCIDENT: "업무상사고",
+  OCCUPATIONAL_CANCER: "직업성암",
+  CARDIOVASCULAR: "뇌심혈관계",
+  BEREAVED: "유족",
+  OTHER: "기타",
+};
+
+const STATUS_KO: Record<string, string> = {
+  CONSULTING: "상담",
+  CONTRACTED: "약정",
+  DOC_COLLECTING: "서류수집",
+  SUBMITTED: "접수완료",
+  EXAM_REQUESTED: "특진요구",
+  EXAM_CLINIC_SELECTED: "특진병원선택",
+  EXAM_SCHEDULED: "특진예정",
+  IN_EXAM: "특진중",
+  EXAM_DONE: "특진완료",
+  EXPERT_REQUESTED: "전문조사요구",
+  EXPERT_CLINIC_SELECTED: "전문병원선택",
+  EXPERT_DONE: "전문조사완료",
+  BANK_REQUESTED: "계좌요청",
+  BANK_SUBMITTED: "계좌제출",
+  DECISION_RECEIVED: "결정수령",
+  REVIEWING: "검토중",
+  INFO_REQUESTED: "정공청구",
+  APPROVED: "승인",
+  REJECTED: "불승인",
+  OBJECTION: "이의제기",
+  WAGE_CORRECTION: "평정청구",
+  CLOSED: "종결",
+};
+
+type CaseItem = {
+  id: string;
+  caseType: string;
+  status: string;
+  tfName: string | null;
+  branch: string | null;
+  salesManager: { id: string; name: string } | null;
+  caseManager: { id: string; name: string } | null;
+};
+
+type PatientResult = {
+  id: string;
+  name: string;
+  phone: string | null;
+  address: string | null;
+  ssn: string;
+  cases: CaseItem[];
+};
+
+function maskPhone(phone: string | null) {
+  if (!phone) return "-";
+  return phone.replace(/(\d{3})-?(\d{4})-?(\d{4})/, "$1-****-$4");
+}
+
+function CaseTypeBadge({ type }: { type: string }) {
+  return (
+    <span style={{ display: "inline-block", padding: "2px 8px", borderRadius: 4, fontSize: 11, fontWeight: 600, background: "#eff6ff", color: "#2563eb", border: "1px solid #bfdbfe", marginRight: 4, marginBottom: 2 }}>
+      {CASE_TYPE_LABELS[type] ?? type}
+    </span>
+  );
+}
+
+function StatusBadge({ status }: { status: string }) {
+  return (
+    <span style={{ display: "inline-block", padding: "2px 8px", borderRadius: 999, fontSize: 11, fontWeight: 600, background: "#f0fdf4", color: "#15803d", border: "1px solid #bbf7d0" }}>
+      {STATUS_KO[status] ?? status}
+    </span>
+  );
+}
+
+export default function InquiryPage() {
+  const { data: session } = useSession();
+  const router = useRouter();
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<PatientResult[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [searched, setSearched] = useState(false);
+
+  const role = (session?.user as { role?: string })?.role ?? "";
+  const canViewDetail = role === "ADMIN" || role === "STAFF" || role === "조직관리자";
+  const isIsan = role === "이산계정";
+
+  const handleSearch = async () => {
+    if (!query.trim()) return;
+    setLoading(true);
+    setSearched(true);
+    try {
+      const res = await fetch(`/api/inquiry?q=${encodeURIComponent(query.trim())}`);
+      if (!res.ok) throw new Error("조회 실패");
+      const data = await res.json();
+      setResults(data);
+    } catch {
+      alert("조회 중 오류가 발생했습니다.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div style={{ padding: 24, minHeight: "100%", background: "#f1f5f9", fontFamily: "'Malgun Gothic', 'Apple SD Gothic Neo', 'Segoe UI', sans-serif" }}>
+      {/* Header */}
+      <div style={{ marginBottom: 24 }}>
+        <p style={{ fontSize: 11, color: "#9ca3af", fontWeight: 700, letterSpacing: 2, margin: "0 0 4px 0" }}>CASE INQUIRY</p>
+        <h1 style={{ fontSize: 20, fontWeight: 800, color: "#111827", margin: 0 }}>사건 조회</h1>
+      </div>
+
+      {/* Search Box */}
+      <div style={{
+        background: "white", borderRadius: 12, border: "1px solid #e5e7eb",
+        padding: "28px 24px", marginBottom: 24,
+        boxShadow: "0 1px 3px rgba(0,0,0,0.05)",
+      }}>
+        <div style={{ fontSize: 13, color: "#6b7280", marginBottom: 12, fontWeight: 500 }}>
+          성명, 생년월일(6자리), 또는 전화번호로 검색
+        </div>
+        <div style={{ display: "flex", gap: 10 }}>
+          <input
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") handleSearch(); }}
+            placeholder="예) 홍길동 / 801215 / 010-1234-5678"
+            style={{
+              flex: 1, border: "2px solid #e5e7eb", borderRadius: 8,
+              padding: "10px 16px", fontSize: 15, color: "#111827",
+              outline: "none", background: "#f9fafb",
+            }}
+          />
+          <button
+            onClick={handleSearch}
+            disabled={loading}
+            style={{
+              background: "#2563eb", color: "white", border: "none",
+              borderRadius: 8, padding: "10px 24px", fontSize: 14,
+              fontWeight: 700, cursor: loading ? "default" : "pointer",
+              opacity: loading ? 0.6 : 1,
+            }}
+          >
+            {loading ? "조회 중..." : "검색"}
+          </button>
+        </div>
+      </div>
+
+      {/* Results */}
+      {searched && !loading && results.length === 0 && (
+        <div style={{ background: "white", borderRadius: 10, border: "1px solid #e5e7eb", padding: "48px 16px", textAlign: "center", color: "#9ca3af", fontSize: 14 }}>
+          검색 결과가 없습니다.
+        </div>
+      )}
+
+      {results.map((patient) => (
+        <div key={patient.id} style={{
+          background: "white", borderRadius: 10, border: "1px solid #e5e7eb",
+          marginBottom: 16, overflow: "hidden", boxShadow: "0 1px 3px rgba(0,0,0,0.05)",
+        }}>
+          {/* Patient Header */}
+          <div style={{ background: "#f8fafc", padding: "14px 20px", borderBottom: "1px solid #e5e7eb", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+              <span style={{ fontSize: 17, fontWeight: 800, color: "#111827" }}>{patient.name}</span>
+              <span style={{ fontSize: 13, color: "#6b7280" }}>
+                {isIsan ? maskPhone(patient.phone) : (patient.phone ?? "-")}
+              </span>
+              {!isIsan && patient.address && (
+                <span style={{ fontSize: 12, color: "#9ca3af" }}>{patient.address}</span>
+              )}
+              {isIsan && patient.address && (
+                <span style={{ fontSize: 12, color: "#9ca3af" }}>{patient.address.slice(0, 4)}****</span>
+              )}
+              <span style={{ fontSize: 12, color: "#9ca3af" }}>생: {patient.ssn.slice(0, 6)}</span>
+            </div>
+            {canViewDetail && (
+              <button
+                onClick={() => router.push(`/patients/${patient.id}`)}
+                style={{ background: "#2563eb", color: "white", border: "none", borderRadius: 6, padding: "6px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
+              >
+                상세 사건으로 이동
+              </button>
+            )}
+          </div>
+
+          {/* Cases */}
+          {patient.cases.length === 0 ? (
+            <div style={{ padding: "20px", color: "#9ca3af", fontSize: 13 }}>등록된 사건이 없습니다.</div>
+          ) : (
+            <div style={{ padding: "12px 20px" }}>
+              {patient.cases.map((c) => (
+                <div key={c.id} style={{
+                  display: "flex", alignItems: "center", gap: 12, padding: "10px 0",
+                  borderBottom: "1px solid #f1f5f9", flexWrap: "wrap",
+                }}>
+                  <CaseTypeBadge type={c.caseType} />
+                  <StatusBadge status={c.status} />
+                  <span style={{ fontSize: 12, color: "#6b7280" }}>TF: {c.tfName ?? "-"}</span>
+                  <span style={{ fontSize: 12, color: "#6b7280" }}>지사: {c.branch ?? "-"}</span>
+                  <span style={{ fontSize: 12, color: "#6b7280" }}>영업: {c.salesManager?.name ?? "-"}</span>
+                  <span style={{ fontSize: 12, color: "#6b7280" }}>실무: {c.caseManager?.name ?? "-"}</span>
+                  {canViewDetail && (
+                    <button
+                      onClick={() => router.push(`/patients/${patient.id}?tab=${c.caseType}`)}
+                      style={{ marginLeft: "auto", border: "1px solid #e5e7eb", borderRadius: 5, padding: "3px 10px", fontSize: 11, color: "#374151", background: "#f9fafb", cursor: "pointer" }}
+                    >
+                      사건 상세
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
