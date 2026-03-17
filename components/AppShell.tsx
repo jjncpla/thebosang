@@ -21,19 +21,20 @@ const MENU_ITEMS: MenuItem[] = [
     label: "사건 관리",
     icon: "📁",
     children: [
-      { id: "cases-consult", label: "상담 관리 목록", path: "/cases-consult" },
+      { id: "consultation", label: "상담 관리", path: "/consultation" },
       { id: "cases-list", label: "사건 목록", path: "/cases" },
       { id: "patients-list", label: "재해자 목록", path: "/patients" },
     ],
   },
-  { id: "cases-view", label: "사건 조회", icon: "🔍", path: "/cases-view" },
+  { id: "inquiry", label: "사건 조회", icon: "🔍", path: "/inquiry" },
   {
     id: "objection",
     label: "이의제기 관리",
     icon: "⚖",
     children: [
-      { id: "objection-schedule", label: "기일 관리", path: "/objection-schedule" },
-      { id: "objection-write", label: "이유서·의견서 작성", path: "/objection-write" },
+      { id: "objection-review", label: "최초총현황·평임검토", path: "/objection/review" },
+      { id: "objection-deadline", label: "기일 관리", path: "/objection/deadline" },
+      { id: "objection-document", label: "이유서·의견서", path: "/objection/document" },
     ],
   },
   {

@@ -410,6 +410,143 @@ function ConfirmModal({ message, onConfirm, onCancel, confirming }: {
   );
 }
 
+// ─── Body Part Data ───────────────────────────────────────────────────────────
+
+const BODY_DISEASES: Record<string, string[]> = {
+  "경추": ["추간판탈출증", "협착증", "경추 골절"],
+  "어깨": ["회전근개파열", "충돌증후군", "관절와순손상", "석회화건염"],
+  "상완/팔꿈치": ["외측상과염", "내측상과염", "주관절 골절"],
+  "흉추": ["추간판탈출증", "압박골절"],
+  "요추": ["추간판탈출증", "협착증", "척추전방전위증", "골절"],
+  "골반/고관절": ["고관절 골절", "대퇴골두무혈성괴사", "골관절염"],
+  "슬관절": ["골관절염", "반월상연골판손상", "인공관절", "전방십자인대손상"],
+  "족관절/발": ["족저근막염", "골절", "연골손상"],
+};
+
+const CANCER_TYPES = ["폐암", "방광암", "혈액암", "중피종", "기타"];
+
+// ─── Body Part Panel ──────────────────────────────────────────────────────────
+
+function BodyPartPanel({
+  selectedPart,
+  onPartClick,
+  onCaseTypeChange,
+  selectedCaseType,
+}: {
+  selectedPart: string | null;
+  onPartClick: (part: string | null) => void;
+  onCaseTypeChange: (type: string) => void;
+  selectedCaseType: string;
+}) {
+  const PLANNED = [
+    { key: "HEARING_LOSS", label: "소음성난청" },
+    { key: "COPD", label: "COPD" },
+    { key: "PNEUMOCONIOSIS", label: "진폐증" },
+  ];
+
+  // SVG body parts — coordinates for simple human silhouette
+  const svgParts: { id: string; label: string; shape: React.ReactNode }[] = [
+    { id: "머리", label: "머리", shape: <ellipse cx="60" cy="22" rx="18" ry="20" /> },
+    { id: "경추", label: "경추", shape: <rect x="53" y="43" width="14" height="14" rx="3" /> },
+    { id: "어깨", label: "어깨(좌)", shape: <ellipse cx="30" cy="62" rx="14" ry="10" /> },
+    { id: "어깨R", label: "어깨(우)", shape: <ellipse cx="90" cy="62" rx="14" ry="10" /> },
+    { id: "흉추", label: "흉부", shape: <rect x="43" y="58" width="34" height="36" rx="5" /> },
+    { id: "상완/팔꿈치", label: "팔(좌)", shape: <rect x="14" y="72" width="12" height="34" rx="6" /> },
+    { id: "상완/팔꿈치R", label: "팔(우)", shape: <rect x="94" y="72" width="12" height="34" rx="6" /> },
+    { id: "요추", label: "요추", shape: <rect x="46" y="96" width="28" height="24" rx="4" /> },
+    { id: "골반/고관절", label: "골반", shape: <ellipse cx="60" cy="130" rx="24" ry="12" /> },
+    { id: "슬관절", label: "슬관절(좌)", shape: <rect x="38" y="148" width="14" height="28" rx="6" /> },
+    { id: "슬관절R", label: "슬관절(우)", shape: <rect x="68" y="148" width="14" height="28" rx="6" /> },
+    { id: "족관절/발", label: "발목(좌)", shape: <rect x="38" y="180" width="14" height="18" rx="4" /> },
+    { id: "족관절/발R", label: "발목(우)", shape: <rect x="68" y="180" width="14" height="18" rx="4" /> },
+  ];
+
+  const normalizePartId = (id: string) => id.replace(/R$/, "");
+  const activePart = selectedPart;
+
+  return (
+    <div style={{ padding: "14px 16px" }}>
+      {/* 기획사건 */}
+      <div style={{ marginBottom: 14 }}>
+        <div style={{ fontSize: 11, color: "#6b7280", fontWeight: 700, marginBottom: 6 }}>기획사건</div>
+        <div style={{ display: "flex", gap: 6 }}>
+          {PLANNED.map(p => (
+            <button
+              key={p.key}
+              onClick={() => { onCaseTypeChange(p.key); onPartClick(null); }}
+              style={{
+                padding: "6px 16px", fontSize: 13, borderRadius: 6, cursor: "pointer",
+                border: selectedCaseType === p.key ? "1px solid #2563eb" : "1px solid #e5e7eb",
+                background: selectedCaseType === p.key ? "#eff6ff" : "#f9fafb",
+                color: selectedCaseType === p.key ? "#2563eb" : "#374151",
+                fontWeight: selectedCaseType === p.key ? 700 : 400,
+              }}
+            >{p.label}</button>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ display: "flex", gap: 20, alignItems: "flex-start" }}>
+        {/* SVG Body */}
+        <div>
+          <div style={{ fontSize: 11, color: "#6b7280", fontWeight: 700, marginBottom: 6 }}>일반산재 — 부위 선택</div>
+          <svg width="120" height="210" viewBox="0 0 120 210" style={{ display: "block" }}>
+            {svgParts.map(p => {
+              const baseId = normalizePartId(p.id);
+              const isActive = activePart === baseId;
+              return (
+                <g key={p.id} onClick={() => { onCaseTypeChange("MUSCULOSKELETAL"); onPartClick(isActive && p.id === baseId ? null : baseId); }} style={{ cursor: "pointer" }}>
+                  <g fill={isActive ? "#2563eb" : "#94a3b8"} fillOpacity={isActive ? 0.85 : 0.5} stroke={isActive ? "#1d4ed8" : "#64748b"} strokeWidth="1">
+                    {p.shape}
+                  </g>
+                </g>
+              );
+            })}
+          </svg>
+        </div>
+
+        {/* Disease list for selected part */}
+        <div style={{ flex: 1 }}>
+          {activePart && BODY_DISEASES[activePart] && (
+            <div>
+              <div style={{ fontSize: 11, color: "#374151", fontWeight: 700, marginBottom: 8 }}>{activePart} — 상병 선택</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                {BODY_DISEASES[activePart].map(d => (
+                  <label key={d} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "#374151", cursor: "pointer" }}>
+                    <input type="checkbox" style={{ cursor: "pointer" }} />
+                    {d}
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
+          {!activePart && (
+            <div style={{ color: "#9ca3af", fontSize: 12 }}>좌측 인체 부위를 클릭하면<br />해당 부위의 상병 목록이 표시됩니다.</div>
+          )}
+        </div>
+
+        {/* 직업성 암 */}
+        <div>
+          <div style={{ fontSize: 11, color: "#6b7280", fontWeight: 700, marginBottom: 6 }}>직업성 암</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            {CANCER_TYPES.map(c => (
+              <button
+                key={c}
+                onClick={() => { onCaseTypeChange("OCCUPATIONAL_CANCER"); onPartClick(null); }}
+                style={{
+                  padding: "5px 14px", fontSize: 12, borderRadius: 5, cursor: "pointer", textAlign: "left",
+                  border: "1px solid #e5e7eb", background: selectedCaseType === "OCCUPATIONAL_CANCER" ? "#fdf4ff" : "#f9fafb",
+                  color: selectedCaseType === "OCCUPATIONAL_CANCER" ? "#7c3aed" : "#374151",
+                }}
+              >{c}</button>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function CasesPage() {
   const router = useRouter();
@@ -427,6 +564,8 @@ export default function CasesPage() {
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
   const [deleteModal, setDeleteModal] = useState(false);
   const [deleteConfirming, setDeleteConfirming] = useState(false);
+  const [showBodyPanel, setShowBodyPanel] = useState(false);
+  const [selectedBodyPart, setSelectedBodyPart] = useState<string | null>(null);
 
   const tfList = selectedBranch ? TF_BY_BRANCH[selectedBranch] ?? [] : [];
   const filterFields: FilterField[] = selectedCaseType
@@ -594,7 +733,27 @@ export default function CasesPage() {
 
       {/* Step 3: 상병 선택 */}
       <div style={{ background: "white", borderRadius: 10, border: "1px solid #e5e7eb", padding: "14px 16px", marginBottom: 12, boxShadow: "0 1px 3px rgba(0,0,0,0.05)" }}>
-        <div style={{ fontSize: 11, color: "#6b7280", fontWeight: 700, marginBottom: 8 }}>상병 선택</div>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+          <div style={{ fontSize: 11, color: "#6b7280", fontWeight: 700 }}>상병 선택</div>
+          <button
+            onClick={() => setShowBodyPanel(v => !v)}
+            style={{
+              fontSize: 11, padding: "3px 10px", borderRadius: 5, cursor: "pointer",
+              border: showBodyPanel ? "1px solid #2563eb" : "1px solid #e5e7eb",
+              background: showBodyPanel ? "#eff6ff" : "#f9fafb",
+              color: showBodyPanel ? "#2563eb" : "#6b7280",
+              fontWeight: showBodyPanel ? 700 : 400,
+            }}
+          >🫀 상병으로 보기</button>
+        </div>
+        {showBodyPanel && (
+          <BodyPartPanel
+            selectedPart={selectedBodyPart}
+            onPartClick={setSelectedBodyPart}
+            onCaseTypeChange={(type) => { setSelectedCaseType(type); setActiveFilters({}); }}
+            selectedCaseType={selectedCaseType}
+          />
+        )}
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <button
             onClick={() => { setSelectedCaseType(""); setActiveFilters({}); }}

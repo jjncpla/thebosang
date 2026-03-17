@@ -26,11 +26,14 @@
       "Bash(cd:*)",
       "Bash(taskkill:*)",
       "Bash(powershell -Command \"Get-Process -Name node | Stop-Process -Force\" 2>&1)",
-      "Bash(powershell -Command \"Get-Process -Name node -ErrorAction SilentlyContinue | Stop-Process -Force\" 2>&1 && rm -rf .next)"
+      "Bash(powershell -Command \"Get-Process -Name node -ErrorAction SilentlyContinue | Stop-Process -Force\" 2>&1 && rm -rf .next)",
+      "Bash(mkdir -p \"C:/dev/my-app/app/api/objection/review/[id]\")",
+      "Bash(mkdir -p \"C:/dev/my-app/app/api/objection/wage-review/[id]\")",
+      "Bash(mkdir -p \"C:/dev/my-app/app/api/objection/cases/[id]\")"
     ]
   },
+  "enableAllProjectMcpServers": true,
   "enabledMcpjsonServers": [
     "postgres"
-  ],
-  "enableAllProjectMcpServers": true
+  ]
 }

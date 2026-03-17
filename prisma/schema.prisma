@@ -434,6 +434,7 @@ model User {
   branchCases    Case[]          @relation("BranchManager")
   timelineEvents TimelineEvent[]
   consultations  Consultation[]  @relation("ConsultationManager")
+  objectionCases ObjectionCase[] @relation("ObjectionManager")
 }
 
 model SignupRequest {
@@ -520,4 +521,99 @@ model ObjectionReview {
   memo           String?
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
+
+  objectionCases ObjectionCase[]
+}
+
+// ─────────────────────────────────────────────
+// 이의제기 기일 관리 (심사/재심사 청구 및 결과)
+// ─────────────────────────────────────────────
+model ObjectionCase {
+  id                    String    @id @default(cuid())
+  reviewId              String?   // ObjectionReview FK (최초총현황과 연결)
+  review                ObjectionReview? @relation(fields: [reviewId], references: [id])
+  caseId                String?   // Case FK
+  tfName                String    // TF명 (예: 울산동부TF)
+  patientName           String
+  caseType              String    // 소음성 난청 / COPD / 근골격계 등
+  approvalStatus        String    // 승인 / 불승인 / 일부승인
+  decisionDate          DateTime? // 처분일(안날) — 제척기간 기산일
+  // 심사청구
+  examClaimDate         DateTime? // 심사청구일
+  examResult            String?   // 기각 / 인용 / 취하 / null(진행중)
+  examResultDate        DateTime? // 심사 결정 송달일
+  // 재심사청구
+  reExamClaimDate       DateTime? // 재심사청구일
+  reExamResult          String?   // 기각 / 인용 / 취하 / null(진행중)
+  reExamResultDate      DateTime? // 재심사 결정 송달일
+  // 업무상질병판정위원회 해당 여부 (질판위 거친 경우 심사 건너뛰고 재심사부터 가능)
+  isQualityReview       Boolean   @default(false)
+  // 담당자
+  managerId             String?
+  manager               User?     @relation("ObjectionManager", fields: [managerId], references: [id])
+  // 진행 상태
+  progressStatus        String    // 진행중 / 종결 / 송무인계 / 검토중
+  memo                  String?
+  // 소송 인계 관련
+  litigationHandover    Boolean   @default(false) // 송무 인계 여부
+  litigationMemo        String?
+  // 재처분 필요 여부 (제척 도과 시 자동 계산)
+  needsReDecision       Boolean   @default(false)
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+}
+
+// ─────────────────────────────────────────────
+// 평균임금 데이터 검토 (정보공개청구 후 입력)
+// ─────────────────────────────────────────────
+model WageReviewData {
+  id                    String    @id @default(cuid())
+  caseId                String?   // Case FK
+  tfName                String
+  patientName           String
+  caseType              String
+  decisionDate          DateTime?
+  hasInfoDisclosure     Boolean   @default(false) // 정공 여부
+  retirementDate        DateTime? // 퇴직일자
+  diagnosisDate         DateTime? // 산정사유발생일(진단일)
+  hasNationalDisability Boolean   @default(false) // 국가장애여부
+  disabilityGrade       String?   // 급수
+  workerType            String?   // 일용 / 상용
+  // 임금 산정 결과
+  comparisonWage        String?   // 비교임금 (실임금/동종임금/특례 등)
+  appliedWage           String?   // 적용임금 유형
+  workplaceName         String?   // 적용사업장명
+  occupation1           String?   // 직종1
+  occupation1Years      String?   // 직종1 직력
+  occupation2           String?   // 직종2
+  occupation2Years      String?
+  occupation3           String?   // 직종3
+  occupation3Years      String?
+  // 실제임금
+  baseAvgWage           Float?    // 최초산출평균임금
+  basisNote             String?   // 산정 근거
+  hasCommuteCoef        Boolean?  // 통상근로계수 적용여부
+  changeRate            Float?    // 증감률
+  finalAvgWage          Float?    // 적용평균임금
+  // 동종근로자/임금구조 임금
+  statWageGender        String?   // 성별
+  statWageSize          String?   // 규모
+  statWageIndustry      String?   // 업종
+  statWageOccupation    String?   // 직종
+  statWageQuarter       String?   // 적용분기
+  statWageBase          Float?    // 최초산정임금
+  statWageChangeRate    Float?    // 증감률
+  statWageFinal         Float?    // 적용평균임금
+  // 최종 산정
+  finalSelectedWage     Float?    // 최종 채택 평균임금
+  // 검토 결과
+  reviewManagerName     String?   // 검토 담당자 (자유텍스트)
+  reviewResult          String?   // 종결 / 평정진행 등
+  reviewDetail          String?   // 상세 쟁점
+  progressNote          String?   // 진행경과
+  claimDate             DateTime? // 평정/적사변 청구일
+  decisionResultDate    DateTime? // 결정일
+  additionalReview      String?   // 추가 검토
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
 }
