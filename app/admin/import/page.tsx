@@ -79,6 +79,10 @@ export default function ImportPage() {
   const [deleteConfirming, setDeleteConfirming] = useState(false);
   const [deleteResult, setDeleteResult] = useState<string | null>(null);
 
+  const [simpleDeleteModal, setSimpleDeleteModal] = useState<{ title: string; message: string; apiPath: string } | null>(null);
+  const [simpleDeleteConfirming, setSimpleDeleteConfirming] = useState(false);
+  const [simpleDeleteResult, setSimpleDeleteResult] = useState<{ apiPath: string; text: string } | null>(null);
+
   const selectedBranch = selectedTf ? TF_TO_BRANCH[selectedTf] ?? "" : "";
 
   const handleFile = (f: File) => {
@@ -185,6 +189,22 @@ export default function ImportPage() {
       window.removeEventListener("beforeunload", beforeUnload);
       setProgress(null);
       document.title = "데이터 임포트 | TBSS";
+    }
+  };
+
+  const handleSimpleDelete = async () => {
+    if (!simpleDeleteModal) return;
+    setSimpleDeleteConfirming(true);
+    try {
+      const res = await fetch(simpleDeleteModal.apiPath, { method: "DELETE" });
+      const data = await res.json();
+      if (!res.ok) { setSimpleDeleteResult({ apiPath: simpleDeleteModal.apiPath, text: `오류: ${data.error ?? "삭제 실패"}` }); }
+      else { setSimpleDeleteResult({ apiPath: simpleDeleteModal.apiPath, text: data.message ?? `삭제 완료: ${data.deleted}건` }); }
+    } catch {
+      setSimpleDeleteResult({ apiPath: simpleDeleteModal.apiPath, text: "네트워크 오류가 발생했습니다" });
+    } finally {
+      setSimpleDeleteConfirming(false);
+      setSimpleDeleteModal(null);
     }
   };
 
@@ -428,6 +448,64 @@ export default function ImportPage() {
           onConfirm={handleDeleteTf}
           onCancel={() => setDeleteModal(false)}
           confirming={deleteConfirming}
+        />
+      )}
+
+      {/* ─── 업무 데이터 전체 삭제 ─── */}
+      <div style={{ marginTop: 24 }}>
+        <div style={{ fontSize: 13, fontWeight: 800, color: "#dc2626", marginBottom: 12 }}>업무 데이터 전체 삭제</div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14 }}>
+          {[
+            {
+              title: "상담내역 전체 삭제",
+              description: "상담 관리 페이지의 모든 상담내역 데이터를 삭제합니다.",
+              buttonLabel: "상담내역 삭제",
+              apiPath: "/api/admin/delete-consultations",
+              confirmMessage: "상담내역 데이터를 모두 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.",
+            },
+            {
+              title: "처분검토 전체 삭제",
+              description: "처분검토 페이지의 모든 데이터를 삭제합니다.",
+              buttonLabel: "처분검토 삭제",
+              apiPath: "/api/admin/delete-objection-reviews",
+              confirmMessage: "처분검토 데이터를 모두 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.",
+            },
+            {
+              title: "기일관리 전체 삭제",
+              description: "이의제기 기일관리 페이지의 모든 데이터를 삭제합니다.",
+              buttonLabel: "기일관리 삭제",
+              apiPath: "/api/admin/delete-objection-cases",
+              confirmMessage: "기일관리 데이터를 모두 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.",
+            },
+          ].map((item) => {
+            const result = simpleDeleteResult?.apiPath === item.apiPath ? simpleDeleteResult.text : null;
+            return (
+              <div key={item.apiPath} style={{ background: "white", borderRadius: 10, border: "1px solid #fecaca", padding: 18, boxShadow: "0 1px 3px rgba(0,0,0,0.05)" }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: "#dc2626", marginBottom: 6 }}>{item.title}</div>
+                <div style={{ fontSize: 12, color: "#6b7280", lineHeight: 1.6, marginBottom: 14 }}>{item.description}</div>
+                <button
+                  onClick={() => { setSimpleDeleteResult(null); setSimpleDeleteModal({ title: item.title, message: item.confirmMessage, apiPath: item.apiPath }); }}
+                  style={{ background: "#dc2626", color: "white", border: "none", borderRadius: 6, padding: "8px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer", width: "100%" }}
+                >
+                  {item.buttonLabel}
+                </button>
+                {result && (
+                  <div style={{ marginTop: 10, fontSize: 12, color: result.startsWith("오류") ? "#dc2626" : "#16a34a", background: result.startsWith("오류") ? "#fef2f2" : "#f0fdf4", border: `1px solid ${result.startsWith("오류") ? "#fecaca" : "#bbf7d0"}`, borderRadius: 6, padding: "7px 10px" }}>
+                    {result}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {simpleDeleteModal && (
+        <ConfirmModal
+          message={simpleDeleteModal.message}
+          onConfirm={handleSimpleDelete}
+          onCancel={() => setSimpleDeleteModal(null)}
+          confirming={simpleDeleteConfirming}
         />
       )}
 
