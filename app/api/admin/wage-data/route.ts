@@ -2,6 +2,23 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 
+export async function GET() {
+  const session = await auth();
+  if (!session || (session.user as { role?: string })?.role !== "ADMIN") {
+    return NextResponse.json({ error: "권한이 없습니다." }, { status: 403 });
+  }
+  try {
+    const items = await prisma.wageReviewData.findMany({
+      select: { id: true, tfName: true, patientName: true, caseType: true, decisionDate: true },
+      orderBy: { patientName: "asc" },
+    });
+    return NextResponse.json(items);
+  } catch (err) {
+    console.error("[GET /api/admin/wage-data]", err);
+    return NextResponse.json({ error: "조회 오류" }, { status: 500 });
+  }
+}
+
 export async function DELETE(req: NextRequest) {
   const session = await auth();
   if (!session || (session.user as { role?: string })?.role !== "ADMIN") {

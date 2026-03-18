@@ -76,7 +76,7 @@ export default function NewCasePage() {
       setFromConsultationId(consultId);
       fetch(`/api/consultation/${consultId}`)
         .then((r) => r.json())
-        .then((c: { name: string; phone: string; ssn?: string; address?: string; caseTypes?: string[] }) => {
+        .then((c: { name: string; phone: string; ssn?: string; address?: string; caseTypes?: string[]; routeMain?: string; routeSub?: string; routeDetail?: string }) => {
           const filled = new Set<string>();
           const updates: Partial<typeof newPatient> = {};
           if (c.name) { updates.name = c.name; filled.add("name"); }
@@ -85,6 +85,7 @@ export default function NewCasePage() {
           if (c.address) { updates.address = c.address; filled.add("address"); }
           setNewPatient((prev) => ({ ...prev, ...updates }));
           setAutoFilledFields(filled);
+          const caseUpdates: Partial<typeof caseForm> = {};
           if (c.caseTypes && c.caseTypes.length > 0) {
             const typeMap: Record<string, string> = {
               "소음성난청": "HEARING_LOSS", "COPD": "COPD", "진폐": "PNEUMOCONIOSIS",
@@ -93,7 +94,21 @@ export default function NewCasePage() {
               "유족": "BEREAVED", "기타": "OTHER",
             };
             const mapped = typeMap[c.caseTypes[0]];
-            if (mapped) setCaseForm((prev) => ({ ...prev, caseType: mapped }));
+            if (mapped) caseUpdates.caseType = mapped;
+          }
+          // 상담경로 → 영업경로 자동 매핑
+          if (c.routeMain) {
+            const routeMap: Record<string, string> = {
+              "소개": "소개",
+              "영업": "직접",
+              "간판": "기타",
+              "홍보": c.routeSub === "온라인" ? "온라인" : "기타",
+              "인계": "기타",
+            };
+            caseUpdates.salesRoute = routeMap[c.routeMain] ?? "기타";
+          }
+          if (Object.keys(caseUpdates).length > 0) {
+            setCaseForm((prev) => ({ ...prev, ...caseUpdates }));
           }
           setShowNewPatientForm(true);
         })

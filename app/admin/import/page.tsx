@@ -83,6 +83,39 @@ export default function ImportPage() {
   const [simpleDeleteConfirming, setSimpleDeleteConfirming] = useState(false);
   const [simpleDeleteResult, setSimpleDeleteResult] = useState<{ apiPath: string; text: string } | null>(null);
 
+  type WageDataItem = { id: string; tfName: string; patientName: string; caseType: string; decisionDate: string | null };
+  const [wageDataList, setWageDataList] = useState<WageDataItem[]>([]);
+  const [wageDataLoading, setWageDataLoading] = useState(false);
+  const [wageDataLoaded, setWageDataLoaded] = useState(false);
+  const [selectedWageIds, setSelectedWageIds] = useState<Set<string>>(new Set());
+  const [wageDeleteConfirm, setWageDeleteConfirm] = useState(false);
+  const [wageDeleteConfirming, setWageDeleteConfirming] = useState(false);
+
+  const loadWageData = async () => {
+    setWageDataLoading(true);
+    try {
+      const res = await fetch("/api/admin/wage-data");
+      if (res.ok) { const data = await res.json(); setWageDataList(Array.isArray(data) ? data : []); setWageDataLoaded(true); }
+    } catch { /* silent */ } finally { setWageDataLoading(false); }
+  };
+
+  const handleWageDelete = async () => {
+    if (selectedWageIds.size === 0) return;
+    setWageDeleteConfirming(true);
+    try {
+      const res = await fetch("/api/admin/wage-data", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: Array.from(selectedWageIds) }),
+      });
+      if (res.ok) {
+        setWageDataList((prev) => prev.filter((i) => !selectedWageIds.has(i.id)));
+        setSelectedWageIds(new Set());
+        setWageDeleteConfirm(false);
+      }
+    } catch { /* silent */ } finally { setWageDeleteConfirming(false); }
+  };
+
   const selectedBranch = selectedTf ? TF_TO_BRANCH[selectedTf] ?? "" : "";
 
   const handleFile = (f: File) => {
@@ -555,6 +588,88 @@ export default function ImportPage() {
           </div>
         </div>
       </div>
+
+      {/* ─── 평균임금 데이터 선택 삭제 ─── */}
+      <div style={{ marginTop: 40 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: "#9ca3af", letterSpacing: 2, marginBottom: 4 }}>ADMIN</div>
+        <h2 style={{ fontSize: 18, fontWeight: 800, color: "#111827", margin: "0 0 16px 0" }}>평균임금 데이터 선택 삭제</h2>
+        <div style={{ background: "white", borderRadius: 10, border: "1px solid #fecaca", padding: 20, boxShadow: "0 1px 3px rgba(0,0,0,0.05)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
+            <button
+              onClick={loadWageData}
+              disabled={wageDataLoading}
+              style={{ background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: 6, padding: "7px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer", color: "#374151", opacity: wageDataLoading ? 0.6 : 1 }}
+            >
+              {wageDataLoading ? "로딩중..." : "목록 불러오기"}
+            </button>
+            {wageDataLoaded && <span style={{ fontSize: 12, color: "#6b7280" }}>총 {wageDataList.length}건</span>}
+            {selectedWageIds.size > 0 && (
+              <button
+                onClick={() => setWageDeleteConfirm(true)}
+                style={{ background: "#dc2626", color: "white", border: "none", borderRadius: 6, padding: "7px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}
+              >
+                선택 삭제 ({selectedWageIds.size})
+              </button>
+            )}
+          </div>
+          {wageDataLoaded && (
+            <div style={{ overflowX: "auto", maxHeight: 400, overflowY: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                <thead>
+                  <tr style={{ background: "#f8fafc", borderBottom: "2px solid #e5e7eb" }}>
+                    <th style={{ padding: "8px 10px", width: 36 }}>
+                      <input
+                        type="checkbox"
+                        checked={wageDataList.length > 0 && selectedWageIds.size === wageDataList.length}
+                        onChange={() => {
+                          if (selectedWageIds.size === wageDataList.length) setSelectedWageIds(new Set());
+                          else setSelectedWageIds(new Set(wageDataList.map((i) => i.id)));
+                        }}
+                      />
+                    </th>
+                    {["재해자명", "TF", "사건종류", "결정일자"].map((h) => (
+                      <th key={h} style={{ padding: "8px 12px", textAlign: "left", fontWeight: 700, color: "#6b7280", letterSpacing: 1 }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {wageDataList.length === 0 && (
+                    <tr><td colSpan={5} style={{ padding: "24px", textAlign: "center", color: "#9ca3af" }}>데이터 없음</td></tr>
+                  )}
+                  {wageDataList.map((item) => (
+                    <tr key={item.id} style={{ borderBottom: "1px solid #f1f5f9", background: selectedWageIds.has(item.id) ? "#fef2f2" : "white" }}>
+                      <td style={{ padding: "8px 10px" }}>
+                        <input
+                          type="checkbox"
+                          checked={selectedWageIds.has(item.id)}
+                          onChange={() => setSelectedWageIds((prev) => {
+                            const next = new Set(prev);
+                            next.has(item.id) ? next.delete(item.id) : next.add(item.id);
+                            return next;
+                          })}
+                        />
+                      </td>
+                      <td style={{ padding: "8px 12px", fontWeight: 600, color: "#111827" }}>{item.patientName}</td>
+                      <td style={{ padding: "8px 12px", color: "#374151" }}>{item.tfName}</td>
+                      <td style={{ padding: "8px 12px", color: "#374151" }}>{item.caseType}</td>
+                      <td style={{ padding: "8px 12px", color: "#6b7280" }}>{item.decisionDate ? item.decisionDate.slice(0, 10) : "-"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {wageDeleteConfirm && (
+        <ConfirmModal
+          message={`선택한 ${selectedWageIds.size}건의 평균임금 데이터를 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.`}
+          onConfirm={handleWageDelete}
+          onCancel={() => setWageDeleteConfirm(false)}
+          confirming={wageDeleteConfirming}
+        />
+      )}
 
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
