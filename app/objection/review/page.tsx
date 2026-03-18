@@ -218,28 +218,18 @@ function BranchTfFilter({
     <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "flex-end" }}>
       <div>
         <div style={{ fontSize: 11, color: "#6b7280", fontWeight: 700, marginBottom: 4 }}>지사</div>
-        <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-          {["", ...BRANCH_LIST].map(b => (
-            <button key={b} onClick={() => { setFilterBranch(b); setFilterTf(""); }}
-              style={{ padding: "4px 10px", fontSize: 11, borderRadius: 6, cursor: "pointer", border: filterBranch === b ? "1px solid #29ABE2" : "1px solid #e5e7eb", background: filterBranch === b ? "#eff6ff" : "#f9fafb", color: filterBranch === b ? "#29ABE2" : "#374151", fontWeight: filterBranch === b ? 700 : 400 }}>
-              {b || "전체"}
-            </button>
-          ))}
-        </div>
+        <select value={filterBranch} onChange={e => { setFilterBranch(e.target.value); setFilterTf(""); }} style={{ border: "1px solid #e5e7eb", borderRadius: 6, padding: "6px 10px", fontSize: 12, color: "#374151", background: "white", minWidth: 120, outline: "none", cursor: "pointer" }}>
+          <option value="">전체</option>
+          {BRANCH_LIST.map(b => <option key={b} value={b}>{b}</option>)}
+        </select>
       </div>
-      {filterBranch && (
-        <div>
-          <div style={{ fontSize: 11, color: "#6b7280", fontWeight: 700, marginBottom: 4 }}>TF</div>
-          <div style={{ display: "flex", gap: 4 }}>
-            {["", ...tfList].map(t => (
-              <button key={t} onClick={() => setFilterTf(t)}
-                style={{ padding: "4px 10px", fontSize: 11, borderRadius: 6, cursor: "pointer", border: filterTf === t ? "1px solid #29ABE2" : "1px solid #e5e7eb", background: filterTf === t ? "#eff6ff" : "#f9fafb", color: filterTf === t ? "#29ABE2" : "#374151", fontWeight: filterTf === t ? 700 : 400 }}>
-                {t || "전체"}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
+      <div>
+        <div style={{ fontSize: 11, color: "#6b7280", fontWeight: 700, marginBottom: 4 }}>TF</div>
+        <select value={filterTf} onChange={e => setFilterTf(e.target.value)} style={{ border: "1px solid #e5e7eb", borderRadius: 6, padding: "6px 10px", fontSize: 12, color: "#374151", background: "white", minWidth: 120, outline: "none", cursor: "pointer" }}>
+          <option value="">전체</option>
+          {tfList.map(t => <option key={t} value={t}>{t}</option>)}
+        </select>
+      </div>
       <div>
         <div style={{ fontSize: 11, color: "#6b7280", fontWeight: 700, marginBottom: 4 }}>{progressLabel}</div>
         <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
