@@ -93,3 +93,16 @@ export async function POST(req: NextRequest) {
 
   return NextResponse.json(item, { status: 201 });
 }
+
+export async function DELETE(req: NextRequest) {
+  const session = await auth();
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const { ids } = await req.json() as { ids: string[] };
+  if (!Array.isArray(ids) || ids.length === 0) {
+    return NextResponse.json({ error: "삭제할 항목을 선택해주세요." }, { status: 400 });
+  }
+
+  const result = await prisma.consultation.deleteMany({ where: { id: { in: ids } } });
+  return NextResponse.json({ success: true, deleted: result.count });
+}

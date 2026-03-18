@@ -27,7 +27,28 @@ export async function PUT(
     const body = await req.json();
     // exams 및 메타 필드는 별도 처리
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { exams, id, caseId: _cId, createdAt, updatedAt, ...data } = body;
+    const { exams, id, caseId: _cId, createdAt, updatedAt, ...rawData } = body;
+
+    // 숫자 타입 필드 강제 변환 (UI에서 string으로 올 수 있음)
+    const FLOAT_FIELDS = ["firstExamRight","firstExamLeft","firstExamSpeech"];
+    const INT_FIELDS = ["lumpSumAmount","avgWage"];
+    const data: Record<string, unknown> = { ...rawData };
+    for (const f of FLOAT_FIELDS) {
+      if (data[f] !== null && data[f] !== undefined && data[f] !== "") {
+        const n = parseFloat(String(data[f]));
+        data[f] = isNaN(n) ? null : n;
+      } else if (data[f] === "") {
+        data[f] = null;
+      }
+    }
+    for (const f of INT_FIELDS) {
+      if (data[f] !== null && data[f] !== undefined && data[f] !== "") {
+        const n = parseInt(String(data[f]), 10);
+        data[f] = isNaN(n) ? null : n;
+      } else if (data[f] === "") {
+        data[f] = null;
+      }
+    }
 
     const detail = await prisma.hearingLossDetail.upsert({
       where: { caseId },

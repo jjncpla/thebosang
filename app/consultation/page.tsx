@@ -35,14 +35,44 @@ type Stats = { total: number; contract: number; waiting: number; closed: number 
 
 const CASE_TYPE_OPTIONS = ["소음성난청", "COPD", "근골격계", "업무상사고", "직업성암", "뇌심혈관계", "유족", "기타"];
 const STATUS_OPTIONS = ["진행중", "약정", "종결", "연락대기"];
-const ROUTE_MAIN_OPTIONS = ["간판", "소개", "홍보", "기타"];
 
-const ROUTE_SUB_MAP: Record<string, string[]> = {
-  간판: ["워킹"],
-  소개: ["기진행자", "지인", "기타"],
-  홍보: ["온라인", "오프라인"],
-  기타: [],
+// 상담경로 대/중/소분류 데이터
+// 소분류 배열이 비어있으면 자유 텍스트 입력, 값이 있으면 SELECT 드롭다운
+const REFERRAL_DATA: Record<string, Record<string, string[]>> = {
+  "소개": {
+    "재해자": ["재해자 성명"],
+    "복지관": [],
+    "초진 병원": [],
+    "특진 병원": [],
+    "보청기 업체": [],
+  },
+  "영업": {
+    "명함 영업": [],
+    "아파트 영업": [],
+    "공원 영업": [],
+    "특진 병원 인근 영업": [],
+    "지사 인근 영업": [],
+    "기타 영업": [],
+  },
+  "간판": {
+    "간판": [],
+  },
+  "홍보": {
+    "약봉투 광고": [],
+    "버스광고": [],
+    "현수막": [],
+    "단체복": [],
+    "보청기 광고": [],
+    "온라인": ["네이버 검색", "네이버 지도", "네이버 블로그"],
+    "밥차 봉사": [],
+  },
+  "인계": {
+    "기존 재해자": [],
+    "타 지사 인계": [],
+  },
 };
+
+const ROUTE_MAIN_OPTIONS = Object.keys(REFERRAL_DATA);
 
 const STATUS_BADGE: Record<string, { bg: string; color: string; border: string }> = {
   약정: { bg: "#E8F5D0", color: "#5A8A1F", border: "1px solid #A2D158" },
@@ -173,7 +203,8 @@ function ConsultationModal({
   const inputStyle = { border: "1px solid #e5e7eb", borderRadius: 6, padding: "7px 10px", fontSize: 13, color: "#374151", background: "#f9fafb", outline: "none", width: "100%" };
   const labelStyle = { fontSize: 11, color: "#6b7280", fontWeight: 700, display: "block", marginBottom: 4 };
 
-  const subOptions = ROUTE_SUB_MAP[form.routeMain] ?? [];
+  const subOptions = form.routeMain ? Object.keys(REFERRAL_DATA[form.routeMain] ?? {}) : [];
+  const detailOptions = (form.routeMain && form.routeSub) ? (REFERRAL_DATA[form.routeMain]?.[form.routeSub] ?? []) : [];
 
   return (
     <>
@@ -247,7 +278,7 @@ function ConsultationModal({
           </div>
           <div>
             <label style={labelStyle}>상담경로 대분류</label>
-            <select style={{ ...inputStyle }} value={form.routeMain} onChange={(e) => { set("routeMain", e.target.value); set("routeSub", ""); }}>
+            <select style={{ ...inputStyle }} value={form.routeMain} onChange={(e) => { set("routeMain", e.target.value); set("routeSub", ""); set("routeDetail", ""); }}>
               <option value="">선택</option>
               {ROUTE_MAIN_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
             </select>
@@ -255,7 +286,7 @@ function ConsultationModal({
           <div>
             <label style={labelStyle}>상담경로 중분류</label>
             {subOptions.length > 0 ? (
-              <select style={{ ...inputStyle }} value={form.routeSub} onChange={(e) => set("routeSub", e.target.value)}>
+              <select style={{ ...inputStyle }} value={form.routeSub} onChange={(e) => { set("routeSub", e.target.value); set("routeDetail", ""); }}>
                 <option value="">선택</option>
                 {subOptions.map((o) => <option key={o} value={o}>{o}</option>)}
               </select>
@@ -265,7 +296,14 @@ function ConsultationModal({
           </div>
           <div>
             <label style={labelStyle}>상담경로 소분류</label>
-            <input style={inputStyle} value={form.routeDetail} onChange={(e) => set("routeDetail", e.target.value)} placeholder="소분류" />
+            {detailOptions.length > 0 ? (
+              <select style={{ ...inputStyle }} value={form.routeDetail} onChange={(e) => set("routeDetail", e.target.value)}>
+                <option value="">선택</option>
+                {detailOptions.map((o) => <option key={o} value={o}>{o}</option>)}
+              </select>
+            ) : (
+              <input style={inputStyle} value={form.routeDetail} onChange={(e) => set("routeDetail", e.target.value)} placeholder="소분류" />
+            )}
           </div>
           <div>
             <label style={labelStyle}>사건수임</label>
@@ -339,6 +377,40 @@ export default function ConsultationPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<Consultation | null>(null);
 
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  const toggleSelect = (id: string) => setSelectedIds((prev) => {
+    const next = new Set(prev);
+    next.has(id) ? next.delete(id) : next.add(id);
+    return next;
+  });
+  const toggleSelectAll = () => {
+    if (selectedIds.size === items.length) setSelectedIds(new Set());
+    else setSelectedIds(new Set(items.map((i) => i.id)));
+  };
+
+  const handleDelete = async () => {
+    if (selectedIds.size === 0) return;
+    setDeleting(true);
+    try {
+      const res = await fetch("/api/consultation", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: Array.from(selectedIds) }),
+      });
+      if (!res.ok) throw new Error("삭제 실패");
+      setSelectedIds(new Set());
+      setDeleteConfirm(false);
+      await fetchItems();
+    } catch {
+      alert("삭제 중 오류가 발생했습니다.");
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   const fetchManagers = async () => {
     const res = await fetch("/api/users");
     if (res.ok) {
@@ -410,18 +482,44 @@ export default function ConsultationPage() {
         />
       )}
 
+      {deleteConfirm && (
+        <>
+          <div onClick={() => setDeleteConfirm(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 999 }} />
+          <div style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)", background: "white", borderRadius: 12, padding: 28, zIndex: 1000, maxWidth: 400, width: "90%", boxShadow: "0 20px 60px rgba(0,0,0,0.3)", fontFamily: "'Malgun Gothic', 'Apple SD Gothic Neo', 'Segoe UI', sans-serif" }}>
+            <h3 style={{ margin: "0 0 12px", fontSize: 16, fontWeight: 800, color: "#111827" }}>상담 삭제 확인</h3>
+            <p style={{ margin: "0 0 20px", fontSize: 13, color: "#374151" }}>선택한 {selectedIds.size}건을 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.</p>
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+              <button onClick={() => setDeleteConfirm(false)} style={{ border: "1px solid #e5e7eb", borderRadius: 6, padding: "8px 16px", fontSize: 13, background: "white", cursor: "pointer" }}>취소</button>
+              <button onClick={handleDelete} disabled={deleting} style={{ background: "#dc2626", color: "white", border: "none", borderRadius: 6, padding: "8px 16px", fontSize: 13, fontWeight: 700, cursor: "pointer", opacity: deleting ? 0.6 : 1 }}>
+                {deleting ? "삭제 중..." : "삭제"}
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
       {/* Header */}
       <div style={{ marginBottom: 16, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div>
           <p style={{ fontSize: 11, color: "#9ca3af", fontWeight: 700, letterSpacing: 2, margin: "0 0 4px 0" }}>CONSULTATION MANAGEMENT</p>
           <h1 style={{ fontSize: 20, fontWeight: 800, color: "#005530", margin: 0 }}>상담 관리</h1>
         </div>
-        <button
-          onClick={() => { setEditTarget(null); setModalOpen(true); }}
-          style={{ background: "#29ABE2", color: "white", border: "none", borderRadius: 6, padding: "8px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
-        >
-          + 상담 등록
-        </button>
+        <div style={{ display: "flex", gap: 8 }}>
+          {selectedIds.size > 0 && (
+            <button
+              onClick={() => setDeleteConfirm(true)}
+              style={{ background: "#dc2626", color: "white", border: "none", borderRadius: 6, padding: "8px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
+            >
+              선택 삭제 ({selectedIds.size})
+            </button>
+          )}
+          <button
+            onClick={() => { setEditTarget(null); setModalOpen(true); }}
+            style={{ background: "#29ABE2", color: "white", border: "none", borderRadius: 6, padding: "8px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
+          >
+            + 상담 등록
+          </button>
+        </div>
       </div>
 
       {/* Stats */}
@@ -529,7 +627,10 @@ export default function ConsultationPage() {
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
           <thead>
             <tr style={{ background: "#f8fafc", borderBottom: "2px solid #e5e7eb" }}>
-              {["성명", "연락처", "사건종류", "담당자", "상담경로", "방문일자", "사건수임", "비고"].map((h) => (
+              <th style={{ padding: "10px 10px", width: 36 }}>
+                <input type="checkbox" checked={items.length > 0 && selectedIds.size === items.length} onChange={toggleSelectAll} />
+              </th>
+              {["성명", "연락처", "사건종류", "담당자", "상담경로", "방문일자", "사건수임", "비고", ""].map((h) => (
                 <th key={h} style={{ padding: "10px 14px", textAlign: "left", fontSize: 11, fontWeight: 700, color: "#6b7280", letterSpacing: 1, whiteSpace: "nowrap" }}>{h}</th>
               ))}
             </tr>
@@ -537,7 +638,8 @@ export default function ConsultationPage() {
           <tbody>
             {loading && Array.from({ length: 5 }).map((_, i) => (
               <tr key={i} style={{ borderBottom: "1px solid #f1f5f9" }}>
-                {Array.from({ length: 8 }).map((_, j) => (
+                <td style={{ padding: "14px 10px" }}><div style={{ width: 14, height: 14, background: "#f1f5f9", borderRadius: 3 }} /></td>
+                {Array.from({ length: 9 }).map((_, j) => (
                   <td key={j} style={{ padding: "14px" }}>
                     <div style={{ height: 12, background: "#f1f5f9", borderRadius: 4, width: 50 + (j % 3) * 20 }} />
                   </td>
@@ -546,7 +648,7 @@ export default function ConsultationPage() {
             ))}
             {!loading && items.length === 0 && (
               <tr>
-                <td colSpan={8} style={{ padding: "48px 16px", textAlign: "center", color: "#9ca3af", fontSize: 14 }}>
+                <td colSpan={10} style={{ padding: "48px 16px", textAlign: "center", color: "#9ca3af", fontSize: 14 }}>
                   등록된 상담이 없습니다
                 </td>
               </tr>
@@ -554,23 +656,31 @@ export default function ConsultationPage() {
             {!loading && items.map((item) => (
               <tr
                 key={item.id}
-                onClick={() => { setEditTarget(item); setModalOpen(true); }}
-                style={{ borderBottom: "1px solid #f1f5f9", cursor: "pointer" }}
-                onMouseEnter={(e) => { e.currentTarget.style.background = "#f8fafc"; }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = "white"; }}
+                style={{ borderBottom: "1px solid #f1f5f9", background: selectedIds.has(item.id) ? "#eff6ff" : "white" }}
+                onMouseEnter={(e) => { if (!selectedIds.has(item.id)) e.currentTarget.style.background = "#f8fafc"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = selectedIds.has(item.id) ? "#eff6ff" : "white"; }}
               >
-                <td style={{ padding: "12px 14px", fontWeight: 600, color: "#111827" }}>{item.name}</td>
-                <td style={{ padding: "12px 14px", color: "#374151", fontFamily: "monospace" }}>{item.phone}</td>
-                <td style={{ padding: "12px 14px" }}>
+                <td style={{ padding: "12px 10px" }} onClick={(e) => e.stopPropagation()}>
+                  <input type="checkbox" checked={selectedIds.has(item.id)} onChange={() => toggleSelect(item.id)} />
+                </td>
+                <td style={{ padding: "12px 14px", fontWeight: 600, color: "#111827", cursor: "pointer" }} onClick={() => { setEditTarget(item); setModalOpen(true); }}>{item.name}</td>
+                <td style={{ padding: "12px 14px", color: "#374151", fontFamily: "monospace", cursor: "pointer" }} onClick={() => { setEditTarget(item); setModalOpen(true); }}>{item.phone}</td>
+                <td style={{ padding: "12px 14px", cursor: "pointer" }} onClick={() => { setEditTarget(item); setModalOpen(true); }}>
                   {item.caseTypes.length > 0 ? item.caseTypes.map((t) => <CaseTypeBadge key={t} type={t} />) : <span style={{ color: "#9ca3af" }}>-</span>}
                 </td>
-                <td style={{ padding: "12px 14px", color: "#374151" }}>{item.manager?.name ?? "-"}</td>
-                <td style={{ padding: "12px 14px", color: "#6b7280", fontSize: 12 }}>
+                <td style={{ padding: "12px 14px", color: "#374151", cursor: "pointer" }} onClick={() => { setEditTarget(item); setModalOpen(true); }}>{item.manager?.name ?? "-"}</td>
+                <td style={{ padding: "12px 14px", color: "#6b7280", fontSize: 12, cursor: "pointer" }} onClick={() => { setEditTarget(item); setModalOpen(true); }}>
                   {[item.routeMain, item.routeSub, item.routeDetail].filter(Boolean).join(" / ") || "-"}
                 </td>
-                <td style={{ padding: "12px 14px", color: "#6b7280", fontFamily: "monospace", fontSize: 12 }}>{formatDate(item.visitDate)}</td>
-                <td style={{ padding: "12px 14px" }}><StatusBadge status={item.status} /></td>
-                <td style={{ padding: "12px 14px", color: "#6b7280", fontSize: 12, maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.memo || "-"}</td>
+                <td style={{ padding: "12px 14px", color: "#6b7280", fontFamily: "monospace", fontSize: 12, cursor: "pointer" }} onClick={() => { setEditTarget(item); setModalOpen(true); }}>{formatDate(item.visitDate)}</td>
+                <td style={{ padding: "12px 14px", cursor: "pointer" }} onClick={() => { setEditTarget(item); setModalOpen(true); }}><StatusBadge status={item.status} /></td>
+                <td style={{ padding: "12px 14px", color: "#6b7280", fontSize: 12, maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", cursor: "pointer" }} onClick={() => { setEditTarget(item); setModalOpen(true); }}>{item.memo || "-"}</td>
+                <td style={{ padding: "12px 10px" }}>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setSelectedIds(new Set([item.id])); setDeleteConfirm(true); }}
+                    style={{ background: "none", border: "1px solid #fecaca", borderRadius: 4, color: "#dc2626", cursor: "pointer", fontSize: 11, padding: "2px 8px" }}
+                  >삭제</button>
+                </td>
               </tr>
             ))}
           </tbody>

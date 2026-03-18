@@ -454,7 +454,7 @@ export default function ImportPage() {
       {/* ─── 업무 데이터 전체 삭제 ─── */}
       <div style={{ marginTop: 24 }}>
         <div style={{ fontSize: 13, fontWeight: 800, color: "#dc2626", marginBottom: 12 }}>업무 데이터 전체 삭제</div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 14 }}>
           {[
             {
               title: "상담내역 전체 삭제",
@@ -476,6 +476,13 @@ export default function ImportPage() {
               buttonLabel: "기일관리 삭제",
               apiPath: "/api/admin/delete-objection-cases",
               confirmMessage: "기일관리 데이터를 모두 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.",
+            },
+            {
+              title: "평균임금 데이터 전체 삭제",
+              description: "평균임금 데이터 검토 페이지의 모든 데이터를 삭제합니다.",
+              buttonLabel: "평균임금 데이터 삭제",
+              apiPath: "/api/admin/wage-data",
+              confirmMessage: "평균임금 데이터를 모두 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.",
             },
           ].map((item) => {
             const result = simpleDeleteResult?.apiPath === item.apiPath ? simpleDeleteResult.text : null;

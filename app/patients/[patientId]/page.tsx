@@ -4,6 +4,10 @@ import { useEffect, useState, useCallback, Suspense } from "react";
 import { useRouter, useParams, useSearchParams } from "next/navigation";
 import { CASE_TYPE_LABELS, DISPOSAL_TYPE, GRADE_TYPE, STATUS_BY_CASE_TYPE, HEARING_LOSS_STATUS, CASE_STATUS_LABELS } from "@/lib/constants/case";
 import { OCC_DISEASE_COMMITTEES } from "@/constants/occDiseaseCommittees";
+import firstVisitHospitalsData from "@/data/first_visit_hospitals.json";
+import specialHospitalsData from "@/data/special_hospitals.json";
+const FIRST_VISIT_HOSPITALS: string[] = (firstVisitHospitalsData as { hearing_loss: { hospital: string }[] }).hearing_loss.map(h => h.hospital);
+const SPECIAL_HOSPITALS: string[] = (specialHospitalsData as { hospital: string }[]).map(h => h.hospital);
 
 const S = { fontFamily: "'Malgun Gothic', 'Apple SD Gothic Neo', 'Segoe UI', sans-serif" };
 
@@ -516,6 +520,16 @@ function HearingLossTab({ caseId, initial }: { caseId: string; initial: HearingL
         method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(detail),
       });
       if (!res.ok) throw new Error("저장 실패");
+      // 처분결과 승인/불승인 시 처분검토 페이지에 자동 반영
+      if (detail.decisionType === "APPROVED" || detail.decisionType === "REJECTED") {
+        try {
+          await fetch(`/api/objection/review`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ caseId, approvalStatus: detail.decisionType === "APPROVED" ? "승인" : "불승인" }),
+          });
+        } catch { /* 처분검토 연동 오류는 silent */ }
+      }
       setSaveMsg("저장되었습니다");
       setTimeout(() => setSaveMsg(null), 3000);
     } catch { setSaveMsg("오류가 발생했습니다"); }
@@ -619,7 +633,12 @@ function HearingLossTab({ caseId, initial }: { caseId: string; initial: HearingL
           <div style={{ padding: 20 }}>
             <SectionTitle>초진</SectionTitle>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 16 }}>
-              <DField label="초진 병원" k="firstClinic" />
+              <Field label="초진 병원">
+                <input list="first-clinic-list" style={inputStyle} value={d("firstClinic")} onChange={(e) => setD("firstClinic", e.target.value || null)} placeholder="병원명 검색..." />
+                <datalist id="first-clinic-list">
+                  {FIRST_VISIT_HOSPITALS.map((h, i) => <option key={i} value={h} />)}
+                </datalist>
+              </Field>
               <DField label="초진일" k="firstExamDate" type="date" />
               <div />
               <DField label="우측 PTA (dB)" k="firstExamRight" type="number" />
@@ -682,7 +701,7 @@ function HearingLossTab({ caseId, initial }: { caseId: string; initial: HearingL
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
                 <thead>
                   <tr style={{ background: "#f9fafb" }}>
-                    {["회사명", "직종", "작업내용", "시작년월", "종료년월", "소음노출", "소음(dB)", "근무시간", ""].map((h) => (
+                    {["회사명", "직종", "작업내용", "시작년월", "종료년월", ""].map((h) => (
                       <th key={h} style={{ padding: "5px 6px", border: "1px solid #e5e7eb", fontWeight: 600, color: "#6b7280", whiteSpace: "nowrap" }}>{h}</th>
                     ))}
                   </tr>
@@ -716,21 +735,12 @@ function HearingLossTab({ caseId, initial }: { caseId: string; initial: HearingL
                         </div>
                       </td>
                       <td style={{ padding: 3, border: "1px solid #f1f5f9", textAlign: "center" }}>
-                        <input type="checkbox" checked={row.noiseExposure} onChange={(e) => setRawField(activeRawSource, i, "noiseExposure", e.target.checked)} />
-                      </td>
-                      <td style={{ padding: 3, border: "1px solid #f1f5f9" }}>
-                        <input type="number" style={{ ...inputStyle, width: 56, fontSize: 12 }} value={row.noiseLevel ?? ""} onChange={(e) => setRawField(activeRawSource, i, "noiseLevel", e.target.value === "" ? null : Number(e.target.value))} />
-                      </td>
-                      <td style={{ padding: 3, border: "1px solid #f1f5f9" }}>
-                        <input style={{ ...inputStyle, minWidth: 65, fontSize: 12 }} value={String(row.workHours ?? "")} onChange={(e) => setRawField(activeRawSource, i, "workHours", e.target.value)} />
-                      </td>
-                      <td style={{ padding: 3, border: "1px solid #f1f5f9", textAlign: "center" }}>
                         <button onClick={() => removeRawRow(activeRawSource, i)} style={{ background: "none", border: "none", color: "#dc2626", cursor: "pointer", fontSize: 14 }}>✕</button>
                       </td>
                     </tr>
                   ))}
                   {(rawData[activeRawSource]?.length ?? 0) === 0 && (
-                    <tr><td colSpan={9} style={{ padding: "12px", textAlign: "center", color: "#9ca3af", fontSize: 12 }}>항목 없음</td></tr>
+                    <tr><td colSpan={6} style={{ padding: "12px", textAlign: "center", color: "#9ca3af", fontSize: 12 }}>항목 없음</td></tr>
                   )}
                 </tbody>
               </table>
@@ -747,13 +757,60 @@ function HearingLossTab({ caseId, initial }: { caseId: string; initial: HearingL
                 전체 {RAW_SOURCES.reduce((sum, src) => sum + (rawData[src]?.length ?? 0), 0)}개 항목 → 중복 제거 후 최종 직업력 생성
               </span>
             </div>
+            {/* 합산 결과 요약 */}
+            {workHistory.length > 0 && (
+              <div style={{ marginBottom: 16, background: "#f0fdf4", borderRadius: 8, border: "1px solid #bbf7d0", padding: "12px 14px" }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: "#15803d", marginBottom: 8 }}>합산 결과 요약</div>
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                  <thead>
+                    <tr style={{ background: "#dcfce7" }}>
+                      {["회사명", "시작년월", "종료년월", "근속기간"].map(h => (
+                        <th key={h} style={{ padding: "4px 8px", border: "1px solid #bbf7d0", fontWeight: 600, color: "#15803d", textAlign: "left" }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {workHistory.map((row, i) => {
+                      const totalMonths = (row.endYear - row.startYear) * 12 + (row.endMonth - row.startMonth) + 1;
+                      const years = Math.floor(Math.max(0, totalMonths) / 12);
+                      const months = Math.max(0, totalMonths) % 12;
+                      const duration = years > 0 && months > 0 ? `${years}년 ${months}개월` : years > 0 ? `${years}년` : `${months}개월`;
+                      return (
+                        <tr key={i}>
+                          <td style={{ padding: "4px 8px", border: "1px solid #dcfce7" }}>{row.company}</td>
+                          <td style={{ padding: "4px 8px", border: "1px solid #dcfce7" }}>{row.startYear}-{String(row.startMonth).padStart(2,"0")}</td>
+                          <td style={{ padding: "4px 8px", border: "1px solid #dcfce7" }}>{row.endYear}-{String(row.endMonth).padStart(2,"0")}</td>
+                          <td style={{ padding: "4px 8px", border: "1px solid #dcfce7", fontWeight: 600, color: "#15803d" }}>{duration}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                  <tfoot>
+                    <tr style={{ background: "#f0fdf4" }}>
+                      <td colSpan={3} style={{ padding: "4px 8px", border: "1px solid #bbf7d0", fontWeight: 700, color: "#15803d", textAlign: "right" }}>총 근속기간</td>
+                      <td style={{ padding: "4px 8px", border: "1px solid #bbf7d0", fontWeight: 700, color: "#15803d" }}>
+                        {(() => {
+                          const total = workHistory.reduce((sum, row) => {
+                            const m = (row.endYear - row.startYear) * 12 + (row.endMonth - row.startMonth) + 1;
+                            return sum + Math.max(0, m);
+                          }, 0);
+                          const y = Math.floor(total / 12);
+                          const mo = total % 12;
+                          return y > 0 && mo > 0 ? `${y}년 ${mo}개월` : y > 0 ? `${y}년` : `${mo}개월`;
+                        })()}
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            )}
             {/* 최종 직업력 */}
             <div style={{ fontSize: 12, fontWeight: 700, color: "#374151", marginBottom: 8 }}>최종 직업력 (합산 결과)</div>
             <div style={{ overflowX: "auto", marginBottom: 12 }}>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
                 <thead>
                   <tr style={{ background: "#f0fdf4" }}>
-                    {["회사명", "직종", "작업내용", "시작년월", "종료년월", "소음노출", "소음(dB)", "근무시간", "출처", ""].map((h) => (
+                    {["회사명", "직종", "작업내용", "시작년월", "종료년월", "출처", ""].map((h) => (
                       <th key={h} style={{ padding: "5px 6px", border: "1px solid #bbf7d0", fontWeight: 600, color: "#15803d", whiteSpace: "nowrap" }}>{h}</th>
                     ))}
                   </tr>
@@ -786,15 +843,6 @@ function HearingLossTab({ caseId, initial }: { caseId: string; initial: HearingL
                           </select>
                         </div>
                       </td>
-                      <td style={{ padding: 3, border: "1px solid #f1f5f9", textAlign: "center" }}>
-                        <input type="checkbox" checked={row.noiseExposure} onChange={(e) => setWorkField(i, "noiseExposure", e.target.checked)} />
-                      </td>
-                      <td style={{ padding: 3, border: "1px solid #f1f5f9" }}>
-                        <input type="number" style={{ ...inputStyle, width: 56, fontSize: 12 }} value={row.noiseLevel ?? ""} onChange={(e) => setWorkField(i, "noiseLevel", e.target.value === "" ? null : Number(e.target.value))} />
-                      </td>
-                      <td style={{ padding: 3, border: "1px solid #f1f5f9" }}>
-                        <input style={{ ...inputStyle, minWidth: 65, fontSize: 12 }} value={String(row.workHours ?? "")} onChange={(e) => setWorkField(i, "workHours", e.target.value)} />
-                      </td>
                       <td style={{ padding: 3, border: "1px solid #f1f5f9" }}>
                         <input style={{ ...inputStyle, minWidth: 65, fontSize: 12 }} value={String(row.source ?? "")} onChange={(e) => setWorkField(i, "source", e.target.value)} />
                       </td>
@@ -804,7 +852,7 @@ function HearingLossTab({ caseId, initial }: { caseId: string; initial: HearingL
                     </tr>
                   ))}
                   {workHistory.length === 0 && (
-                    <tr><td colSpan={10} style={{ padding: "12px", textAlign: "center", color: "#9ca3af", fontSize: 12 }}>합산하기 버튼을 눌러 최종 직업력을 생성하세요</td></tr>
+                    <tr><td colSpan={7} style={{ padding: "12px", textAlign: "center", color: "#9ca3af", fontSize: 12 }}>합산하기 버튼을 눌러 최종 직업력을 생성하세요</td></tr>
                   )}
                 </tbody>
               </table>
@@ -832,8 +880,6 @@ function HearingLossTab({ caseId, initial }: { caseId: string; initial: HearingL
             <SectionTitle>접수/청구</SectionTitle>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 20 }}>
               <DField label="청구서 발송일" k="claimSubmittedAt" type="date" />
-              <DField label="NAS 경로" k="claimNasPath" />
-              <DField label="텔레그램 공유일시" k="telegramSharedAt" type="datetime-local" />
             </div>
             <SectionTitle>특진진찰요구서</SectionTitle>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 20 }}>
@@ -843,7 +889,12 @@ function HearingLossTab({ caseId, initial }: { caseId: string; initial: HearingL
             </div>
             <SectionTitle>특진병원 선택</SectionTitle>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 20 }}>
-              <DField label="특진병원명" k="specialClinic" />
+              <Field label="특진병원명">
+                <input list="special-clinic-list" style={inputStyle} value={d("specialClinic")} onChange={(e) => setD("specialClinic", e.target.value || null)} placeholder="병원명 검색..." />
+                <datalist id="special-clinic-list">
+                  {SPECIAL_HOSPITALS.map((h, i) => <option key={i} value={h} />)}
+                </datalist>
+              </Field>
               <DField label="선택확인서 제출일" k="examClinicSelectionSubmittedAt" type="date" />
             </div>
             <SectionTitle>최초특진</SectionTitle>
@@ -894,31 +945,6 @@ function HearingLossTab({ caseId, initial }: { caseId: string; initial: HearingL
                   <option value="REJECTED">불승인</option>
                 </select>
               </div>
-              <DField label="결정통지서 수령일" k="decisionReceivedAt" type="date" />
-              <DField label="승인 상병명" k="approvedDisease" />
-              <DField label="확정 장해등급" k="disabilityGrade" />
-              <DField label="장해급여 결정액 (원)" k="lumpSumAmount" type="number" />
-              <DField label="산정 평균임금 (원/일)" k="avgWage" type="number" />
-              <DField label="보상금 지급일" k="compensationPaidAt" type="date" />
-            </div>
-            <SectionTitle>검토/정공</SectionTitle>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 12, marginBottom: 12 }}>
-              <DField label="정보공개청구일" k="infoDisclosureRequestedAt" type="date" />
-              <DField label="정공 자료 수령일" k="infoDisclosureReceivedAt" type="date" />
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 12 }}>
-              <Field label="평균임금 정정 실익 검토">
-                <textarea style={{ ...inputStyle, minHeight: 60, resize: "vertical" }} value={d("wageReviewMemo")} onChange={(e) => setD("wageReviewMemo", e.target.value || null)} />
-              </Field>
-              <Field label="적사변 실익 검토">
-                <textarea style={{ ...inputStyle, minHeight: 60, resize: "vertical" }} value={d("adaptedWorkplaceReviewMemo")} onChange={(e) => setD("adaptedWorkplaceReviewMemo", e.target.value || null)} />
-              </Field>
-              <Field label="불승인 사유">
-                <textarea style={{ ...inputStyle, minHeight: 60, resize: "vertical" }} value={d("rejectionReason")} onChange={(e) => setD("rejectionReason", e.target.value || null)} />
-              </Field>
-              <Field label="종합 검토 메모">
-                <textarea style={{ ...inputStyle, minHeight: 60, resize: "vertical" }} value={d("reviewMemo")} onChange={(e) => setD("reviewMemo", e.target.value || null)} />
-              </Field>
             </div>
             <SaveBar />
           </div>
@@ -1344,6 +1370,10 @@ function CaseCommonInfoSection({ caseItem, onUpdated }: { caseItem: CaseData; on
     memo: caseItem.memo ?? "",
   });
   const [saving, setSaving] = useState(false);
+  const [users, setUsers] = useState<{ id: string; name: string }[]>([]);
+  useEffect(() => {
+    fetch("/api/users").then(r => r.ok ? r.json() : []).then(d => setUsers(Array.isArray(d) ? d : d.users ?? [])).catch(() => {});
+  }, []);
 
   const updateStatus = async (status: string) => {
     setForm((prev) => ({ ...prev, status }));
@@ -1433,22 +1463,36 @@ function CaseCommonInfoSection({ caseItem, onUpdated }: { caseItem: CaseData; on
             </>
           ) : (
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-              {([
-                ["사건번호", "caseNumber"],
-                ["TF명", "tfName"],
-                ["영업담당자", "salesManager"],
-                ["실무담당자", "caseManager"],
-              ] as [string, keyof typeof form][]).map(([label, key]) => (
-                <div key={key} style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-                  <label style={{ fontSize: 11, color: "#9ca3af" }}>{label}</label>
-                  <input style={inputStyle} value={String(form[key])} onChange={(e) => setForm({ ...form, [key]: e.target.value })} />
-                </div>
-              ))}
+              <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                <label style={{ fontSize: 11, color: "#9ca3af" }}>사건번호</label>
+                <input style={inputStyle} value={String(form.caseNumber)} onChange={(e) => setForm({ ...form, caseNumber: e.target.value })} />
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                <label style={{ fontSize: 11, color: "#9ca3af" }}>TF명</label>
+                <select style={inputStyle} value={form.tfName} onChange={(e) => setForm({ ...form, tfName: e.target.value })}>
+                  <option value="">선택</option>
+                  {["더보상울산TF","더보상부산경남TF","더보상서울북부TF","더보상경기안산TF","더보상전북익산TF","더보상경북구미TF","더보상경기의정부TF","더보상강원동해TF","더보상전남여수TF","더보상대구TF","더보상부산중부TF","더보상경기수원TF","이산울산동부TF","이산울산남부TF","이산울산북부TF","이산부산TF","이산경남TF"].map((tf) => <option key={tf} value={tf}>{tf}</option>)}
+                </select>
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                <label style={{ fontSize: 11, color: "#9ca3af" }}>영업담당자</label>
+                <select style={inputStyle} value={form.salesManager} onChange={(e) => setForm({ ...form, salesManager: e.target.value })}>
+                  <option value="">선택</option>
+                  {users.map((u) => <option key={u.id} value={u.name}>{u.name}</option>)}
+                </select>
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                <label style={{ fontSize: 11, color: "#9ca3af" }}>실무담당자</label>
+                <select style={inputStyle} value={form.caseManager} onChange={(e) => setForm({ ...form, caseManager: e.target.value })}>
+                  <option value="">선택</option>
+                  {users.map((u) => <option key={u.id} value={u.name}>{u.name}</option>)}
+                </select>
+              </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
                 <label style={{ fontSize: 11, color: "#9ca3af" }}>지사</label>
                 <select style={inputStyle} value={form.branch} onChange={(e) => setForm({ ...form, branch: e.target.value })}>
                   <option value="">선택</option>
-                  {BRANCHES.map((b) => <option key={b} value={b}>{b}</option>)}
+                  {["본사","울산지사","부산경남지사","서울북부지사","경기안산지사","전북익산지사","경북구미지사","경기의정부지사","강원동해지사","전남여수지사","대구지사","부산중부지사","경기수원지사"].map((b) => <option key={b} value={b}>{b}</option>)}
                 </select>
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>

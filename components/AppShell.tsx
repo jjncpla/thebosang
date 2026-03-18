@@ -205,7 +205,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               style={{
                 width: 32,
                 height: 32,
-                background: "#006838",
+                background: "#8DC63F",
                 borderRadius: 8,
                 display: "flex",
                 alignItems: "center",
@@ -216,11 +216,11 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 flexShrink: 0,
               }}
             >
-              TB
+              더
             </div>
             {!collapsed && (
-              <span style={{ color: "#e2e8f0", fontWeight: 800, fontSize: 15, letterSpacing: 2 }}>
-                TBSS
+              <span style={{ color: "#e2e8f0", fontWeight: 800, fontSize: 14, letterSpacing: 0 }}>
+                노무법인 더보상
               </span>
             )}
           </div>
