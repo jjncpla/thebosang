@@ -25,7 +25,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     },
   });
 
-  if (item.progressStatus === "평정청구 진행") {
+  if (item.progressStatus === "평정청구 진행" || item.approvalStatus === "승인") {
     let existingWageReview;
     if (item.caseId) {
       existingWageReview = await prisma.wageReviewData.findFirst({ where: { caseId: item.caseId } });

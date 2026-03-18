@@ -65,5 +65,23 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     },
   });
 
+  if (body.reviewResult) {
+    let reviewTarget;
+    if (item.caseId) {
+      reviewTarget = await prisma.objectionReview.findFirst({ where: { caseId: item.caseId } });
+    } else {
+      reviewTarget = await prisma.objectionReview.findFirst({
+        where: { tfName: item.tfName, patientName: item.patientName, caseType: item.caseType }
+      });
+    }
+
+    if (reviewTarget && reviewTarget.approvalStatus === "승인") {
+      await prisma.objectionReview.update({
+        where: { id: reviewTarget.id },
+        data: { progressStatus: body.reviewResult }
+      });
+    }
+  }
+
   return NextResponse.json(item);
 }

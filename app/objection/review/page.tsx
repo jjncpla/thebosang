@@ -166,13 +166,16 @@ function ReviewModal({ initial, onClose, onSave }: {
           <div><label style={labelStyle}>승인여부</label><select style={inputStyle} value={form.approvalStatus} onChange={e => set("approvalStatus", e.target.value)}>{APPROVAL_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}</select></div>
           <div>
             <label style={labelStyle}>사건진행여부</label>
-            <select style={inputStyle} value={form.progressStatus} onChange={e => set("progressStatus", e.target.value)}>
+            <select style={{ ...inputStyle, opacity: form.approvalStatus === "승인" ? 0.6 : 1, background: form.approvalStatus === "승인" ? "#f1f5f9" : "#f9fafb" }} value={form.progressStatus} onChange={e => set("progressStatus", e.target.value)} disabled={form.approvalStatus === "승인"}>
               {PROGRESS_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
             </select>
-            {form.progressStatus === "이의제기 진행" && (
+            {form.approvalStatus === "승인" && (
+              <span style={{ fontSize: 11, color: "#15803d", display: "block", marginTop: 4 }}>승인 사건의 진행여부는 평균임금 검토 탭의 결과로 반영됩니다</span>
+            )}
+            {form.approvalStatus !== "승인" && form.progressStatus === "이의제기 진행" && (
               <button onClick={() => router.push("/objection/deadline")} style={{ fontSize: 11, color: "#29ABE2", background: "none", border: "none", cursor: "pointer", marginTop: 4, padding: 0, textDecoration: "underline" }}>기일관리 페이지에서 확인 →</button>
             )}
-            {form.progressStatus === "평정청구 진행" && (
+            {form.approvalStatus !== "승인" && form.progressStatus === "평정청구 진행" && (
               <span style={{ fontSize: 11, color: "#15803d", display: "block", marginTop: 4 }}>평균임금 데이터 검토 탭에 반영됩니다</span>
             )}
           </div>
