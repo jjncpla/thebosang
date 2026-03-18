@@ -98,7 +98,7 @@ export default function PatientsPage() {
           </div>
         </div>
         <button
-          onClick={() => router.push("/patients/new")}
+          onClick={() => router.push("/cases/new")}
           style={{ background: "#29ABE2", color: "white", border: "none", borderRadius: 6, padding: "8px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
         >
           + 재해자 등록

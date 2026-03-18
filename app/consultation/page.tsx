@@ -291,7 +291,7 @@ function ConsultationModal({
         <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 20, alignItems: "center" }}>
           {initial && form.status === "약정" && (
             <button
-              onClick={() => router.push(`/patients/new?from=consultation&id=${initial.id}`)}
+              onClick={() => router.push(`/cases/new?from=consultation&id=${initial.id}`)}
               style={{ border: "1px solid #15803d", borderRadius: 6, padding: "8px 14px", fontSize: 13, color: "#15803d", background: "#f0fdf4", cursor: "pointer", fontWeight: 600 }}
             >
               재해자 등록하기
