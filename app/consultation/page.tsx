@@ -33,7 +33,7 @@ type Consultation = {
 
 type Stats = { total: number; contract: number; waiting: number; closed: number };
 
-const CASE_TYPE_OPTIONS = ["소음성난청", "COPD", "근골격계", "업무상사고", "직업성암", "뇌심혈관계", "유족", "기타"];
+const CASE_TYPE_OPTIONS = ["소음성난청", "COPD", "진폐", "근골격계", "업무상사고", "직업성암", "뇌심혈관계", "유족", "기타"];
 const STATUS_OPTIONS = ["진행중", "약정", "종결", "연락대기"];
 
 const REFERRAL_DATA: Record<string, Record<string, string[]>> = {
