@@ -548,6 +548,121 @@ function BodyPartPanel({
   );
 }
 
+// ─── Unscheduled Exam Panel ──────────────────────────────────────────────────
+
+type UnscheduledItem = {
+  id: string;
+  examRequestReceivedAt: string;
+  specialClinic: string | null;
+  case: {
+    id: string;
+    patient: { name: string; phone: string | null };
+  } | null;
+};
+
+function UnscheduledExamPanel({ onNavigate }: { onNavigate: (caseId: string) => void }) {
+  const [grouped, setGrouped] = useState<Record<string, UnscheduledItem[]>>({});
+  const [loading, setLoading] = useState(true);
+  const [open, setOpen] = useState(true);
+  const [filterClinic, setFilterClinic] = useState<string>("");
+
+  useEffect(() => {
+    fetch("/api/hearing-loss/unscheduled")
+      .then((r) => r.json())
+      .then((data) => { setGrouped(data); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, []);
+
+  const clinics = Object.keys(grouped);
+  const totalCount = Object.values(grouped).reduce((sum, arr) => sum + arr.length, 0);
+  const displayClinic = filterClinic || null;
+  const displayGroups = displayClinic
+    ? { [displayClinic]: grouped[displayClinic] ?? [] }
+    : grouped;
+
+  if (loading) return null;
+  if (totalCount === 0) return null;
+
+  return (
+    <div style={{ background: "#fff7ed", border: "1px solid #fed7aa", borderRadius: 10, marginBottom: 16, overflow: "hidden", boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
+      <button
+        onClick={() => setOpen((v) => !v)}
+        style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", background: "transparent", border: "none", cursor: "pointer", fontFamily: "inherit" }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ fontSize: 16 }}>⚠️</span>
+          <span style={{ fontSize: 13, fontWeight: 700, color: "#c2410c" }}>1차 특진 일정 미정 재해자 현황</span>
+          <span style={{ background: "#dc2626", color: "white", fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 999 }}>{totalCount}건</span>
+          <span style={{ fontSize: 11, color: "#9ca3af" }}>진찰요구서 수령 후 1차 특진일정이 없는 건</span>
+        </div>
+        <span style={{ fontSize: 12, color: "#c2410c" }}>{open ? "▲" : "▼"}</span>
+      </button>
+
+      {open && (
+        <div style={{ padding: "0 16px 16px" }}>
+          {/* 병원별 필터 */}
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12 }}>
+            <button
+              onClick={() => setFilterClinic("")}
+              style={{ padding: "4px 12px", fontSize: 12, borderRadius: 999, border: !filterClinic ? "1px solid #ea580c" : "1px solid #e5e7eb", background: !filterClinic ? "#fff7ed" : "#f9fafb", color: !filterClinic ? "#c2410c" : "#374151", cursor: "pointer", fontWeight: !filterClinic ? 700 : 400 }}
+            >전체</button>
+            {clinics.map((clinic) => (
+              <button
+                key={clinic}
+                onClick={() => setFilterClinic(clinic === filterClinic ? "" : clinic)}
+                style={{ padding: "4px 12px", fontSize: 12, borderRadius: 999, border: filterClinic === clinic ? "1px solid #ea580c" : "1px solid #e5e7eb", background: filterClinic === clinic ? "#fff7ed" : "#f9fafb", color: filterClinic === clinic ? "#c2410c" : "#374151", cursor: "pointer", fontWeight: filterClinic === clinic ? 700 : 400 }}
+              >
+                {clinic} ({grouped[clinic].length}건)
+              </button>
+            ))}
+          </div>
+
+          {/* 그룹별 표 */}
+          {Object.entries(displayGroups).map(([clinic, items]) => (
+            <div key={clinic} style={{ marginBottom: 14 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: "#c2410c", marginBottom: 6, padding: "4px 10px", background: "#ffedd5", borderRadius: 5, display: "inline-block" }}
+              >
+                🏥 {clinic} — {items.length}건
+              </div>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                <thead>
+                  <tr style={{ background: "#fef3c7" }}>
+                    <th style={{ padding: "5px 10px", textAlign: "left", fontWeight: 600, color: "#78350f", borderBottom: "1px solid #fde68a" }}>성명</th>
+                    <th style={{ padding: "5px 10px", textAlign: "left", fontWeight: 600, color: "#78350f", borderBottom: "1px solid #fde68a" }}>연락처</th>
+                    <th style={{ padding: "5px 10px", textAlign: "left", fontWeight: 600, color: "#78350f", borderBottom: "1px solid #fde68a" }}>진찰요구서 수령일</th>
+                    <th style={{ padding: "5px 10px", textAlign: "left", fontWeight: 600, color: "#78350f", borderBottom: "1px solid #fde68a" }}>바로가기</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {items.map((item) => {
+                    const d = new Date(item.examRequestReceivedAt);
+                    const dateStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+                    return (
+                      <tr key={item.id} style={{ borderBottom: "1px solid #fef3c7" }}>
+                        <td style={{ padding: "6px 10px", fontWeight: 600, color: "#111827" }}>{item.case?.patient.name ?? "-"}</td>
+                        <td style={{ padding: "6px 10px", color: "#374151" }}>{item.case?.patient.phone ?? "-"}</td>
+                        <td style={{ padding: "6px 10px", color: "#374151" }}>{dateStr}</td>
+                        <td style={{ padding: "6px 10px" }}>
+                          {item.case?.id && (
+                            <button
+                              onClick={() => onNavigate(item.case!.id)}
+                              style={{ background: "#29ABE2", color: "white", border: "none", borderRadius: 5, padding: "3px 10px", fontSize: 11, cursor: "pointer", fontWeight: 600 }}
+                            >일정 등록 →</button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function CasesPage() {
   const router = useRouter();
@@ -698,6 +813,11 @@ export default function CasesPage() {
           </button>
         </div>
       </div>
+
+      {/* ─── 1차 특진 미정 현황 패널 (소음성 난청 선택 시) ─── */}
+      {selectedCaseType === "HEARING_LOSS" && (
+        <UnscheduledExamPanel onNavigate={(caseId) => router.push(`/cases/${caseId}`)} />
+      )}
 
       {/* Step 1 & 2: 지사 → TF 선택 */}
       <div style={{ background: "white", borderRadius: 10, border: "1px solid #e5e7eb", padding: "14px 16px", marginBottom: 12, boxShadow: "0 1px 3px rgba(0,0,0,0.05)" }}>

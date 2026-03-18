@@ -99,6 +99,24 @@ type HearingLossDetail = {
   infoDisclosureReceivedAt: string | null;
   rejectionReason: string | null;
   reviewMemo: string | null;
+  specialExam1Date: string | null;
+  specialExam1Contact: string | null;
+  specialExam1Attendee: string | null;
+  specialExam2Date: string | null;
+  specialExam2Contact: string | null;
+  specialExam2Attendee: string | null;
+  specialExam3Date: string | null;
+  specialExam3Contact: string | null;
+  specialExam3Attendee: string | null;
+  reSpecialExam1Date: string | null;
+  reSpecialExam1Contact: string | null;
+  reSpecialExam1Attendee: string | null;
+  reSpecialExam2Date: string | null;
+  reSpecialExam2Contact: string | null;
+  reSpecialExam2Attendee: string | null;
+  reSpecialExam3Date: string | null;
+  reSpecialExam3Contact: string | null;
+  reSpecialExam3Attendee: string | null;
   exams: HearingLossExam[];
 };
 
@@ -266,7 +284,14 @@ const EMPTY_DETAIL: HearingLossDetail = {
   baseAssessment: null, finalAssessment: null, lumpSumAmount: null, avgWage: null,
   compensationPaidAt: null, wageReviewMemo: null, adaptedWorkplaceReviewMemo: null,
   infoDisclosureRequestedAt: null, infoDisclosureReceivedAt: null,
-  rejectionReason: null, reviewMemo: null, exams: [],
+  rejectionReason: null, reviewMemo: null,
+  specialExam1Date: null, specialExam1Contact: null, specialExam1Attendee: null,
+  specialExam2Date: null, specialExam2Contact: null, specialExam2Attendee: null,
+  specialExam3Date: null, specialExam3Contact: null, specialExam3Attendee: null,
+  reSpecialExam1Date: null, reSpecialExam1Contact: null, reSpecialExam1Attendee: null,
+  reSpecialExam2Date: null, reSpecialExam2Contact: null, reSpecialExam2Attendee: null,
+  reSpecialExam3Date: null, reSpecialExam3Contact: null, reSpecialExam3Attendee: null,
+  exams: [],
 };
 
 const EMPTY_EXAM = (examSet: string, examRound: number): HearingLossExam => ({
@@ -825,7 +850,19 @@ function HearingLossTab({ caseId, initial, status, onStatusChange }: { caseId: s
               <DField label="선택확인서 제출일" k="examClinicSelectionSubmittedAt" type="date" />
             </div>
 
-            <SectionTitle>최초특진</SectionTitle>
+            <SectionTitle>최초특진 일정 및 참석</SectionTitle>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 12 }}>
+              <DField label="1차 특진일정" k="specialExam1Date" type="datetime-local" />
+              <DField label="1차 연락담당자" k="specialExam1Contact" />
+              <DField label="1차 참석자" k="specialExam1Attendee" />
+              <DField label="2차 특진일정" k="specialExam2Date" type="datetime-local" />
+              <DField label="2차 연락담당자" k="specialExam2Contact" />
+              <DField label="2차 참석자" k="specialExam2Attendee" />
+              <DField label="3차 특진일정" k="specialExam3Date" type="datetime-local" />
+              <DField label="3차 연락담당자" k="specialExam3Contact" />
+              <DField label="3차 참석자" k="specialExam3Attendee" />
+            </div>
+            <SectionTitle>최초특진 검사결과</SectionTitle>
             {([1, 2, 3] as const).map((r) => (
               <ExamRoundBlock key={r} caseId={caseId} examSet="INITIAL" round={r} label={`${r}차`} exams={exams} setExams={setExams} />
             ))}
@@ -838,7 +875,19 @@ function HearingLossTab({ caseId, initial, status, onStatusChange }: { caseId: s
 
             {showReExam && (
               <>
-                <SectionTitle>재특진</SectionTitle>
+                <SectionTitle>재특진 일정 및 참석</SectionTitle>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 12 }}>
+                  <DField label="1차 재특진일정" k="reSpecialExam1Date" type="datetime-local" />
+                  <DField label="1차 연락담당자" k="reSpecialExam1Contact" />
+                  <DField label="1차 참석자" k="reSpecialExam1Attendee" />
+                  <DField label="2차 재특진일정" k="reSpecialExam2Date" type="datetime-local" />
+                  <DField label="2차 연락담당자" k="reSpecialExam2Contact" />
+                  <DField label="2차 참석자" k="reSpecialExam2Attendee" />
+                  <DField label="3차 재특진일정" k="reSpecialExam3Date" type="datetime-local" />
+                  <DField label="3차 연락담당자" k="reSpecialExam3Contact" />
+                  <DField label="3차 참석자" k="reSpecialExam3Attendee" />
+                </div>
+                <SectionTitle>재특진 검사결과</SectionTitle>
                 {([1, 2, 3] as const).map((r) => (
                   <ExamRoundBlock key={r} caseId={caseId} examSet="RE" round={r} label={`${r}차`} exams={exams} setExams={setExams} />
                 ))}
