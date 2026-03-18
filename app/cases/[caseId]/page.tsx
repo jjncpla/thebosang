@@ -150,47 +150,47 @@ function toInputDate(iso: string | null | undefined): string {
 }
 
 const STATUS_COLOR: Record<string, { bg: string; color: string; border: string; dot: string }> = {
-  "접수대기": { bg: "#1e1b4b", color: "#a5b4fc", border: "1px solid #4338ca", dot: "#818cf8" },
-  "접수완료": { bg: "#082f49", color: "#7dd3fc", border: "1px solid #0369a1", dot: "#38bdf8" },
-  "특진예정": { bg: "#1a2e05", color: "#86efac", border: "1px solid #15803d", dot: "#4ade80" },
-  "특진중":   { bg: "#052e16", color: "#6ee7b7", border: "1px solid #059669", dot: "#34d399" },
-  "특진완료": { bg: "#052e16", color: "#86efac", border: "1px solid #15803d", dot: "#4ade80" },
-  "재특진예정":{ bg: "#1e1b4b", color: "#c4b5fd", border: "1px solid #7c3aed", dot: "#a78bfa" },
-  "재특진중":  { bg: "#2e1065", color: "#d8b4fe", border: "1px solid #9333ea", dot: "#c084fc" },
-  "재특진완료":{ bg: "#2e1065", color: "#e9d5ff", border: "1px solid #7e22ce", dot: "#d8b4fe" },
-  "재재특진예정":{ bg: "#3b1764", color: "#f0abfc", border: "1px solid #a21caf", dot: "#e879f9" },
-  "재재특진중":  { bg: "#4a1942", color: "#f9a8d4", border: "1px solid #be185d", dot: "#f472b6" },
-  "재재특진완료":{ bg: "#4a1942", color: "#fda4af", border: "1px solid #9f1239", dot: "#fb7185" },
-  "전문예정": { bg: "#451a03", color: "#fcd34d", border: "1px solid #b45309", dot: "#fbbf24" },
-  "전문완료": { bg: "#451a03", color: "#fde68a", border: "1px solid #d97706", dot: "#fcd34d" },
-  "승인":     { bg: "#052e16", color: "#86efac", border: "1px solid #16a34a", dot: "#4ade80" },
-  "불승인":   { bg: "#450a0a", color: "#fca5a5", border: "1px solid #b91c1c", dot: "#f87171" },
-  "반려":     { bg: "#450a0a", color: "#fca5a5", border: "1px solid #dc2626", dot: "#f87171" },
-  "보류":     { bg: "#1c1917", color: "#d6d3d1", border: "1px solid #78716c", dot: "#a8a29e" },
-  "파기":     { bg: "#1e293b", color: "#94a3b8", border: "1px solid #475569", dot: "#64748b" },
+  "접수대기":    { bg: "#DCEEFA", color: "#1480B0", border: "1px solid #50BDEA", dot: "#29ABE2" },
+  "접수완료":    { bg: "#DCEEFA", color: "#1480B0", border: "1px solid #50BDEA", dot: "#29ABE2" },
+  "특진예정":    { bg: "#D0EAD9", color: "#006838", border: "1px solid #00854A", dot: "#006838" },
+  "특진중":      { bg: "#D0EAD9", color: "#006838", border: "1px solid #00854A", dot: "#006838" },
+  "특진완료":    { bg: "#D0EAD9", color: "#006838", border: "1px solid #00854A", dot: "#006838" },
+  "재특진예정":  { bg: "#D0EAD9", color: "#005530", border: "1px solid #006838", dot: "#005530" },
+  "재특진중":    { bg: "#D0EAD9", color: "#005530", border: "1px solid #006838", dot: "#005530" },
+  "재특진완료":  { bg: "#D0EAD9", color: "#005530", border: "1px solid #006838", dot: "#005530" },
+  "재재특진예정":{ bg: "#E8F5EE", color: "#004025", border: "1px solid #005530", dot: "#005530" },
+  "재재특진중":  { bg: "#E8F5EE", color: "#004025", border: "1px solid #005530", dot: "#005530" },
+  "재재특진완료":{ bg: "#E8F5EE", color: "#004025", border: "1px solid #005530", dot: "#005530" },
+  "전문예정":    { bg: "#FEF3C7", color: "#92400E", border: "1px solid #FCD34D", dot: "#F59E0B" },
+  "전문완료":    { bg: "#FEF3C7", color: "#92400E", border: "1px solid #FCD34D", dot: "#F59E0B" },
+  "승인":        { bg: "#E8F5D0", color: "#5A8A1F", border: "1px solid #A2D158", dot: "#8DC63F" },
+  "불승인":      { bg: "#FEF2F2", color: "#b91c1c", border: "1px solid #FECACA", dot: "#EF4444" },
+  "반려":        { bg: "#FEF2F2", color: "#b91c1c", border: "1px solid #FECACA", dot: "#EF4444" },
+  "보류":        { bg: "#F1F5F9", color: "#64748B", border: "1px solid #CBD5E1", dot: "#94A3B8" },
+  "파기":        { bg: "#F1F5F9", color: "#64748B", border: "1px solid #CBD5E1", dot: "#94A3B8" },
   // 영문 키
-  "CONSULTING":             { bg: "#1e1b4b", color: "#a5b4fc", border: "1px solid #4338ca", dot: "#818cf8" },
-  "CONTRACTED":             { bg: "#082f49", color: "#7dd3fc", border: "1px solid #0369a1", dot: "#38bdf8" },
-  "DOC_COLLECTING":         { bg: "#082f49", color: "#bae6fd", border: "1px solid #0284c7", dot: "#38bdf8" },
-  "SUBMITTED":              { bg: "#1a2e05", color: "#86efac", border: "1px solid #15803d", dot: "#4ade80" },
-  "EXAM_REQUESTED":         { bg: "#1a2e05", color: "#86efac", border: "1px solid #15803d", dot: "#4ade80" },
-  "EXAM_CLINIC_SELECTED":   { bg: "#052e16", color: "#6ee7b7", border: "1px solid #059669", dot: "#34d399" },
-  "EXAM_SCHEDULED":         { bg: "#052e16", color: "#6ee7b7", border: "1px solid #059669", dot: "#34d399" },
-  "IN_EXAM":                { bg: "#052e16", color: "#6ee7b7", border: "1px solid #059669", dot: "#34d399" },
-  "EXAM_DONE":              { bg: "#052e16", color: "#86efac", border: "1px solid #15803d", dot: "#4ade80" },
-  "EXPERT_REQUESTED":       { bg: "#451a03", color: "#fcd34d", border: "1px solid #b45309", dot: "#fbbf24" },
-  "EXPERT_CLINIC_SELECTED": { bg: "#451a03", color: "#fcd34d", border: "1px solid #b45309", dot: "#fbbf24" },
-  "EXPERT_DONE":            { bg: "#451a03", color: "#fde68a", border: "1px solid #d97706", dot: "#fcd34d" },
-  "BANK_REQUESTED":         { bg: "#1e1b4b", color: "#c4b5fd", border: "1px solid #7c3aed", dot: "#a78bfa" },
-  "BANK_SUBMITTED":         { bg: "#1e1b4b", color: "#c4b5fd", border: "1px solid #7c3aed", dot: "#a78bfa" },
-  "DECISION_RECEIVED":      { bg: "#2e1065", color: "#d8b4fe", border: "1px solid #9333ea", dot: "#c084fc" },
-  "REVIEWING":              { bg: "#1c1917", color: "#d6d3d1", border: "1px solid #78716c", dot: "#a8a29e" },
-  "INFO_REQUESTED":         { bg: "#1c1917", color: "#d6d3d1", border: "1px solid #78716c", dot: "#a8a29e" },
-  "APPROVED":               { bg: "#052e16", color: "#86efac", border: "1px solid #16a34a", dot: "#4ade80" },
-  "REJECTED":               { bg: "#450a0a", color: "#fca5a5", border: "1px solid #b91c1c", dot: "#f87171" },
-  "CLOSED":                 { bg: "#1e293b", color: "#94a3b8", border: "1px solid #475569", dot: "#64748b" },
-  "OBJECTION":              { bg: "#450a0a", color: "#fca5a5", border: "1px solid #dc2626", dot: "#f87171" },
-  "WAGE_CORRECTION":        { bg: "#1e1b4b", color: "#c4b5fd", border: "1px solid #7c3aed", dot: "#a78bfa" },
+  "CONSULTING":             { bg: "#DCEEFA", color: "#1480B0", border: "1px solid #50BDEA", dot: "#29ABE2" },
+  "CONTRACTED":             { bg: "#DCEEFA", color: "#1480B0", border: "1px solid #50BDEA", dot: "#29ABE2" },
+  "DOC_COLLECTING":         { bg: "#FEF3C7", color: "#92400E", border: "1px solid #FCD34D", dot: "#F59E0B" },
+  "SUBMITTED":              { bg: "#DCEEFA", color: "#1480B0", border: "1px solid #50BDEA", dot: "#29ABE2" },
+  "EXAM_REQUESTED":         { bg: "#D0EAD9", color: "#006838", border: "1px solid #00854A", dot: "#006838" },
+  "EXAM_CLINIC_SELECTED":   { bg: "#D0EAD9", color: "#006838", border: "1px solid #00854A", dot: "#006838" },
+  "EXAM_SCHEDULED":         { bg: "#D0EAD9", color: "#006838", border: "1px solid #00854A", dot: "#006838" },
+  "IN_EXAM":                { bg: "#D0EAD9", color: "#006838", border: "1px solid #00854A", dot: "#006838" },
+  "EXAM_DONE":              { bg: "#D0EAD9", color: "#006838", border: "1px solid #00854A", dot: "#006838" },
+  "EXPERT_REQUESTED":       { bg: "#D0EAD9", color: "#005530", border: "1px solid #006838", dot: "#005530" },
+  "EXPERT_CLINIC_SELECTED": { bg: "#D0EAD9", color: "#005530", border: "1px solid #006838", dot: "#005530" },
+  "EXPERT_DONE":            { bg: "#D0EAD9", color: "#005530", border: "1px solid #006838", dot: "#005530" },
+  "BANK_REQUESTED":         { bg: "#EEF7FD", color: "#1480B0", border: "1px solid #84D1F2", dot: "#29ABE2" },
+  "BANK_SUBMITTED":         { bg: "#EEF7FD", color: "#1480B0", border: "1px solid #84D1F2", dot: "#29ABE2" },
+  "DECISION_RECEIVED":      { bg: "#E8F5EE", color: "#005530", border: "1px solid #D0EAD9", dot: "#006838" },
+  "REVIEWING":              { bg: "#F1F5F9", color: "#64748B", border: "1px solid #CBD5E1", dot: "#94A3B8" },
+  "INFO_REQUESTED":         { bg: "#FEF3C7", color: "#92400E", border: "1px solid #FCD34D", dot: "#F59E0B" },
+  "APPROVED":               { bg: "#E8F5D0", color: "#5A8A1F", border: "1px solid #A2D158", dot: "#8DC63F" },
+  "REJECTED":               { bg: "#FEF2F2", color: "#b91c1c", border: "1px solid #FECACA", dot: "#EF4444" },
+  "CLOSED":                 { bg: "#F1F5F9", color: "#64748B", border: "1px solid #CBD5E1", dot: "#94A3B8" },
+  "OBJECTION":              { bg: "#FEF0E0", color: "#C45E00", border: "1px solid #FDBA74", dot: "#F97316" },
+  "WAGE_CORRECTION":        { bg: "#FEF0E0", color: "#C45E00", border: "1px solid #FDBA74", dot: "#F97316" },
 };
 
 function StatusBadge({ status }: { status: string }) {
@@ -234,8 +234,8 @@ const secWrap: React.CSSProperties = { border: "1px solid #e5e7eb", borderRadius
 function AccordionHeader({ open, onToggle, label }: { open: boolean; onToggle: () => void; label: string }) {
   return (
     <button onClick={onToggle} style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 16px", background: open ? "#eff6ff" : "#f9fafb", border: "none", borderBottom: open ? "1px solid #bfdbfe" : "none", cursor: "pointer", fontFamily: "inherit" }}>
-      <span style={{ fontSize: 14, fontWeight: 700, color: open ? "#1d4ed8" : "#374151" }}>{label}</span>
-      <span style={{ fontSize: 12, color: open ? "#1d4ed8" : "#6b7280" }}>{open ? "▲" : "▼"}</span>
+      <span style={{ fontSize: 14, fontWeight: 700, color: open ? "#1A95C8" : "#374151" }}>{label}</span>
+      <span style={{ fontSize: 12, color: open ? "#1A95C8" : "#6b7280" }}>{open ? "▲" : "▼"}</span>
     </button>
   );
 }
@@ -364,7 +364,7 @@ function ExamRoundBlock({
     <div style={{ border: "1px solid #e5e7eb", borderRadius: 6, marginBottom: 8, overflow: "hidden" }}>
       {/* 아코디언 헤더 */}
       <button onClick={() => setOpen((v) => !v)} style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 16px", background: open ? "#eff6ff" : "#fafafa", border: "none", cursor: "pointer", fontFamily: "inherit" }}>
-        <span style={{ fontSize: 13, fontWeight: 700, color: open ? "#1d4ed8" : "#374151" }}>{label}</span>
+        <span style={{ fontSize: 13, fontWeight: 700, color: open ? "#1A95C8" : "#374151" }}>{label}</span>
         <span style={{ fontSize: 12, color: "#9ca3af" }}>{summary}  {open ? "▲" : "▼"}</span>
       </button>
 
@@ -543,10 +543,10 @@ function ExamRoundBlock({
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 12 }}>
-            <button onClick={save} disabled={saving} style={{ background: "#2563eb", color: "white", border: "none", borderRadius: 6, padding: "6px 16px", fontSize: 12, fontWeight: 600, cursor: "pointer", opacity: saving ? 0.6 : 1 }}>
+            <button onClick={save} disabled={saving} style={{ background: "#29ABE2", color: "white", border: "none", borderRadius: 6, padding: "6px 16px", fontSize: 12, fontWeight: 600, cursor: "pointer", opacity: saving ? 0.6 : 1 }}>
               {saving ? "저장중..." : "이 회차 저장"}
             </button>
-            {msg && <span style={{ fontSize: 12, color: msg.includes("오류") ? "#dc2626" : "#16a34a" }}>{msg}</span>}
+            {msg && <span style={{ fontSize: 12, color: msg.includes("오류") ? "#dc2626" : "#8DC63F" }}>{msg}</span>}
           </div>
         </div>
       )}
@@ -577,13 +577,13 @@ function HearingStepBar({ status }: { status: string }) {
         return (
           <div key={i} style={{ display: "flex", alignItems: "center", flexShrink: 0 }}>
             <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
-              <div style={{ width: 28, height: 28, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, background: done ? "#16a34a" : active ? "#2563eb" : "#e5e7eb", color: done || active ? "white" : "#9ca3af", border: active ? "2px solid #1d4ed8" : "none" }}>
+              <div style={{ width: 28, height: 28, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, background: done ? "#8DC63F" : active ? "#29ABE2" : "#e5e7eb", color: done || active ? "white" : "#9ca3af", border: active ? "2px solid #1A95C8" : "none" }}>
                 {done ? "✓" : i + 1}
               </div>
-              <span style={{ fontSize: 10, color: active ? "#1d4ed8" : done ? "#16a34a" : "#9ca3af", fontWeight: active ? 700 : 400, whiteSpace: "nowrap" }}>{step.label}</span>
+              <span style={{ fontSize: 10, color: active ? "#1A95C8" : done ? "#8DC63F" : "#9ca3af", fontWeight: active ? 700 : 400, whiteSpace: "nowrap" }}>{step.label}</span>
             </div>
             {i < HL_STEPS.length - 1 && (
-              <div style={{ width: 20, height: 2, background: i < currentIdx ? "#16a34a" : "#e5e7eb", marginBottom: 18, flexShrink: 0 }} />
+              <div style={{ width: 20, height: 2, background: i < currentIdx ? "#8DC63F" : "#e5e7eb", marginBottom: 18, flexShrink: 0 }} />
             )}
           </div>
         );
@@ -643,10 +643,10 @@ function HearingLossTab({ caseId, initial, status, onStatusChange }: { caseId: s
 
   const SaveBar = () => (
     <div style={{ display: "flex", alignItems: "center", gap: 12, paddingTop: 16, borderTop: "1px solid #e5e7eb" }}>
-      <button onClick={saveDetail} disabled={saving} style={{ background: "#2563eb", color: "white", border: "none", borderRadius: 6, padding: "8px 20px", fontSize: 13, fontWeight: 600, cursor: "pointer", opacity: saving ? 0.6 : 1 }}>
+      <button onClick={saveDetail} disabled={saving} style={{ background: "#29ABE2", color: "white", border: "none", borderRadius: 6, padding: "8px 20px", fontSize: 13, fontWeight: 600, cursor: "pointer", opacity: saving ? 0.6 : 1 }}>
         {saving ? "저장중..." : "저장"}
       </button>
-      {saveMsg && <span style={{ fontSize: 13, color: saveMsg.includes("오류") ? "#dc2626" : "#16a34a" }}>{saveMsg}</span>}
+      {saveMsg && <span style={{ fontSize: 13, color: saveMsg.includes("오류") ? "#dc2626" : "#8DC63F" }}>{saveMsg}</span>}
     </div>
   );
 
@@ -831,7 +831,7 @@ function HearingLossTab({ caseId, initial, status, onStatusChange }: { caseId: s
             ))}
 
             <div style={{ marginBottom: 12 }}>
-              <button onClick={() => setShowReExam((v) => !v)} style={{ background: showReExam ? "#eff6ff" : "white", border: "1px solid #d1d5db", borderRadius: 6, padding: "6px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer", color: showReExam ? "#1d4ed8" : "#374151" }}>
+              <button onClick={() => setShowReExam((v) => !v)} style={{ background: showReExam ? "#eff6ff" : "white", border: "1px solid #d1d5db", borderRadius: 6, padding: "6px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer", color: showReExam ? "#1A95C8" : "#374151" }}>
                 {showReExam ? "▲ 재특진 숨기기" : "▼ 재특진 입력"}
               </button>
             </div>
@@ -843,7 +843,7 @@ function HearingLossTab({ caseId, initial, status, onStatusChange }: { caseId: s
                   <ExamRoundBlock key={r} caseId={caseId} examSet="RE" round={r} label={`${r}차`} exams={exams} setExams={setExams} />
                 ))}
                 <div style={{ marginBottom: 12 }}>
-                  <button onClick={() => setShowReReExam((v) => !v)} style={{ background: showReReExam ? "#eff6ff" : "white", border: "1px solid #d1d5db", borderRadius: 6, padding: "6px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer", color: showReReExam ? "#1d4ed8" : "#374151" }}>
+                  <button onClick={() => setShowReReExam((v) => !v)} style={{ background: showReReExam ? "#eff6ff" : "white", border: "1px solid #d1d5db", borderRadius: 6, padding: "6px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer", color: showReReExam ? "#1A95C8" : "#374151" }}>
                     {showReReExam ? "▲ 재재특진 숨기기" : "▼ 재재특진 입력"}
                   </button>
                 </div>
@@ -1017,10 +1017,10 @@ function CopdTab({ caseId }: { caseId: string }) {
 
   const SaveBar = () => (
     <div style={{ display: "flex", alignItems: "center", gap: 12, paddingTop: 16, borderTop: "1px solid #e5e7eb" }}>
-      <button onClick={save} disabled={saving} style={{ background: "#2563eb", color: "white", border: "none", borderRadius: 6, padding: "8px 20px", fontSize: 13, fontWeight: 600, cursor: "pointer", opacity: saving ? 0.6 : 1 }}>
+      <button onClick={save} disabled={saving} style={{ background: "#29ABE2", color: "white", border: "none", borderRadius: 6, padding: "8px 20px", fontSize: 13, fontWeight: 600, cursor: "pointer", opacity: saving ? 0.6 : 1 }}>
         {saving ? "저장중..." : "저장"}
       </button>
-      {saveMsg && <span style={{ fontSize: 13, color: saveMsg.includes("오류") ? "#dc2626" : "#16a34a" }}>{saveMsg}</span>}
+      {saveMsg && <span style={{ fontSize: 13, color: saveMsg.includes("오류") ? "#dc2626" : "#8DC63F" }}>{saveMsg}</span>}
     </div>
   );
 
@@ -1227,10 +1227,10 @@ function PneumoconiosisTab({ caseId }: { caseId: string }) {
 
   const SaveBar = () => (
     <div style={{ display: "flex", alignItems: "center", gap: 12, paddingTop: 16, borderTop: "1px solid #e5e7eb" }}>
-      <button onClick={save} disabled={saving} style={{ background: "#2563eb", color: "white", border: "none", borderRadius: 6, padding: "8px 20px", fontSize: 13, fontWeight: 600, cursor: "pointer", opacity: saving ? 0.6 : 1 }}>
+      <button onClick={save} disabled={saving} style={{ background: "#29ABE2", color: "white", border: "none", borderRadius: 6, padding: "8px 20px", fontSize: 13, fontWeight: 600, cursor: "pointer", opacity: saving ? 0.6 : 1 }}>
         {saving ? "저장중..." : "저장"}
       </button>
-      {saveMsg && <span style={{ fontSize: 13, color: saveMsg.includes("오류") ? "#dc2626" : "#16a34a" }}>{saveMsg}</span>}
+      {saveMsg && <span style={{ fontSize: 13, color: saveMsg.includes("오류") ? "#dc2626" : "#8DC63F" }}>{saveMsg}</span>}
     </div>
   );
 
@@ -1474,7 +1474,7 @@ function BasicInfoTab({ caseData, onUpdated }: { caseData: CaseData; onUpdated: 
           <textarea style={{ ...inputStyle, minHeight: 72, resize: "vertical" }} value={form.memo} onChange={(e) => setForm({ ...form, memo: e.target.value })} />
         </div>
         <div style={{ gridColumn: "1 / -1", display: "flex", gap: 8 }}>
-          <button onClick={save} disabled={saving} style={{ background: "#2563eb", color: "white", border: "none", borderRadius: 6, padding: "7px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer", opacity: saving ? 0.6 : 1 }}>
+          <button onClick={save} disabled={saving} style={{ background: "#29ABE2", color: "white", border: "none", borderRadius: 6, padding: "7px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer", opacity: saving ? 0.6 : 1 }}>
             {saving ? "저장중..." : "저장"}
           </button>
           <button onClick={() => setEditing(false)} style={{ background: "white", color: "#374151", border: "1px solid #e5e7eb", borderRadius: 6, padding: "7px 14px", fontSize: 13, cursor: "pointer" }}>취소</button>
@@ -1493,7 +1493,7 @@ function FormTab({ caseId }: { caseId: string }) {
         <div key={name} style={{ background: "white", border: "1px solid #e5e7eb", borderRadius: 10, padding: "20px 16px", display: "flex", flexDirection: "column", gap: 12, boxShadow: "0 1px 3px rgba(0,0,0,0.05)" }}>
           <div style={{ fontSize: 24, textAlign: "center" }}>📄</div>
           <div style={{ fontSize: 13, fontWeight: 600, color: "#374151", textAlign: "center" }}>{name}</div>
-          <a href={`/api/cases/${caseId}/generate-disability-claim`} style={{ display: "block", background: "#2563eb", color: "white", border: "none", borderRadius: 6, padding: "7px 0", fontSize: 12, fontWeight: 600, textAlign: "center", textDecoration: "none", cursor: "pointer" }}>
+          <a href={`/api/cases/${caseId}/generate-disability-claim`} style={{ display: "block", background: "#29ABE2", color: "white", border: "none", borderRadius: 6, padding: "7px 0", fontSize: 12, fontWeight: 600, textAlign: "center", textDecoration: "none", cursor: "pointer" }}>
             PDF 생성
           </a>
         </div>
@@ -1543,7 +1543,7 @@ export default function CaseDetailPage() {
   if (error || !caseData) return (
     <div style={{ ...S, padding: 24, textAlign: "center" }}>
       <div style={{ color: "#dc2626", marginBottom: 12 }}>⚠ {error ?? "데이터 없음"}</div>
-      <button onClick={() => router.push("/cases")} style={{ color: "#2563eb", background: "none", border: "none", cursor: "pointer", fontSize: 13, textDecoration: "underline" }}>목록으로</button>
+      <button onClick={() => router.push("/cases")} style={{ color: "#29ABE2", background: "none", border: "none", cursor: "pointer", fontSize: 13, textDecoration: "underline" }}>목록으로</button>
     </div>
   );
 
@@ -1585,7 +1585,7 @@ export default function CaseDetailPage() {
       {/* 탭 */}
       <div style={{ background: "white", borderBottom: "1px solid #e5e7eb", padding: "0 24px", display: "flex" }}>
         {TABS.map((tab) => (
-          <button key={tab} onClick={() => setActiveTab(tab)} style={{ background: "none", border: "none", borderBottom: activeTab === tab ? "2px solid #2563eb" : "2px solid transparent", color: activeTab === tab ? "#2563eb" : "#6b7280", fontWeight: activeTab === tab ? 700 : 400, fontSize: 13, padding: "14px 20px", cursor: "pointer", marginBottom: -1 }}>
+          <button key={tab} onClick={() => setActiveTab(tab)} style={{ background: "none", border: "none", borderBottom: activeTab === tab ? "2px solid #29ABE2" : "2px solid transparent", color: activeTab === tab ? "#29ABE2" : "#6b7280", fontWeight: activeTab === tab ? 700 : 400, fontSize: 13, padding: "14px 20px", cursor: "pointer", marginBottom: -1 }}>
             {tab}
           </button>
         ))}

@@ -199,7 +199,7 @@ export default function ImportPage() {
   return (
     <div style={{ maxWidth: 640 }}>
       <p style={{ fontSize: 11, color: "#9ca3af", fontWeight: 700, letterSpacing: 2, margin: "0 0 4px 0" }}>ADMIN</p>
-      <h1 style={{ fontSize: 20, fontWeight: 800, color: "#111827", margin: "0 0 24px 0" }}>데이터 임포트</h1>
+      <h1 style={{ fontSize: 20, fontWeight: 800, color: "#005530", margin: "0 0 24px 0" }}>데이터 임포트</h1>
 
       <div style={{ background: "white", borderRadius: 10, border: "1px solid #e5e7eb", padding: 24, boxShadow: "0 1px 3px rgba(0,0,0,0.05)", marginBottom: 16 }}>
         {/* 상병 선택 */}
@@ -258,7 +258,7 @@ export default function ImportPage() {
             onDragLeave={() => setDragging(false)}
             onDrop={handleDrop}
             style={{
-              border: `2px dashed ${dragging ? "#2563eb" : "#d1d5db"}`,
+              border: `2px dashed ${dragging ? "#29ABE2" : "#d1d5db"}`,
               borderRadius: 8,
               padding: "32px 20px",
               textAlign: "center",
@@ -305,7 +305,7 @@ export default function ImportPage() {
           onClick={handleSubmit}
           disabled={!file || !selectedTf || loading}
           style={{
-            background: !file || !selectedTf || loading ? "#9ca3af" : "#2563eb",
+            background: !file || !selectedTf || loading ? "#9ca3af" : "#29ABE2",
             color: "white",
             border: "none",
             borderRadius: 6,
@@ -328,7 +328,7 @@ export default function ImportPage() {
       {/* 진행상황 */}
       {progress && (
         <div style={{ background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: 8, padding: "14px 16px", marginBottom: 16, display: "flex", alignItems: "center", gap: 12 }}>
-          <span style={{ display: "inline-block", width: 16, height: 16, border: "2px solid #93c5fd", borderTopColor: "#2563eb", borderRadius: "50%", animation: "spin 0.8s linear infinite", flexShrink: 0 }} />
+          <span style={{ display: "inline-block", width: 16, height: 16, border: "2px solid #93c5fd", borderTopColor: "#29ABE2", borderRadius: "50%", animation: "spin 0.8s linear infinite", flexShrink: 0 }} />
           <div style={{ fontSize: 13, fontWeight: 700, color: "#1d4ed8" }}>
             처리 중...
             {progress.total > 0 && ` ${Math.min(progress.done + BATCH_SIZE, progress.total)}/${progress.total}건`}
@@ -452,7 +452,7 @@ export default function ImportPage() {
             <div style={{ fontSize: 12, color: "#6b7280", lineHeight: 1.6 }}>상병별 TF를 선택하여 재해자·사건 데이터를 일괄 임포트합니다. 상단의 TF 임포트 섹션을 이용하세요.</div>
             <button
               onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
-              style={{ background: "#2563eb", color: "white", border: "none", borderRadius: 6, padding: "8px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer", textAlign: "left" }}
+              style={{ background: "#29ABE2", color: "white", border: "none", borderRadius: 6, padding: "8px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer", textAlign: "left" }}
             >
               ↑ 페이지 상단 TF 임포트로 이동
             </button>
@@ -539,7 +539,7 @@ function ImportCard({
               onDragOver={(e) => { e.preventDefault(); setCardDragging(true); }}
               onDragLeave={() => setCardDragging(false)}
               onDrop={(e) => { e.preventDefault(); setCardDragging(false); const f = e.dataTransfer.files[0]; if (f) { setCardFile(f); setCardResult(null); setCardResult2(null); setCardError(null); } }}
-              style={{ border: `2px dashed ${cardDragging ? "#2563eb" : "#d1d5db"}`, borderRadius: 8, padding: "20px 12px", textAlign: "center", cursor: "pointer", background: cardDragging ? "#eff6ff" : "#f9fafb", transition: "all 0.15s" }}
+              style={{ border: `2px dashed ${cardDragging ? "#29ABE2" : "#d1d5db"}`, borderRadius: 8, padding: "20px 12px", textAlign: "center", cursor: "pointer", background: cardDragging ? "#eff6ff" : "#f9fafb", transition: "all 0.15s" }}
             >
               <div style={{ fontSize: 20, marginBottom: 4 }}>📁</div>
               {cardFile ? (
@@ -553,7 +553,7 @@ function ImportCard({
             </div>
           </div>
           {notice && <div style={{ fontSize: 11, color: "#6b7280", background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 6, padding: "6px 10px" }}>{notice}</div>}
-          <button onClick={run} disabled={!cardFile || cardLoading} style={{ background: !cardFile || cardLoading ? "#9ca3af" : "#2563eb", color: "white", border: "none", borderRadius: 6, padding: "8px 16px", fontSize: 13, fontWeight: 600, cursor: !cardFile || cardLoading ? "not-allowed" : "pointer", display: "flex", alignItems: "center", gap: 6 }}>
+          <button onClick={run} disabled={!cardFile || cardLoading} style={{ background: !cardFile || cardLoading ? "#9ca3af" : "#29ABE2", color: "white", border: "none", borderRadius: 6, padding: "8px 16px", fontSize: 13, fontWeight: 600, cursor: !cardFile || cardLoading ? "not-allowed" : "pointer", display: "flex", alignItems: "center", gap: 6 }}>
             {cardLoading && <span style={{ display: "inline-block", width: 12, height: 12, border: "2px solid rgba(255,255,255,0.3)", borderTopColor: "white", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />}
             {cardLoading ? "처리중..." : "임포트 시작"}
           </button>

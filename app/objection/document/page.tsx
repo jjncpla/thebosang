@@ -86,7 +86,7 @@ export default function ObjectionDocumentPage() {
 
       <div style={{ marginBottom: 16 }}>
         <p style={{ fontSize: 11, color: "#9ca3af", fontWeight: 700, letterSpacing: 2, margin: "0 0 4px 0" }}>OBJECTION DOCUMENT</p>
-        <h1 style={{ fontSize: 20, fontWeight: 800, color: "#111827", margin: 0 }}>이유서·의견서 작성</h1>
+        <h1 style={{ fontSize: 20, fontWeight: 800, color: "#005530", margin: 0 }}>이유서·의견서 작성</h1>
       </div>
 
       {/* Case Search */}
@@ -100,7 +100,7 @@ export default function ObjectionDocumentPage() {
             placeholder="성명 또는 TF명으로 검색"
             style={{ flex: 1, border: "1px solid #e5e7eb", borderRadius: 6, padding: "7px 12px", fontSize: 13, color: "#374151", background: "#f9fafb", outline: "none" }}
           />
-          <button onClick={handleSearch} disabled={searching} style={{ background: "#2563eb", color: "white", border: "none", borderRadius: 6, padding: "7px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+          <button onClick={handleSearch} disabled={searching} style={{ background: "#29ABE2", color: "white", border: "none", borderRadius: 6, padding: "7px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
             {searching ? "검색 중..." : "검색"}
           </button>
         </div>
@@ -135,7 +135,7 @@ export default function ObjectionDocumentPage() {
                 style={{
                   width: "100%", display: "block", padding: "11px 16px", fontSize: 13,
                   background: selectedForm === ft.id ? "#eff6ff" : "white",
-                  border: "none", borderLeft: selectedForm === ft.id ? "3px solid #2563eb" : "3px solid transparent",
+                  border: "none", borderLeft: selectedForm === ft.id ? "3px solid #29ABE2" : "3px solid transparent",
                   color: selectedForm === ft.id ? "#1d4ed8" : "#374151",
                   fontWeight: selectedForm === ft.id ? 700 : 400,
                   cursor: "pointer", textAlign: "left",
@@ -193,11 +193,11 @@ export default function ObjectionDocumentPage() {
               ) : null}
               {selectedForm === "id" && (
                 <div style={{ background: "#f8fafc", border: "1px solid #e5e7eb", borderRadius: 8, padding: "12px 14px", marginBottom: 12, fontSize: 12, color: "#6b7280" }}>
-                  <div style={{ marginBottom: 6 }}>재해자 신분증: DB에 등록된 이미지가 없습니다. <button style={{ color: "#2563eb", background: "none", border: "none", cursor: "pointer", textDecoration: "underline", fontSize: 12 }}>파일 첨부</button></div>
+                  <div style={{ marginBottom: 6 }}>재해자 신분증: DB에 등록된 이미지가 없습니다. <button style={{ color: "#29ABE2", background: "none", border: "none", cursor: "pointer", textDecoration: "underline", fontSize: 12 }}>파일 첨부</button></div>
                   <div style={{ color: "#9ca3af" }}>대리인 신분증: 추후 일괄 DB 등록 예정</div>
                 </div>
               )}
-              <button onClick={handleGenerate} style={{ background: "#2563eb", color: "white", border: "none", borderRadius: 6, padding: "8px 20px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>PDF 생성</button>
+              <button onClick={handleGenerate} style={{ background: "#29ABE2", color: "white", border: "none", borderRadius: 6, padding: "8px 20px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>PDF 생성</button>
             </div>
           )}
 

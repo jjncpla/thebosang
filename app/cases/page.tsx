@@ -63,24 +63,24 @@ function formatDate(iso: string | null | undefined): string {
 }
 
 const STATUS_COLOR: Record<string, { bg: string; color: string; border: string; dot: string }> = {
-  "접수대기":    { bg: "#1e1b4b", color: "#a5b4fc", border: "1px solid #4338ca", dot: "#818cf8" },
-  "접수완료":    { bg: "#082f49", color: "#7dd3fc", border: "1px solid #0369a1", dot: "#38bdf8" },
-  "특진예정":    { bg: "#1a2e05", color: "#86efac", border: "1px solid #15803d", dot: "#4ade80" },
-  "특진중":      { bg: "#052e16", color: "#6ee7b7", border: "1px solid #059669", dot: "#34d399" },
-  "특진완료":    { bg: "#052e16", color: "#86efac", border: "1px solid #15803d", dot: "#4ade80" },
-  "재특진예정":  { bg: "#1e1b4b", color: "#c4b5fd", border: "1px solid #7c3aed", dot: "#a78bfa" },
-  "재특진중":    { bg: "#2e1065", color: "#d8b4fe", border: "1px solid #9333ea", dot: "#c084fc" },
-  "재특진완료":  { bg: "#2e1065", color: "#e9d5ff", border: "1px solid #7e22ce", dot: "#d8b4fe" },
-  "재재특진예정":{ bg: "#3b1764", color: "#f0abfc", border: "1px solid #a21caf", dot: "#e879f9" },
-  "재재특진중":  { bg: "#4a1942", color: "#f9a8d4", border: "1px solid #be185d", dot: "#f472b6" },
-  "재재특진완료":{ bg: "#4a1942", color: "#fda4af", border: "1px solid #9f1239", dot: "#fb7185" },
-  "전문예정":    { bg: "#451a03", color: "#fcd34d", border: "1px solid #b45309", dot: "#fbbf24" },
-  "전문완료":    { bg: "#451a03", color: "#fde68a", border: "1px solid #d97706", dot: "#fcd34d" },
-  "승인":        { bg: "#052e16", color: "#86efac", border: "1px solid #16a34a", dot: "#4ade80" },
-  "불승인":      { bg: "#450a0a", color: "#fca5a5", border: "1px solid #b91c1c", dot: "#f87171" },
-  "반려":        { bg: "#450a0a", color: "#fca5a5", border: "1px solid #dc2626", dot: "#f87171" },
-  "보류":        { bg: "#1c1917", color: "#d6d3d1", border: "1px solid #78716c", dot: "#a8a29e" },
-  "파기":        { bg: "#1e293b", color: "#94a3b8", border: "1px solid #475569", dot: "#64748b" },
+  "접수대기":    { bg: "#DCEEFA", color: "#1480B0", border: "1px solid #50BDEA", dot: "#29ABE2" },
+  "접수완료":    { bg: "#DCEEFA", color: "#1480B0", border: "1px solid #50BDEA", dot: "#29ABE2" },
+  "특진예정":    { bg: "#D0EAD9", color: "#006838", border: "1px solid #00854A", dot: "#006838" },
+  "특진중":      { bg: "#D0EAD9", color: "#006838", border: "1px solid #00854A", dot: "#006838" },
+  "특진완료":    { bg: "#D0EAD9", color: "#006838", border: "1px solid #00854A", dot: "#006838" },
+  "재특진예정":  { bg: "#D0EAD9", color: "#005530", border: "1px solid #006838", dot: "#005530" },
+  "재특진중":    { bg: "#D0EAD9", color: "#005530", border: "1px solid #006838", dot: "#005530" },
+  "재특진완료":  { bg: "#D0EAD9", color: "#005530", border: "1px solid #006838", dot: "#005530" },
+  "재재특진예정":{ bg: "#E8F5EE", color: "#004025", border: "1px solid #005530", dot: "#005530" },
+  "재재특진중":  { bg: "#E8F5EE", color: "#004025", border: "1px solid #005530", dot: "#005530" },
+  "재재특진완료":{ bg: "#E8F5EE", color: "#004025", border: "1px solid #005530", dot: "#005530" },
+  "전문예정":    { bg: "#FEF3C7", color: "#92400E", border: "1px solid #FCD34D", dot: "#F59E0B" },
+  "전문완료":    { bg: "#FEF3C7", color: "#92400E", border: "1px solid #FCD34D", dot: "#F59E0B" },
+  "승인":        { bg: "#E8F5D0", color: "#5A8A1F", border: "1px solid #A2D158", dot: "#8DC63F" },
+  "불승인":      { bg: "#FEF2F2", color: "#b91c1c", border: "1px solid #FECACA", dot: "#EF4444" },
+  "반려":        { bg: "#FEF2F2", color: "#b91c1c", border: "1px solid #FECACA", dot: "#EF4444" },
+  "보류":        { bg: "#F1F5F9", color: "#64748B", border: "1px solid #CBD5E1", dot: "#94A3B8" },
+  "파기":        { bg: "#F1F5F9", color: "#64748B", border: "1px solid #CBD5E1", dot: "#94A3B8" },
 };
 
 function StatusBadge({ status }: { status: string }) {
@@ -194,9 +194,9 @@ function FilterControl({
                   padding: "3px 10px",
                   fontSize: 12,
                   borderRadius: 999,
-                  border: active ? "1px solid #2563eb" : "1px solid #e5e7eb",
+                  border: active ? "1px solid #29ABE2" : "1px solid #e5e7eb",
                   background: active ? "#eff6ff" : "#f9fafb",
-                  color: active ? "#2563eb" : "#374151",
+                  color: active ? "#29ABE2" : "#374151",
                   cursor: "pointer",
                   fontWeight: active ? 600 : 400,
                 }}
@@ -276,9 +276,9 @@ function FilterControl({
                   padding: "3px 10px",
                   fontSize: 12,
                   borderRadius: 999,
-                  border: active ? "1px solid #2563eb" : "1px solid #e5e7eb",
+                  border: active ? "1px solid #29ABE2" : "1px solid #e5e7eb",
                   background: active ? "#eff6ff" : "#f9fafb",
-                  color: active ? "#2563eb" : "#374151",
+                  color: active ? "#29ABE2" : "#374151",
                   cursor: "pointer",
                   fontWeight: active ? 600 : 400,
                 }}
@@ -476,9 +476,9 @@ function BodyPartPanel({
               onClick={() => { onCaseTypeChange(p.key); onPartClick(null); }}
               style={{
                 padding: "6px 16px", fontSize: 13, borderRadius: 6, cursor: "pointer",
-                border: selectedCaseType === p.key ? "1px solid #2563eb" : "1px solid #e5e7eb",
+                border: selectedCaseType === p.key ? "1px solid #29ABE2" : "1px solid #e5e7eb",
                 background: selectedCaseType === p.key ? "#eff6ff" : "#f9fafb",
-                color: selectedCaseType === p.key ? "#2563eb" : "#374151",
+                color: selectedCaseType === p.key ? "#29ABE2" : "#374151",
                 fontWeight: selectedCaseType === p.key ? 700 : 400,
               }}
             >{p.label}</button>
@@ -496,7 +496,7 @@ function BodyPartPanel({
               const isActive = activePart === baseId;
               return (
                 <g key={p.id} onClick={() => { onCaseTypeChange("MUSCULOSKELETAL"); onPartClick(isActive && p.id === baseId ? null : baseId); }} style={{ cursor: "pointer" }}>
-                  <g fill={isActive ? "#2563eb" : "#94a3b8"} fillOpacity={isActive ? 0.85 : 0.5} stroke={isActive ? "#1d4ed8" : "#64748b"} strokeWidth="1">
+                  <g fill={isActive ? "#29ABE2" : "#94a3b8"} fillOpacity={isActive ? 0.85 : 0.5} stroke={isActive ? "#1A95C8" : "#64748b"} strokeWidth="1">
                     {p.shape}
                   </g>
                 </g>
@@ -664,7 +664,7 @@ export default function CasesPage() {
         <div>
           <p style={{ fontSize: 11, color: "#9ca3af", fontWeight: 700, letterSpacing: 2, margin: "0 0 4px 0" }}>CASE MANAGEMENT</p>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <h1 style={{ fontSize: 20, fontWeight: 800, color: "#111827", margin: 0 }}>사건 목록</h1>
+            <h1 style={{ fontSize: 20, fontWeight: 800, color: "#005530", margin: 0 }}>사건 목록</h1>
             {!loading && !error && (
               <span style={{ background: "#e0e7ff", color: "#3730a3", fontSize: 12, fontWeight: 700, padding: "2px 10px", borderRadius: 999 }}>
                 {cases.length}건
@@ -689,7 +689,7 @@ export default function CasesPage() {
           </button>
           <button
             onClick={() => router.push("/cases/new")}
-            style={{ background: "#2563eb", color: "white", border: "none", borderRadius: 6, padding: "8px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
+            style={{ background: "#29ABE2", color: "white", border: "none", borderRadius: 6, padding: "8px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
           >
             + 새 사건 등록
           </button>
@@ -739,9 +739,9 @@ export default function CasesPage() {
             onClick={() => setShowBodyPanel(v => !v)}
             style={{
               fontSize: 11, padding: "3px 10px", borderRadius: 5, cursor: "pointer",
-              border: showBodyPanel ? "1px solid #2563eb" : "1px solid #e5e7eb",
+              border: showBodyPanel ? "1px solid #29ABE2" : "1px solid #e5e7eb",
               background: showBodyPanel ? "#eff6ff" : "#f9fafb",
-              color: showBodyPanel ? "#2563eb" : "#6b7280",
+              color: showBodyPanel ? "#29ABE2" : "#6b7280",
               fontWeight: showBodyPanel ? 700 : 400,
             }}
           >🫀 상병으로 보기</button>
@@ -761,9 +761,9 @@ export default function CasesPage() {
               padding: "6px 16px",
               fontSize: 13,
               borderRadius: 6,
-              border: selectedCaseType === "" ? "1px solid #2563eb" : "1px solid #e5e7eb",
+              border: selectedCaseType === "" ? "1px solid #29ABE2" : "1px solid #e5e7eb",
               background: selectedCaseType === "" ? "#eff6ff" : "#f9fafb",
-              color: selectedCaseType === "" ? "#2563eb" : "#374151",
+              color: selectedCaseType === "" ? "#29ABE2" : "#374151",
               cursor: "pointer",
               fontWeight: selectedCaseType === "" ? 700 : 400,
             }}
@@ -778,9 +778,9 @@ export default function CasesPage() {
                 padding: "6px 16px",
                 fontSize: 13,
                 borderRadius: 6,
-                border: selectedCaseType === k ? "1px solid #2563eb" : "1px solid #e5e7eb",
+                border: selectedCaseType === k ? "1px solid #29ABE2" : "1px solid #e5e7eb",
                 background: selectedCaseType === k ? "#eff6ff" : "#f9fafb",
-                color: selectedCaseType === k ? "#2563eb" : "#374151",
+                color: selectedCaseType === k ? "#29ABE2" : "#374151",
                 cursor: "pointer",
                 fontWeight: selectedCaseType === k ? 700 : 400,
               }}
@@ -831,7 +831,7 @@ export default function CasesPage() {
         {error && (
           <div style={{ padding: "12px 16px", background: "#fef2f2", color: "#dc2626", fontSize: 13, borderBottom: "1px solid #fecaca", display: "flex", alignItems: "center", gap: 10 }}>
             ⚠ {error}
-            <button onClick={fetchCases} style={{ color: "#2563eb", background: "none", border: "none", cursor: "pointer", fontSize: 13, textDecoration: "underline" }}>다시 시도</button>
+            <button onClick={fetchCases} style={{ color: "#29ABE2", background: "none", border: "none", cursor: "pointer", fontSize: 13, textDecoration: "underline" }}>다시 시도</button>
           </div>
         )}
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>

@@ -44,10 +44,10 @@ const ROUTE_SUB_MAP: Record<string, string[]> = {
 };
 
 const STATUS_BADGE: Record<string, { bg: string; color: string; border: string }> = {
-  약정: { bg: "#052e16", color: "#86efac", border: "1px solid #15803d" },
-  종결: { bg: "#1c1917", color: "#d6d3d1", border: "1px solid #78716c" },
-  연락대기: { bg: "#431407", color: "#fdba74", border: "1px solid #c2410c" },
-  진행중: { bg: "#0c1a2e", color: "#93c5fd", border: "1px solid #1d4ed8" },
+  약정: { bg: "#E8F5D0", color: "#5A8A1F", border: "1px solid #A2D158" },
+  종결: { bg: "#F1F5F9", color: "#64748B", border: "1px solid #CBD5E1" },
+  연락대기: { bg: "#FEF3C7", color: "#92400E", border: "1px solid #FCD34D" },
+  진행중: { bg: "#D0EAD9", color: "#006838", border: "1px solid #00854A" },
 };
 
 function StatusBadge({ status }: { status: string }) {
@@ -61,7 +61,7 @@ function StatusBadge({ status }: { status: string }) {
 
 function CaseTypeBadge({ type }: { type: string }) {
   return (
-    <span style={{ display: "inline-block", padding: "1px 7px", borderRadius: 4, fontSize: 11, fontWeight: 600, background: "#eff6ff", color: "#2563eb", border: "1px solid #bfdbfe", marginRight: 3 }}>
+    <span style={{ display: "inline-block", padding: "1px 7px", borderRadius: 4, fontSize: 11, fontWeight: 600, background: "#eff6ff", color: "#29ABE2", border: "1px solid #bfdbfe", marginRight: 3 }}>
       {type}
     </span>
   );
@@ -219,9 +219,9 @@ function ConsultationModal({
                   onClick={() => toggleCaseType(t)}
                   style={{
                     padding: "4px 12px", fontSize: 12, borderRadius: 999, cursor: "pointer",
-                    border: active ? "1px solid #2563eb" : "1px solid #e5e7eb",
+                    border: active ? "1px solid #29ABE2" : "1px solid #e5e7eb",
                     background: active ? "#eff6ff" : "#f9fafb",
-                    color: active ? "#2563eb" : "#374151",
+                    color: active ? "#29ABE2" : "#374151",
                     fontWeight: active ? 700 : 400,
                   }}
                 >
@@ -300,7 +300,7 @@ function ConsultationModal({
           <button
             onClick={handleSubmit}
             disabled={saving}
-            style={{ background: "#2563eb", color: "white", border: "none", borderRadius: 6, padding: "8px 18px", fontSize: 13, fontWeight: 700, cursor: "pointer", opacity: saving ? 0.6 : 1 }}
+            style={{ background: "#29ABE2", color: "white", border: "none", borderRadius: 6, padding: "8px 18px", fontSize: 13, fontWeight: 700, cursor: "pointer", opacity: saving ? 0.6 : 1 }}
           >
             {saving ? "저장 중..." : "저장"}
           </button>
@@ -383,7 +383,7 @@ export default function ConsultationPage() {
   const totalPages = Math.ceil(total / pageSize);
 
   const statCards = [
-    { label: "총 상담 건수", value: stats.total, color: "#2563eb" },
+    { label: "총 상담 건수", value: stats.total, color: "#29ABE2" },
     { label: "약정 건수", value: stats.contract, color: "#16a34a" },
     { label: "연락대기 건수", value: stats.waiting, color: "#ea580c" },
     { label: "종결 건수", value: stats.closed, color: "#6b7280" },
@@ -404,11 +404,11 @@ export default function ConsultationPage() {
       <div style={{ marginBottom: 16, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div>
           <p style={{ fontSize: 11, color: "#9ca3af", fontWeight: 700, letterSpacing: 2, margin: "0 0 4px 0" }}>CONSULTATION MANAGEMENT</p>
-          <h1 style={{ fontSize: 20, fontWeight: 800, color: "#111827", margin: 0 }}>상담 관리</h1>
+          <h1 style={{ fontSize: 20, fontWeight: 800, color: "#005530", margin: 0 }}>상담 관리</h1>
         </div>
         <button
           onClick={() => { setEditTarget(null); setModalOpen(true); }}
-          style={{ background: "#2563eb", color: "white", border: "none", borderRadius: 6, padding: "8px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
+          style={{ background: "#29ABE2", color: "white", border: "none", borderRadius: 6, padding: "8px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
         >
           + 상담 등록
         </button>
@@ -436,9 +436,9 @@ export default function ConsultationPage() {
                   onClick={() => { setFilterStatus(s); setPage(1); }}
                   style={{
                     padding: "4px 10px", fontSize: 12, borderRadius: 6, cursor: "pointer",
-                    border: filterStatus === s ? "1px solid #2563eb" : "1px solid #e5e7eb",
+                    border: filterStatus === s ? "1px solid #29ABE2" : "1px solid #e5e7eb",
                     background: filterStatus === s ? "#eff6ff" : "#f9fafb",
-                    color: filterStatus === s ? "#2563eb" : "#374151",
+                    color: filterStatus === s ? "#29ABE2" : "#374151",
                     fontWeight: filterStatus === s ? 700 : 400,
                   }}
                 >
@@ -560,9 +560,9 @@ export default function ConsultationPage() {
               key={p}
               onClick={() => setPage(p)}
               style={{
-                border: p === page ? "1px solid #2563eb" : "1px solid #e5e7eb",
+                border: p === page ? "1px solid #29ABE2" : "1px solid #e5e7eb",
                 borderRadius: 6, padding: "6px 12px", fontSize: 13,
-                color: p === page ? "#2563eb" : "#374151",
+                color: p === page ? "#29ABE2" : "#374151",
                 background: p === page ? "#eff6ff" : "white",
                 cursor: "pointer", fontWeight: p === page ? 700 : 400,
               }}

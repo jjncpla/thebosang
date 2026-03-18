@@ -67,7 +67,7 @@ function maskPhone(phone: string | null) {
 
 function CaseTypeBadge({ type }: { type: string }) {
   return (
-    <span style={{ display: "inline-block", padding: "2px 8px", borderRadius: 4, fontSize: 11, fontWeight: 600, background: "#eff6ff", color: "#2563eb", border: "1px solid #bfdbfe", marginRight: 4, marginBottom: 2 }}>
+    <span style={{ display: "inline-block", padding: "2px 8px", borderRadius: 4, fontSize: 11, fontWeight: 600, background: "#eff6ff", color: "#29ABE2", border: "1px solid #bfdbfe", marginRight: 4, marginBottom: 2 }}>
       {CASE_TYPE_LABELS[type] ?? type}
     </span>
   );
@@ -75,7 +75,7 @@ function CaseTypeBadge({ type }: { type: string }) {
 
 function StatusBadge({ status }: { status: string }) {
   return (
-    <span style={{ display: "inline-block", padding: "2px 8px", borderRadius: 999, fontSize: 11, fontWeight: 600, background: "#f0fdf4", color: "#15803d", border: "1px solid #bbf7d0" }}>
+    <span style={{ display: "inline-block", padding: "2px 8px", borderRadius: 999, fontSize: 11, fontWeight: 600, background: "#D0EAD9", color: "#006838", border: "1px solid #00854A" }}>
       {STATUS_KO[status] ?? status}
     </span>
   );
@@ -139,7 +139,7 @@ export default function InquiryPage() {
       {/* Header */}
       <div style={{ marginBottom: 16 }}>
         <p style={{ fontSize: 11, color: "#9ca3af", fontWeight: 700, letterSpacing: 2, margin: "0 0 4px 0" }}>CASE INQUIRY</p>
-        <h1 style={{ fontSize: 20, fontWeight: 800, color: "#111827", margin: 0 }}>사건 조회</h1>
+        <h1 style={{ fontSize: 20, fontWeight: 800, color: "#005530", margin: 0 }}>사건 조회</h1>
       </div>
 
       {/* Tabs */}
@@ -151,8 +151,8 @@ export default function InquiryPage() {
             style={{
               padding: "8px 20px", fontSize: 13, fontWeight: activeTab === tab ? 700 : 400,
               borderRadius: 6, cursor: "pointer",
-              border: activeTab === tab ? "1px solid #2563eb" : "1px solid #e5e7eb",
-              background: activeTab === tab ? "#2563eb" : "white",
+              border: activeTab === tab ? "1px solid #29ABE2" : "1px solid #e5e7eb",
+              background: activeTab === tab ? "#29ABE2" : "white",
               color: activeTab === tab ? "white" : "#374151",
             }}
           >
@@ -190,7 +190,7 @@ export default function InquiryPage() {
               onClick={handleSearch}
               disabled={loading}
               style={{
-                background: "#2563eb", color: "white", border: "none",
+                background: "#29ABE2", color: "white", border: "none",
                 borderRadius: 8, padding: "10px 24px", fontSize: 14,
                 fontWeight: 700, cursor: loading ? "default" : "pointer",
                 opacity: loading ? 0.6 : 1,
@@ -244,7 +244,7 @@ export default function InquiryPage() {
             {canViewDetail && (
               <button
                 onClick={() => router.push(`/patients/${patient.id}`)}
-                style={{ background: "#2563eb", color: "white", border: "none", borderRadius: 6, padding: "6px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
+                style={{ background: "#29ABE2", color: "white", border: "none", borderRadius: 6, padding: "6px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
               >
                 상세 사건으로 이동
               </button>

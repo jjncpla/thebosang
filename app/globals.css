@@ -3,6 +3,29 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+
+  /* ── 더보상 브랜드 컬러 ── */
+  --blue-700: #1480B0;
+  --blue-600: #1A95C8;
+  --blue-500: #29ABE2;
+  --blue-400: #50BDEA;
+  --blue-300: #84D1F2;
+  --blue-100: #DCEEFA;
+  --blue-50:  #EEF7FD;
+
+  --dkgreen-800: #004025;
+  --dkgreen-700: #005530;
+  --dkgreen-600: #006838;
+  --dkgreen-500: #00854A;
+  --dkgreen-100: #D0EAD9;
+  --dkgreen-50:  #E8F5EE;
+
+  --green-700: #5A8A1F;
+  --green-600: #6EA02A;
+  --green-500: #8DC63F;
+  --green-400: #A2D158;
+  --green-100: #E8F5D0;
+  --green-50:  #F4FAE8;
 }
 
 @theme inline {
@@ -10,6 +33,29 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+
+  /* 더보상 브랜드 컬러 — Tailwind 확장 */
+  --color-blue-50:  #EEF7FD;
+  --color-blue-100: #DCEEFA;
+  --color-blue-300: #84D1F2;
+  --color-blue-400: #50BDEA;
+  --color-blue-500: #29ABE2;
+  --color-blue-600: #1A95C8;
+  --color-blue-700: #1480B0;
+
+  --color-dkgreen-50:  #E8F5EE;
+  --color-dkgreen-100: #D0EAD9;
+  --color-dkgreen-500: #00854A;
+  --color-dkgreen-600: #006838;
+  --color-dkgreen-700: #005530;
+  --color-dkgreen-800: #004025;
+
+  --color-green-50:  #F4FAE8;
+  --color-green-100: #E8F5D0;
+  --color-green-400: #A2D158;
+  --color-green-500: #8DC63F;
+  --color-green-600: #6EA02A;
+  --color-green-700: #5A8A1F;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -23,4 +69,10 @@ body {
   background: #eef6f0;
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+}
+
+input:focus, select:focus, textarea:focus {
+  outline: none;
+  border-color: var(--blue-500);
+  box-shadow: 0 0 0 3px rgba(41, 171, 226, 0.14);
 }

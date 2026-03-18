@@ -183,7 +183,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           style={{
             width: collapsed ? 60 : 220,
             transition: "width 0.2s ease",
-            background: "linear-gradient(180deg, #0a2a1a, #0f3d24)",
+            background: "#006838",
             display: "flex",
             flexDirection: "column",
             flexShrink: 0,
@@ -326,7 +326,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                   width: 32,
                   height: 32,
                   borderRadius: "50%",
-                  background: "#1d4ed8",
+                  background: "#29ABE2",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",

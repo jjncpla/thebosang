@@ -143,7 +143,7 @@ function LinkCasePopup({
             style={{ flex: 1, border: "1px solid #e5e7eb", borderRadius: 6, padding: "6px 10px", fontSize: 13 }}
           />
           <button onClick={search} disabled={searching}
-            style={{ background: "#2563eb", color: "white", border: "none", borderRadius: 6, padding: "6px 14px", fontSize: 13, cursor: "pointer" }}>
+            style={{ background: "#29ABE2", color: "white", border: "none", borderRadius: 6, padding: "6px 14px", fontSize: 13, cursor: "pointer" }}>
             검색
           </button>
         </div>
@@ -156,7 +156,7 @@ function LinkCasePopup({
                 style={{
                   padding: "8px 12px", cursor: "pointer", fontSize: 13,
                   background: selectedCaseId === p.id ? "#eff6ff" : "white",
-                  color: selectedCaseId === p.id ? "#2563eb" : "#374151",
+                  color: selectedCaseId === p.id ? "#29ABE2" : "#374151",
                   borderBottom: "1px solid #f1f5f9",
                   fontWeight: selectedCaseId === p.id ? 700 : 400,
                 }}
@@ -169,7 +169,7 @@ function LinkCasePopup({
         <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
           <button onClick={onClose} style={{ border: "1px solid #e5e7eb", borderRadius: 6, padding: "6px 14px", fontSize: 13, color: "#374151", background: "white", cursor: "pointer" }}>취소</button>
           <button onClick={handleLink} disabled={!selectedCaseId || linking}
-            style={{ background: "#2563eb", color: "white", border: "none", borderRadius: 6, padding: "6px 14px", fontSize: 13, fontWeight: 700, cursor: "pointer", opacity: !selectedCaseId || linking ? 0.5 : 1 }}>
+            style={{ background: "#29ABE2", color: "white", border: "none", borderRadius: 6, padding: "6px 14px", fontSize: 13, fontWeight: 700, cursor: "pointer", opacity: !selectedCaseId || linking ? 0.5 : 1 }}>
             {linking ? "반영 중..." : "DB 반영"}
           </button>
         </div>
@@ -266,7 +266,7 @@ export default function TFMonitorPage() {
       <div style={{ marginBottom: 16 }}>
         <p style={{ fontSize: 11, color: "#9ca3af", fontWeight: 700, letterSpacing: 2, margin: "0 0 4px 0" }}>TF MONITORING</p>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <h1 style={{ fontSize: 20, fontWeight: 800, color: "#111827", margin: 0 }}>담당TF 모니터링</h1>
+          <h1 style={{ fontSize: 20, fontWeight: 800, color: "#005530", margin: 0 }}>담당TF 모니터링</h1>
           {unprocessedCount > 0 && (
             <span style={{ background: "#dc2626", color: "white", borderRadius: 999, fontSize: 11, fontWeight: 700, padding: "2px 10px" }}>
               미처리 {unprocessedCount}건
@@ -291,8 +291,8 @@ export default function TFMonitorPage() {
               }}
               style={{
                 padding: "5px 14px", fontSize: 12, borderRadius: 6, cursor: "pointer",
-                border: selectedBranch === branch ? "1px solid #2563eb" : "1px solid #e5e7eb",
-                background: selectedBranch === branch ? "#2563eb" : "white",
+                border: selectedBranch === branch ? "1px solid #29ABE2" : "1px solid #e5e7eb",
+                background: selectedBranch === branch ? "#29ABE2" : "white",
                 color: selectedBranch === branch ? "white" : "#374151",
                 fontWeight: selectedBranch === branch ? 700 : 400,
               }}
@@ -313,9 +313,9 @@ export default function TFMonitorPage() {
               onClick={() => { setSelectedTf(tf); setSelectedDay(null); setStatsFilter(null); }}
               style={{
                 padding: "6px 16px", fontSize: 13, borderRadius: 6, cursor: "pointer",
-                border: selectedTf === tf ? "1px solid #2563eb" : "1px solid #e5e7eb",
+                border: selectedTf === tf ? "1px solid #29ABE2" : "1px solid #e5e7eb",
                 background: selectedTf === tf ? "#eff6ff" : "white",
-                color: selectedTf === tf ? "#2563eb" : "#374151",
+                color: selectedTf === tf ? "#29ABE2" : "#374151",
                 fontWeight: selectedTf === tf ? 700 : 400,
               }}
             >
@@ -361,7 +361,7 @@ export default function TFMonitorPage() {
                     style={{
                       textAlign: "center", fontSize: 12, padding: "4px 2px", borderRadius: 6,
                       cursor: day ? "pointer" : "default",
-                      background: isSelected ? "#2563eb" : isToday ? "#eff6ff" : "transparent",
+                      background: isSelected ? "#29ABE2" : isToday ? "#eff6ff" : "transparent",
                       color: isSelected ? "white" : di === 0 ? "#ef4444" : di === 6 ? "#3b82f6" : "#374151",
                       fontWeight: isToday || isSelected ? 700 : 400,
                       position: "relative",
@@ -369,7 +369,7 @@ export default function TFMonitorPage() {
                   >
                     {day ?? ""}
                     {hasMsg && !isSelected && (
-                      <span style={{ display: "block", width: 4, height: 4, borderRadius: "50%", background: "#2563eb", margin: "1px auto 0" }} />
+                      <span style={{ display: "block", width: 4, height: 4, borderRadius: "50%", background: "#29ABE2", margin: "1px auto 0" }} />
                     )}
                   </div>
                 );
@@ -378,7 +378,7 @@ export default function TFMonitorPage() {
           ))}
           <div style={{ padding: "8px 12px 12px", textAlign: "center" }}>
             {selectedDay ? (
-              <button onClick={() => setSelectedDay(null)} style={{ fontSize: 11, color: "#2563eb", background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}>
+              <button onClick={() => setSelectedDay(null)} style={{ fontSize: 11, color: "#29ABE2", background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}>
                 전체 보기
               </button>
             ) : (
@@ -428,7 +428,7 @@ export default function TFMonitorPage() {
             <span style={{ fontSize: 13, fontWeight: 700, color: "#374151" }}>
               {selectedDay ? `${year}년 ${month + 1}월 ${selectedDay}일 메시지` : `${monthLabel} 전체 메시지`}
               <span style={{ marginLeft: 8, fontSize: 11, color: "#9ca3af", fontWeight: 400 }}>{filteredMessages.length}건</span>
-              {statsFilter && <span style={{ marginLeft: 6, fontSize: 11, color: "#2563eb", fontWeight: 600 }}>— {statsFilter} 필터 중</span>}
+              {statsFilter && <span style={{ marginLeft: 6, fontSize: 11, color: "#29ABE2", fontWeight: 600 }}>— {statsFilter} 필터 중</span>}
             </span>
             {statsFilter && (
               <button onClick={() => setStatsFilter(null)} style={{ fontSize: 11, color: "#6b7280", background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}>전체 보기</button>
@@ -462,7 +462,7 @@ export default function TFMonitorPage() {
                   {!msg.isProcessed && (
                     <button
                       onClick={() => setLinkPopup(msg.id)}
-                      style={{ border: "1px solid #2563eb", borderRadius: 5, padding: "3px 10px", fontSize: 11, color: "#2563eb", background: "#eff6ff", cursor: "pointer", fontWeight: 600 }}
+                      style={{ border: "1px solid #29ABE2", borderRadius: 5, padding: "3px 10px", fontSize: 11, color: "#29ABE2", background: "#eff6ff", cursor: "pointer", fontWeight: 600 }}
                     >
                       DB 반영
                     </button>

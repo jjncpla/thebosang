@@ -813,7 +813,7 @@ function StatWageSection() {
             <span style={{...yearTag, background:`${ic}20`, color:ic, border:`1px solid ${ic}40`, fontSize:14}}>
               {industry}
             </span>
-            <span style={{...yearTag, background:'#f0fdf4', color:'#15803d', border:'1px solid #86efac'}}>
+            <span style={{...yearTag, background:'#f0fdf4', color:'#6EA02A', border:'1px solid #86efac'}}>
               총 근속 {result.tenure.years}년 {result.tenure.months}개월 ({result.tenure.totalMonths}개월)
             </span>
             <span style={{...yearTag, background:'#fef3c7', color:'#92400e', border:'1px solid #fcd34d'}}>
@@ -855,14 +855,14 @@ function StatWageSection() {
 
           {/* 근로기준법 평균임금 카드 */}
           <div style={card}>
-            <div style={{...cardH, background:'#f0fdf4', borderBottomColor:'#bbf7d0', color:'#15803d'}}>
+            <div style={{...cardH, background:'#f0fdf4', borderBottomColor:'#bbf7d0', color:'#6EA02A'}}>
               💰 {result.retireYear}년 퇴직 근로기준법 평균임금 (1일 기준)
             </div>
             <div style={{textAlign:'center', padding:'24px 16px'}}>
               {result.avgWage !== null ? (
                 <>
                   <div style={{fontSize:13, color:'#6b7280', marginBottom:8}}>일 평균임금</div>
-                  <div style={{fontSize:36, fontWeight:800, color:'#15803d'}}>{formatWon(result.avgWage)}</div>
+                  <div style={{fontSize:36, fontWeight:800, color:'#6EA02A'}}>{formatWon(result.avgWage)}</div>
                   <div style={{fontSize:12, color:'#9ca3af', marginTop:6}}>
                     = ({formatWon(result.monthly!)} + {formatWon(result.bonus!)} ÷ 12) ÷ 30
                   </div>
@@ -1267,7 +1267,7 @@ function TFMonitoringSection() {
           <span style={{
             display: "inline-flex", alignItems: "center", gap: 5,
             background: isPolling ? "#dcfce7" : "#f3f4f6",
-            color:      isPolling ? "#15803d" : "#9ca3af",
+            color:      isPolling ? "#6EA02A" : "#9ca3af",
             border:     `1px solid ${isPolling ? "#86efac" : "#e5e7eb"}`,
             borderRadius: 20, padding: "3px 10px", fontSize: 12, fontWeight: 600,
           }}>
@@ -1543,7 +1543,7 @@ const gLbl:React.CSSProperties={fontSize:13,color:"#6b7280",marginBottom:6};
 const gVal:React.CSSProperties={fontSize:20,fontWeight:700,color:"#1e40af"};
 const noData:React.CSSProperties={textAlign:"center",padding:40,color:"#9ca3af",fontSize:15};
 const errBox:React.CSSProperties={background:"#fef2f2",border:"1px solid #fecaca",color:"#dc2626",padding:"10px 16px",borderRadius:6,fontSize:14,marginBottom:12,whiteSpace:"pre-wrap"};
-const successBox:React.CSSProperties={...errBox,background:"#f0fdf4",borderColor:"#bbf7d0",color:"#16a34a"};
+const successBox:React.CSSProperties={...errBox,background:"#f0fdf4",borderColor:"#bbf7d0",color:"#8DC63F"};
 const warnBox:React.CSSProperties={...errBox,background:"#fffbeb",borderColor:"#fde68a",color:"#d97706"};
 const tbl:React.CSSProperties={width:"100%",borderCollapse:"collapse",fontSize:13};
 const th:React.CSSProperties={background:"#f9fafb",padding:"8px 12px",textAlign:"center",fontWeight:600,color:"#374151",borderBottom:"2px solid #e5e7eb",position:"sticky",top:0};

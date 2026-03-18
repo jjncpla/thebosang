@@ -137,7 +137,7 @@ const s = {
   loading:      { textAlign: "center" as const, padding: 80, color: "#9ca3af" },
   header:       { display: "flex", alignItems: "center", gap: 16, marginBottom: 28 } as React.CSSProperties,
   back:         { fontSize: 13, color: "#6b7280", textDecoration: "none" } as React.CSSProperties,
-  title:        { fontSize: 22, fontWeight: 700, color: "#111827", margin: 0 } as React.CSSProperties,
+  title:        { fontSize: 22, fontWeight: 700, color: "#005530", margin: 0 } as React.CSSProperties,
   err:          { color: "#dc2626", fontSize: 13, margin: "0 0 12px" } as React.CSSProperties,
   sectionTitle: { fontSize: 15, fontWeight: 700, color: "#374151", margin: "0 0 12px" } as React.CSSProperties,
   addForm:      { background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: 10, padding: "20px 20px", marginBottom: 28 } as React.CSSProperties,

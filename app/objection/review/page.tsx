@@ -169,7 +169,7 @@ function ReviewModal({ initial, onClose, onSave }: {
               {PROGRESS_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
             </select>
             {form.progressStatus === "이의제기 진행" && (
-              <button onClick={() => router.push("/objection/deadline")} style={{ fontSize: 11, color: "#2563eb", background: "none", border: "none", cursor: "pointer", marginTop: 4, padding: 0, textDecoration: "underline" }}>기일관리 페이지에서 확인 →</button>
+              <button onClick={() => router.push("/objection/deadline")} style={{ fontSize: 11, color: "#29ABE2", background: "none", border: "none", cursor: "pointer", marginTop: 4, padding: 0, textDecoration: "underline" }}>기일관리 페이지에서 확인 →</button>
             )}
             {form.progressStatus === "평정청구 진행" && (
               <span style={{ fontSize: 11, color: "#15803d", display: "block", marginTop: 4 }}>평균임금 데이터 검토 탭에 반영됩니다</span>
@@ -188,7 +188,7 @@ function ReviewModal({ initial, onClose, onSave }: {
         </div>
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 18 }}>
           <button onClick={onClose} style={{ border: "1px solid #e5e7eb", borderRadius: 6, padding: "8px 18px", fontSize: 13, color: "#374151", background: "white", cursor: "pointer" }}>취소</button>
-          <button onClick={handleSave} disabled={saving} style={{ background: "#2563eb", color: "white", border: "none", borderRadius: 6, padding: "8px 18px", fontSize: 13, fontWeight: 700, cursor: "pointer", opacity: saving ? 0.6 : 1 }}>
+          <button onClick={handleSave} disabled={saving} style={{ background: "#29ABE2", color: "white", border: "none", borderRadius: 6, padding: "8px 18px", fontSize: 13, fontWeight: 700, cursor: "pointer", opacity: saving ? 0.6 : 1 }}>
             {saving ? "저장 중..." : "저장"}
           </button>
         </div>
@@ -220,7 +220,7 @@ function BranchTfFilter({
         <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
           {["", ...BRANCH_LIST].map(b => (
             <button key={b} onClick={() => { setFilterBranch(b); setFilterTf(""); }}
-              style={{ padding: "4px 10px", fontSize: 11, borderRadius: 6, cursor: "pointer", border: filterBranch === b ? "1px solid #2563eb" : "1px solid #e5e7eb", background: filterBranch === b ? "#eff6ff" : "#f9fafb", color: filterBranch === b ? "#2563eb" : "#374151", fontWeight: filterBranch === b ? 700 : 400 }}>
+              style={{ padding: "4px 10px", fontSize: 11, borderRadius: 6, cursor: "pointer", border: filterBranch === b ? "1px solid #29ABE2" : "1px solid #e5e7eb", background: filterBranch === b ? "#eff6ff" : "#f9fafb", color: filterBranch === b ? "#29ABE2" : "#374151", fontWeight: filterBranch === b ? 700 : 400 }}>
               {b || "전체"}
             </button>
           ))}
@@ -232,7 +232,7 @@ function BranchTfFilter({
           <div style={{ display: "flex", gap: 4 }}>
             {["", ...tfList].map(t => (
               <button key={t} onClick={() => setFilterTf(t)}
-                style={{ padding: "4px 10px", fontSize: 11, borderRadius: 6, cursor: "pointer", border: filterTf === t ? "1px solid #2563eb" : "1px solid #e5e7eb", background: filterTf === t ? "#eff6ff" : "#f9fafb", color: filterTf === t ? "#2563eb" : "#374151", fontWeight: filterTf === t ? 700 : 400 }}>
+                style={{ padding: "4px 10px", fontSize: 11, borderRadius: 6, cursor: "pointer", border: filterTf === t ? "1px solid #29ABE2" : "1px solid #e5e7eb", background: filterTf === t ? "#eff6ff" : "#f9fafb", color: filterTf === t ? "#29ABE2" : "#374151", fontWeight: filterTf === t ? 700 : 400 }}>
                 {t || "전체"}
               </button>
             ))}
@@ -244,7 +244,7 @@ function BranchTfFilter({
         <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
           {["", ...progressOptions].map(p => (
             <button key={p} onClick={() => setFilterProgress(p)}
-              style={{ padding: "4px 10px", fontSize: 11, borderRadius: 6, cursor: "pointer", border: filterProgress === p ? "1px solid #2563eb" : "1px solid #e5e7eb", background: filterProgress === p ? "#eff6ff" : "#f9fafb", color: filterProgress === p ? "#2563eb" : "#374151", fontWeight: filterProgress === p ? 700 : 400 }}>
+              style={{ padding: "4px 10px", fontSize: 11, borderRadius: 6, cursor: "pointer", border: filterProgress === p ? "1px solid #29ABE2" : "1px solid #e5e7eb", background: filterProgress === p ? "#eff6ff" : "#f9fafb", color: filterProgress === p ? "#29ABE2" : "#374151", fontWeight: filterProgress === p ? 700 : 400 }}>
               {p || "전체"}
             </button>
           ))}
@@ -344,7 +344,7 @@ export default function ObjectionReviewPage() {
 
       <div style={{ marginBottom: 16 }}>
         <p style={{ fontSize: 11, color: "#9ca3af", fontWeight: 700, letterSpacing: 2, margin: "0 0 4px 0" }}>OBJECTION MANAGEMENT</p>
-        <h1 style={{ fontSize: 20, fontWeight: 800, color: "#111827", margin: 0 }}>처분 검토</h1>
+        <h1 style={{ fontSize: 20, fontWeight: 800, color: "#005530", margin: 0 }}>처분 검토</h1>
       </div>
 
       {/* Tabs */}
@@ -361,13 +361,13 @@ export default function ObjectionReviewPage() {
             <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 10, marginBottom: 16 }}>
               {[
                 { label: "미검토", value: stats.unreviewed, color: "#6b7280", filter: "미검토" },
-                { label: "검토중", value: stats.reviewing, color: "#2563eb", filter: "검토중" },
+                { label: "검토중", value: stats.reviewing, color: "#29ABE2", filter: "검토중" },
                 { label: "이의제기 진행", value: stats.ongoing, color: "#d97706", filter: "이의제기 진행" },
                 { label: "송무 인계", value: stats.litigation, color: "#9333ea", filter: "송무 인계" },
                 { label: "평정청구 진행", value: stats.wage, color: "#ea580c", filter: "평정청구 진행" },
               ].map(s => (
                 <div key={s.label} onClick={() => setFilterProgress(filterProgress === s.filter ? "" : s.filter)}
-                  style={{ background: filterProgress === s.filter ? "#f0f9ff" : "#f8fafc", borderRadius: 8, border: `1px solid ${filterProgress === s.filter ? "#2563eb" : "#e5e7eb"}`, padding: "12px 14px", cursor: "pointer" }}>
+                  style={{ background: filterProgress === s.filter ? "#f0f9ff" : "#f8fafc", borderRadius: 8, border: `1px solid ${filterProgress === s.filter ? "#29ABE2" : "#e5e7eb"}`, padding: "12px 14px", cursor: "pointer" }}>
                   <div style={{ fontSize: 10, color: "#6b7280", fontWeight: 700, marginBottom: 3 }}>{s.label}</div>
                   <div style={{ fontSize: 22, fontWeight: 800, color: s.color }}>{s.value}</div>
                 </div>
@@ -388,7 +388,7 @@ export default function ObjectionReviewPage() {
                   <div style={{ fontSize: 11, color: "#6b7280", fontWeight: 700, marginBottom: 4 }}>검색</div>
                   <input value={searchReview} onChange={e => setSearchReview(e.target.value)} placeholder="성명 검색" style={{ border: "1px solid #e5e7eb", borderRadius: 6, padding: "6px 10px", fontSize: 12, color: "#374151", background: "white", width: 140 }} />
                 </div>
-                <button onClick={() => { setReviewTarget(null); setReviewModal(true); }} style={{ marginLeft: "auto", background: "#2563eb", color: "white", border: "none", borderRadius: 6, padding: "8px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>+ 등록</button>
+                <button onClick={() => { setReviewTarget(null); setReviewModal(true); }} style={{ marginLeft: "auto", background: "#29ABE2", color: "white", border: "none", borderRadius: 6, padding: "8px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>+ 등록</button>
               </div>
             </div>
 
@@ -486,7 +486,7 @@ export default function ObjectionReviewPage() {
                       <td style={{ padding: "10px 12px", color: "#374151" }}>{item.reviewResult ?? "-"}</td>
                       <td style={{ padding: "10px 12px", color: "#6b7280" }}>{item.reviewManagerName ?? "-"}</td>
                       <td style={{ padding: "10px 12px" }}>
-                        <button onClick={e => { e.stopPropagation(); router.push(`/objection/wage-review/${item.id}`); }} style={{ border: "1px solid #2563eb", borderRadius: 5, padding: "3px 8px", fontSize: 11, color: "#2563eb", background: "#eff6ff", cursor: "pointer" }}>상세</button>
+                        <button onClick={e => { e.stopPropagation(); router.push(`/objection/wage-review/${item.id}`); }} style={{ border: "1px solid #29ABE2", borderRadius: 5, padding: "3px 8px", fontSize: 11, color: "#29ABE2", background: "#eff6ff", cursor: "pointer" }}>상세</button>
                       </td>
                     </tr>
                   ))}

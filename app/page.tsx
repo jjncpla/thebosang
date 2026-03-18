@@ -138,8 +138,8 @@ export default function TodoPage() {
                     onClick={() => setSelectedDate(ds)}
                     style={{
                       ...calDayBtn,
-                      background: isSelected ? "#2563eb" : isToday ? "#eff6ff" : "transparent",
-                      color: isSelected ? "#fff" : isToday ? "#2563eb" : dayOfWeek === 0 ? "#ef4444" : dayOfWeek === 6 ? "#3b82f6" : "#1e293b",
+                      background: isSelected ? "#29ABE2" : isToday ? "#eff6ff" : "transparent",
+                      color: isSelected ? "#fff" : isToday ? "#29ABE2" : dayOfWeek === 0 ? "#ef4444" : dayOfWeek === 6 ? "#3b82f6" : "#1e293b",
                       fontWeight: isToday || isSelected ? 700 : 400,
                       borderRadius: "50%",
                       position: "relative",
@@ -151,7 +151,7 @@ export default function TodoPage() {
                       <span style={{
                         position: "absolute", bottom: 2, left: "50%", transform: "translateX(-50%)",
                         width: 4, height: 4, borderRadius: "50%",
-                        background: isSelected ? "#bfdbfe" : "#2563eb",
+                        background: isSelected ? "#bfdbfe" : "#29ABE2",
                         display: "block",
                       }} />
                     )}

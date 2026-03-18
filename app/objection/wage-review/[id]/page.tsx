@@ -144,7 +144,7 @@ export default function WageReviewDetailPage() {
         <button onClick={() => router.back()} style={{ background: "none", border: "1px solid #e5e7eb", borderRadius: 6, padding: "5px 12px", fontSize: 12, color: "#374151", cursor: "pointer" }}>← 돌아가기</button>
         <div>
           <p style={{ fontSize: 11, color: "#9ca3af", fontWeight: 700, letterSpacing: 2, margin: "0 0 2px 0" }}>WAGE REVIEW DETAIL</p>
-          <h1 style={{ fontSize: 18, fontWeight: 800, color: "#111827", margin: 0 }}>
+          <h1 style={{ fontSize: 18, fontWeight: 800, color: "#005530", margin: 0 }}>
             평균임금 상세 — {data.patientName} <span style={{ fontSize: 13, color: "#6b7280", fontWeight: 400 }}>({data.tfName} / {data.caseType})</span>
           </h1>
         </div>
@@ -156,7 +156,7 @@ export default function WageReviewDetailPage() {
         {/* ── 좌측: 근기법 평균임금 ── */}
         <div style={{
           background: leftDimmed ? "#f8fafc" : "white",
-          border: `2px solid ${leftMatch ? "#2563eb" : leftDimmed ? "#e2e8f0" : "#bfdbfe"}`,
+          border: `2px solid ${leftMatch ? "#29ABE2" : leftDimmed ? "#e2e8f0" : "#bfdbfe"}`,
           borderRadius: 12,
           padding: 20,
           opacity: leftDimmed ? 0.6 : 1,
@@ -164,7 +164,7 @@ export default function WageReviewDetailPage() {
         }}>
           <div style={{ fontSize: 14, fontWeight: 800, color: "#1d4ed8", marginBottom: 16, display: "flex", alignItems: "center", gap: 6 }}>
             ① 근로기준법상 평균임금
-            {leftMatch && <span style={{ fontSize: 10, background: "#2563eb", color: "white", borderRadius: 4, padding: "2px 6px" }}>적용</span>}
+            {leftMatch && <span style={{ fontSize: 10, background: "#29ABE2", color: "white", borderRadius: 4, padding: "2px 6px" }}>적용</span>}
           </div>
 
           {/* 1. 기본 정보 */}
@@ -235,19 +235,19 @@ export default function WageReviewDetailPage() {
         {/* ── 우측: 산재법 특례임금 ── */}
         <div style={{
           background: rightDimmed ? "#f8fafc" : "white",
-          border: `2px solid ${rightMatch ? "#16a34a" : rightDimmed ? "#e2e8f0" : "#bbf7d0"}`,
+          border: `2px solid ${rightMatch ? "#8DC63F" : rightDimmed ? "#e2e8f0" : "#bbf7d0"}`,
           borderRadius: 12,
           padding: 20,
           opacity: rightDimmed ? 0.6 : 1,
           transition: "all 0.2s",
         }}>
-          <div style={{ fontSize: 14, fontWeight: 800, color: "#15803d", marginBottom: 16, display: "flex", alignItems: "center", gap: 6 }}>
+          <div style={{ fontSize: 14, fontWeight: 800, color: "#6EA02A", marginBottom: 16, display: "flex", alignItems: "center", gap: 6 }}>
             ② 산재법상 특례임금
-            {rightMatch && <span style={{ fontSize: 10, background: "#16a34a", color: "white", borderRadius: 4, padding: "2px 6px" }}>적용</span>}
+            {rightMatch && <span style={{ fontSize: 10, background: "#8DC63F", color: "white", borderRadius: 4, padding: "2px 6px" }}>적용</span>}
           </div>
 
           {/* 1. 산정 기준 */}
-          <div style={{ ...sectionTitleStyle, color: "#15803d", borderColor: "#bbf7d0" }}>산정 기준</div>
+          <div style={{ ...sectionTitleStyle, color: "#6EA02A", borderColor: "#bbf7d0" }}>산정 기준</div>
           <div style={rowStyle}>
             <div><label style={labelStyle}>성별</label><div style={{ fontSize: 12, color: "#374151" }}>{data.statWageGender ?? "-"}</div></div>
             <div><label style={labelStyle}>규모</label><div style={{ fontSize: 12, color: "#374151" }}>{data.statWageSize ?? "-"}</div></div>
@@ -262,7 +262,7 @@ export default function WageReviewDetailPage() {
           </div>
 
           {/* 2. 산정 결과 */}
-          <div style={{ ...sectionTitleStyle, color: "#15803d", borderColor: "#bbf7d0", marginTop: 12 }}>산정 결과</div>
+          <div style={{ ...sectionTitleStyle, color: "#6EA02A", borderColor: "#bbf7d0", marginTop: 12 }}>산정 결과</div>
           <div style={{ marginBottom: 8 }}>
             <label style={labelStyle}>최초 산정임금</label>
             <div style={{ fontSize: 12, color: "#374151" }}>{fmtWage(data.statWageBase)}</div>
@@ -278,8 +278,8 @@ export default function WageReviewDetailPage() {
 
           {/* 3. 최종 특례임금 */}
           <div style={{ background: rightMatch ? "#f0fdf4" : "#f8fafc", border: `1px solid ${rightMatch ? "#86efac" : "#e2e8f0"}`, borderRadius: 8, padding: "12px 16px", marginTop: 14, textAlign: "center" }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: "#15803d", marginBottom: 4 }}>최종 특례임금</div>
-            <div style={{ fontSize: 26, fontWeight: 800, color: rightMatch ? "#15803d" : "#374151" }}>{fmtWage(data.statWageFinal)}</div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: "#6EA02A", marginBottom: 4 }}>최종 특례임금</div>
+            <div style={{ fontSize: 26, fontWeight: 800, color: rightMatch ? "#6EA02A" : "#374151" }}>{fmtWage(data.statWageFinal)}</div>
           </div>
 
           {/* Spacer to align with left panel height */}
@@ -319,7 +319,7 @@ export default function WageReviewDetailPage() {
               {REVIEW_RESULT_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
             </select>
             {form.reviewResult === "평정청구 진행" && (
-              <div style={{ marginTop: 4, fontSize: 11, color: "#2563eb", background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: 4, padding: "4px 8px" }}>
+              <div style={{ marginTop: 4, fontSize: 11, color: "#29ABE2", background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: 4, padding: "4px 8px" }}>
                 📋 기일관리 &gt; 평균임금 정정 탭에 자동으로 반영됩니다
               </div>
             )}
@@ -346,7 +346,7 @@ export default function WageReviewDetailPage() {
           <textarea style={{ ...inputStyle, resize: "vertical", minHeight: 50 }} value={form.additionalReview ?? ""} onChange={e => set("additionalReview", e.target.value)} placeholder="추가 검토 사항" />
         </div>
         <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 16 }}>
-          <button onClick={handleSave} disabled={saving} style={{ background: "#2563eb", color: "white", border: "none", borderRadius: 6, padding: "10px 24px", fontSize: 13, fontWeight: 700, cursor: "pointer", opacity: saving ? 0.6 : 1 }}>
+          <button onClick={handleSave} disabled={saving} style={{ background: "#29ABE2", color: "white", border: "none", borderRadius: 6, padding: "10px 24px", fontSize: 13, fontWeight: 700, cursor: "pointer", opacity: saving ? 0.6 : 1 }}>
             {saving ? "저장 중..." : "저장"}
           </button>
         </div>

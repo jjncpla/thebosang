@@ -86,7 +86,7 @@ export default function PatientsPage() {
         <div>
           <p style={{ fontSize: 11, color: "#9ca3af", fontWeight: 700, letterSpacing: 2, margin: "0 0 4px 0" }}>PATIENT LIST</p>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <h1 style={{ fontSize: 20, fontWeight: 800, color: "#111827", margin: 0 }}>재해자 목록</h1>
+            <h1 style={{ fontSize: 20, fontWeight: 800, color: "#005530", margin: 0 }}>재해자 목록</h1>
             {!loading && !error && (
               <span style={{ background: "#e0e7ff", color: "#3730a3", fontSize: 12, fontWeight: 700, padding: "2px 10px", borderRadius: 999 }}>
                 {patients.length}명
@@ -96,7 +96,7 @@ export default function PatientsPage() {
         </div>
         <button
           onClick={() => router.push("/cases/new")}
-          style={{ background: "#2563eb", color: "white", border: "none", borderRadius: 6, padding: "8px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
+          style={{ background: "#29ABE2", color: "white", border: "none", borderRadius: 6, padding: "8px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
         >
           + 재해자 등록
         </button>
@@ -114,7 +114,7 @@ export default function PatientsPage() {
         />
         <button
           onClick={handleSearch}
-          style={{ background: "#2563eb", color: "white", border: "none", borderRadius: 6, padding: "7px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
+          style={{ background: "#29ABE2", color: "white", border: "none", borderRadius: 6, padding: "7px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
         >
           검색
         </button>
@@ -133,7 +133,7 @@ export default function PatientsPage() {
         {error && (
           <div style={{ padding: "12px 16px", background: "#fef2f2", color: "#dc2626", fontSize: 13, borderBottom: "1px solid #fecaca", display: "flex", alignItems: "center", gap: 10 }}>
             ⚠ {error}
-            <button onClick={fetchPatients} style={{ color: "#2563eb", background: "none", border: "none", cursor: "pointer", fontSize: 13, textDecoration: "underline" }}>다시 시도</button>
+            <button onClick={fetchPatients} style={{ color: "#29ABE2", background: "none", border: "none", cursor: "pointer", fontSize: 13, textDecoration: "underline" }}>다시 시도</button>
           </div>
         )}
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>

@@ -177,7 +177,7 @@ export default function NewCasePage() {
         <p style={{ fontSize: 11, color: "#9ca3af", fontWeight: 700, letterSpacing: 2, margin: "0 0 4px 0" }}>CASE MANAGEMENT</p>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <button onClick={() => router.push("/cases")} style={{ background: "none", border: "none", color: "#6b7280", fontSize: 13, cursor: "pointer", padding: 0 }}>← 목록</button>
-          <h1 style={{ fontSize: 20, fontWeight: 800, color: "#111827", margin: 0 }}>새 사건 등록</h1>
+          <h1 style={{ fontSize: 20, fontWeight: 800, color: "#005530", margin: 0 }}>새 사건 등록</h1>
         </div>
       </div>
 
@@ -188,7 +188,7 @@ export default function NewCasePage() {
             <div style={{
               width: 28, height: 28, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center",
               fontSize: 13, fontWeight: 700,
-              background: step >= n ? "#2563eb" : "#e5e7eb",
+              background: step >= n ? "#29ABE2" : "#e5e7eb",
               color: step >= n ? "white" : "#9ca3af",
             }}>{n}</div>
             <span style={{ fontSize: 13, color: step >= n ? "#111827" : "#9ca3af", fontWeight: step === n ? 700 : 400 }}>
@@ -218,7 +218,7 @@ export default function NewCasePage() {
               onKeyDown={(e) => e.key === "Enter" && searchPatients()}
               style={{ ...inputStyle, flex: 1 }}
             />
-            <button onClick={searchPatients} disabled={searching} style={{ background: "#2563eb", color: "white", border: "none", borderRadius: 6, padding: "7px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>
+            <button onClick={searchPatients} disabled={searching} style={{ background: "#29ABE2", color: "white", border: "none", borderRadius: 6, padding: "7px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }}>
               {searching ? "검색중..." : "검색"}
             </button>
           </div>
@@ -235,7 +235,7 @@ export default function NewCasePage() {
                     <div style={{ fontWeight: 600, color: "#111827", fontSize: 14 }}>{p.name}</div>
                     <div style={{ color: "#9ca3af", fontSize: 12, fontFamily: "monospace" }}>{p.ssn}</div>
                   </div>
-                  <span style={{ color: "#2563eb", fontSize: 13, fontWeight: 600 }}>선택 →</span>
+                  <span style={{ color: "#29ABE2", fontSize: 13, fontWeight: 600 }}>선택 →</span>
                 </div>
               ))}
             </div>
@@ -271,7 +271,7 @@ export default function NewCasePage() {
                 <input style={{ ...inputStyle, background: autoFilledFields.has("address") ? "#eff6ff" : "white" }} value={newPatient.address} onChange={(e) => setNewPatient({ ...newPatient, address: e.target.value })} placeholder="주소 입력" title={autoFilledFields.has("address") ? "상담 내역에서 자동입력됨" : undefined} />
               </LabelInput>
               <div style={{ gridColumn: "1 / -1" }}>
-                <button onClick={createNewPatientAndProceed} style={{ background: "#2563eb", color: "white", border: "none", borderRadius: 6, padding: "8px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                <button onClick={createNewPatientAndProceed} style={{ background: "#29ABE2", color: "white", border: "none", borderRadius: 6, padding: "8px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
                   등록 후 사건 정보 입력 →
                 </button>
               </div>
@@ -377,7 +377,7 @@ export default function NewCasePage() {
                 <button onClick={() => setStep(1)} style={{ background: "white", color: "#374151", border: "1px solid #e5e7eb", borderRadius: 6, padding: "8px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
                   ← 이전
                 </button>
-                <button onClick={submitCase} disabled={submitting} style={{ background: "#2563eb", color: "white", border: "none", borderRadius: 6, padding: "8px 20px", fontSize: 13, fontWeight: 600, cursor: "pointer", opacity: submitting ? 0.6 : 1 }}>
+                <button onClick={submitCase} disabled={submitting} style={{ background: "#29ABE2", color: "white", border: "none", borderRadius: 6, padding: "8px 20px", fontSize: 13, fontWeight: 600, cursor: "pointer", opacity: submitting ? 0.6 : 1 }}>
                   {submitting ? "등록중..." : "사건 등록"}
                 </button>
               </div>

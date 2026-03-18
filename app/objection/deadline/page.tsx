@@ -195,7 +195,7 @@ function CaseModal({ initial, managers, onClose, onSave }: {
 
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 16 }}>
           <button onClick={onClose} style={{ border: "1px solid #e5e7eb", borderRadius: 6, padding: "8px 18px", fontSize: 13, color: "#374151", background: "white", cursor: "pointer" }}>취소</button>
-          <button onClick={handleSave} disabled={saving} style={{ background: "#2563eb", color: "white", border: "none", borderRadius: 6, padding: "8px 18px", fontSize: 13, fontWeight: 700, cursor: "pointer", opacity: saving ? 0.6 : 1 }}>
+          <button onClick={handleSave} disabled={saving} style={{ background: "#29ABE2", color: "white", border: "none", borderRadius: 6, padding: "8px 18px", fontSize: 13, fontWeight: 700, cursor: "pointer", opacity: saving ? 0.6 : 1 }}>
             {saving ? "저장 중..." : "저장"}
           </button>
         </div>
@@ -238,7 +238,7 @@ function WageDateModal({ item, onClose, onSave }: {
         </div>
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 16 }}>
           <button onClick={onClose} style={{ border: "1px solid #e5e7eb", borderRadius: 6, padding: "7px 14px", fontSize: 12, color: "#374151", background: "white", cursor: "pointer" }}>취소</button>
-          <button onClick={handleSave} disabled={saving} style={{ background: "#2563eb", color: "white", border: "none", borderRadius: 6, padding: "7px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer", opacity: saving ? 0.6 : 1 }}>
+          <button onClick={handleSave} disabled={saving} style={{ background: "#29ABE2", color: "white", border: "none", borderRadius: 6, padding: "7px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer", opacity: saving ? 0.6 : 1 }}>
             {saving ? "저장 중..." : "저장"}
           </button>
         </div>
@@ -402,16 +402,16 @@ export default function ObjectionDeadlinePage() {
       <div style={{ marginBottom: 12, display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
         <div>
           <p style={{ fontSize: 11, color: "#9ca3af", fontWeight: 700, letterSpacing: 2, margin: "0 0 4px 0" }}>OBJECTION DEADLINE</p>
-          <h1 style={{ fontSize: 20, fontWeight: 800, color: "#111827", margin: 0 }}>이의제기 — 기일 관리</h1>
+          <h1 style={{ fontSize: 20, fontWeight: 800, color: "#005530", margin: 0 }}>이의제기 — 기일 관리</h1>
         </div>
-        <button onClick={() => { setTarget(null); setModal(true); }} style={{ background: "#2563eb", color: "white", border: "none", borderRadius: 6, padding: "8px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>+ 등록</button>
+        <button onClick={() => { setTarget(null); setModal(true); }} style={{ background: "#29ABE2", color: "white", border: "none", borderRadius: 6, padding: "8px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>+ 등록</button>
       </div>
 
       {/* Date bar */}
       <div style={{ background: "white", borderRadius: 10, border: "1px solid #e5e7eb", padding: "10px 16px", marginBottom: 14, display: "flex", gap: 32, alignItems: "center", fontSize: 13 }}>
         <div>
           <span style={{ fontWeight: 700, color: "#374151" }}>오늘: </span>
-          <span style={{ color: "#2563eb", fontWeight: 600 }}>{fmtKorDate(today)}</span>
+          <span style={{ color: "#29ABE2", fontWeight: 600 }}>{fmtKorDate(today)}</span>
         </div>
         <div title="이 날짜 이후 송달된 결정에 대해 제척기간이 진행 중입니다" style={{ cursor: "help" }}>
           <span style={{ fontWeight: 700, color: "#374151" }}>제척 기준일: </span>
@@ -427,7 +427,7 @@ export default function ObjectionDeadlinePage() {
           { id: "litigation", label: `소송 인계 (${litigationItems.length})` },
           { id: "wage", label: `평균임금 정정 (${wageItems.length})` },
         ] as const).map(t => (
-          <button key={t.id} onClick={() => setTab(t.id as typeof tab)} style={{ padding: "7px 18px", fontSize: 13, borderRadius: 7, cursor: "pointer", border: tab === t.id ? "1px solid #2563eb" : "1px solid #e5e7eb", background: tab === t.id ? "#eff6ff" : "white", color: tab === t.id ? "#2563eb" : "#374151", fontWeight: tab === t.id ? 700 : 400 }}>
+          <button key={t.id} onClick={() => setTab(t.id as typeof tab)} style={{ padding: "7px 18px", fontSize: 13, borderRadius: 7, cursor: "pointer", border: tab === t.id ? "1px solid #29ABE2" : "1px solid #e5e7eb", background: tab === t.id ? "#eff6ff" : "white", color: tab === t.id ? "#29ABE2" : "#374151", fontWeight: tab === t.id ? 700 : 400 }}>
             {t.label}
           </button>
         ))}
@@ -440,7 +440,7 @@ export default function ObjectionDeadlinePage() {
           <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 10, marginBottom: 14 }}>
             {[
               { key: "접수대기", label: "접수 대기", value: objStats.waiting, color: "#6b7280" },
-              { key: "진행중", label: "진행 중", value: objStats.ongoing, color: "#2563eb" },
+              { key: "진행중", label: "진행 중", value: objStats.ongoing, color: "#29ABE2" },
               { key: "제척임박", label: "제척 임박 (7일 이내)", value: objStats.urgent, color: "#d97706" },
               { key: "제척도과", label: "제척도과/재처분 필요", value: objStats.expired, color: "#dc2626" },
               { key: "송무인계", label: "송무 인계", value: objStats.litigation, color: "#9333ea" },
@@ -525,7 +525,7 @@ export default function ObjectionDeadlinePage() {
                         <td style={{ padding: "8px 10px", fontFamily: "monospace", fontSize: 11, color: "#6b7280" }}>{formatDate(item.reExamResultDate)}</td>
                         <td style={{ padding: "8px 10px", color: "#374151" }}>{item.manager?.name ?? "-"}</td>
                         <td style={{ padding: "8px 10px" }}>
-                          <span style={{ display: "inline-block", padding: "2px 7px", borderRadius: 999, fontSize: 10, fontWeight: 600, background: item.progressStatus === "진행중" ? "#eff6ff" : item.progressStatus === "종결" ? "#f1f5f9" : "#fdf4ff", color: item.progressStatus === "진행중" ? "#2563eb" : item.progressStatus === "종결" ? "#6b7280" : "#7c3aed" }}>{item.progressStatus}</span>
+                          <span style={{ display: "inline-block", padding: "2px 7px", borderRadius: 999, fontSize: 10, fontWeight: 600, background: item.progressStatus === "진행중" ? "#eff6ff" : item.progressStatus === "종결" ? "#f1f5f9" : "#fdf4ff", color: item.progressStatus === "진행중" ? "#29ABE2" : item.progressStatus === "종결" ? "#6b7280" : "#7c3aed" }}>{item.progressStatus}</span>
                         </td>
                         <td style={{ padding: "8px 10px" }}>
                           <button onClick={async e => { e.stopPropagation(); if (!confirm("삭제?")) return; await fetch(`/api/objection/cases/${item.id}`, { method: "DELETE" }); fetchItems(); }} style={{ border: "1px solid #e5e7eb", borderRadius: 4, padding: "2px 7px", fontSize: 10, color: "#dc2626", background: "white", cursor: "pointer" }}>삭제</button>
@@ -546,7 +546,7 @@ export default function ObjectionDeadlinePage() {
           {/* Stats */}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, marginBottom: 14 }}>
             {[
-              { label: "소송 검토중", value: litStats.검토중, color: "#2563eb" },
+              { label: "소송 검토중", value: litStats.검토중, color: "#29ABE2" },
               { label: "소송 검토 완료", value: litStats.완료, color: "#0891b2" },
               { label: "소송 진행중", value: litStats.진행중, color: "#9333ea" },
               { label: "소송 종료", value: litStats.종료, color: "#6b7280" },
@@ -612,7 +612,7 @@ export default function ObjectionDeadlinePage() {
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, marginBottom: 14 }}>
             {[
               { label: "접수 대기", value: wageStats.waiting, color: "#6b7280" },
-              { label: "진행 중", value: wageStats.ongoing, color: "#2563eb" },
+              { label: "진행 중", value: wageStats.ongoing, color: "#29ABE2" },
               { label: "처분 완료", value: wageStats.done, color: "#16a34a" },
             ].map(s => (
               <div key={s.label} style={{ background: "white", borderRadius: 10, border: "1px solid #e5e7eb", padding: "14px 18px", boxShadow: "0 1px 3px rgba(0,0,0,0.05)" }}>
@@ -638,7 +638,7 @@ export default function ObjectionDeadlinePage() {
                   )}
                   {wageItems.map(item => {
                     const status = item.decisionResultDate ? "처분완료" : item.claimDate ? "진행중" : "접수대기";
-                    const statusColor = status === "처분완료" ? "#16a34a" : status === "진행중" ? "#2563eb" : "#6b7280";
+                    const statusColor = status === "처분완료" ? "#16a34a" : status === "진행중" ? "#29ABE2" : "#6b7280";
                     return (
                       <tr key={item.id} style={{ borderBottom: "1px solid #f1f5f9" }}>
                         <td style={{ padding: "10px 12px", color: "#374151" }}>{item.tfName}</td>
@@ -655,7 +655,7 @@ export default function ObjectionDeadlinePage() {
                           <span style={{ display: "inline-block", padding: "2px 8px", borderRadius: 999, fontSize: 10, fontWeight: 600, background: statusColor + "15", color: statusColor }}>{status}</span>
                         </td>
                         <td style={{ padding: "10px 12px" }}>
-                          <button onClick={() => setWageModal(item)} style={{ border: "1px solid #e5e7eb", borderRadius: 5, padding: "3px 9px", fontSize: 11, color: "#2563eb", background: "white", cursor: "pointer" }}>일정 업데이트</button>
+                          <button onClick={() => setWageModal(item)} style={{ border: "1px solid #e5e7eb", borderRadius: 5, padding: "3px 9px", fontSize: 11, color: "#29ABE2", background: "white", cursor: "pointer" }}>일정 업데이트</button>
                         </td>
                       </tr>
                     );
