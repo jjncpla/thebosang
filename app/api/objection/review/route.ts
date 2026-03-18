@@ -76,6 +76,24 @@ export async function POST(req: NextRequest) {
         }
       }
 
+      if (updated.progressStatus === "이의제기 진행") {
+        const existingObjectionCase = await prisma.objectionCase.findFirst({ where: { caseId } });
+        if (!existingObjectionCase) {
+          await prisma.objectionCase.create({
+            data: {
+              caseId,
+              reviewId: updated.id,
+              tfName: updated.tfName,
+              patientName: updated.patientName,
+              caseType: updated.caseType,
+              decisionDate: updated.decisionDate,
+              approvalStatus: updated.approvalStatus,
+              progressStatus: "진행중",
+            }
+          });
+        }
+      }
+
       return NextResponse.json(updated);
     }
   }
@@ -113,6 +131,32 @@ export async function POST(req: NextRequest) {
           caseType: item.caseType,
           decisionDate: item.decisionDate,
           hasInfoDisclosure: item.hasInfoDisclosure,
+        }
+      });
+    }
+  }
+
+  if (item.progressStatus === "이의제기 진행") {
+    let existingObjectionCase;
+    if (item.caseId) {
+      existingObjectionCase = await prisma.objectionCase.findFirst({ where: { caseId: item.caseId } });
+    } else {
+      existingObjectionCase = await prisma.objectionCase.findFirst({
+        where: { tfName: item.tfName, patientName: item.patientName, caseType: item.caseType }
+      });
+    }
+
+    if (!existingObjectionCase) {
+      await prisma.objectionCase.create({
+        data: {
+          caseId: item.caseId || null,
+          reviewId: item.id,
+          tfName: item.tfName,
+          patientName: item.patientName,
+          caseType: item.caseType,
+          decisionDate: item.decisionDate,
+          approvalStatus: item.approvalStatus,
+          progressStatus: "진행중",
         }
       });
     }
