@@ -36,39 +36,35 @@ type Stats = { total: number; contract: number; waiting: number; closed: number 
 const CASE_TYPE_OPTIONS = ["소음성난청", "COPD", "근골격계", "업무상사고", "직업성암", "뇌심혈관계", "유족", "기타"];
 const STATUS_OPTIONS = ["진행중", "약정", "종결", "연락대기"];
 
-// 상담경로 대/중/소분류 데이터
-// 소분류 배열이 비어있으면 자유 텍스트 입력, 값이 있으면 SELECT 드롭다운
 const REFERRAL_DATA: Record<string, Record<string, string[]>> = {
   "소개": {
-    "재해자": ["재해자 성명"],
+    "재해자": [],
     "복지관": [],
-    "초진 병원": [],
-    "특진 병원": [],
-    "보청기 업체": [],
+    "초진병원": [],
+    "특진병원": [],
+    "보청기광고": [],
+    "보청기업체": [],
   },
   "영업": {
-    "명함 영업": [],
-    "아파트 영업": [],
-    "공원 영업": [],
-    "특진 병원 인근 영업": [],
-    "지사 인근 영업": [],
-    "기타 영업": [],
+    "명함영업": [],
+    "아파트영업": [],
+    "공원영업": [],
+    "특진병원인근영업": [],
+    "지사인근영업": [],
+    "기타영업": [],
+    "밥차봉사": [],
   },
-  "간판": {
-    "간판": [],
-  },
+  "간판": {},
   "홍보": {
-    "약봉투 광고": [],
-    "버스광고": [],
+    "약봉투": [],
+    "버스": [],
     "현수막": [],
     "단체복": [],
-    "보청기 광고": [],
-    "온라인": ["네이버 검색", "네이버 지도", "네이버 블로그"],
-    "밥차 봉사": [],
+    "온라인": [],
   },
   "인계": {
-    "기존 재해자": [],
-    "타 지사 인계": [],
+    "기존재해자": [],
+    "타지사": [],
   },
 };
 
@@ -285,25 +281,17 @@ function ConsultationModal({
           </div>
           <div>
             <label style={labelStyle}>상담경로 중분류</label>
-            {subOptions.length > 0 ? (
-              <select style={{ ...inputStyle }} value={form.routeSub} onChange={(e) => { set("routeSub", e.target.value); set("routeDetail", ""); }}>
-                <option value="">선택</option>
-                {subOptions.map((o) => <option key={o} value={o}>{o}</option>)}
-              </select>
-            ) : (
-              <input style={inputStyle} value={form.routeSub} onChange={(e) => set("routeSub", e.target.value)} placeholder="직접 입력" />
-            )}
+            <select style={{ ...inputStyle }} value={form.routeSub} onChange={(e) => { set("routeSub", e.target.value); set("routeDetail", ""); }} disabled={subOptions.length === 0}>
+              <option value="">{subOptions.length > 0 ? "선택" : "해당 없음"}</option>
+              {subOptions.map((o) => <option key={o} value={o}>{o}</option>)}
+            </select>
           </div>
           <div>
             <label style={labelStyle}>상담경로 소분류</label>
-            {detailOptions.length > 0 ? (
-              <select style={{ ...inputStyle }} value={form.routeDetail} onChange={(e) => set("routeDetail", e.target.value)}>
-                <option value="">선택</option>
-                {detailOptions.map((o) => <option key={o} value={o}>{o}</option>)}
-              </select>
-            ) : (
-              <input style={inputStyle} value={form.routeDetail} onChange={(e) => set("routeDetail", e.target.value)} placeholder="소분류" />
-            )}
+            <select style={{ ...inputStyle }} value={form.routeDetail} onChange={(e) => set("routeDetail", e.target.value)} disabled={detailOptions.length === 0}>
+              <option value="">{detailOptions.length > 0 ? "선택" : "해당 없음"}</option>
+              {detailOptions.map((o) => <option key={o} value={o}>{o}</option>)}
+            </select>
           </div>
           <div>
             <label style={labelStyle}>사건수임</label>

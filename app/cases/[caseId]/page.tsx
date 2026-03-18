@@ -1435,7 +1435,7 @@ function BasicInfoTab({ caseData, onUpdated }: { caseData: CaseData; onUpdated: 
         <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
           <label style={{ fontSize: 12, color: "#6b7280" }}>진행상황</label>
           <select style={inputStyle} value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
-            {(STATUS_BY_CASE_TYPE[form.caseType] ?? STATUS_BY_CASE_TYPE["HEARING_LOSS"]).map((s) => <option key={s} value={s}>{s}</option>)}
+            {(STATUS_BY_CASE_TYPE[form.caseType] ?? STATUS_BY_CASE_TYPE["HEARING_LOSS"]).map((s) => <option key={s} value={s}>{CASE_STATUS_LABELS[s] ?? s}</option>)}
           </select>
         </div>
         {([
