@@ -1033,7 +1033,7 @@ export default function CasesPage() {
                     <td style={{ padding: "12px 16px", color: "#6b7280" }}>{c.tfName ?? "-"}</td>
                     <td style={{ padding: "12px 16px", color: "#374151" }}>{c.caseManager ?? "-"}</td>
                     <td style={{ padding: "12px 16px" }}>
-                      <StatusBadge status={CASE_STATUS_LABELS[c.status] ?? c.status} />
+                      <StatusBadge status={CASE_STATUS_LABELS[c.status] ?? getCaseStatus(c) ?? "-"} />
                     </td>
                     <td style={{ padding: "12px 16px", color: "#9ca3af", fontFamily: "monospace", fontSize: 12 }}>{formatDate(c.receptionDate ?? c.createdAt)}</td>
                   </>
