@@ -623,7 +623,7 @@ function HearingLossTab({ caseId, initial, status, onStatusChange }: { caseId: s
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
   const [sec1Open, setSec1Open] = useState(true);
-  const [sec3Open, setSec3Open] = useState(false);
+  const [sec3Open, setSec3Open] = useState(true);
   const [showReExam, setShowReExam] = useState(false);
   const [showReReExam, setShowReReExam] = useState(false);
 
@@ -660,11 +660,17 @@ function HearingLossTab({ caseId, initial, status, onStatusChange }: { caseId: s
     </div>
   );
 
-  const DField = ({ label, k, type = "text" }: { label: string; k: keyof HearingLossDetail; type?: string }) => (
-    <Field label={label}>
-      <input type={type} style={inputStyle} value={d(k)} onChange={(e) => setD(k, e.target.value || null)} />
-    </Field>
-  );
+  const DField = ({ label, k, type = "text" }: { label: string; k: keyof HearingLossDetail; type?: string }) => {
+    let val = d(k);
+    if (type === "datetime-local" && val && val.length > 16) {
+      val = val.slice(0, 16);
+    }
+    return (
+      <Field label={label}>
+        <input type={type} style={inputStyle} value={val} onChange={(e) => setD(k, e.target.value || null)} />
+      </Field>
+    );
+  };
 
   const SaveBar = () => (
     <div style={{ display: "flex", alignItems: "center", gap: 12, paddingTop: 16, borderTop: "1px solid #e5e7eb" }}>
