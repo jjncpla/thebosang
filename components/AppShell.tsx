@@ -162,7 +162,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         </span>
         <span style={{ color: "#64748b", fontSize: 12 }}>{today}</span>
         <button
-          onClick={() => signOut({ callbackUrl: "/login" })}
+          onClick={() => signOut({ callbackUrl: `${window.location.origin}/login` })}
           style={{
             background: "#334155",
             border: "none",

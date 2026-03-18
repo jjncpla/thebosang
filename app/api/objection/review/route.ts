@@ -59,6 +59,23 @@ export async function POST(req: NextRequest) {
         where: { id: existing.id },
         data: { approvalStatus, ...(progressStatus && { progressStatus }) },
       });
+
+      if (updated.progressStatus === "평정청구 진행") {
+        const existingWageReview = await prisma.wageReviewData.findFirst({ where: { caseId } });
+        if (!existingWageReview) {
+          await prisma.wageReviewData.create({
+            data: {
+              caseId,
+              tfName: updated.tfName,
+              patientName: updated.patientName,
+              caseType: updated.caseType,
+              decisionDate: updated.decisionDate,
+              hasInfoDisclosure: updated.hasInfoDisclosure,
+            }
+          });
+        }
+      }
+
       return NextResponse.json(updated);
     }
   }
@@ -76,6 +93,30 @@ export async function POST(req: NextRequest) {
       caseId: caseId || null,
     },
   });
+
+  if (item.progressStatus === "평정청구 진행") {
+    let existingWageReview;
+    if (item.caseId) {
+      existingWageReview = await prisma.wageReviewData.findFirst({ where: { caseId: item.caseId } });
+    } else {
+      existingWageReview = await prisma.wageReviewData.findFirst({
+        where: { tfName: item.tfName, patientName: item.patientName, caseType: item.caseType }
+      });
+    }
+
+    if (!existingWageReview) {
+      await prisma.wageReviewData.create({
+        data: {
+          caseId: item.caseId || null,
+          tfName: item.tfName,
+          patientName: item.patientName,
+          caseType: item.caseType,
+          decisionDate: item.decisionDate,
+          hasInfoDisclosure: item.hasInfoDisclosure,
+        }
+      });
+    }
+  }
 
   return NextResponse.json(item, { status: 201 });
 }

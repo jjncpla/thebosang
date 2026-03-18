@@ -25,6 +25,30 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     },
   });
 
+  if (item.progressStatus === "평정청구 진행") {
+    let existingWageReview;
+    if (item.caseId) {
+      existingWageReview = await prisma.wageReviewData.findFirst({ where: { caseId: item.caseId } });
+    } else {
+      existingWageReview = await prisma.wageReviewData.findFirst({
+        where: { tfName: item.tfName, patientName: item.patientName, caseType: item.caseType }
+      });
+    }
+
+    if (!existingWageReview) {
+      await prisma.wageReviewData.create({
+        data: {
+          caseId: item.caseId || null,
+          tfName: item.tfName,
+          patientName: item.patientName,
+          caseType: item.caseType,
+          decisionDate: item.decisionDate,
+          hasInfoDisclosure: item.hasInfoDisclosure,
+        }
+      });
+    }
+  }
+
   return NextResponse.json(item);
 }
 
