@@ -5,6 +5,7 @@ export async function GET(req: NextRequest) {
   const sp = req.nextUrl.searchParams;
   const caseType = sp.get("caseType") ?? "";
   const tfName = sp.get("tfName") ?? "";
+  const status = sp.get("status") ?? "";
   const search = sp.get("search") ?? "";
   const salesRoute = sp.get("salesRoute") ?? "";
   const isOneStop = sp.get("isOneStop") ?? "";
@@ -62,6 +63,7 @@ export async function GET(req: NextRequest) {
       where: {
         ...(caseType && { caseType }),
         ...(tfName && { tfName }),
+        ...(status && { status }),
         ...(salesRoute && { salesRoute: { contains: salesRoute } }),
         ...(isOneStop && { isOneStop: isOneStop === "true" }),
         ...(Object.keys(contractDateFilter).length > 0 && { contractDate: contractDateFilter }),

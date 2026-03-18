@@ -98,6 +98,11 @@ export default function ImportPage() {
   const handleSubmit = async () => {
     if (!file || !selectedTf) return;
     setLoading(true);
+    const beforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", beforeUnload);
     setResult(null);
     setServerError(null);
     setProgress(null);
@@ -129,7 +134,9 @@ export default function ImportPage() {
       const prevHeader = headerRowIdx > 0
         ? sanitizeRows([allRows[headerRowIdx - 1] as unknown[]])[0]
         : [];
-      const dataRows = allRows.slice(headerRowIdx + 1);
+      const dataRows = allRows.slice(headerRowIdx + 1).filter(row =>
+        (row as unknown[]).some(c => c !== null && c !== undefined && String(c).trim() !== "")
+      );
       const totalRows = dataRows.length;
 
       let totalCreated = 0, totalSkipped = 0;
@@ -137,6 +144,7 @@ export default function ImportPage() {
 
       for (let offset = 0; offset < totalRows; offset += BATCH_SIZE) {
         setProgress({ done: offset, total: totalRows });
+        document.title = `임포트 중... ${offset}/${totalRows}건`;
 
         const batch = sanitizeRows(dataRows.slice(offset, offset + BATCH_SIZE));
         const res = await fetch(selectedDisease.apiPath, {
@@ -169,11 +177,14 @@ export default function ImportPage() {
       }
 
       setProgress(null);
+      document.title = "데이터 임포트 | TBSS";
     } catch {
       setServerError("네트워크 오류가 발생했습니다");
     } finally {
       setLoading(false);
+      window.removeEventListener("beforeunload", beforeUnload);
       setProgress(null);
+      document.title = "데이터 임포트 | TBSS";
     }
   };
 

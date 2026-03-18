@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { CASE_TYPE_LABELS } from "@/lib/constants/case";
+import { TF_BY_BRANCH } from "@/lib/constants/tf";
 
 type PatientListItem = {
   id: string;
@@ -55,6 +56,7 @@ export default function PatientsPage() {
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [submittedSearch, setSubmittedSearch] = useState("");
+  const [filterTf, setFilterTf] = useState("");
 
   const fetchPatients = useCallback(async () => {
     setLoading(true);
@@ -62,6 +64,7 @@ export default function PatientsPage() {
     try {
       const params = new URLSearchParams();
       if (submittedSearch) params.set("search", submittedSearch);
+      if (filterTf) params.set("tfName", filterTf);
       const res = await fetch(`/api/patients?${params}`);
       if (!res.ok) throw new Error(`서버 오류 (${res.status})`);
       const data: PatientListItem[] = await res.json();
@@ -71,7 +74,7 @@ export default function PatientsPage() {
     } finally {
       setLoading(false);
     }
-  }, [submittedSearch]);
+  }, [submittedSearch, filterTf]);
 
   useEffect(() => { fetchPatients(); }, [fetchPatients]);
 
@@ -95,7 +98,7 @@ export default function PatientsPage() {
           </div>
         </div>
         <button
-          onClick={() => router.push("/cases/new")}
+          onClick={() => router.push("/patients/new")}
           style={{ background: "#29ABE2", color: "white", border: "none", borderRadius: 6, padding: "8px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
         >
           + 재해자 등록
@@ -103,7 +106,7 @@ export default function PatientsPage() {
       </div>
 
       {/* Search */}
-      <div style={{ background: "white", borderRadius: 10, border: "1px solid #e5e7eb", padding: "12px 16px", marginBottom: 16, display: "flex", gap: 10, alignItems: "center", boxShadow: "0 1px 3px rgba(0,0,0,0.05)" }}>
+      <div style={{ background: "white", borderRadius: 10, border: "1px solid #e5e7eb", padding: "12px 16px", marginBottom: 16, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", boxShadow: "0 1px 3px rgba(0,0,0,0.05)" }}>
         <input
           type="text"
           placeholder="이름, 주민번호, 전화번호 뒷 4자리 검색..."
@@ -118,6 +121,18 @@ export default function PatientsPage() {
         >
           검색
         </button>
+        <select
+          value={filterTf}
+          onChange={(e) => setFilterTf(e.target.value)}
+          style={{ border: "1px solid #e5e7eb", borderRadius: 6, padding: "6px 10px", fontSize: 13, color: "#374151", background: "#f9fafb", cursor: "pointer" }}
+        >
+          <option value="">TF 전체</option>
+          {Object.entries(TF_BY_BRANCH).map(([branch, tfs]) => (
+            <optgroup key={branch} label={branch}>
+              {tfs.map((tf) => <option key={tf} value={tf}>{tf}</option>)}
+            </optgroup>
+          ))}
+        </select>
         {submittedSearch && (
           <button
             onClick={() => { setSearch(""); setSubmittedSearch(""); }}

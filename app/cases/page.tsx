@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { CASE_TYPE_LABELS } from "@/lib/constants/case";
+import { CASE_TYPE_LABELS, CASE_STATUS_LABELS } from "@/lib/constants/case";
 import { TF_BY_BRANCH } from "@/lib/constants/tf";
 import {
   FILTER_DEFINITIONS_BY_TYPE,
@@ -23,6 +23,7 @@ type HearingLoss = {
 type DetailStatus = { status: string } | null;
 type Case = {
   id: string;
+  status: string;
   patientId: string;
   patient: Patient;
   caseType: string;
@@ -557,6 +558,7 @@ export default function CasesPage() {
   const [selectedBranch, setSelectedBranch] = useState("");
   const [selectedTf, setSelectedTf] = useState("");
   const [selectedCaseType, setSelectedCaseType] = useState("");
+  const [filterStatus, setFilterStatus] = useState("");
   const [activeFilters, setActiveFilters] = useState<Record<string, string>>({});
   const [search, setSearch] = useState("");
   const [showJurisdiction, setShowJurisdiction] = useState(false);
@@ -579,6 +581,7 @@ export default function CasesPage() {
       const params = new URLSearchParams();
       if (selectedTf) params.set("tfName", selectedTf);
       if (selectedCaseType) params.set("caseType", selectedCaseType);
+      if (filterStatus) params.set("status", filterStatus);
       if (search) params.set("search", search);
 
       for (const [k, v] of Object.entries(activeFilters)) {
@@ -594,7 +597,7 @@ export default function CasesPage() {
     } finally {
       setLoading(false);
     }
-  }, [selectedTf, selectedCaseType, search, activeFilters]);
+  }, [selectedTf, selectedCaseType, filterStatus, search, activeFilters]);
 
   useEffect(() => {
     fetchCases();
@@ -816,7 +819,7 @@ export default function CasesPage() {
       )}
 
       {/* Search */}
-      <div style={{ background: "white", borderRadius: 10, border: "1px solid #e5e7eb", padding: "12px 16px", marginBottom: 16, display: "flex", gap: 10, alignItems: "center", boxShadow: "0 1px 3px rgba(0,0,0,0.05)" }}>
+      <div style={{ background: "white", borderRadius: 10, border: "1px solid #e5e7eb", padding: "12px 16px", marginBottom: 16, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", boxShadow: "0 1px 3px rgba(0,0,0,0.05)" }}>
         <input
           type="text"
           placeholder="이름, 주민번호, 전화번호 뒷 4자리 검색..."
@@ -824,6 +827,16 @@ export default function CasesPage() {
           onChange={(e) => setSearch(e.target.value)}
           style={{ border: "1px solid #e5e7eb", borderRadius: 6, padding: "6px 12px", fontSize: 13, color: "#374151", outline: "none", width: 280, background: "#f9fafb" }}
         />
+        <select
+          value={filterStatus}
+          onChange={(e) => setFilterStatus(e.target.value)}
+          style={{ border: "1px solid #e5e7eb", borderRadius: 6, padding: "6px 10px", fontSize: 13, color: "#374151", background: "#f9fafb", cursor: "pointer" }}
+        >
+          <option value="">진행상황 전체</option>
+          {Object.entries(CASE_STATUS_LABELS).map(([k, v]) => (
+            <option key={k} value={k}>{v}</option>
+          ))}
+        </select>
       </div>
 
       {/* Table */}
@@ -866,7 +879,7 @@ export default function CasesPage() {
             {!loading && cases.map((c, idx) => (
               <tr
                 key={c.id}
-                onClick={() => router.push(c.caseType === "HEARING_LOSS" ? `/cases/${c.id}` : `/patients/${c.patient.id}?tab=${c.caseType}`)}
+                onClick={() => router.push(`/patients/${c.patientId}?tab=${c.caseType}`)}
                 style={{ borderBottom: "1px solid #f1f5f9", cursor: "pointer", background: checkedIds.has(c.id) ? "#fef2f2" : "white" }}
                 onMouseEnter={(e) => { if (!checkedIds.has(c.id)) e.currentTarget.style.background = "#f8fafc"; }}
                 onMouseLeave={(e) => { e.currentTarget.style.background = checkedIds.has(c.id) ? "#fef2f2" : "white"; }}
@@ -881,7 +894,7 @@ export default function CasesPage() {
                     <td style={{ padding: "12px 16px", color: "#6b7280" }}>{c.tfName ?? "-"}</td>
                     <td style={{ padding: "12px 16px", color: "#374151" }}>{c.salesManager ?? "-"}</td>
                     <td style={{ padding: "12px 16px", color: "#374151" }}>{c.caseManager ?? "-"}</td>
-                    <td style={{ padding: "12px 16px" }}><StatusBadge status={getCaseStatus(c)} /></td>
+                    <td style={{ padding: "12px 16px" }}><StatusBadge status={CASE_STATUS_LABELS[c.status] ?? getCaseStatus(c)} /></td>
                     <td style={{ padding: "12px 16px", color: "#6b7280" }}>{c.hearingLoss?.firstClinic ?? "-"}</td>
                     <td style={{ padding: "12px 16px", color: "#6b7280" }}>{c.hearingLoss?.specialClinic ?? "-"}</td>
                     <td style={{ padding: "12px 16px", color: "#374151" }}>{c.hearingLoss?.disposalType ?? "-"}</td>
@@ -897,7 +910,7 @@ export default function CasesPage() {
                     <td style={{ padding: "12px 16px", color: "#374151" }}>{CASE_TYPE_LABELS[c.caseType] ?? c.caseType}</td>
                     <td style={{ padding: "12px 16px", color: "#6b7280" }}>{c.tfName ?? "-"}</td>
                     <td style={{ padding: "12px 16px", color: "#374151" }}>{c.caseManager ?? "-"}</td>
-                    <td style={{ padding: "12px 16px" }}><StatusBadge status={getCaseStatus(c)} /></td>
+                    <td style={{ padding: "12px 16px" }}><StatusBadge status={CASE_STATUS_LABELS[c.status] ?? getCaseStatus(c)} /></td>
                     <td style={{ padding: "12px 16px", color: "#9ca3af", fontFamily: "monospace", fontSize: 12 }}>{formatDate(c.receptionDate ?? c.createdAt)}</td>
                   </>
                 )}

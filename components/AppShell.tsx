@@ -32,7 +32,7 @@ const MENU_ITEMS: MenuItem[] = [
     label: "이의제기 관리",
     icon: "⚖",
     children: [
-      { id: "objection-review", label: "최초총현황·평임검토", path: "/objection/review" },
+      { id: "objection-review", label: "처분 검토", path: "/objection/review" },
       { id: "objection-deadline", label: "기일 관리", path: "/objection/deadline" },
       { id: "objection-document", label: "이유서·의견서", path: "/objection/document" },
     ],

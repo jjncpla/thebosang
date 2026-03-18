@@ -13,12 +13,16 @@ export async function GET(req: NextRequest) {
   const dateFrom = searchParams.get("dateFrom");
   const dateTo = searchParams.get("dateTo");
   const search = searchParams.get("search");
+  const tfName = searchParams.get("tfName");
+  const routeMain = searchParams.get("routeMain");
   const page = parseInt(searchParams.get("page") ?? "1");
   const pageSize = parseInt(searchParams.get("pageSize") ?? "50");
 
   const where: Record<string, unknown> = {};
   if (status) where.status = status;
   if (managerId) where.managerId = managerId;
+  if (tfName) where.tfName = tfName;
+  if (routeMain) where.routeMain = routeMain;
   if (caseType) where.caseTypes = { has: caseType };
   if (dateFrom || dateTo) {
     where.visitDate = {};

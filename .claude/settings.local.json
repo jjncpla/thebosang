@@ -38,7 +38,16 @@
       "Bash(cmd /c \"taskkill /PID 31376 /F\" && echo \"killed\")",
       "Bash(sleep 5 && cd C:/Users/LG/thebosang && npx next build --skip-env-check 2>&1 | grep -E \"error|Error|warning|Warning|Failed|✓|✗|λ\" | head -40)",
       "Bash(netstat -ano 2>/dev/null | grep \":3000\" | head -3)",
-      "Bash(cmd //c \"taskkill /PID 31376 /F 2>&1\")"
+      "Bash(cmd //c \"taskkill /PID 31376 /F 2>&1\")",
+      "Bash(for f:*)",
+      "Bash(do)",
+      "Bash(sed -i 's/#2563eb/#29ABE2/g' \"$f\")",
+      "Bash(echo \"OK: $f\")",
+      "Bash(done)",
+      "Bash(ls C:/dev/my-app/*.txt)",
+      "Read(//c/Users/user/**)",
+      "Bash(xargs grep:*)",
+      "Bash(head -10 find C:/dev/my-app/components -name *.tsx)"
     ]
   }
 }

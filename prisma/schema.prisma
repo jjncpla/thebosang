@@ -75,6 +75,9 @@ model Case {
   occupationalCancer   OccupationalCancerDetail?
   bereaved             BereavedDetail?
 
+  objectionReviews ObjectionReview[]
+  objectionCases   ObjectionCase[]
+
   messages  Message[]
   timelines TimelineEvent[]
 }
@@ -92,6 +95,7 @@ model HearingLossDetail {
   firstExamSpeech        Float?
   passedInitialCriteria  Boolean   @default(false)
   isDisabilityRegistered Boolean   @default(false)
+  isBig3                 Boolean   @default(false)
 
   disabilityRegistrationDate  DateTime? // 국가장애 등록일자
   disabilityDiagnosisDate     DateTime? // 국가장애 진단일자
@@ -513,7 +517,8 @@ model TelegramMessage {
 // ─────────────────────────────────────────────
 model ObjectionReview {
   id             String    @id @default(cuid())
-  caseId         String?   // Case FK (연결된 경우)
+  caseId         String?
+  case           Case?     @relation(fields: [caseId], references: [id])
   tfName         String
   patientName    String
   caseType       String    // 소음성 난청 / COPD 등
@@ -535,7 +540,8 @@ model ObjectionCase {
   id                    String    @id @default(cuid())
   reviewId              String?   // ObjectionReview FK (최초총현황과 연결)
   review                ObjectionReview? @relation(fields: [reviewId], references: [id])
-  caseId                String?   // Case FK
+  caseId                String?
+  case                  Case?     @relation(fields: [caseId], references: [id])
   tfName                String    // TF명 (예: 울산동부TF)
   patientName           String
   caseType              String    // 소음성 난청 / COPD / 근골격계 등

@@ -9,6 +9,7 @@ export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl;
   const tfName = searchParams.get("tfName");
   const progressStatus = searchParams.get("progressStatus");
+  const caseType = searchParams.get("caseType");
   const search = searchParams.get("search");
 
   const type = searchParams.get("type");
@@ -20,6 +21,7 @@ export async function GET(req: NextRequest) {
     if (progressStatus) where.progressStatus = progressStatus;
   }
   if (tfName) where.tfName = tfName;
+  if (caseType) where.caseType = caseType;
   if (search) where.patientName = { contains: search, mode: "insensitive" };
 
   const items = await prisma.objectionCase.findMany({

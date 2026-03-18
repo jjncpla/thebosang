@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { TF_BY_BRANCH } from "@/lib/constants/tf";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -290,7 +291,7 @@ function ConsultationModal({
         <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 20, alignItems: "center" }}>
           {initial && form.status === "약정" && (
             <button
-              onClick={() => router.push(`/cases/new?from=consultation&id=${initial.id}`)}
+              onClick={() => router.push(`/patients/new?from=consultation&id=${initial.id}`)}
               style={{ border: "1px solid #15803d", borderRadius: 6, padding: "8px 14px", fontSize: 13, color: "#15803d", background: "#f0fdf4", cursor: "pointer", fontWeight: 600 }}
             >
               재해자 등록하기
@@ -310,6 +311,11 @@ function ConsultationModal({
   );
 }
 
+// 상담관리는 더보상TF만 표시 (이산TF 제외)
+const THEBOSANG_TF_LIST: string[] = Object.entries(TF_BY_BRANCH)
+  .flatMap(([, tfs]) => tfs)
+  .filter((tf) => !tf.startsWith("이산"));
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function ConsultationPage() {
@@ -324,6 +330,8 @@ export default function ConsultationPage() {
   const [filterStatus, setFilterStatus] = useState("");
   const [filterCaseType, setFilterCaseType] = useState("");
   const [filterManagerId, setFilterManagerId] = useState("");
+  const [filterTf, setFilterTf] = useState("");
+  const [filterRoute, setFilterRoute] = useState("");
   const [filterDateFrom, setFilterDateFrom] = useState("");
   const [filterDateTo, setFilterDateTo] = useState("");
   const [search, setSearch] = useState("");
@@ -346,6 +354,8 @@ export default function ConsultationPage() {
       if (filterStatus) p.set("status", filterStatus);
       if (filterCaseType) p.set("caseType", filterCaseType);
       if (filterManagerId) p.set("managerId", filterManagerId);
+      if (filterTf) p.set("tfName", filterTf);
+      if (filterRoute) p.set("routeMain", filterRoute);
       if (filterDateFrom) p.set("dateFrom", filterDateFrom);
       if (filterDateTo) p.set("dateTo", filterDateTo);
       if (search) p.set("search", search);
@@ -363,7 +373,7 @@ export default function ConsultationPage() {
     } finally {
       setLoading(false);
     }
-  }, [filterStatus, filterCaseType, filterManagerId, filterDateFrom, filterDateTo, search, page]);
+  }, [filterStatus, filterCaseType, filterManagerId, filterTf, filterRoute, filterDateFrom, filterDateTo, search, page]);
 
   useEffect(() => { fetchManagers(); }, []);
   useEffect(() => { fetchItems(); }, [fetchItems]);
@@ -467,6 +477,28 @@ export default function ConsultationPage() {
             >
               <option value="">전체</option>
               {managers.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+            </select>
+          </div>
+          <div>
+            <label style={{ fontSize: 11, color: "#6b7280", fontWeight: 700, display: "block", marginBottom: 4 }}>TF</label>
+            <select
+              value={filterTf}
+              onChange={(e) => { setFilterTf(e.target.value); setPage(1); }}
+              style={{ border: "1px solid #e5e7eb", borderRadius: 6, padding: "6px 10px", fontSize: 12, color: "#374151", background: "#f9fafb" }}
+            >
+              <option value="">전체</option>
+              {THEBOSANG_TF_LIST.map((tf) => <option key={tf} value={tf}>{tf}</option>)}
+            </select>
+          </div>
+          <div>
+            <label style={{ fontSize: 11, color: "#6b7280", fontWeight: 700, display: "block", marginBottom: 4 }}>상담경로</label>
+            <select
+              value={filterRoute}
+              onChange={(e) => { setFilterRoute(e.target.value); setPage(1); }}
+              style={{ border: "1px solid #e5e7eb", borderRadius: 6, padding: "6px 10px", fontSize: 12, color: "#374151", background: "#f9fafb" }}
+            >
+              <option value="">전체</option>
+              {ROUTE_MAIN_OPTIONS.map((r) => <option key={r} value={r}>{r}</option>)}
             </select>
           </div>
           <div>

@@ -1,0 +1,71 @@
+# Task 1: CLAUDE.md 프로젝트 루트 배치
+
+## 목적
+Claude Code가 프로젝트 컨텍스트를 자동으로 읽을 수 있도록 CLAUDE.md를 루트에 배치한다.
+
+## 작업 내용
+
+1. 프로젝트 루트(C:\dev\my-app)에 CLAUDE.md 파일이 있는지 확인한다.
+2. 없으면 아래 내용을 그대로 CLAUDE.md로 생성한다.
+3. 이미 있으면 건드리지 않는다.
+
+## CLAUDE.md 내용 (없을 경우에만 생성)
+
+---
+# TBSS (더보상 업무지원시스템) — Claude Code 개발 기준 문서
+
+> 이 파일은 Claude Code가 자동으로 읽는 프로젝트 컨텍스트 파일입니다.
+> 코딩 시작 전 반드시 이 파일을 참조하고, 아래 원칙을 항상 준수하세요.
+
+## 프로젝트 개요
+- 시스템명: TBSS (더보상 업무지원시스템)
+- 운영사: 노무법인 더보상 (전국 단위 산재 전문 노무법인)
+- 목적: 산재 사건 관리, 이의제기, TF 업무 등 내부 업무 전산화
+- 배포: Railway (thebosang-production.up.railway.app)
+- 레포: github.com/jjncpla/thebosang (main 브랜치 push → 자동 배포)
+
+## 기술 스택
+- Frontend: Next.js App Router, TypeScript
+- Backend: Next.js API Routes
+- DB: PostgreSQL (Prisma ORM)
+- Auth: Auth.js v5 (NextAuth)
+- PDF 생성: pdf-lib + @pdf-lib/fontkit + NotoSansKR
+- 배포: Railway
+
+## 절대 원칙
+
+### 해야 할 것
+- 수술적 수정만 — 필요한 부분만 str_replace로 최소 변경
+- 새 기능은 새 파일 추가 방식으로 구현
+- schema.prisma 변경 시 마지막에 npx prisma db push 명령 안내
+- 인라인 스타일 / Tailwind 혼재 현황 그대로 존중
+
+### 하지 말 것
+- 기존 파일 전체 재작성 금지 (명시적 요청 없으면)
+- 기존 UI·로직·스타일 임의 변경 금지
+- 새 npm 패키지 임의 설치 금지
+- .env 파일 수정 금지
+- 불확실한 부분 임의로 채워넣기 금지
+
+## 판단 기준
+- 새 페이지 → app/[경로]/page.tsx 생성
+- DB 접근 → lib/prisma.ts import 후 Prisma Client 사용
+- 인증 확인 → import { auth } from '@/auth' → const session = await auth()
+- 정적 데이터 → lib/constants/xxx.ts 하드코딩
+- 에러 처리 → console.error() + 사용자에게 에러 메시지 표시
+
+## 권한 체계
+- ADMIN: 전체 + 관리자 페이지
+- 조직관리자: 지사장 관리 페이지 포함
+- STAFF: 일반 업무 기능
+- 이산계정: 사건 조회만 (상세 불가)
+
+## Railway 배포 주의
+- main 브랜치 push → 자동 빌드·배포 (2~4분)
+- lib/generated/ 는 git 커밋 제외
+- schema.prisma 변경 후: npx prisma db push
+---
+
+## 완료 기준
+- C:\dev\my-app\CLAUDE.md 파일 존재 확인
+- 내용 정상 여부 확인

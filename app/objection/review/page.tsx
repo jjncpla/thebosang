@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { CASE_TYPE_LABELS } from "@/lib/constants/case";
 
 const BRANCH_TF_MAP: Record<string, string[]> = {
   "울산지사": ["울산TF", "이산울산북부TF"],
@@ -160,7 +161,7 @@ function ReviewModal({ initial, onClose, onSave }: {
             </select>
           </div>
           <div><label style={labelStyle}>성명</label><input style={inputStyle} value={form.patientName} onChange={e => set("patientName", e.target.value)} /></div>
-          <div><label style={labelStyle}>사건분류</label><input style={inputStyle} value={form.caseType} onChange={e => set("caseType", e.target.value)} /></div>
+          <div><label style={labelStyle}>사건분류</label><select style={inputStyle} value={form.caseType} onChange={e => set("caseType", e.target.value)}><option value="">선택</option>{Object.entries(CASE_TYPE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
           <div><label style={labelStyle}>처분일</label><input type="date" style={inputStyle} value={form.decisionDate} onChange={e => set("decisionDate", e.target.value)} /></div>
           <div><label style={labelStyle}>승인여부</label><select style={inputStyle} value={form.approvalStatus} onChange={e => set("approvalStatus", e.target.value)}>{APPROVAL_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}</select></div>
           <div>
@@ -265,6 +266,7 @@ export default function ObjectionReviewPage() {
   const [filterBranch, setFilterBranch] = useState("");
   const [filterTf, setFilterTf] = useState("");
   const [filterProgress, setFilterProgress] = useState("");
+  const [filterCaseType, setFilterCaseType] = useState("");
   const [searchReview, setSearchReview] = useState("");
   const [reviewModal, setReviewModal] = useState(false);
   const [reviewTarget, setReviewTarget] = useState<ReviewItem | null>(null);
@@ -287,10 +289,11 @@ export default function ObjectionReviewPage() {
     } else if (filterProgress) {
       p.set("progressStatus", filterProgress);
     }
+    if (filterCaseType) p.set("caseType", filterCaseType);
     if (searchReview) p.set("search", searchReview);
     const res = await fetch(`/api/objection/review?${p}`);
     if (res.ok) setReviews(await res.json());
-  }, [filterTf, filterProgress, searchReview]);
+  }, [filterTf, filterProgress, filterCaseType, searchReview]);
 
   const fetchWages = useCallback(async () => {
     const p = new URLSearchParams();
@@ -384,6 +387,13 @@ export default function ObjectionReviewPage() {
                 progressLabel="사건진행여부"
               />
               <div style={{ display: "flex", gap: 10, marginTop: 10, alignItems: "flex-end" }}>
+                <div>
+                  <div style={{ fontSize: 11, color: "#6b7280", fontWeight: 700, marginBottom: 4 }}>사건분류</div>
+                  <select value={filterCaseType} onChange={e => setFilterCaseType(e.target.value)} style={{ border: "1px solid #e5e7eb", borderRadius: 6, padding: "6px 10px", fontSize: 12, color: "#374151", background: "white" }}>
+                    <option value="">전체</option>
+                    {Object.entries(CASE_TYPE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                  </select>
+                </div>
                 <div>
                   <div style={{ fontSize: 11, color: "#6b7280", fontWeight: 700, marginBottom: 4 }}>검색</div>
                   <input value={searchReview} onChange={e => setSearchReview(e.target.value)} placeholder="성명 검색" style={{ border: "1px solid #e5e7eb", borderRadius: 6, padding: "6px 10px", fontSize: 12, color: "#374151", background: "white", width: 140 }} />

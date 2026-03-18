@@ -3,17 +3,19 @@ import { prisma } from "@/lib/prisma";
 
 export async function GET(req: NextRequest) {
   const search = req.nextUrl.searchParams.get("search") ?? "";
+  const tfName = req.nextUrl.searchParams.get("tfName") ?? "";
   try {
+    const where: Record<string, unknown> = {};
+    if (search) {
+      where.OR = [
+        { name: { contains: search } },
+        { ssn: { contains: search } },
+        { phone: { endsWith: search } },
+      ];
+    }
+    if (tfName) where.cases = { some: { tfName } };
     const patients = await prisma.patient.findMany({
-      where: search
-        ? {
-            OR: [
-              { name: { contains: search } },
-              { ssn: { contains: search } },
-              { phone: { endsWith: search } },
-            ],
-          }
-        : undefined,
+      where: Object.keys(where).length > 0 ? where : undefined,
       orderBy: { createdAt: "desc" },
       include: {
         _count: { select: { cases: true } },

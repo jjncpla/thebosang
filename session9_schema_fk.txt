@@ -1,0 +1,76 @@
+## 세션 9 — 아키텍처 B방식 FK 연결 (schema.prisma)
+
+아래 작업을 순서대로 실행해줘.
+
+---
+
+## STEP 1. prisma/schema.prisma 수정
+
+### 1-1. Case 모델에 역방향 관계 추가
+
+Case 모델 내 마지막 relation 필드들(`messages`, `timelines`) 바로 위에 아래 두 줄 추가:
+
+```prisma
+  objectionReviews ObjectionReview[]
+  objectionCases   ObjectionCase[]
+```
+
+### 1-2. ObjectionReview 모델 caseId에 @relation 추가
+
+현재:
+```prisma
+  caseId         String?   // Case FK (연결된 경우)
+```
+를 다음으로 교체:
+```prisma
+  caseId         String?
+  case           Case?     @relation(fields: [caseId], references: [id])
+```
+
+### 1-3. ObjectionCase 모델 caseId에 @relation 추가
+
+현재:
+```prisma
+  caseId                String?   // Case FK
+```
+를 다음으로 교체:
+```prisma
+  caseId                String?
+  case                  Case?     @relation(fields: [caseId], references: [id])
+```
+
+---
+
+## STEP 2. 마이그레이션 실행
+
+```bash
+npx prisma migrate dev --name add_case_fk_to_objection
+```
+
+마이그레이션 오류 없이 완료되는지 확인해.
+오류가 나면 오류 메시지 그대로 출력해줘 (수정 시도 하지 말고).
+
+---
+
+## STEP 3. Prisma Client 재생성
+
+```bash
+npx prisma generate
+```
+
+---
+
+## STEP 4. 기존 caseId 활용 코드 확인 (수정 없음)
+
+아래 파일들에서 `caseId` 관련 코드를 읽어서 현재 어떻게 사용 중인지만 확인하고 출력해줘.
+수정은 하지 않아:
+- `app/api/objection/review/route.ts`
+- `app/api/objection/cases/route.ts`
+
+---
+
+## 주의사항
+- schema.prisma 수정은 위 3곳만 (Case, ObjectionReview, ObjectionCase)
+- 다른 모델 건드리지 않기
+- migrate 성공 후 TypeScript 타입 오류가 있으면 오류 목록만 출력 (자동 수정 시도 금지)
+- 완료 후 수정 내용 + 마이그레이션 결과 요약해줘
