@@ -58,6 +58,7 @@ type WageItem = {
   decisionResultDate: string | null;
   reviewManagerName: string | null;
   reviewResult: string | null;
+  reviewDetail: string | null;
 };
 
 function formatDate(iso: string | null | undefined) {
@@ -162,9 +163,9 @@ function CaseModal({ initial, managers, onClose, onSave }: {
         <div style={{ background: "#f0f9ff", border: "1px solid #bae6fd", borderRadius: 8, padding: "12px 14px", marginTop: 14 }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: "#0369a1", marginBottom: 10 }}>심사청구</div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "8px 12px" }}>
-            <div><label style={labelStyle}>심사청구일</label><input type="date" style={{ ...inputStyle, opacity: form.isQualityReview ? 0.4 : 1 }} disabled={!!form.isQualityReview} value={form.examClaimDate ?? ""} onChange={e => set("examClaimDate", e.target.value)} /></div>
-            <div><label style={labelStyle}>심사결과</label><select style={{ ...inputStyle, opacity: form.isQualityReview ? 0.4 : 1 }} disabled={!!form.isQualityReview} value={form.examResult ?? ""} onChange={e => set("examResult", e.target.value)}><option value="">진행중</option>{EXAM_RESULT_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}</select></div>
-            <div><label style={labelStyle}>심사송달일</label><input type="date" style={{ ...inputStyle, opacity: (form.isQualityReview || !["기각","인용"].includes(form.examResult)) ? 0.4 : 1 }} disabled={!!form.isQualityReview || !["기각","인용"].includes(form.examResult)} value={form.examResultDate ?? ""} onChange={e => set("examResultDate", e.target.value)} /></div>
+            <div><label style={labelStyle}>심사청구일</label><input type="date" style={inputStyle} value={form.examClaimDate ?? ""} onChange={e => set("examClaimDate", e.target.value)} /></div>
+            <div><label style={labelStyle}>심사결과</label><select style={inputStyle} value={form.examResult ?? ""} onChange={e => set("examResult", e.target.value)}><option value="">진행중</option>{EXAM_RESULT_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}</select></div>
+            <div><label style={labelStyle}>심사송달일</label><input type="date" style={inputStyle} value={form.examResultDate ?? ""} onChange={e => set("examResultDate", e.target.value)} /></div>
           </div>
         </div>
 
@@ -522,7 +523,7 @@ export default function ObjectionDeadlinePage() {
                         <td style={{ padding: "8px 10px" }}><ApprovalBadge status={item.approvalStatus} />{item.isQualityReview && <span style={{ marginLeft: 4, fontSize: 9, background: "#7c3aed", color: "white", borderRadius: 3, padding: "1px 5px" }}>질판위</span>}</td>
                         <td style={{ padding: "8px 10px", color: "#374151" }}>{item.tfName}</td>
                         <td style={{ padding: "8px 10px", fontWeight: 600, color: "#111827" }}>{item.patientName}</td>
-                        <td style={{ padding: "8px 10px", color: "#6b7280" }}>{item.caseType}</td>
+                        <td style={{ padding: "8px 10px", color: "#6b7280" }}>{CASE_TYPE_LABELS[item.caseType] || item.caseType}</td>
                         <td style={{ padding: "8px 10px", fontFamily: "monospace", fontSize: 11, color: "#6b7280" }}>{formatDate(item.decisionDate)}</td>
                         <td style={{ padding: "8px 10px", fontFamily: "monospace", fontSize: 11, color: diff !== null && diff <= 7 ? "#dc2626" : "#374151", fontWeight: diff !== null && diff <= 7 ? 700 : 400 }}>
                           {deadline ? formatDate(deadline.toISOString()) : "-"}{diff !== null && diff <= 7 && diff >= 0 && " ⚠️"}{diff !== null && diff < 0 && " 🔴"}
@@ -586,7 +587,7 @@ export default function ObjectionDeadlinePage() {
                     <tr key={item.id} style={{ borderBottom: "1px solid #f1f5f9" }}>
                       <td style={{ padding: "10px 12px", color: "#374151" }}>{item.tfName}</td>
                       <td style={{ padding: "10px 12px", fontWeight: 600, color: "#111827" }}>{item.patientName}</td>
-                      <td style={{ padding: "10px 12px", color: "#6b7280" }}>{item.caseType}</td>
+                      <td style={{ padding: "10px 12px", color: "#6b7280" }}>{CASE_TYPE_LABELS[item.caseType] || item.caseType}</td>
                       <td style={{ padding: "10px 12px", color: "#374151" }}>{item.examResult ?? "-"}</td>
                       <td style={{ padding: "10px 12px", color: "#374151" }}>{item.reExamResult ?? "-"}</td>
                       <td style={{ padding: "10px 12px" }}>
@@ -637,7 +638,7 @@ export default function ObjectionDeadlinePage() {
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
                 <thead>
                   <tr style={{ background: "#f8fafc", borderBottom: "2px solid #e5e7eb" }}>
-                    {["TF","성명","사건분류","처분일","최종 적용임금","청구일","결정일","검토담당자","진행상태","관리"].map(h => (
+                    {["TF","성명","사건분류","최종 적용임금","상세 쟁점","검토담당자","진행상태","관리"].map(h => (
                       <th key={h} style={thStyle}>{h}</th>
                     ))}
                   </tr>
@@ -653,13 +654,11 @@ export default function ObjectionDeadlinePage() {
                       <tr key={item.id} style={{ borderBottom: "1px solid #f1f5f9" }}>
                         <td style={{ padding: "10px 12px", color: "#374151" }}>{item.tfName}</td>
                         <td style={{ padding: "10px 12px", fontWeight: 600, color: "#111827" }}>{item.patientName}</td>
-                        <td style={{ padding: "10px 12px", color: "#6b7280" }}>{item.caseType}</td>
-                        <td style={{ padding: "10px 12px", fontFamily: "monospace", fontSize: 11, color: "#6b7280" }}>{formatDate(item.decisionDate)}</td>
+                        <td style={{ padding: "10px 12px", color: "#6b7280" }}>{CASE_TYPE_LABELS[item.caseType] || item.caseType}</td>
                         <td style={{ padding: "10px 12px", fontFamily: "monospace", fontSize: 11, color: "#374151", fontWeight: 600 }}>
                           {item.finalSelectedWage != null ? item.finalSelectedWage.toLocaleString("ko-KR") + "원/일" : "-"}
                         </td>
-                        <td style={{ padding: "10px 12px", fontFamily: "monospace", fontSize: 11, color: item.claimDate ? "#374151" : "#9ca3af" }}>{formatDate(item.claimDate)}</td>
-                        <td style={{ padding: "10px 12px", fontFamily: "monospace", fontSize: 11, color: item.decisionResultDate ? "#374151" : "#9ca3af" }}>{formatDate(item.decisionResultDate)}</td>
+                        <td style={{ padding: "10px 12px", color: "#374151", maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.reviewDetail ?? "-"}</td>
                         <td style={{ padding: "10px 12px", color: "#374151" }}>{item.reviewManagerName ?? "-"}</td>
                         <td style={{ padding: "10px 12px" }}>
                           <span style={{ display: "inline-block", padding: "2px 8px", borderRadius: 999, fontSize: 10, fontWeight: 600, background: statusColor + "15", color: statusColor }}>{status}</span>

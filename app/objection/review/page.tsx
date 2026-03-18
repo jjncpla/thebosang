@@ -416,7 +416,7 @@ export default function ObjectionReviewPage() {
                         <td style={{ padding: "10px 12px" }}><ApprovalBadge status={item.approvalStatus} /></td>
                         <td style={{ padding: "10px 12px", color: "#374151" }}>{item.tfName}</td>
                         <td style={{ padding: "10px 12px", fontWeight: 600, color: "#111827" }}>{item.patientName}</td>
-                        <td style={{ padding: "10px 12px", color: "#6b7280" }}>{item.caseType}</td>
+                        <td style={{ padding: "10px 12px", color: "#6b7280" }}>{CASE_TYPE_LABELS[item.caseType] || item.caseType}</td>
                         <td style={{ padding: "10px 12px", color: "#6b7280", fontFamily: "monospace", fontSize: 12 }}>{formatDate(item.decisionDate)}</td>
                         <td style={{ padding: "10px 12px", fontFamily: "monospace", fontSize: 12, color: diff !== null && diff <= 7 ? "#dc2626" : "#374151", fontWeight: diff !== null && diff <= 7 ? 700 : 400 }}>
                           {deadline ? `${deadline.getFullYear()}-${String(deadline.getMonth()+1).padStart(2,"0")}-${String(deadline.getDate()).padStart(2,"0")}` : "-"}
@@ -478,7 +478,7 @@ export default function ObjectionReviewPage() {
                     <tr key={item.id} onClick={() => router.push(`/objection/wage-review/${item.id}`)} style={{ borderBottom: "1px solid #f1f5f9", cursor: "pointer" }} onMouseEnter={e => e.currentTarget.style.background = "#f8fafc"} onMouseLeave={e => e.currentTarget.style.background = "white"}>
                       <td style={{ padding: "10px 12px", color: "#374151" }}>{item.tfName}</td>
                       <td style={{ padding: "10px 12px", fontWeight: 600, color: "#111827" }}>{item.patientName}</td>
-                      <td style={{ padding: "10px 12px", color: "#6b7280" }}>{item.caseType}</td>
+                      <td style={{ padding: "10px 12px", color: "#6b7280" }}>{CASE_TYPE_LABELS[item.caseType] || item.caseType}</td>
                       <td style={{ padding: "10px 12px", fontFamily: "monospace", fontSize: 12, color: "#6b7280" }}>{formatDate(item.decisionDate)}</td>
                       <td style={{ padding: "10px 12px", color: "#1d4ed8", fontSize: 12 }}>{fmtWage(item.finalAvgWage)}</td>
                       <td style={{ padding: "10px 12px", color: "#15803d", fontSize: 12 }}>{fmtWage(item.statWageFinal)}</td>

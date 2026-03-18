@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { CASE_TYPE_LABELS } from "@/lib/constants/case";
 
 type WageReviewData = {
   id: string;
@@ -84,13 +85,16 @@ export default function WageReviewDetailPage() {
       .then(d => {
         setData(d);
         setForm({
+          baseAvgWage: d.baseAvgWage ?? ("" as any),
+          hasCommuteCoef: d.hasCommuteCoef,
+          changeRate: d.changeRate ?? ("" as any),
+          finalAvgWage: d.finalAvgWage ?? ("" as any),
+          statWageBase: d.statWageBase ?? ("" as any),
+          statWageChangeRate: d.statWageChangeRate ?? ("" as any),
+          statWageFinal: d.statWageFinal ?? ("" as any),
           reviewManagerName: d.reviewManagerName ?? "",
           reviewResult: d.reviewResult ?? "",
           reviewDetail: d.reviewDetail ?? "",
-          progressNote: d.progressNote ?? "",
-          claimDate: toInputDate(d.claimDate),
-          decisionResultDate: toInputDate(d.decisionResultDate),
-          additionalReview: d.additionalReview ?? "",
         });
         setLoading(false);
       });
@@ -105,8 +109,15 @@ export default function WageReviewDetailPage() {
         body: JSON.stringify({
           ...data,
           ...form,
-          claimDate: form.claimDate || null,
-          decisionResultDate: form.decisionResultDate || null,
+          baseAvgWage: (form.baseAvgWage as any) === "" ? null : Number(form.baseAvgWage),
+          changeRate: (form.changeRate as any) === "" ? null : Number(form.changeRate),
+          finalAvgWage: (form.finalAvgWage as any) === "" ? null : Number(form.finalAvgWage),
+          statWageBase: (form.statWageBase as any) === "" ? null : Number(form.statWageBase),
+          statWageChangeRate: (form.statWageChangeRate as any) === "" ? null : Number(form.statWageChangeRate),
+          statWageFinal: (form.statWageFinal as any) === "" ? null : Number(form.statWageFinal),
+          finalSelectedWage: (Number(form.finalAvgWage) || Number(form.statWageFinal))
+            ? Math.max(Number(form.finalAvgWage) || 0, Number(form.statWageFinal) || 0)
+            : null,
         }),
       });
       if (!res.ok) throw new Error();
@@ -125,12 +136,21 @@ export default function WageReviewDetailPage() {
   if (loading) return <div style={{ padding: 40, fontFamily: "'Malgun Gothic','Apple SD Gothic Neo',sans-serif", color: "#6b7280" }}>불러오는 중...</div>;
   if (!data) return <div style={{ padding: 40, fontFamily: "'Malgun Gothic','Apple SD Gothic Neo',sans-serif", color: "#dc2626" }}>데이터를 찾을 수 없습니다.</div>;
 
-  const finalWage = data.finalSelectedWage;
-  const leftMatch = finalWage != null && data.finalAvgWage != null && Math.abs(finalWage - data.finalAvgWage) < 1;
-  const rightMatch = finalWage != null && data.statWageFinal != null && Math.abs(finalWage - data.statWageFinal) < 1;
+  const calcLeft = (form.finalAvgWage as any) === "" || form.finalAvgWage == null ? null : Number(form.finalAvgWage);
+  const calcRight = (form.statWageFinal as any) === "" || form.statWageFinal == null ? null : Number(form.statWageFinal);
+  const finalSelectedWage = calcLeft != null || calcRight != null ? Math.max(calcLeft || 0, calcRight || 0) : null;
+
+  const leftMatch = finalSelectedWage != null && calcLeft != null && Math.abs(finalSelectedWage - calcLeft) < 1;
+  const rightMatch = finalSelectedWage != null && calcRight != null && Math.abs(finalSelectedWage - calcRight) < 1;
 
   const leftDimmed = rightMatch && !leftMatch;
   const rightDimmed = leftMatch && !rightMatch;
+
+  let applyBasis = "-";
+  if (leftMatch && !rightMatch) applyBasis = "근로기준법";
+  if (rightMatch && !leftMatch) applyBasis = "산재법 특례";
+  if (leftMatch && rightMatch) applyBasis = "근로기준법 = 산재법 특례";
+  if (!leftMatch && !rightMatch && finalSelectedWage != null) applyBasis = "직접 입력";
 
   const inputStyle: React.CSSProperties = { border: "1px solid #e5e7eb", borderRadius: 6, padding: "5px 9px", fontSize: 12, color: "#374151", background: "#f9fafb", outline: "none", width: "100%" };
   const labelStyle: React.CSSProperties = { fontSize: 11, color: "#6b7280", fontWeight: 700, display: "block", marginBottom: 3 };
@@ -145,7 +165,7 @@ export default function WageReviewDetailPage() {
         <div>
           <p style={{ fontSize: 11, color: "#9ca3af", fontWeight: 700, letterSpacing: 2, margin: "0 0 2px 0" }}>WAGE REVIEW DETAIL</p>
           <h1 style={{ fontSize: 18, fontWeight: 800, color: "#005530", margin: 0 }}>
-            평균임금 상세 — {data.patientName} <span style={{ fontSize: 13, color: "#6b7280", fontWeight: 400 }}>({data.tfName} / {data.caseType})</span>
+            평균임금 상세 — {data.patientName} <span style={{ fontSize: 13, color: "#6b7280", fontWeight: 400 }}>({data.tfName} / {CASE_TYPE_LABELS[data.caseType] || data.caseType})</span>
           </h1>
         </div>
       </div>
@@ -200,16 +220,22 @@ export default function WageReviewDetailPage() {
             실임금 <span style={{ fontSize: 10, fontWeight: 400, color: "#6b7280" }}>(임금자료 확인 시)</span>
           </div>
           <div style={rowStyle}>
-            <div><label style={labelStyle}>최초산출 평균임금</label><div style={{ fontSize: 12, color: "#374151" }}>{fmtWage(data.baseAvgWage)}</div></div>
-            <div><label style={labelStyle}>통상근로계수 여부</label><div style={{ fontSize: 12, color: "#374151" }}>{data.hasCommuteCoef == null ? "-" : data.hasCommuteCoef ? "적용" : "미적용"}</div></div>
+            <div><label style={labelStyle}>최초산출 평균임금</label><input type="number" style={inputStyle} value={form.baseAvgWage ?? ""} onChange={e => set("baseAvgWage", e.target.value)} /></div>
+            <div>
+              <label style={labelStyle}>통상근로계수 여부</label>
+              <select style={inputStyle} value={form.hasCommuteCoef == null ? "" : form.hasCommuteCoef ? "true" : "false"} onChange={e => set("hasCommuteCoef", e.target.value === "" ? null : e.target.value === "true")}>
+                <option value="">-</option>
+                <option value="true">적용</option>
+                <option value="false">미적용</option>
+              </select>
+            </div>
           </div>
           <div style={{ marginBottom: 8 }}>
             <label style={labelStyle}>산정 근거</label>
             <div style={{ fontSize: 12, color: "#374151", background: "#f0f9ff", border: "1px solid #bae6fd", borderRadius: 4, padding: "4px 8px", minHeight: 30 }}>{data.basisNote ?? "-"}</div>
           </div>
           <div style={{ marginBottom: 8 }}>
-            <label style={labelStyle}>증감률 (%)</label>
-            <div style={{ fontSize: 12, color: "#374151" }}>{data.changeRate != null ? `${data.changeRate}%` : "-"}</div>
+            <label style={labelStyle}>증감률 (%)</label><input type="number" style={inputStyle} value={form.changeRate ?? ""} onChange={e => set("changeRate", e.target.value)} />
           </div>
 
           {/* 4. 동종/구조 임금 산정 */}
@@ -227,8 +253,8 @@ export default function WageReviewDetailPage() {
 
           {/* 5. 최종 근기법 평균임금 */}
           <div style={{ background: leftMatch ? "#eff6ff" : "#f8fafc", border: `1px solid ${leftMatch ? "#93c5fd" : "#e2e8f0"}`, borderRadius: 8, padding: "12px 16px", marginTop: 14, textAlign: "center" }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: "#1d4ed8", marginBottom: 4 }}>최종 근기법 평균임금</div>
-            <div style={{ fontSize: 26, fontWeight: 800, color: leftMatch ? "#1d4ed8" : "#374151" }}>{fmtWage(data.finalAvgWage)}</div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: "#1d4ed8", marginBottom: 6 }}>최종 근기법 평균임금</div>
+            <input type="number" style={{ ...inputStyle, fontSize: 16, fontWeight: 700, textAlign: "center", border: "1px solid #93c5fd", color: leftMatch ? "#1d4ed8" : "#374151" }} value={form.finalAvgWage ?? ""} onChange={e => set("finalAvgWage", e.target.value)} placeholder="금액 입력" />
           </div>
         </div>
 
@@ -264,22 +290,20 @@ export default function WageReviewDetailPage() {
           {/* 2. 산정 결과 */}
           <div style={{ ...sectionTitleStyle, color: "#6EA02A", borderColor: "#bbf7d0", marginTop: 12 }}>산정 결과</div>
           <div style={{ marginBottom: 8 }}>
-            <label style={labelStyle}>최초 산정임금</label>
-            <div style={{ fontSize: 12, color: "#374151" }}>{fmtWage(data.statWageBase)}</div>
+            <label style={labelStyle}>최초 산정임금</label><input type="number" style={inputStyle} value={form.statWageBase ?? ""} onChange={e => set("statWageBase", e.target.value)} />
           </div>
           <div style={{ marginBottom: 8 }}>
-            <label style={labelStyle}>증감률 (%)</label>
-            <div style={{ fontSize: 12, color: "#374151" }}>{data.statWageChangeRate != null ? `${data.statWageChangeRate}%` : "-"}</div>
+            <label style={labelStyle}>증감률 (%)</label><input type="number" style={inputStyle} value={form.statWageChangeRate ?? ""} onChange={e => set("statWageChangeRate", e.target.value)} />
           </div>
           <div style={{ marginBottom: 8 }}>
             <label style={labelStyle}>적용 평균임금</label>
-            <div style={{ fontSize: 12, color: "#374151" }}>{fmtWage(data.statWageFinal)}</div>
+            <input type="number" style={{ ...inputStyle, fontSize: 14, fontWeight: 700, border: "1px solid #bbf7d0", color: rightMatch ? "#6EA02A" : "#374151" }} value={form.statWageFinal ?? ""} onChange={e => set("statWageFinal", e.target.value)} />
           </div>
 
           {/* 3. 최종 특례임금 */}
           <div style={{ background: rightMatch ? "#f0fdf4" : "#f8fafc", border: `1px solid ${rightMatch ? "#86efac" : "#e2e8f0"}`, borderRadius: 8, padding: "12px 16px", marginTop: 14, textAlign: "center" }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: "#6EA02A", marginBottom: 4 }}>최종 특례임금</div>
-            <div style={{ fontSize: 26, fontWeight: 800, color: rightMatch ? "#6EA02A" : "#374151" }}>{fmtWage(data.statWageFinal)}</div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: "#6EA02A", marginBottom: 6 }}>최종 특례임금</div>
+            <div style={{ fontSize: 22, fontWeight: 800, color: rightMatch ? "#6EA02A" : "#374151" }}>{form.statWageFinal ? fmtWage(Number(form.statWageFinal)) : "-"}</div>
           </div>
 
           {/* Spacer to align with left panel height */}
@@ -291,15 +315,12 @@ export default function WageReviewDetailPage() {
       <div style={{ background: "linear-gradient(135deg, #1e3a8a 0%, #065f46 100%)", borderRadius: 12, padding: "20px 24px", marginBottom: 16, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div>
           <div style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.7)", marginBottom: 4 }}>최종 적용 평균임금</div>
-          <div style={{ fontSize: 32, fontWeight: 800, color: "white" }}>{fmtWage(data.finalSelectedWage)}</div>
+          <div style={{ fontSize: 32, fontWeight: 800, color: "white" }}>{fmtWage(finalSelectedWage)}</div>
         </div>
         <div style={{ textAlign: "right" }}>
           <div style={{ fontSize: 11, color: "rgba(255,255,255,0.7)", marginBottom: 4 }}>적용 근거</div>
           <div style={{ fontSize: 13, fontWeight: 700, color: "white" }}>
-            {leftMatch && !rightMatch && "근로기준법"}
-            {rightMatch && !leftMatch && "산재법 특례"}
-            {leftMatch && rightMatch && "근로기준법 = 산재법 특례"}
-            {!leftMatch && !rightMatch && (data.finalSelectedWage != null ? "직접 입력" : "-")}
+            {applyBasis}
           </div>
         </div>
       </div>
@@ -324,26 +345,10 @@ export default function WageReviewDetailPage() {
               </div>
             )}
           </div>
-          <div>
-            <label style={labelStyle}>청구일</label>
-            <input type="date" style={inputStyle} value={form.claimDate ?? ""} onChange={e => set("claimDate", e.target.value)} />
-          </div>
-          <div>
-            <label style={labelStyle}>결정일</label>
-            <input type="date" style={inputStyle} value={form.decisionResultDate ?? ""} onChange={e => set("decisionResultDate", e.target.value)} />
-          </div>
         </div>
         <div style={{ marginTop: 10 }}>
           <label style={labelStyle}>상세 쟁점</label>
           <textarea style={{ ...inputStyle, resize: "vertical", minHeight: 60 }} value={form.reviewDetail ?? ""} onChange={e => set("reviewDetail", e.target.value)} placeholder="주요 쟁점 사항 입력" />
-        </div>
-        <div style={{ marginTop: 10 }}>
-          <label style={labelStyle}>진행 경과</label>
-          <textarea style={{ ...inputStyle, resize: "vertical", minHeight: 60 }} value={form.progressNote ?? ""} onChange={e => set("progressNote", e.target.value)} placeholder="진행 경과 입력" />
-        </div>
-        <div style={{ marginTop: 10 }}>
-          <label style={labelStyle}>추가 검토</label>
-          <textarea style={{ ...inputStyle, resize: "vertical", minHeight: 50 }} value={form.additionalReview ?? ""} onChange={e => set("additionalReview", e.target.value)} placeholder="추가 검토 사항" />
         </div>
         <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 16 }}>
           <button onClick={handleSave} disabled={saving} style={{ background: "#29ABE2", color: "white", border: "none", borderRadius: 6, padding: "10px 24px", fontSize: 13, fontWeight: 700, cursor: "pointer", opacity: saving ? 0.6 : 1 }}>
