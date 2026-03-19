@@ -572,10 +572,10 @@ export function WorkHistorySection({
                 <tr style={{ background: "#fef9ec" }}>
                   <td colSpan={2} style={{ padding: "4px 8px", border: "1px solid #fcd34d", fontWeight: 700, color: "#92400e", textAlign: "right" }}>합계</td>
                   <td style={{ padding: "4px 8px", border: "1px solid #fcd34d", fontWeight: 700, color: "#92400e", textAlign: "center" }}>
-                    {workHistoryDaily.reduce((sum, r) => sum + r.totalDays, 0)}일
+                    {workHistoryDaily.reduce((sum, r) => sum + Number(r.totalDays || 0), 0)}일
                   </td>
                   <td style={{ padding: "4px 8px", border: "1px solid #fcd34d", fontWeight: 700, color: "#b45309", textAlign: "center" }}>
-                    {(() => { const t = workHistoryDaily.reduce((sum, r) => sum + r.convertedMonths, 0); const y = Math.floor(t / 12); const m = t % 12; return y > 0 && m > 0 ? `${y}년 ${m}개월` : y > 0 ? `${y}년` : `${m}개월`; })()}
+                    {(() => { const t = workHistoryDaily.reduce((sum, r) => sum + Number(r.convertedMonths || 0), 0); const y = Math.floor(t / 12); const m = t % 12; return y > 0 && m > 0 ? `${y}년 ${m}개월` : y > 0 ? `${y}년` : `${m}개월`; })()}
                   </td>
                   <td colSpan={4} style={{ border: "1px solid #fcd34d" }} />
                 </tr>
