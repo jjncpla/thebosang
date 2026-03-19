@@ -1,0 +1,73 @@
+## 작업 개요
+고용보험 일용직 이력 처리 방식 수정.
+일용직은 월별 건수가 아니라 총 근무일수를 합산 후 기간으로 변환해야 함.
+변환 기준: 20일 = 1개월, 220일 = 1년
+
+## 수정 대상
+파일: app/api/cases/[caseId]/work-history/analyze/route.ts
+
+## 수정 내용
+
+### 1. 프롬프트 텍스트 규칙 교체
+기존 일용직 관련 규칙을 아래로 교체:
+
+```
+6. 일용근로자(일용직)의 경우 동일 사업장별로 총 근무일수(workDays)를 합산해서 별도 필드로 포함한다.
+   변환 공식: 20일 = 1개월, 220일 = 1년 (나머지 일수는 올림해서 개월로 변환)
+   예: A사업장 총 45일 → 45/20 = 2.25개월 → 3개월로 올림
+   일용직 항목은 startYear/startMonth는 최초 근무월, endYear/endMonth는 최후 근무월로 표기하되,
+   workDays 필드에 실제 총 근무일수를 숫자로 기입한다.
+   일용직이 아닌 경우 workDays는 0으로 기입.
+```
+
+### 2. 응답 JSON 예시에 workDays 필드 추가
+sources 안의 각 항목 예시를:
+```json
+{ "company": "사업장명", "startYear": 2000, "startMonth": 1, "endYear": 2005, "endMonth": 12, "department": "", "jobType": "", "workDays": 0 }
+```
+로 변경 (workDays 필드 추가)
+
+### 3. 일용직 후처리 로직 추가
+JSON 파싱 후 DB 저장 전에 아래 로직을 삽입:
+
+```typescript
+// 일용직 근무기간 변환: workDays > 0인 경우 endYear/endMonth를 실제 일수 기준으로 재계산
+for (const sourceKey of Object.keys(parsed.sources)) {
+  const entries = parsed.sources[sourceKey] as any[]
+  parsed.sources[sourceKey] = entries.map((entry: any) => {
+    const days = Number(entry.workDays ?? 0)
+    if (days > 0) {
+      // 20일 = 1개월 기준으로 개월 수 계산 (올림)
+      const totalMonths = Math.ceil(days / 20)
+      const startTotal = entry.startYear * 12 + (entry.startMonth - 1)
+      const endTotal = startTotal + totalMonths - 1
+      const endYear = Math.floor(endTotal / 12)
+      const endMonth = (endTotal % 12) + 1
+      return {
+        ...entry,
+        endYear,
+        endMonth,
+        jobType: entry.jobType ? `[일용직 ${days}일] ${entry.jobType}` : `[일용직 ${days}일]`,
+      }
+    }
+    return entry
+  })
+}
+```
+
+### 4. JSON 파싱 방식도 함께 수정
+현재 파싱 코드를 아래로 교체:
+```typescript
+let parsed: {
+  name?: string
+  sources: Record<string, unknown[]>
+}
+try {
+  const jsonMatch = rawText.match(/\{[\s\S]*\}/)
+  if (!jsonMatch) throw new Error('JSON not found in response')
+  parsed = JSON.parse(jsonMatch[0])
+} catch {
+  console.error("JSON parse error:", rawText)
+  return NextResponse.json({ error: "응답 파싱 실패", raw: rawText }, { status: 500 })
+}
+```
