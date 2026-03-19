@@ -714,32 +714,94 @@ function HearingLossTab({ caseId, initial }: { caseId: string; initial: HearingL
     }
   };
 
-  const mergeWorkHistory = () => {
+  const mergeWorkHistory = async () => {
     const all: (WorkHistoryRawEntry & { source: string })[] = [];
     RAW_SOURCES.forEach((src) => {
       (rawData[src] ?? []).forEach((entry) => all.push({ ...entry, source: src }));
     });
     if (all.length === 0) return;
+
     const toMonths = (y: number, m: number) => y * 12 + m;
+
+    // 시작일 순 정렬
     all.sort((a, b) => toMonths(a.startYear, a.startMonth) - toMonths(b.startYear, b.startMonth));
-    const deduped: typeof all = [];
-    for (const entry of all) {
+
+    // 완전 포함 관계 처리: B가 A 안에 완전히 포함되면 B를 제거하고 메모에 기록
+    const memoLines: string[] = [];
+    const filtered: typeof all = [];
+
+    for (let i = 0; i < all.length; i++) {
+      const b = all[i];
+      const bStart = toMonths(b.startYear, b.startMonth);
+      const bEnd = toMonths(b.endYear, b.endMonth);
+
+      const isContained = all.some((a, j) => {
+        if (i === j) return false;
+        if (a.company.trim() === b.company.trim()) return false;
+        const aStart = toMonths(a.startYear, a.startMonth);
+        const aEnd = toMonths(a.endYear, a.endMonth);
+        return aStart <= bStart && aEnd >= bEnd;
+      });
+
+      if (isContained) {
+        // 포함된 기간 → 메모로 기록
+        memoLines.push(
+          `[포함이력] ${b.company} (${b.startYear}.${String(b.startMonth).padStart(2,"0")} ~ ${b.endYear}.${String(b.endMonth).padStart(2,"0")}) — 상위 사업장 재직기간 내 포함됨 [출처: ${b.source}]`
+        );
+      } else {
+        filtered.push(b);
+      }
+    }
+
+    // 동일 회사 중복 제거 (완전 포함 케이스)
+    const deduped: typeof filtered = [];
+    for (const entry of filtered) {
+      const eStart = toMonths(entry.startYear, entry.startMonth);
+      const eEnd = toMonths(entry.endYear, entry.endMonth);
       const isDuplicate = deduped.some((existing) => {
         if (existing.company.trim() !== entry.company.trim()) return false;
-        const eStart = toMonths(entry.startYear, entry.startMonth);
-        const eEnd = toMonths(entry.endYear, entry.endMonth);
         const xStart = toMonths(existing.startYear, existing.startMonth);
         const xEnd = toMonths(existing.endYear, existing.endMonth);
         return xStart <= eStart && xEnd >= eEnd;
       });
       if (!isDuplicate) deduped.push(entry);
     }
+
     const merged: WorkHistoryItem[] = deduped.map(({ source, ...entry }) => ({
       ...entry,
       workHours: entry.workHours || "",
       source,
     }));
+
     setD("workHistory", merged);
+
+    // 메모 저장
+    if (memoLines.length > 0) {
+      const existingMemo = detail.workHistoryMemo ?? "";
+      const newMemo = existingMemo
+        ? existingMemo + "\n\n" + memoLines.join("\n")
+        : memoLines.join("\n");
+      setD("workHistoryMemo", newMemo);
+    }
+
+    // lastNoiseWorkEndDate 자동 저장: 합산된 직업력 중 가장 마지막 종료 연월
+    if (merged.length > 0) {
+      const toMonthsLocal = (y: number, m: number) => y * 12 + m;
+      const last = merged.reduce((prev, cur) =>
+        toMonthsLocal(cur.endYear, cur.endMonth) > toMonthsLocal(prev.endYear, prev.endMonth) ? cur : prev
+      );
+      const lastDate = new Date(last.endYear, last.endMonth - 1, 1);
+
+      try {
+        await fetch(`/api/cases/${detail.caseId}/hearing-loss`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ lastNoiseWorkEndDate: lastDate.toISOString() }),
+        });
+      } catch (e) {
+        console.error("lastNoiseWorkEndDate 저장 실패:", e);
+      }
+    }
   };
 
   return (

@@ -62,3 +62,22 @@ export async function PUT(
     return NextResponse.json({ error: "저장 오류" }, { status: 500 });
   }
 }
+
+export async function PATCH(
+  req: NextRequest,
+  { params }: { params: Promise<{ caseId: string }> }
+) {
+  const { caseId } = await params;
+  const body = await req.json();
+
+  const updated = await prisma.hearingLossDetail.update({
+    where: { caseId },
+    data: {
+      ...(body.lastNoiseWorkEndDate !== undefined && {
+        lastNoiseWorkEndDate: new Date(body.lastNoiseWorkEndDate),
+      }),
+    },
+  });
+
+  return NextResponse.json({ success: true, updated });
+}
