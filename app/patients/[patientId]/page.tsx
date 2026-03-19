@@ -793,7 +793,7 @@ function HearingLossTab({ caseId, initial }: { caseId: string; initial: HearingL
       const lastDate = new Date(last.endYear, last.endMonth - 1, 1);
 
       try {
-        await fetch(`/api/cases/${detail.caseId}/hearing-loss`, {
+        await fetch(`/api/cases/${caseId}/hearing-loss`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ lastNoiseWorkEndDate: lastDate.toISOString() }),
