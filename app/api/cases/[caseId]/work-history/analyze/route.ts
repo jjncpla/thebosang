@@ -9,7 +9,7 @@ async function callClaudeWithRetry(body: object, apiKey: string, maxRetries = 3)
   let lastError: Error | null = null
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     if (attempt > 0) {
-      const waitMs = 30000 * attempt // 30초, 60초, 90초
+      const waitMs = 30000 * attempt
       console.log("Rate limit hit, waiting", waitMs / 1000, "seconds before retry", attempt)
       await new Promise((r) => setTimeout(r, waitMs))
     }
@@ -33,11 +33,11 @@ async function callClaudeWithRetry(body: object, apiKey: string, maxRetries = 3)
   throw lastError ?? new Error("Max retries exceeded")
 }
 
-function getPromptForDocType(docType: string, _fileName: string): string {
+function getPromptForDocType(docType: string): string {
   const base = `[중요] 반드시 JSON만 응답하라. 설명 텍스트, 코드블록(\`\`\`), 주석을 절대 포함하지 마라. 첫 글자 { 마지막 글자 }인 순수 JSON만 출력하라.\n\n`
 
   if (docType === "건보") {
-    return base + `이 문서는 건강보험자격득실확인서입니다.
+    return base + `이 문서는 건강보험자격득실확인서이다.
 "가입자구분"이 "직장가입자"인 항목만 추출하라.
 지역가입자, 지역세대원, 지역세대주, 직장피부양자는 반드시 제외하라.
 사업장명은 "사업장명칭" 컬럼에서 추출하라.
@@ -55,16 +55,17 @@ JSON 형식:
   }
 
   if (docType === "고용산재_상용") {
-    return base + `이 문서는 고용보험 자격이력내역서입니다.
-비고가 근로자인 항목을 모두 추출하라. 직종, 사업장명, 취득일(시작), 상실일(종료)을 추출한다.
+    return base + `이 문서는 고용보험 자격이력내역서이다.
+비고가 "근로자"인 항목을 모두 추출하라.
+직종명(코드), 사업장명, 취득일/전근일(시작), 상실일(종료)을 추출한다.
 상실일이 없으면 현재(2026-01)로 표기.
-피보험자 구분이 일용직인 항목도 포함하되 jobType에 [일용] 접두어를 붙여라.
+직종 코드가 있으면 jobType에 포함하라.
 
 JSON 형식:
 {
   "name": "성명",
   "sources": {
-    "고용산재": [{ "company": "사업장명", "startYear": 2000, "startMonth": 1, "endYear": 2005, "endMonth": 12, "department": "", "jobType": "직종명", "workDays": 0 }],
+    "고용산재": [{ "company": "사업장명", "startYear": 2000, "startMonth": 1, "endYear": 2005, "endMonth": 12, "department": "", "jobType": "직종명(코드)", "workDays": 0 }],
     "건보": [], "소득금액": [], "연금": []
   },
   "dailyEntries": []
@@ -72,11 +73,12 @@ JSON 형식:
   }
 
   if (docType === "일용직") {
-    return base + `이 문서는 고용보험 일용근로노무제공내역서입니다.
+    return base + `이 문서는 고용보험 일용근로노무제공내역서이다.
 사업장별로 총 근무일수(workDays)를 합산하라.
 변환 기준: 20일=1개월, 220일=1년.
 convertedMonths = Math.ceil(totalDays / 20).
 같은 사업장의 여러 달 근무는 하나로 합산하라.
+startYear/startMonth는 해당 사업장 최초 근무 연월.
 
 JSON 형식:
 {
@@ -89,10 +91,11 @@ JSON 형식:
   }
 
   if (docType === "연금") {
-    return base + `이 문서는 국민연금 가입증명 또는 가입내역확인서입니다.
+    return base + `이 문서는 국민연금 가입증명 또는 가입내역확인서이다.
 사업장취득/사업장사용관계종결 이벤트에서 사업장명과 기간을 추출하라.
 "사업장 명칭 변경 내역"이 있으면 최신 명칭으로 통일하라.
 지역가입자 구간은 제외하라.
+가입자격취득일이 시작일, 사업장사용관계종결일이 종료일이다.
 
 JSON 형식:
 {
@@ -105,28 +108,10 @@ JSON 형식:
 }`
   }
 
-  if (docType === "소득금액") {
-    return base + `이 문서는 소득금액증명원입니다.
-"근로소득" 항목의 법인명(상호)과 귀속연도만 추출하라.
-연금소득, 사업소득, 종교인소득은 제외하라.
-국민연금공단, 건강보험공단 등 공공기관은 사업장으로 기재하지 마라.
-동일 사업장이 연속 연도에 등장하면 하나로 합산하라.
-귀속연도가 시작연도이며 해당 연도 1월~12월로 표기하라.
-
-JSON 형식:
-{
-  "name": "성명",
-  "sources": {
-    "소득금액": [{ "company": "사업장명", "startYear": 2000, "startMonth": 1, "endYear": 2000, "endMonth": 12, "department": "", "jobType": "근로소득", "workDays": 0 }],
-    "고용산재": [], "건보": [], "연금": []
-  },
-  "dailyEntries": []
-}`
-  }
-
   if (docType === "건근공") {
-    return base + `이 문서는 건설근로자공제회 내역서입니다.
+    return base + `이 문서는 건설근로자공제회 내역서이다.
 사업장별로 총 근무일수를 합산하라. 변환 기준: 20일=1개월.
+convertedMonths = Math.ceil(totalDays / 20).
 
 JSON 형식:
 {
@@ -168,7 +153,6 @@ export async function POST(
       return NextResponse.json({ error: "파일이 없습니다" }, { status: 400 })
     }
 
-    // 파일을 청크 단위 base64 배열로 변환 (3MB 초과 시 5페이지씩 분할)
     const SIZE_LIMIT = 3 * 1024 * 1024
     const CHUNK_PAGES = 5
     const pdfContents: { name: string; base64: string; docType: string }[] = []
@@ -180,10 +164,9 @@ export async function POST(
       if (buffer.byteLength <= SIZE_LIMIT) {
         pdfContents.push({ name: file.name, base64: Buffer.from(buffer).toString("base64"), docType })
       } else {
-        // pdf-lib로 5페이지씩 분할
         const srcDoc = await PDFDocument.load(buffer)
         const totalPages = srcDoc.getPageCount()
-        const STEP = CHUNK_PAGES - 1 // 1페이지 overlap: 0-4, 4-9, 9-14
+        const STEP = CHUNK_PAGES - 1
         for (let start = 0; start < totalPages; start += STEP) {
           const end = Math.min(start + CHUNK_PAGES, totalPages)
           const chunkDoc = await PDFDocument.create()
@@ -203,16 +186,18 @@ export async function POST(
     const apiKey = process.env.ANTHROPIC_API_KEY
     if (!apiKey) return NextResponse.json({ error: "API key missing" }, { status: 500 })
 
-    // 각 PDF를 순차적으로 별도 요청
     const mergedSources: Record<string, unknown[]> = {
-      고용산재: [], 건보: [], 소득금액: [], 연금: [],
+      고용산재: [],
+      건보: [],
+      소득금액: [],
+      연금: [],
     }
     const allDailyEntries: unknown[] = []
     let extractedName = ""
 
     for (let pdfIdx = 0; pdfIdx < pdfContents.length; pdfIdx++) {
       const pdf = pdfContents[pdfIdx]
-      const promptText = getPromptForDocType(pdf.docType, pdf.name)
+      const promptText = getPromptForDocType(pdf.docType)
       const userContent = [
         {
           type: "document",
@@ -225,16 +210,19 @@ export async function POST(
         { type: "text", text: promptText },
       ]
 
-      const claudeRes = await callClaudeWithRetry({
-        model: "claude-sonnet-4-6",
-        max_tokens: 4096,
-        messages: [{ role: "user", content: userContent }],
-      }, apiKey)
+      const claudeRes = await callClaudeWithRetry(
+        {
+          model: "claude-sonnet-4-6",
+          max_tokens: 4096,
+          messages: [{ role: "user", content: userContent }],
+        },
+        apiKey
+      )
 
       if (!claudeRes.ok) {
         const err = await claudeRes.text()
         console.error(`Claude API error (${pdf.name}):`, err)
-        return NextResponse.json({ error: `AI 분석 오류 (${pdf.name})` }, { status: 500 })
+        continue // 에러 시 해당 파일 스킵하고 계속 진행
       }
 
       const claudeData = await claudeRes.json()
@@ -242,26 +230,22 @@ export async function POST(
 
       let parsed: { name?: string; sources: Record<string, unknown[]>; dailyEntries?: unknown[] }
       try {
-        const jsonMatch = rawText.match(/\{(?:[^{}]|(?:\{(?:[^{}]|(?:\{[^{}]*\}))*\}))*\}/)
-        if (!jsonMatch) {
-          const start = rawText.indexOf("{")
-          const end = rawText.lastIndexOf("}")
-          if (start === -1 || end === -1) throw new Error("JSON not found")
-          parsed = JSON.parse(rawText.slice(start, end + 1))
-        } else {
-          parsed = JSON.parse(jsonMatch[0])
-        }
+        const jsonMatch = rawText.match(/\{[\s\S]*\}/)
+        if (!jsonMatch) throw new Error("JSON not found")
+        parsed = JSON.parse(jsonMatch[0])
       } catch {
         console.error(`JSON parse error (${pdf.name}):`, rawText)
-        return NextResponse.json({ error: `응답 파싱 실패 (${pdf.name})`, raw: rawText }, { status: 500 })
+        continue // 파싱 실패 시 스킵
       }
 
       if (parsed.name && !extractedName) extractedName = parsed.name
+
       for (const key of ["고용산재", "건보", "소득금액", "연금"] as const) {
         if (parsed.sources?.[key]?.length > 0) {
           mergedSources[key] = mergedSources[key].concat(parsed.sources[key])
         }
       }
+
       if (parsed.dailyEntries?.length) {
         allDailyEntries.push(...parsed.dailyEntries)
       }
