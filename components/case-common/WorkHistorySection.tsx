@@ -165,8 +165,10 @@ export function WorkHistorySection({
       });
       onChange({ workHistoryRaw: newRaw });
 
+      console.log('dailyEntries received:', data.dailyEntries);
       if (data.dailyEntries?.length > 0) {
         onChangeDaily([...workHistoryDaily, ...data.dailyEntries]);
+        console.log('onChangeDaily called');
       }
 
       setPendingFiles([]);
