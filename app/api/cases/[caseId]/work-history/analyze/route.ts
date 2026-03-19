@@ -53,7 +53,9 @@ export async function POST(
     const apiKey = process.env.ANTHROPIC_API_KEY
     if (!apiKey) return NextResponse.json({ error: "API key missing" }, { status: 500 })
 
-    const PROMPT_TEXT = `첨부된 PDF 문서를 분석하여 직업력 정보를 추출해주세요.
+    const PROMPT_TEXT = `[중요] 반드시 JSON만 응답하라. 코드블록(\`\`\`), 설명 텍스트, 주석, 부연 설명을 절대 포함하지 마라. 첫 글자가 { 이고 마지막 글자가 } 인 순수 JSON만 출력하라.
+
+첨부된 PDF 문서를 분석하여 직업력 정보를 추출해주세요.
 각 문서는 고용산재보험 가입내역 / 건강보험 직장가입 내역 / 소득금액증명원 / 연금 가입내역 등입니다. 문서 종류를 자동으로 판별하고, 각 문서에서 근무 이력을 최대한 완전하게 추출하세요.
 
 재해자의 이름도 함께 추출해 주세요.
@@ -140,9 +142,15 @@ export async function POST(
 
       let parsed: { name?: string; sources: Record<string, unknown[]> }
       try {
-        const jsonMatch = rawText.match(/\{[\s\S]*\}/)
-        if (!jsonMatch) throw new Error("JSON not found in response")
-        parsed = JSON.parse(jsonMatch[0])
+        const jsonMatch = rawText.match(/\{(?:[^{}]|(?:\{(?:[^{}]|(?:\{[^{}]*\}))*\}))*\}/)
+        if (!jsonMatch) {
+          const start = rawText.indexOf("{")
+          const end = rawText.lastIndexOf("}")
+          if (start === -1 || end === -1) throw new Error("JSON not found")
+          parsed = JSON.parse(rawText.slice(start, end + 1))
+        } else {
+          parsed = JSON.parse(jsonMatch[0])
+        }
       } catch {
         console.error(`JSON parse error (${pdf.name}):`, rawText)
         return NextResponse.json({ error: `응답 파싱 실패 (${pdf.name})`, raw: rawText }, { status: 500 })
