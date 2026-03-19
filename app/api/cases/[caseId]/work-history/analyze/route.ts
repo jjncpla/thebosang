@@ -74,19 +74,19 @@ JSON 형식:
 
   if (docType === "일용직") {
     return base + `이 문서는 고용보험 일용근로노무제공내역서이다.
-사업장별로 총 근무일수(workDays)를 합산하라.
-변환 기준: 20일=1개월, 220일=1년.
+문서에 나와있는 모든 행을 그대로 추출하라. 합산하거나 묶지 마라.
+각 행의 사업장명, 직종명, 근무일수(비고란의 숫자들의 개수 또는 명시된 일수)를 그대로 추출한다.
+사업장명에 [업체명] 형태가 있으면 [] 안의 업체명을 company로 사용하라.
+근무일수는 비고란에 있는 날짜 숫자들의 개수를 세어라. 예: '1,2,3,4,5' → 5일.
+startYear/startMonth는 해당 행의 연월.
 convertedMonths = Math.ceil(totalDays / 20).
-같은 사업장의 여러 달 근무는 하나로 합산하라.
-사업장명에 [업체명] 형태로 실제 고용주가 표기된 경우, [] 안의 업체명을 company로 사용하라. 예: 아산영인-평택충북(제1공구)도로건설공사 [삼호개발(주)] → company: 삼호개발(주). 동일한 [] 업체명을 가진 항목들은 모두 합산하라.
-startYear/startMonth는 해당 사업장 최초 근무 연월.
 
 JSON 형식:
 {
   "name": "성명",
   "sources": { "고용산재": [], "건보": [], "소득금액": [], "연금": [] },
   "dailyEntries": [
-    { "company": "사업장명", "jobType": "직종명", "totalDays": 45, "startYear": 2013, "startMonth": 1, "convertedMonths": 3, "source": "고용산재", "memo": "" }
+    { "company": "사업장명", "jobType": "직종명", "totalDays": 5, "startYear": 2013, "startMonth": 1, "convertedMonths": 1, "source": "고용산재", "memo": "" }
   ]
 }`
   }
