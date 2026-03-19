@@ -1,0 +1,144 @@
+## 작업 개요
+직업력 합산 로직 2가지 개선:
+1. 한 회사 재직기간 안에 다른 회사 기간이 완전히 포함되면 큰 기간만 남기고, 포함된 기간은 메모로 기록
+2. 합산 완료 후 마지막 직업력 종료 연월을 lastNoiseWorkEndDate에 자동 저장
+
+## 수정 원칙
+- 외과적 수정만. 전체 파일 재작성 금지
+- 수정 대상: app/patients/[patientId]/page.tsx 의 mergeWorkHistory 함수
+
+---
+
+## 작업 1: mergeWorkHistory 함수 교체
+app/patients/[patientId]/page.tsx 에서 mergeWorkHistory 함수를 찾아 아래 코드로 교체한다.
+(함수 시작: `const mergeWorkHistory = () => {` / 함수 끝: 닫는 `};` 까지)
+
+```typescript
+const mergeWorkHistory = async () => {
+  const all: (WorkHistoryRawEntry & { source: string })[] = [];
+  RAW_SOURCES.forEach((src) => {
+    (rawData[src] ?? []).forEach((entry) => all.push({ ...entry, source: src }));
+  });
+  if (all.length === 0) return;
+
+  const toMonths = (y: number, m: number) => y * 12 + m;
+
+  // 시작일 순 정렬
+  all.sort((a, b) => toMonths(a.startYear, a.startMonth) - toMonths(b.startYear, b.startMonth));
+
+  // 완전 포함 관계 처리: B가 A 안에 완전히 포함되면 B를 제거하고 메모에 기록
+  const memoLines: string[] = [];
+  const filtered: typeof all = [];
+
+  for (let i = 0; i < all.length; i++) {
+    const b = all[i];
+    const bStart = toMonths(b.startYear, b.startMonth);
+    const bEnd = toMonths(b.endYear, b.endMonth);
+
+    const isContained = all.some((a, j) => {
+      if (i === j) return false;
+      if (a.company.trim() === b.company.trim()) return false;
+      const aStart = toMonths(a.startYear, a.startMonth);
+      const aEnd = toMonths(a.endYear, a.endMonth);
+      return aStart <= bStart && aEnd >= bEnd;
+    });
+
+    if (isContained) {
+      // 포함된 기간 → 메모로 기록
+      memoLines.push(
+        `[포함이력] ${b.company} (${b.startYear}.${String(b.startMonth).padStart(2,"0")} ~ ${b.endYear}.${String(b.endMonth).padStart(2,"0")}) — 상위 사업장 재직기간 내 포함됨 [출처: ${b.source}]`
+      );
+    } else {
+      filtered.push(b);
+    }
+  }
+
+  // 동일 회사 중복 제거 (완전 포함 케이스)
+  const deduped: typeof filtered = [];
+  for (const entry of filtered) {
+    const eStart = toMonths(entry.startYear, entry.startMonth);
+    const eEnd = toMonths(entry.endYear, entry.endMonth);
+    const isDuplicate = deduped.some((existing) => {
+      if (existing.company.trim() !== entry.company.trim()) return false;
+      const xStart = toMonths(existing.startYear, existing.startMonth);
+      const xEnd = toMonths(existing.endYear, existing.endMonth);
+      return xStart <= eStart && xEnd >= eEnd;
+    });
+    if (!isDuplicate) deduped.push(entry);
+  }
+
+  const merged: WorkHistoryItem[] = deduped.map(({ source, ...entry }) => ({
+    ...entry,
+    workHours: entry.workHours || "",
+    source,
+  }));
+
+  setD("workHistory", merged);
+
+  // 메모 저장
+  if (memoLines.length > 0) {
+    const existingMemo = detail.workHistoryMemo ?? "";
+    const newMemo = existingMemo
+      ? existingMemo + "\n\n" + memoLines.join("\n")
+      : memoLines.join("\n");
+    setD("workHistoryMemo", newMemo);
+  }
+
+  // lastNoiseWorkEndDate 자동 저장: 합산된 직업력 중 가장 마지막 종료 연월
+  if (merged.length > 0) {
+    const toMonthsLocal = (y: number, m: number) => y * 12 + m;
+    const last = merged.reduce((prev, cur) =>
+      toMonthsLocal(cur.endYear, cur.endMonth) > toMonthsLocal(prev.endYear, prev.endMonth) ? cur : prev
+    );
+    const lastDate = new Date(last.endYear, last.endMonth - 1, 1);
+
+    try {
+      await fetch(`/api/cases/${detail.caseId}/hearing-loss`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ lastNoiseWorkEndDate: lastDate.toISOString() }),
+      });
+    } catch (e) {
+      console.error("lastNoiseWorkEndDate 저장 실패:", e);
+    }
+  }
+};
+```
+
+---
+
+## 작업 2: API 엔드포인트 확인
+`app/api/cases/[caseId]/hearing-loss/route.ts` 파일에 PATCH 메서드가 있는지 확인한다.
+
+있으면 넘어가고, 없으면 해당 파일에 아래 PATCH 핸들러를 추가한다:
+
+```typescript
+export async function PATCH(
+  req: NextRequest,
+  { params }: { params: Promise<{ caseId: string }> }
+) {
+  const session = await auth()
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+
+  const { caseId } = await params
+  const body = await req.json()
+
+  const updated = await prisma.hearingLossDetail.update({
+    where: { caseId },
+    data: {
+      ...(body.lastNoiseWorkEndDate !== undefined && {
+        lastNoiseWorkEndDate: new Date(body.lastNoiseWorkEndDate),
+      }),
+    },
+  })
+
+  return NextResponse.json({ success: true, updated })
+}
+```
+
+---
+
+## 완료 후 확인
+1. PDF 자동 분석 후 "▶ 최종 직업력 합산하기" 클릭
+2. 포함 이력이 제거되고 메모 섹션에 기록되는지 확인
+3. lastNoiseWorkEndDate 필드에 마지막 종료 연월 자동 기입 확인

@@ -203,7 +203,7 @@ function FilterControl({
                   fontWeight: active ? 600 : 400,
                 }}
               >
-                {opt}
+                {CASE_STATUS_LABELS[opt] ?? opt}
               </button>
             );
           })}
