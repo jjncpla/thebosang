@@ -102,7 +102,8 @@ export async function POST(
     }
     let extractedName = ""
 
-    for (const pdf of pdfContents) {
+    for (let pdfIdx = 0; pdfIdx < pdfContents.length; pdfIdx++) {
+      const pdf = pdfContents[pdfIdx]
       const userContent = [
         {
           type: "document",
@@ -161,6 +162,10 @@ export async function POST(
         if (parsed.sources?.[key]?.length > 0) {
           mergedSources[key] = mergedSources[key].concat(parsed.sources[key])
         }
+      }
+
+      if (pdfIdx < pdfContents.length - 1) {
+        await new Promise((r) => setTimeout(r, 3000))
       }
     }
 
