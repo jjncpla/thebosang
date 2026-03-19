@@ -3,6 +3,8 @@ import { auth } from "@/auth"
 import { prisma } from "@/lib/prisma"
 import { PDFDocument } from "pdf-lib"
 
+export const maxDuration = 300
+
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ caseId: string }> }
@@ -121,6 +123,7 @@ export async function POST(
           max_tokens: 4096,
           messages: [{ role: "user", content: userContent }],
         }),
+        signal: AbortSignal.timeout(120000),
       })
 
       if (!claudeRes.ok) {
