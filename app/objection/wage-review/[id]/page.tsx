@@ -66,7 +66,7 @@ function fmtWage(v: number | null | undefined) {
   return v.toLocaleString("ko-KR") + "원/일";
 }
 
-const REVIEW_RESULT_OPTIONS = ["검토중", "종결", "평정청구 진행"];
+const REVIEW_RESULT_OPTIONS = ["검토중", "종결", "평정청구 진행", "이의제기 진행"];
 
 export default function WageReviewDetailPage() {
   const params = useParams();
@@ -123,6 +123,16 @@ export default function WageReviewDetailPage() {
       if (!res.ok) throw new Error();
       const updated = await res.json();
       setData(updated);
+      // 이의제기 진행 선택 시 ObjectionReview 자동 생성
+      if (form.reviewResult === "이의제기 진행" && updated.caseId) {
+        try {
+          await fetch("/api/objection/review", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ caseId: updated.caseId, approvalStatus: updated.approvalStatus ?? "승인" }),
+          });
+        } catch { /* silent */ }
+      }
       alert("저장되었습니다.");
     } catch {
       alert("저장 오류");
@@ -339,9 +349,11 @@ export default function WageReviewDetailPage() {
               <option value="">선택</option>
               {REVIEW_RESULT_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
             </select>
-            {form.reviewResult === "평정청구 진행" && (
+            {(form.reviewResult === "평정청구 진행" || form.reviewResult === "이의제기 진행") && (
               <div style={{ marginTop: 4, fontSize: 11, color: "#29ABE2", background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: 4, padding: "4px 8px" }}>
-                📋 기일관리 &gt; 평균임금 정정 탭에 자동으로 반영됩니다
+                {form.reviewResult === "평정청구 진행"
+                  ? "📋 기일관리 > 평균임금 정정 탭에 자동으로 반영됩니다"
+                  : "📋 기일관리 > 이의제기 탭에 자동으로 반영됩니다"}
               </div>
             )}
           </div>

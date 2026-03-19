@@ -62,6 +62,7 @@ model Case {
   receptionDate DateTime?
 
   memo String?
+  closedReason String? // 반려 / 파기
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

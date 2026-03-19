@@ -187,6 +187,7 @@ type CaseData = {
   receptionDate: string | null;
   isOneStop: boolean;
   memo: string | null;
+  closedReason: string | null;
   createdAt: string;
   updatedAt: string;
   hearingLoss: HearingLossDetail | null;
@@ -293,7 +294,42 @@ const TAB_ORDER = [
 ];
 
 const BRANCHES = ["울산지사", "부산지사", "경남지사", "서울지사", "경기지사", "인천지사", "대구지사", "광주지사", "대전지사", "기타"];
-const SALES_ROUTES = ["직접", "제휴", "소개", "온라인", "기타"];
+
+// 상담경로와 동일한 구조
+const REFERRAL_DATA: Record<string, Record<string, string[]>> = {
+  "소개": { "재해자": [], "복지관": [], "초진병원": [], "특진병원": [], "보청기광고": [], "보청기업체": [] },
+  "영업": { "명함영업": [], "아파트영업": [], "공원영업": [], "특진병원인근영업": [], "지사인근영업": [], "기타영업": [], "밥차봉사": [] },
+  "간판": {},
+  "홍보": { "약봉투": [], "버스": [], "현수막": [], "단체복": [], "온라인": [] },
+  "인계": { "기존재해자": [], "타지사": [] },
+};
+const ROUTE_MAIN_OPTIONS = Object.keys(REFERRAL_DATA);
+
+// 소음성 난청 자동 진행상황 계산
+function computeHLStatus(hl: HearingLossDetail | null, closedReason: string | null): string | null {
+  if (!hl) return null;
+  if (closedReason) return "CLOSED";
+  if (hl.decisionType === "APPROVED") return "APPROVED";
+  if (hl.decisionType === "REJECTED") return "REJECTED";
+  if (hl.bankAccountSubmittedAt) return "BANK_SUBMITTED";
+  if (hl.bankAccountRequestedAt) return "BANK_REQUESTED";
+  if (hl.expertDate || hl.expertMemo) return "EXPERT_DONE";
+  if (hl.expertRequestReceivedAt) return "EXPERT_REQUESTED";
+  // 특진 완료 여부: 1~3차 모두 기입됐는지
+  const allFilled =
+    hl.specialExam1Date && hl.specialExam1Contact && hl.specialExam1Attendee &&
+    hl.specialExam2Date && hl.specialExam2Contact && hl.specialExam2Attendee &&
+    hl.specialExam3Date && hl.specialExam3Contact && hl.specialExam3Attendee;
+  const anyFilled =
+    hl.specialExam1Date || hl.specialExam1Contact || hl.specialExam1Attendee ||
+    hl.specialExam2Date || hl.specialExam2Contact || hl.specialExam2Attendee ||
+    hl.specialExam3Date || hl.specialExam3Contact || hl.specialExam3Attendee;
+  if (allFilled) return "EXAM_DONE";
+  if (anyFilled) return "IN_EXAM";
+  if (hl.examRequestReceivedAt) return "EXAM_REQUESTED";
+  if (hl.claimSubmittedAt) return "SUBMITTED";
+  return "CONTRACTED";
+}
 
 /* ── 공통: 섹션 아코디언 스타일 ── */
 const secWrap: React.CSSProperties = { border: "1px solid #e5e7eb", borderRadius: 8, marginBottom: 10, overflow: "hidden" };
@@ -538,7 +574,7 @@ function HearingLossTab({ caseId, initial }: { caseId: string; initial: HearingL
   const setD = (key: keyof HearingLossDetail, val: unknown) =>
     setDetail((prev) => ({ ...prev, [key]: val }));
 
-  const saveDetail = async () => {
+  const saveDetail = async (closedReasonForCalc?: string | null) => {
     setSaving(true);
     try {
       const res = await fetch(`/api/cases/${caseId}/hearing-loss`, {
@@ -554,6 +590,17 @@ function HearingLossTab({ caseId, initial }: { caseId: string; initial: HearingL
             body: JSON.stringify({ caseId, approvalStatus: detail.decisionType === "APPROVED" ? "승인" : "불승인" }),
           });
         } catch { /* 처분검토 연동 오류는 silent */ }
+      }
+      // 진행상황 자동 업데이트
+      const autoStatus = computeHLStatus(detail, closedReasonForCalc ?? null);
+      if (autoStatus) {
+        try {
+          await fetch(`/api/cases/${caseId}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ status: autoStatus }),
+          });
+        } catch { /* silent */ }
       }
       setSaveMsg("저장되었습니다");
       setTimeout(() => setSaveMsg(null), 3000);
@@ -583,7 +630,7 @@ function HearingLossTab({ caseId, initial }: { caseId: string; initial: HearingL
   };
   const SaveBar = () => (
     <div style={{ display: "flex", alignItems: "center", gap: 12, paddingTop: 16, borderTop: "1px solid #e5e7eb" }}>
-      <button onClick={saveDetail} disabled={saving} style={{ background: "#29ABE2", color: "white", border: "none", borderRadius: 6, padding: "8px 20px", fontSize: 13, fontWeight: 600, cursor: "pointer", opacity: saving ? 0.6 : 1 }}>
+      <button onClick={() => saveDetail()} disabled={saving} style={{ background: "#29ABE2", color: "white", border: "none", borderRadius: 6, padding: "8px 20px", fontSize: 13, fontWeight: 600, cursor: "pointer", opacity: saving ? 0.6 : 1 }}>
         {saving ? "저장중..." : "저장"}
       </button>
       {saveMsg && <span style={{ fontSize: 13, color: saveMsg.includes("오류") ? "#dc2626" : "#8DC63F" }}>{saveMsg}</span>}
@@ -676,14 +723,7 @@ function HearingLossTab({ caseId, initial }: { caseId: string; initial: HearingL
               <DField label="좌측 PTA (dB)" k="firstExamLeft" type="number" />
               <DField label="어음명료도 (%)" k="firstExamSpeech" type="number" />
             </div>
-            <div style={{ display: "flex", gap: 20, marginBottom: 8 }}>
-              {([["passedInitialCriteria","편측 40dB 기준 통과"]] as [keyof HearingLossDetail, string][]).map(([k, label]) => (
-                <label key={k} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, cursor: "pointer" }}>
-                  <input type="checkbox" checked={Boolean(detail[k])} onChange={(e) => setD(k, e.target.checked)} />
-                  {label}
-                </label>
-              ))}
-            </div>
+
             <div style={{ marginTop: 8, marginBottom: 16 }}>
               <label style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, cursor: "pointer", marginBottom: 8 }}>
                 <input
@@ -1409,6 +1449,8 @@ function FormTab({ caseId }: { caseId: string }) {
 function CaseCommonInfoSection({ caseItem, onUpdated }: { caseItem: CaseData; onUpdated: (c: CaseData) => void }) {
   const [open, setOpen] = useState(true);
   const [editing, setEditing] = useState(false);
+  // 영업경로: routeMain / routeSub 분리
+  const parsedRoute = (caseItem.salesRoute ?? "").split(" > ");
   const [form, setForm] = useState({
     caseNumber: caseItem.caseNumber ?? "",
     tfName: caseItem.tfName ?? "",
@@ -1417,18 +1459,35 @@ function CaseCommonInfoSection({ caseItem, onUpdated }: { caseItem: CaseData; on
     branchManager: caseItem.branchManager ?? "",
     salesManager: caseItem.salesManager ?? "",
     caseManager: caseItem.caseManager ?? "",
-    salesRoute: caseItem.salesRoute ?? "",
+    routeMain: parsedRoute[0] ?? "",
+    routeSub: parsedRoute[1] ?? "",
     contractDate: toInputDate(caseItem.contractDate),
     receptionDate: toInputDate(caseItem.receptionDate),
     isOneStop: caseItem.isOneStop,
-    status: getCaseStatus(caseItem),
     memo: caseItem.memo ?? "",
   });
+  const [closedReason, setClosedReason] = useState(caseItem.closedReason ?? "");
+  const [savingClosed, setSavingClosed] = useState(false);
   const [saving, setSaving] = useState(false);
   const [users, setUsers] = useState<{ id: string; name: string }[]>([]);
   useEffect(() => {
     fetch("/api/users").then(r => r.ok ? r.json() : []).then(d => setUsers(Array.isArray(d) ? d : d.users ?? [])).catch(() => {});
   }, []);
+
+  const handleClosedReason = async (reason: string) => {
+    const next = closedReason === reason ? "" : reason;
+    setSavingClosed(true);
+    setClosedReason(next);
+    try {
+      const res = await fetch(`/api/cases/${caseItem.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ closedReason: next || null, status: next ? "CLOSED" : getCaseStatus(caseItem) }),
+      });
+      if (res.ok) { const updated = await res.json(); onUpdated(updated); }
+    } catch { /* silent */ }
+    setSavingClosed(false);
+  };
 
   const updateStatus = async (status: string) => {
     setForm((prev) => ({ ...prev, status }));
@@ -1447,14 +1506,18 @@ function CaseCommonInfoSection({ caseItem, onUpdated }: { caseItem: CaseData; on
 
   const save = async () => {
     setSaving(true);
+    const salesRoute = [form.routeMain, form.routeSub].filter(Boolean).join(" > ");
     try {
       const res = await fetch(`/api/cases/${caseItem.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          ...form,
-          contractDate: form.contractDate || null,
+          caseNumber: form.caseNumber, tfName: form.tfName, branch: form.branch,
+          subAgent: form.subAgent, branchManager: form.branchManager,
+          salesManager: form.salesManager, caseManager: form.caseManager,
+          salesRoute, contractDate: form.contractDate || null,
           receptionDate: form.receptionDate || null,
+          isOneStop: form.isOneStop, memo: form.memo,
         }),
       });
       if (!res.ok) throw new Error();
@@ -1498,16 +1561,38 @@ function CaseCommonInfoSection({ caseItem, onUpdated }: { caseItem: CaseData; on
                   </div>
                 ))}
               </div>
+              {/* 진행상황 — 소음성 난청은 자동계산 표시, 나머지는 수동 */}
               <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
                 <span style={{ fontSize: 11, color: "#9ca3af", width: 56 }}>진행상황</span>
-                <select
-                  value={form.status}
-                  onChange={(e) => updateStatus(e.target.value)}
-                  style={{ ...inputStyle, width: 160 }}
-                >
-                  {(STATUS_BY_CASE_TYPE[caseItem.caseType] ?? HEARING_LOSS_STATUS).map((s) => <option key={s} value={s}>{CASE_STATUS_LABELS[s] ?? s}</option>)}
-                </select>
+                {caseItem.caseType === "HEARING_LOSS" ? (
+                  <StatusBadge status={getCaseStatus(caseItem)} />
+                ) : (
+                  <select value={getCaseStatus(caseItem)} onChange={(e) => {
+                    fetch(`/api/cases/${caseItem.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: e.target.value }) })
+                      .then(r => r.json()).then(onUpdated).catch(() => {});
+                  }} style={{ ...inputStyle, width: 160 }}>
+                    {(STATUS_BY_CASE_TYPE[caseItem.caseType] ?? HEARING_LOSS_STATUS).map((s) => <option key={s} value={s}>{CASE_STATUS_LABELS[s] ?? s}</option>)}
+                  </select>
+                )}
               </div>
+              {/* 반려/파기 */}
+              {caseItem.caseType === "HEARING_LOSS" && (
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+                  <span style={{ fontSize: 11, color: "#9ca3af", width: 56 }}>종결</span>
+                  {["반려", "파기"].map((reason) => (
+                    <button
+                      key={reason}
+                      disabled={savingClosed}
+                      onClick={() => handleClosedReason(reason)}
+                      style={{ padding: "4px 14px", fontSize: 12, fontWeight: 700, borderRadius: 6, cursor: "pointer", border: "1px solid",
+                        background: closedReason === reason ? (reason === "반려" ? "#fef2f2" : "#f1f5f9") : "white",
+                        color: closedReason === reason ? (reason === "반려" ? "#dc2626" : "#374151") : "#6b7280",
+                        borderColor: closedReason === reason ? (reason === "반려" ? "#fca5a5" : "#cbd5e1") : "#e5e7eb" }}
+                    >{reason}</button>
+                  ))}
+                  {closedReason && <span style={{ fontSize: 11, color: "#6b7280" }}>선택됨: {closedReason}</span>}
+                </div>
+              )}
               {caseItem.memo && (
                 <div style={{ fontSize: 12, color: "#374151", background: "#f8fafc", borderRadius: 6, padding: "8px 12px", marginBottom: 12 }}>
                   <div style={{ fontSize: 10, color: "#9ca3af", fontWeight: 600, marginBottom: 4 }}>메모</div>
@@ -1551,10 +1636,17 @@ function CaseCommonInfoSection({ caseItem, onUpdated }: { caseItem: CaseData; on
                 </select>
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-                <label style={{ fontSize: 11, color: "#9ca3af" }}>영업경로</label>
-                <select style={inputStyle} value={form.salesRoute} onChange={(e) => setForm({ ...form, salesRoute: e.target.value })}>
+                <label style={{ fontSize: 11, color: "#9ca3af" }}>영업경로(대)</label>
+                <select style={inputStyle} value={form.routeMain} onChange={(e) => setForm({ ...form, routeMain: e.target.value, routeSub: "" })}>
                   <option value="">선택</option>
-                  {SALES_ROUTES.map((r) => <option key={r} value={r}>{r}</option>)}
+                  {ROUTE_MAIN_OPTIONS.map((r) => <option key={r} value={r}>{r}</option>)}
+                </select>
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                <label style={{ fontSize: 11, color: "#9ca3af" }}>영업경로(소)</label>
+                <select style={inputStyle} value={form.routeSub} onChange={(e) => setForm({ ...form, routeSub: e.target.value })} disabled={!form.routeMain || Object.keys(REFERRAL_DATA[form.routeMain] ?? {}).length === 0}>
+                  <option value="">선택</option>
+                  {Object.keys(REFERRAL_DATA[form.routeMain] ?? {}).map((sub) => <option key={sub} value={sub}>{sub}</option>)}
                 </select>
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
@@ -1565,12 +1657,7 @@ function CaseCommonInfoSection({ caseItem, onUpdated }: { caseItem: CaseData; on
                 <label style={{ fontSize: 11, color: "#9ca3af" }}>접수일자</label>
                 <input type="date" style={inputStyle} value={form.receptionDate} onChange={(e) => setForm({ ...form, receptionDate: e.target.value })} />
               </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-                <label style={{ fontSize: 11, color: "#9ca3af" }}>진행상황</label>
-                <select style={inputStyle} value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
-                  {(STATUS_BY_CASE_TYPE[caseItem.caseType] ?? HEARING_LOSS_STATUS).map((s) => <option key={s} value={s}>{CASE_STATUS_LABELS[s] ?? s}</option>)}
-                </select>
-              </div>
+
               <div style={{ display: "flex", alignItems: "center", gap: 8, paddingTop: 16 }}>
                 <label style={{ fontSize: 11, color: "#9ca3af" }}>원스톱</label>
                 <input type="checkbox" checked={form.isOneStop} onChange={(e) => setForm({ ...form, isOneStop: e.target.checked })} />
