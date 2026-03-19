@@ -180,6 +180,22 @@ export function WorkHistorySection({
     }
   };
 
+  const handleClearAll = async () => {
+    if (!window.confirm("직업력 데이터를 전체 초기화합니다. 계속하시겠습니까?")) return;
+
+    const emptyRaw: WorkHistoryRaw = {
+      고용산재: [], 건보: [], 소득금액: [], 연금: [], 건근공: [], 일용직: [],
+    };
+
+    onChange({
+      workHistory: [],
+      workHistoryRaw: emptyRaw,
+      workHistoryMemo: null,
+      lastNoiseWorkEndDate: null,
+    });
+    onChangeDaily([]);
+  };
+
   const mergeWorkHistory = async () => {
     const all: (WorkHistoryRawEntry & { source: string })[] = [];
     RAW_SOURCES.forEach((src) => {
@@ -283,6 +299,22 @@ export function WorkHistorySection({
           <span style={{ fontSize: 11, color: "#1d4ed8" }}>
             건강보험·고용보험·국민연금·소득금액증명원 PDF를 선택하면 종류를 지정할 수 있습니다
           </span>
+          <button
+            onClick={handleClearAll}
+            style={{
+              background: "white",
+              color: "#dc2626",
+              border: "1px solid #fca5a5",
+              borderRadius: 6,
+              padding: "6px 12px",
+              fontSize: 12,
+              fontWeight: 600,
+              cursor: "pointer",
+              marginLeft: "auto",
+            }}
+          >
+            🗑 전체 초기화
+          </button>
           {analyzeError && (
             <span style={{ fontSize: 11, color: "#dc2626", marginLeft: 8 }}>⚠ {analyzeError}</span>
           )}
