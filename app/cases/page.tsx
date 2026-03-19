@@ -85,11 +85,12 @@ const STATUS_COLOR: Record<string, { bg: string; color: string; border: string; 
 };
 
 function StatusBadge({ status }: { status: string }) {
-  const s = STATUS_COLOR[status] ?? { bg: "#1e293b", color: "#94a3b8", border: "1px solid #475569", dot: "#64748b" };
+  const displayStatus = CASE_STATUS_LABELS[status] ?? status;
+  const s = STATUS_COLOR[displayStatus] ?? { bg: "#1e293b", color: "#94a3b8", border: "1px solid #475569", dot: "#64748b" };
   return (
     <span style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "3px 10px", borderRadius: 999, fontSize: 11, fontWeight: 700, background: s.bg, color: s.color, border: s.border }}>
       <span style={{ width: 6, height: 6, borderRadius: "50%", background: s.dot, flexShrink: 0 }} />
-      {status}
+      {displayStatus}
     </span>
   );
 }
@@ -581,7 +582,6 @@ function UnscheduledExamPanel({ onNavigate }: { onNavigate: (caseId: string) => 
     : grouped;
 
   if (loading) return null;
-  if (totalCount === 0) return null;
 
   return (
     <div style={{ background: "#fff7ed", border: "1px solid #fed7aa", borderRadius: 10, marginBottom: 16, overflow: "hidden", boxShadow: "0 1px 3px rgba(0,0,0,.06)" }}>
@@ -592,7 +592,7 @@ function UnscheduledExamPanel({ onNavigate }: { onNavigate: (caseId: string) => 
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <span style={{ fontSize: 16 }}>⚠️</span>
           <span style={{ fontSize: 13, fontWeight: 700, color: "#c2410c" }}>1차 특진 일정 미정 재해자 현황</span>
-          <span style={{ background: "#dc2626", color: "white", fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 999 }}>{totalCount}건</span>
+          <span style={{ background: totalCount > 0 ? "#dc2626" : "#f97316", color: "white", fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 999 }}>{totalCount}건</span>
           <span style={{ fontSize: 11, color: "#9ca3af" }}>진찰요구서 수령 후 1차 특진일정이 없는 건</span>
         </div>
         <span style={{ fontSize: 12, color: "#c2410c" }}>{open ? "▲" : "▼"}</span>
@@ -600,63 +600,71 @@ function UnscheduledExamPanel({ onNavigate }: { onNavigate: (caseId: string) => 
 
       {open && (
         <div style={{ padding: "0 16px 16px" }}>
-          {/* 병원별 필터 */}
-          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12 }}>
-            <button
-              onClick={() => setFilterClinic("")}
-              style={{ padding: "4px 12px", fontSize: 12, borderRadius: 999, border: !filterClinic ? "1px solid #ea580c" : "1px solid #e5e7eb", background: !filterClinic ? "#fff7ed" : "#f9fafb", color: !filterClinic ? "#c2410c" : "#374151", cursor: "pointer", fontWeight: !filterClinic ? 700 : 400 }}
-            >전체</button>
-            {clinics.map((clinic) => (
-              <button
-                key={clinic}
-                onClick={() => setFilterClinic(clinic === filterClinic ? "" : clinic)}
-                style={{ padding: "4px 12px", fontSize: 12, borderRadius: 999, border: filterClinic === clinic ? "1px solid #ea580c" : "1px solid #e5e7eb", background: filterClinic === clinic ? "#fff7ed" : "#f9fafb", color: filterClinic === clinic ? "#c2410c" : "#374151", cursor: "pointer", fontWeight: filterClinic === clinic ? 700 : 400 }}
-              >
-                {clinic} ({grouped[clinic].length}건)
-              </button>
-            ))}
-          </div>
-
-          {/* 그룹별 표 */}
-          {Object.entries(displayGroups).map(([clinic, items]) => (
-            <div key={clinic} style={{ marginBottom: 14 }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: "#c2410c", marginBottom: 6, padding: "4px 10px", background: "#ffedd5", borderRadius: 5, display: "inline-block" }}
-              >
-                🏥 {clinic} — {items.length}건
-              </div>
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
-                <thead>
-                  <tr style={{ background: "#fef3c7" }}>
-                    <th style={{ padding: "5px 10px", textAlign: "left", fontWeight: 600, color: "#78350f", borderBottom: "1px solid #fde68a" }}>성명</th>
-                    <th style={{ padding: "5px 10px", textAlign: "left", fontWeight: 600, color: "#78350f", borderBottom: "1px solid #fde68a" }}>연락처</th>
-                    <th style={{ padding: "5px 10px", textAlign: "left", fontWeight: 600, color: "#78350f", borderBottom: "1px solid #fde68a" }}>진찰요구서 수령일</th>
-                    <th style={{ padding: "5px 10px", textAlign: "left", fontWeight: 600, color: "#78350f", borderBottom: "1px solid #fde68a" }}>바로가기</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {items.map((item) => {
-                    const d = new Date(item.examRequestReceivedAt);
-                    const dateStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
-                    return (
-                      <tr key={item.id} style={{ borderBottom: "1px solid #fef3c7" }}>
-                        <td style={{ padding: "6px 10px", fontWeight: 600, color: "#111827" }}>{item.case?.patient.name ?? "-"}</td>
-                        <td style={{ padding: "6px 10px", color: "#374151" }}>{item.case?.patient.phone ?? "-"}</td>
-                        <td style={{ padding: "6px 10px", color: "#374151" }}>{dateStr}</td>
-                        <td style={{ padding: "6px 10px" }}>
-                          {item.case?.id && (
-                            <button
-                              onClick={() => onNavigate(item.case!.id)}
-                              style={{ background: "#29ABE2", color: "white", border: "none", borderRadius: 5, padding: "3px 10px", fontSize: 11, cursor: "pointer", fontWeight: 600 }}
-                            >일정 등록 →</button>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+          {totalCount === 0 ? (
+            <div style={{ padding: "20px", textAlign: "center", color: "#9ca3af", fontSize: 13 }}>
+              조회된 내용이 없습니다. (모든 재해자의 1차 특진 일정이 등록되어 있거나, 진찰요구서 수령건이 없습니다)
             </div>
-          ))}
+          ) : (
+            <>
+              {/* 병원별 필터 */}
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12 }}>
+                <button
+                  onClick={() => setFilterClinic("")}
+                  style={{ padding: "4px 12px", fontSize: 12, borderRadius: 999, border: !filterClinic ? "1px solid #ea580c" : "1px solid #e5e7eb", background: !filterClinic ? "#fff7ed" : "#f9fafb", color: !filterClinic ? "#c2410c" : "#374151", cursor: "pointer", fontWeight: !filterClinic ? 700 : 400 }}
+                >전체</button>
+                {clinics.map((clinic) => (
+                  <button
+                    key={clinic}
+                    onClick={() => setFilterClinic(clinic === filterClinic ? "" : clinic)}
+                    style={{ padding: "4px 12px", fontSize: 12, borderRadius: 999, border: filterClinic === clinic ? "1px solid #ea580c" : "1px solid #e5e7eb", background: filterClinic === clinic ? "#fff7ed" : "#f9fafb", color: filterClinic === clinic ? "#c2410c" : "#374151", cursor: "pointer", fontWeight: filterClinic === clinic ? 700 : 400 }}
+                  >
+                    {clinic} ({grouped[clinic].length}건)
+                  </button>
+                ))}
+              </div>
+
+              {/* 그룹별 표 */}
+              {Object.entries(displayGroups).map(([clinic, items]) => (
+                <div key={clinic} style={{ marginBottom: 14 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: "#c2410c", marginBottom: 6, padding: "4px 10px", background: "#ffedd5", borderRadius: 5, display: "inline-block" }}
+                  >
+                    🏥 {clinic} — {items.length}건
+                  </div>
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                    <thead>
+                      <tr style={{ background: "#fef3c7" }}>
+                        <th style={{ padding: "5px 10px", textAlign: "left", fontWeight: 600, color: "#78350f", borderBottom: "1px solid #fde68a" }}>성명</th>
+                        <th style={{ padding: "5px 10px", textAlign: "left", fontWeight: 600, color: "#78350f", borderBottom: "1px solid #fde68a" }}>연락처</th>
+                        <th style={{ padding: "5px 10px", textAlign: "left", fontWeight: 600, color: "#78350f", borderBottom: "1px solid #fde68a" }}>진찰요구서 수령일</th>
+                        <th style={{ padding: "5px 10px", textAlign: "left", fontWeight: 600, color: "#78350f", borderBottom: "1px solid #fde68a" }}>바로가기</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {items.map((item) => {
+                        const d = new Date(item.examRequestReceivedAt);
+                        const dateStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+                        return (
+                          <tr key={item.id} style={{ borderBottom: "1px solid #fef3c7" }}>
+                            <td style={{ padding: "6px 10px", fontWeight: 600, color: "#111827" }}>{item.case?.patient.name ?? "-"}</td>
+                            <td style={{ padding: "6px 10px", color: "#374151" }}>{item.case?.patient.phone ?? "-"}</td>
+                            <td style={{ padding: "6px 10px", color: "#374151" }}>{dateStr}</td>
+                            <td style={{ padding: "6px 10px" }}>
+                              {item.case?.id && (
+                                <button
+                                  onClick={() => onNavigate(item.case!.id)}
+                                  style={{ background: "#29ABE2", color: "white", border: "none", borderRadius: 5, padding: "3px 10px", fontSize: 11, cursor: "pointer", fontWeight: 600 }}
+                                >일정 등록 →</button>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              ))}
+            </>
+          )}
         </div>
       )}
     </div>

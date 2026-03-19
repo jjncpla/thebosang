@@ -567,6 +567,8 @@ function HearingLossTab({ caseId, initial }: { caseId: string; initial: HearingL
   const [sec3Open, setSec3Open] = useState(true);
   const [showReExam, setShowReExam] = useState(false);
   const [showReReExam, setShowReReExam] = useState(false);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analyzeError, setAnalyzeError] = useState<string | null>(null);
 
   const d = (key: keyof HearingLossDetail) => {
     const v = detail[key]; return v === null || v === undefined ? "" : String(v);
@@ -674,6 +676,44 @@ function HearingLossTab({ caseId, initial }: { caseId: string; initial: HearingL
     setD("workHistoryRaw", { ...rawData, [source]: rows });
   };
 
+  const handlePdfAnalyze = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    setIsAnalyzing(true);
+    setAnalyzeError(null);
+    try {
+      const formData = new FormData();
+      Array.from(files).forEach((file) => formData.append("files", file));
+      const res = await fetch(`/api/cases/${caseId}/work-history/analyze`, {
+        method: "POST",
+        body: formData,
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error ?? "분석 실패");
+      }
+      const data = await res.json();
+      const newRaw = { ...rawData };
+      const sourceMap: Record<string, string> = {
+        "고용산재": "고용산재",
+        "건보": "건보",
+        "소득금액": "소득금액",
+        "연금": "연금",
+      };
+      Object.entries(sourceMap).forEach(([apiKey, stateKey]) => {
+        if (data.sources?.[apiKey]?.length > 0) {
+          (newRaw as Record<string, unknown>)[stateKey] = data.sources[apiKey];
+        }
+      });
+      setD("workHistoryRaw", newRaw);
+    } catch (err) {
+      setAnalyzeError(err instanceof Error ? err.message : "분석 중 오류가 발생했습니다");
+    } finally {
+      setIsAnalyzing(false);
+      e.target.value = "";
+    }
+  };
+
   const mergeWorkHistory = () => {
     const all: (WorkHistoryRawEntry & { source: string })[] = [];
     RAW_SOURCES.forEach((src) => {
@@ -749,6 +789,32 @@ function HearingLossTab({ caseId, initial }: { caseId: string; initial: HearingL
               )}
             </div>
             <SectionTitle>직업력</SectionTitle>
+            {/* AI 자동분석 버튼 */}
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10, padding: "8px 12px", background: "#eff6ff", borderRadius: 8, border: "1px solid #bfdbfe" }}>
+              <label style={{
+                display: "inline-flex", alignItems: "center", gap: 6,
+                background: "#2563eb", color: "white", border: "none",
+                borderRadius: 6, padding: "6px 14px", fontSize: 12,
+                fontWeight: 700, cursor: isAnalyzing ? "not-allowed" : "pointer",
+                opacity: isAnalyzing ? 0.7 : 1,
+              }}>
+                {isAnalyzing ? "분석 중..." : "📄 PDF 자동 분석"}
+                <input
+                  type="file"
+                  accept="application/pdf"
+                  multiple
+                  style={{ display: "none" }}
+                  disabled={isAnalyzing}
+                  onChange={handlePdfAnalyze}
+                />
+              </label>
+              <span style={{ fontSize: 11, color: "#1d4ed8" }}>
+                고용산재 · 건강보험 · 소득금액 · 연금 등 PDF를 선택하면 AI가 직업력을 자동으로 추출합니다
+              </span>
+              {analyzeError && (
+                <span style={{ fontSize: 11, color: "#dc2626", marginLeft: 8 }}>⚠ {analyzeError}</span>
+              )}
+            </div>
             {/* 소스별 탭 */}
             <div style={{ display: "flex", gap: 4, marginBottom: 12, flexWrap: "wrap" }}>
               {RAW_SOURCES.map((src) => (
