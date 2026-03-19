@@ -33,6 +33,123 @@ async function callClaudeWithRetry(body: object, apiKey: string, maxRetries = 3)
   throw lastError ?? new Error("Max retries exceeded")
 }
 
+function getPromptForDocType(docType: string, _fileName: string): string {
+  const base = `[중요] 반드시 JSON만 응답하라. 설명 텍스트, 코드블록(\`\`\`), 주석을 절대 포함하지 마라. 첫 글자 { 마지막 글자 }인 순수 JSON만 출력하라.\n\n`
+
+  if (docType === "건보") {
+    return base + `이 문서는 건강보험자격득실확인서입니다.
+"가입자구분"이 "직장가입자"인 항목만 추출하라.
+지역가입자, 지역세대원, 지역세대주, 직장피부양자는 반드시 제외하라.
+사업장명은 "사업장명칭" 컬럼에서 추출하라.
+자격취득일이 시작일, 자격상실일이 종료일이다. 상실일이 없으면 현재(2026-01)로 표기.
+
+JSON 형식:
+{
+  "name": "성명",
+  "sources": {
+    "건보": [{ "company": "사업장명", "startYear": 2000, "startMonth": 1, "endYear": 2005, "endMonth": 12, "department": "", "jobType": "", "workDays": 0 }],
+    "고용산재": [], "소득금액": [], "연금": []
+  },
+  "dailyEntries": []
+}`
+  }
+
+  if (docType === "고용산재_상용") {
+    return base + `이 문서는 고용보험 자격이력내역서입니다.
+상용직(기능원및관련근로자, 단순노무직근로자, 청소종사자 등 월급제) 이력만 추출하라.
+직종코드가 있으면 jobType에 포함하라.
+취득일이 시작일, 상실일이 종료일이다.
+
+JSON 형식:
+{
+  "name": "성명",
+  "sources": {
+    "고용산재": [{ "company": "사업장명", "startYear": 2000, "startMonth": 1, "endYear": 2005, "endMonth": 12, "department": "", "jobType": "직종명", "workDays": 0 }],
+    "건보": [], "소득금액": [], "연금": []
+  },
+  "dailyEntries": []
+}`
+  }
+
+  if (docType === "일용직") {
+    return base + `이 문서는 고용보험 일용근로노무제공내역서입니다.
+사업장별로 총 근무일수(workDays)를 합산하라.
+변환 기준: 20일=1개월, 220일=1년.
+convertedMonths = Math.ceil(totalDays / 20).
+같은 사업장의 여러 달 근무는 하나로 합산하라.
+
+JSON 형식:
+{
+  "name": "성명",
+  "sources": { "고용산재": [], "건보": [], "소득금액": [], "연금": [] },
+  "dailyEntries": [
+    { "company": "사업장명", "jobType": "직종명", "totalDays": 45, "startYear": 2013, "startMonth": 1, "convertedMonths": 3, "source": "고용산재", "memo": "" }
+  ]
+}`
+  }
+
+  if (docType === "연금") {
+    return base + `이 문서는 국민연금 가입증명 또는 가입내역확인서입니다.
+사업장취득/사업장사용관계종결 이벤트에서 사업장명과 기간을 추출하라.
+"사업장 명칭 변경 내역"이 있으면 최신 명칭으로 통일하라.
+지역가입자 구간은 제외하라.
+
+JSON 형식:
+{
+  "name": "성명",
+  "sources": {
+    "연금": [{ "company": "사업장명", "startYear": 2000, "startMonth": 1, "endYear": 2005, "endMonth": 12, "department": "", "jobType": "", "workDays": 0 }],
+    "고용산재": [], "건보": [], "소득금액": []
+  },
+  "dailyEntries": []
+}`
+  }
+
+  if (docType === "소득금액") {
+    return base + `이 문서는 소득금액증명원입니다.
+"근로소득" 항목의 법인명(상호)과 귀속연도만 추출하라.
+연금소득, 사업소득, 종교인소득은 제외하라.
+국민연금공단, 건강보험공단 등 공공기관은 사업장으로 기재하지 마라.
+동일 사업장이 연속 연도에 등장하면 하나로 합산하라.
+귀속연도가 시작연도이며 해당 연도 1월~12월로 표기하라.
+
+JSON 형식:
+{
+  "name": "성명",
+  "sources": {
+    "소득금액": [{ "company": "사업장명", "startYear": 2000, "startMonth": 1, "endYear": 2000, "endMonth": 12, "department": "", "jobType": "근로소득", "workDays": 0 }],
+    "고용산재": [], "건보": [], "연금": []
+  },
+  "dailyEntries": []
+}`
+  }
+
+  if (docType === "건근공") {
+    return base + `이 문서는 건설근로자공제회 내역서입니다.
+사업장별로 총 근무일수를 합산하라. 변환 기준: 20일=1개월.
+
+JSON 형식:
+{
+  "name": "성명",
+  "sources": { "고용산재": [], "건보": [], "소득금액": [], "연금": [] },
+  "dailyEntries": [
+    { "company": "사업장명", "jobType": "건설일용직", "totalDays": 60, "startYear": 2013, "startMonth": 1, "convertedMonths": 3, "source": "건근공", "memo": "" }
+  ]
+}`
+  }
+
+  // fallback
+  return base + `이 문서에서 직업력 이력을 추출하라.
+JSON 형식:
+{
+  "name": "성명",
+  "sources": {
+    "고용산재": [], "건보": [], "소득금액": [], "연금": []
+  },
+  "dailyEntries": []
+}`
+}
+
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ caseId: string }> }
@@ -45,6 +162,7 @@ export async function POST(
   try {
     const formData = await req.formData()
     const files = formData.getAll("files") as File[]
+    const docTypes = formData.getAll("docTypes") as string[]
 
     if (!files || files.length === 0) {
       return NextResponse.json({ error: "파일이 없습니다" }, { status: 400 })
@@ -53,12 +171,14 @@ export async function POST(
     // 파일을 청크 단위 base64 배열로 변환 (3MB 초과 시 5페이지씩 분할)
     const SIZE_LIMIT = 3 * 1024 * 1024
     const CHUNK_PAGES = 5
-    const pdfContents: { name: string; base64: string }[] = []
+    const pdfContents: { name: string; base64: string; docType: string }[] = []
 
-    for (const file of files) {
+    for (let fileIdx = 0; fileIdx < files.length; fileIdx++) {
+      const file = files[fileIdx]
+      const docType = docTypes[fileIdx] ?? ""
       const buffer = await file.arrayBuffer()
       if (buffer.byteLength <= SIZE_LIMIT) {
-        pdfContents.push({ name: file.name, base64: Buffer.from(buffer).toString("base64") })
+        pdfContents.push({ name: file.name, base64: Buffer.from(buffer).toString("base64"), docType })
       } else {
         // pdf-lib로 5페이지씩 분할
         const srcDoc = await PDFDocument.load(buffer)
@@ -73,6 +193,7 @@ export async function POST(
           pdfContents.push({
             name: `${file.name} (p${start + 1}-${end})`,
             base64: Buffer.from(chunkBytes).toString("base64"),
+            docType,
           })
         }
       }
@@ -81,57 +202,16 @@ export async function POST(
     const apiKey = process.env.ANTHROPIC_API_KEY
     if (!apiKey) return NextResponse.json({ error: "API key missing" }, { status: 500 })
 
-    const PROMPT_TEXT = `[중요] 반드시 JSON만 응답하라. 코드블록(\`\`\`), 설명 텍스트, 주석, 부연 설명을 절대 포함하지 마라. 첫 글자가 { 이고 마지막 글자가 } 인 순수 JSON만 출력하라.
-
-첨부된 PDF 문서를 분석하여 직업력 정보를 추출해주세요.
-각 문서는 고용산재보험 가입내역 / 건강보험 직장가입 내역 / 소득금액증명원 / 연금 가입내역 등입니다. 문서 종류를 자동으로 판별하고, 각 문서에서 근무 이력을 최대한 완전하게 추출하세요.
-
-재해자의 이름도 함께 추출해 주세요.
-
-반드시 아래 JSON 형식으로만 응답하세요. 다른 설명은 일절 하지 마세요.
-
-{
-  "name": "재해자이름",
-  "sources": {
-    "고용산재": [
-      { "company": "회사명", "startYear": 2000, "startMonth": 1, "endYear": 2005, "endMonth": 12, "department": "", "jobType": "", "workDays": 0 }
-    ],
-    "건보": [
-      { "company": "회사명", "startYear": 2000, "startMonth": 1, "endYear": 2005, "endMonth": 12, "department": "", "jobType": "", "workDays": 0 }
-    ],
-    "소득금액": [
-      { "company": "회사명", "startYear": 2000, "startMonth": 1, "endYear": 2005, "endMonth": 12, "department": "", "jobType": "", "workDays": 0 }
-    ],
-    "연금": [
-      { "company": "회사명", "startYear": 2000, "startMonth": 1, "endYear": 2005, "endMonth": 12, "department": "", "jobType": "", "workDays": 0 }
-    ]
-  }
-}
-
-규칙:
-1. 문서 종류에 따라 해당 sources 키에만 넣으세요
-2. 문서에 없는 종류는 빈 배열 []로 두세요
-3. 재직 중인 경우 endYear/endMonth는 현재 날짜(2026년 1월) 기준으로 입력하세요
-4. startYear/endYear는 4자리 숫자, startMonth/endMonth는 1~12 정수
-5. 이름을 찾을 수 없으면 name을 빈 문자열로 두세요
-6. 일용근로자(일용직)의 경우 동일 사업장별로 총 근무일수(workDays)를 합산해서 별도 필드로 포함한다.
-   변환 공식: 20일 = 1개월, 220일 = 1년 (나머지 일수는 올림해서 개월로 변환)
-   예: A사업장 총 45일 → 45/20 = 2.25개월 → 3개월로 올림
-   일용직 항목은 startYear/startMonth는 최초 근무월, endYear/endMonth는 최후 근무월로 표기하되,
-   workDays 필드에 실제 총 근무일수를 숫자로 기입한다.
-   일용직이 아닌 경우 workDays는 0으로 기입.
-7. 지역가입자, 지역세대원, 직장피부양자, 지역세대주는 직접 취업이력이 아니므로 반드시 제외한다.
-8. 국민연금공단, 건강보험공단, 근로복지공단 등 공공기관 자체를 사업장으로 기재하지 않는다. 해당 기관에서 발급한 자료에서 실제 사업장명을 추출해야 한다.
-9. 일용직의 경우 동일 연도 내 여러 사업장에서 근무한 경우 연도별로 대표 사업장명(가장 많이 근무한 곳)과 총 근무일수를 합산하여 한 줄로 표기한다.`
-
     // 각 PDF를 순차적으로 별도 요청
     const mergedSources: Record<string, unknown[]> = {
       고용산재: [], 건보: [], 소득금액: [], 연금: [],
     }
+    const allDailyEntries: unknown[] = []
     let extractedName = ""
 
     for (let pdfIdx = 0; pdfIdx < pdfContents.length; pdfIdx++) {
       const pdf = pdfContents[pdfIdx]
+      const promptText = getPromptForDocType(pdf.docType, pdf.name)
       const userContent = [
         {
           type: "document",
@@ -141,7 +221,7 @@ export async function POST(
             data: pdf.base64,
           },
         },
-        { type: "text", text: PROMPT_TEXT },
+        { type: "text", text: promptText },
       ]
 
       const claudeRes = await callClaudeWithRetry({
@@ -159,7 +239,7 @@ export async function POST(
       const claudeData = await claudeRes.json()
       const rawText = claudeData.content?.[0]?.text ?? ""
 
-      let parsed: { name?: string; sources: Record<string, unknown[]> }
+      let parsed: { name?: string; sources: Record<string, unknown[]>; dailyEntries?: unknown[] }
       try {
         const jsonMatch = rawText.match(/\{(?:[^{}]|(?:\{(?:[^{}]|(?:\{[^{}]*\}))*\}))*\}/)
         if (!jsonMatch) {
@@ -181,47 +261,27 @@ export async function POST(
           mergedSources[key] = mergedSources[key].concat(parsed.sources[key])
         }
       }
+      if (parsed.dailyEntries?.length) {
+        allDailyEntries.push(...parsed.dailyEntries)
+      }
 
       if (pdfIdx < pdfContents.length - 1) {
         await new Promise((r) => setTimeout(r, 15000))
       }
     }
 
-    const parsed = { name: extractedName, sources: mergedSources }
-
-    // 일용직 근무기간 변환: workDays > 0인 경우 endYear/endMonth를 실제 일수 기준으로 재계산
-    for (const sourceKey of Object.keys(parsed.sources)) {
-      const entries = parsed.sources[sourceKey] as any[]
-      parsed.sources[sourceKey] = entries.map((entry: any) => {
-        const days = Number(entry.workDays ?? 0)
-        if (days > 0) {
-          const totalMonths = Math.ceil(days / 20)
-          const startTotal = entry.startYear * 12 + (entry.startMonth - 1)
-          const endTotal = startTotal + totalMonths - 1
-          const endYear = Math.floor(endTotal / 12)
-          const endMonth = (endTotal % 12) + 1
-          return {
-            ...entry,
-            endYear,
-            endMonth,
-            jobType: entry.jobType ? `[일용직 ${days}일] ${entry.jobType}` : `[일용직 ${days}일]`,
-          }
-        }
-        return entry
-      })
-    }
-
     await prisma.case.update({
       where: { id: caseId },
       data: {
-        workHistoryRaw: parsed.sources as object,
+        workHistoryRaw: mergedSources as object,
       },
     })
 
     return NextResponse.json({
       success: true,
-      sources: parsed.sources,
-      name: parsed.name,
+      sources: mergedSources,
+      dailyEntries: allDailyEntries,
+      name: extractedName,
     })
   } catch (err) {
     console.error("Unhandled error:", err)

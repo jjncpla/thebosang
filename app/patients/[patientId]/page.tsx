@@ -12,7 +12,7 @@ const SPECIAL_HOSPITALS: string[] = (specialHospitalsData as { hospital: string 
 const S = { fontFamily: "'Malgun Gothic', 'Apple SD Gothic Neo', 'Segoe UI', sans-serif" };
 
 import { WorkHistorySection } from "@/components/case-common/WorkHistorySection";
-import type { WorkHistoryItem, WorkHistoryRawEntry, WorkHistoryRaw } from "@/components/case-common/WorkHistoryTypes";
+import type { WorkHistoryItem, WorkHistoryRawEntry, WorkHistoryRaw, WorkHistoryDailyEntry } from "@/components/case-common/WorkHistoryTypes";
 
 type HearingLossExam = {
   id: string;
@@ -152,7 +152,7 @@ type CaseData = {
   isOneStop: boolean;
   memo: string | null;
   workHistory: WorkHistoryItem[] | null;
-  workHistoryDaily: unknown[] | null;
+  workHistoryDaily: WorkHistoryDailyEntry[] | null;
   workHistoryRaw: WorkHistoryRaw | null;
   workHistoryMemo: string | null;
   lastNoiseWorkEndDate: string | null;
@@ -1431,10 +1431,19 @@ function CaseCommonInfoSection({ caseItem, onUpdated }: { caseItem: CaseData; on
             <WorkHistorySection
               caseId={caseItem.id}
               workHistory={(caseItem.workHistory as WorkHistoryItem[]) ?? []}
-              workHistoryRaw={(caseItem.workHistoryRaw as WorkHistoryRaw) ?? { 고용산재: [], 건보: [], 소득금액: [], 연금: [], 건근공: [] }}
+              workHistoryRaw={(caseItem.workHistoryRaw as WorkHistoryRaw) ?? { 고용산재: [], 건보: [], 소득금액: [], 연금: [], 건근공: [], 일용직: [] }}
+              workHistoryDaily={(caseItem.workHistoryDaily as WorkHistoryDailyEntry[]) ?? []}
               workHistoryMemo={caseItem.workHistoryMemo}
               lastNoiseWorkEndDate={caseItem.lastNoiseWorkEndDate}
               onChange={handleWorkHistoryChange}
+              onChangeDaily={async (entries) => {
+                await fetch(`/api/cases/${caseItem.id}`, {
+                  method: "PATCH",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ workHistoryDaily: entries }),
+                });
+                onUpdated({ ...caseItem, workHistoryDaily: entries });
+              }}
               onSaveLastDate={saveLastNoiseWorkEndDate}
             />
           </div>

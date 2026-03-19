@@ -1,12 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { WorkHistoryItem, WorkHistoryRaw, WorkHistoryRawEntry } from "./WorkHistoryTypes";
+import { WorkHistoryItem, WorkHistoryRaw, WorkHistoryRawEntry, WorkHistoryDailyEntry } from "./WorkHistoryTypes";
 
 interface WorkHistorySectionProps {
   caseId: string;
   workHistory: WorkHistoryItem[];
   workHistoryRaw: WorkHistoryRaw;
+  workHistoryDaily: WorkHistoryDailyEntry[];
   workHistoryMemo: string | null;
   lastNoiseWorkEndDate: string | null;
   onChange: (updates: {
@@ -15,6 +16,7 @@ interface WorkHistorySectionProps {
     workHistoryMemo?: string | null;
     lastNoiseWorkEndDate?: string | null;
   }) => void;
+  onChangeDaily: (entries: WorkHistoryDailyEntry[]) => void;
   onSaveLastDate?: (dateIso: string) => Promise<void>;
 }
 
@@ -45,15 +47,28 @@ export function WorkHistorySection({
   caseId,
   workHistory,
   workHistoryRaw,
+  workHistoryDaily,
   workHistoryMemo,
   lastNoiseWorkEndDate,
   onChange,
+  onChangeDaily,
   onSaveLastDate,
 }: WorkHistorySectionProps) {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analyzeError, setAnalyzeError] = useState<string | null>(null);
+  const [pendingFiles, setPendingFiles] = useState<{ file: File; docType: string }[]>([]);
+  const [showFileSelector, setShowFileSelector] = useState(false);
 
-  const RAW_SOURCES = ["고용산재", "건보", "소득금액", "연금", "건근공"] as const;
+  const RAW_SOURCES = ["고용산재", "건보", "소득금액", "연금", "건근공", "일용직"] as const;
+
+  const DOC_TYPE_OPTIONS = [
+    { value: "건보", label: "건강보험 자격득실확인서" },
+    { value: "고용산재_상용", label: "고용보험 자격이력내역서 (상용직)" },
+    { value: "일용직", label: "고용보험 일용근로노무제공내역서" },
+    { value: "연금", label: "국민연금 가입증명/가입내역확인서" },
+    { value: "소득금액", label: "소득금액증명원" },
+    { value: "건근공", label: "건설근로자공제회 내역서" },
+  ];
   type RawSource = typeof RAW_SOURCES[number];
   const [activeRawSource, setActiveRawSource] = useState<RawSource>("고용산재");
 
@@ -100,14 +115,37 @@ export function WorkHistorySection({
     onChange({ workHistory: workHistory.map((r, idx) => idx === i ? { ...r, [key]: val } : r) });
   };
 
-  const handlePdfAnalyze = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFilesSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
+    const newFiles = Array.from(files).map(file => ({ file, docType: "" }));
+    setPendingFiles(prev => [...prev, ...newFiles]);
+    setShowFileSelector(true);
+    e.target.value = "";
+  };
+
+  const handleDocTypeChange = (idx: number, docType: string) => {
+    setPendingFiles(prev => prev.map((f, i) => i === idx ? { ...f, docType } : f));
+  };
+
+  const handleRemovePending = (idx: number) => {
+    setPendingFiles(prev => prev.filter((_, i) => i !== idx));
+  };
+
+  const handleAnalyze = async () => {
+    const valid = pendingFiles.filter(f => f.docType !== "");
+    if (valid.length === 0) {
+      setAnalyzeError("문서 종류를 선택해주세요");
+      return;
+    }
     setIsAnalyzing(true);
     setAnalyzeError(null);
     try {
       const formData = new FormData();
-      Array.from(files).forEach((file) => formData.append("files", file));
+      valid.forEach(({ file, docType }) => {
+        formData.append("files", file);
+        formData.append("docTypes", docType);
+      });
       const res = await fetch(`/api/cases/${caseId}/work-history/analyze`, {
         method: "POST",
         body: formData,
@@ -117,24 +155,26 @@ export function WorkHistorySection({
         throw new Error(err.error ?? "분석 실패");
       }
       const data = await res.json();
+
       const newRaw = { ...workHistoryRaw };
-      const sourceMap: Record<string, string> = {
-        "고용산재": "고용산재",
-        "건보": "건보",
-        "소득금액": "소득금액",
-        "연금": "연금",
-      };
-      Object.entries(sourceMap).forEach(([apiKey, stateKey]) => {
-        if (data.sources?.[apiKey]?.length > 0) {
-          (newRaw as Record<string, unknown>)[stateKey] = data.sources[apiKey];
+      const regularSources = ["고용산재", "건보", "소득금액", "연금", "건근공"];
+      regularSources.forEach((src) => {
+        if (data.sources?.[src]?.length > 0) {
+          (newRaw as Record<string, unknown>)[src] = data.sources[src];
         }
       });
       onChange({ workHistoryRaw: newRaw });
+
+      if (data.dailyEntries?.length > 0) {
+        onChangeDaily([...workHistoryDaily, ...data.dailyEntries]);
+      }
+
+      setPendingFiles([]);
+      setShowFileSelector(false);
     } catch (err) {
-      setAnalyzeError(err instanceof Error ? err.message : "분석 중 오류가 발생했습니다");
+      setAnalyzeError(err instanceof Error ? err.message : "오류가 발생했습니다");
     } finally {
       setIsAnalyzing(false);
-      e.target.value = "";
     }
   };
 
@@ -226,29 +266,68 @@ export function WorkHistorySection({
     <>
       <SectionTitle>직업력</SectionTitle>
       
-      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10, padding: "8px 12px", background: "#eff6ff", borderRadius: 8, border: "1px solid #bfdbfe" }}>
-        <label style={{
-          display: "inline-flex", alignItems: "center", gap: 6,
-          background: "#2563eb", color: "white", border: "none",
-          borderRadius: 6, padding: "6px 14px", fontSize: 12,
-          fontWeight: 700, cursor: isAnalyzing ? "not-allowed" : "pointer",
-          opacity: isAnalyzing ? 0.7 : 1,
-        }}>
-          {isAnalyzing ? "분석 중..." : "📄 PDF 자동 분석"}
-          <input
-            type="file"
-            accept="application/pdf"
-            multiple
-            style={{ display: "none" }}
-            disabled={isAnalyzing}
-            onChange={handlePdfAnalyze}
-          />
-        </label>
-        <span style={{ fontSize: 11, color: "#1d4ed8" }}>
-          고용산재 · 건강보험 · 소득금액 · 연금 등 PDF를 선택하면 AI가 직업력을 자동으로 추출합니다
-        </span>
-        {analyzeError && (
-          <span style={{ fontSize: 11, color: "#dc2626", marginLeft: 8 }}>⚠ {analyzeError}</span>
+      {/* PDF 자동 분석 */}
+      <div style={{ marginBottom: 12 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", background: "#eff6ff", borderRadius: 8, border: "1px solid #bfdbfe", marginBottom: showFileSelector ? 8 : 0 }}>
+          <label style={{
+            display: "inline-flex", alignItems: "center", gap: 6,
+            background: "#2563eb", color: "white", borderRadius: 6,
+            padding: "6px 14px", fontSize: 12, fontWeight: 700,
+            cursor: "pointer",
+          }}>
+            📄 PDF 파일 선택
+            <input type="file" accept="application/pdf" multiple style={{ display: "none" }} onChange={handleFilesSelected} />
+          </label>
+          <span style={{ fontSize: 11, color: "#1d4ed8" }}>
+            건강보험·고용보험·국민연금·소득금액증명원 PDF를 선택하면 종류를 지정할 수 있습니다
+          </span>
+          {analyzeError && (
+            <span style={{ fontSize: 11, color: "#dc2626", marginLeft: 8 }}>⚠ {analyzeError}</span>
+          )}
+        </div>
+
+        {showFileSelector && pendingFiles.length > 0 && (
+          <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, padding: 12, marginBottom: 8 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: "#374151", marginBottom: 8 }}>📋 문서 종류 지정</div>
+            {pendingFiles.map((pf, idx) => (
+              <div key={idx} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                <span style={{ fontSize: 12, color: "#374151", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {pf.file.name}
+                </span>
+                <select
+                  value={pf.docType}
+                  onChange={(e) => handleDocTypeChange(idx, e.target.value)}
+                  style={{ fontSize: 12, border: "1px solid #d1d5db", borderRadius: 6, padding: "4px 8px", background: "white", color: pf.docType ? "#374151" : "#9ca3af" }}
+                >
+                  <option value="">-- 종류 선택 --</option>
+                  {DOC_TYPE_OPTIONS.map(opt => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+                <button onClick={() => handleRemovePending(idx)} style={{ background: "none", border: "none", color: "#dc2626", cursor: "pointer", fontSize: 14, padding: "0 4px" }}>✕</button>
+              </div>
+            ))}
+            <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+              <button
+                onClick={handleAnalyze}
+                disabled={isAnalyzing || pendingFiles.every(f => !f.docType)}
+                style={{
+                  background: isAnalyzing ? "#93c5fd" : "#2563eb",
+                  color: "white", border: "none", borderRadius: 6,
+                  padding: "6px 16px", fontSize: 12, fontWeight: 700,
+                  cursor: isAnalyzing ? "not-allowed" : "pointer",
+                }}
+              >
+                {isAnalyzing ? "⏳ 분석 중..." : "🤖 AI 자동 분석 시작"}
+              </button>
+              <button
+                onClick={() => { setPendingFiles([]); setShowFileSelector(false); }}
+                style={{ background: "white", border: "1px solid #d1d5db", borderRadius: 6, padding: "6px 12px", fontSize: 12, cursor: "pointer", color: "#6b7280" }}
+              >
+                취소
+              </button>
+            </div>
+          </div>
         )}
       </div>
 
@@ -260,7 +339,7 @@ export function WorkHistorySection({
             color: activeRawSource === src ? "white" : "#374151",
             borderColor: activeRawSource === src ? "#29ABE2" : "#d1d5db",
           }}>
-            {src === "고용산재" ? "고용/산재보험" : src === "건보" ? "건강보험" : src === "소득금액" ? "소득금액증명원" : src === "연금" ? "국민연금" : "건설근로자공제회"}
+            {src === "고용산재" ? "고용/산재보험" : src === "건보" ? "건강보험" : src === "소득금액" ? "소득금액증명원" : src === "연금" ? "국민연금" : src === "건근공" ? "건설근로자공제회" : "고용보험(일용직)"}
             {(workHistoryRaw[src]?.length ?? 0) > 0 && (
               <span style={{ marginLeft: 4, background: activeRawSource === src ? "rgba(255,255,255,0.3)" : "#e0e7ff", color: activeRawSource === src ? "white" : "#3730a3", borderRadius: 999, padding: "1px 6px", fontSize: 11 }}>
                 {workHistoryRaw[src].length}
@@ -433,6 +512,83 @@ export function WorkHistorySection({
       </div>
       <button onClick={addWorkRow} style={{ background: "white", border: "1px solid #bbf7d0", borderRadius: 6, padding: "4px 12px", fontSize: 12, cursor: "pointer", marginBottom: 16, color: "#15803d" }}>+ 직접 추가</button>
       
+      {/* 일용직 직업력 합산표 */}
+      <div style={{ marginTop: 16, marginBottom: 16 }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: "#374151", padding: "14px 0 8px 0", borderBottom: "2px solid #e5e7eb", marginBottom: 12 }}>
+          일용직 직업력
+          <span style={{ fontSize: 11, fontWeight: 400, color: "#9ca3af", marginLeft: 8 }}>
+            (20일=1개월 / 220일=1년 기준)
+          </span>
+        </div>
+        <div style={{ overflowX: "auto", marginBottom: 8 }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+            <thead>
+              <tr style={{ background: "#fef9ec" }}>
+                {["사업장(대표)", "직종", "총 근무일수", "환산 개월수", "최초 근무", "출처", "비고", ""].map(h => (
+                  <th key={h} style={{ padding: "5px 6px", border: "1px solid #fcd34d", fontWeight: 600, color: "#92400e", whiteSpace: "nowrap" }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {workHistoryDaily.map((row, i) => (
+                <tr key={i}>
+                  <td style={{ padding: 3, border: "1px solid #fef3c7" }}>
+                    <input style={{ ...inputStyle, minWidth: 100, fontSize: 12 }} value={row.company} onChange={(e) => { const u = [...workHistoryDaily]; u[i] = { ...u[i], company: e.target.value }; onChangeDaily(u); }} />
+                  </td>
+                  <td style={{ padding: 3, border: "1px solid #fef3c7" }}>
+                    <input style={{ ...inputStyle, minWidth: 80, fontSize: 12 }} value={row.jobType} onChange={(e) => { const u = [...workHistoryDaily]; u[i] = { ...u[i], jobType: e.target.value }; onChangeDaily(u); }} />
+                  </td>
+                  <td style={{ padding: 3, border: "1px solid #fef3c7", textAlign: "center" }}>
+                    <input type="number" style={{ ...inputStyle, width: 70, fontSize: 12, textAlign: "center" }} value={row.totalDays} onChange={(e) => { const days = Number(e.target.value) || 0; const u = [...workHistoryDaily]; u[i] = { ...u[i], totalDays: days, convertedMonths: Math.ceil(days / 20) }; onChangeDaily(u); }} />
+                  </td>
+                  <td style={{ padding: "3px 8px", border: "1px solid #fef3c7", textAlign: "center", fontWeight: 700, color: "#b45309" }}>
+                    {row.convertedMonths}개월
+                    <div style={{ fontSize: 10, color: "#9ca3af", fontWeight: 400 }}>
+                      ({Math.floor(row.convertedMonths / 12) > 0 ? `${Math.floor(row.convertedMonths / 12)}년 ` : ""}{row.convertedMonths % 12 > 0 ? `${row.convertedMonths % 12}개월` : ""})
+                    </div>
+                  </td>
+                  <td style={{ padding: "3px 8px", border: "1px solid #fef3c7", textAlign: "center", fontSize: 11, color: "#6b7280" }}>
+                    {row.startYear}.{String(row.startMonth).padStart(2, "0")}
+                  </td>
+                  <td style={{ padding: 3, border: "1px solid #fef3c7" }}>
+                    <input style={{ ...inputStyle, width: 70, fontSize: 12 }} value={row.source} onChange={(e) => { const u = [...workHistoryDaily]; u[i] = { ...u[i], source: e.target.value }; onChangeDaily(u); }} />
+                  </td>
+                  <td style={{ padding: 3, border: "1px solid #fef3c7" }}>
+                    <input style={{ ...inputStyle, minWidth: 80, fontSize: 12 }} value={row.memo} onChange={(e) => { const u = [...workHistoryDaily]; u[i] = { ...u[i], memo: e.target.value }; onChangeDaily(u); }} />
+                  </td>
+                  <td style={{ padding: 3, border: "1px solid #fef3c7", textAlign: "center" }}>
+                    <button onClick={() => onChangeDaily(workHistoryDaily.filter((_, idx) => idx !== i))} style={{ background: "none", border: "none", color: "#dc2626", cursor: "pointer", fontSize: 14 }}>✕</button>
+                  </td>
+                </tr>
+              ))}
+              {workHistoryDaily.length === 0 && (
+                <tr><td colSpan={8} style={{ padding: "12px", textAlign: "center", color: "#9ca3af", fontSize: 12 }}>일용직 이력 없음</td></tr>
+              )}
+            </tbody>
+            {workHistoryDaily.length > 0 && (
+              <tfoot>
+                <tr style={{ background: "#fef9ec" }}>
+                  <td colSpan={2} style={{ padding: "4px 8px", border: "1px solid #fcd34d", fontWeight: 700, color: "#92400e", textAlign: "right" }}>합계</td>
+                  <td style={{ padding: "4px 8px", border: "1px solid #fcd34d", fontWeight: 700, color: "#92400e", textAlign: "center" }}>
+                    {workHistoryDaily.reduce((sum, r) => sum + r.totalDays, 0)}일
+                  </td>
+                  <td style={{ padding: "4px 8px", border: "1px solid #fcd34d", fontWeight: 700, color: "#b45309", textAlign: "center" }}>
+                    {(() => { const t = workHistoryDaily.reduce((sum, r) => sum + r.convertedMonths, 0); const y = Math.floor(t / 12); const m = t % 12; return y > 0 && m > 0 ? `${y}년 ${m}개월` : y > 0 ? `${y}년` : `${m}개월`; })()}
+                  </td>
+                  <td colSpan={4} style={{ border: "1px solid #fcd34d" }} />
+                </tr>
+              </tfoot>
+            )}
+          </table>
+        </div>
+        <button
+          onClick={() => onChangeDaily([...workHistoryDaily, { company: "", jobType: "", totalDays: 0, startYear: new Date().getFullYear(), startMonth: 1, convertedMonths: 0, source: "", memo: "" }])}
+          style={{ background: "white", border: "1px solid #fcd34d", borderRadius: 6, padding: "4px 12px", fontSize: 12, cursor: "pointer", color: "#92400e" }}
+        >
+          + 일용직 행 추가
+        </button>
+      </div>
+
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 8 }}>
         <Field label="마지막 소음작업 중단 시기">
           <input
