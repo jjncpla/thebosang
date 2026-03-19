@@ -62,16 +62,16 @@ export async function POST(
   "name": "재해자이름",
   "sources": {
     "고용산재": [
-      { "company": "회사명", "startYear": 2000, "startMonth": 1, "endYear": 2005, "endMonth": 12, "department": "", "jobType": "" }
+      { "company": "회사명", "startYear": 2000, "startMonth": 1, "endYear": 2005, "endMonth": 12, "department": "", "jobType": "", "workDays": 0 }
     ],
     "건보": [
-      { "company": "회사명", "startYear": 2000, "startMonth": 1, "endYear": 2005, "endMonth": 12, "department": "", "jobType": "" }
+      { "company": "회사명", "startYear": 2000, "startMonth": 1, "endYear": 2005, "endMonth": 12, "department": "", "jobType": "", "workDays": 0 }
     ],
     "소득금액": [
-      { "company": "회사명", "startYear": 2000, "startMonth": 1, "endYear": 2005, "endMonth": 12, "department": "", "jobType": "" }
+      { "company": "회사명", "startYear": 2000, "startMonth": 1, "endYear": 2005, "endMonth": 12, "department": "", "jobType": "", "workDays": 0 }
     ],
     "연금": [
-      { "company": "회사명", "startYear": 2000, "startMonth": 1, "endYear": 2005, "endMonth": 12, "department": "", "jobType": "" }
+      { "company": "회사명", "startYear": 2000, "startMonth": 1, "endYear": 2005, "endMonth": 12, "department": "", "jobType": "", "workDays": 0 }
     ]
   }
 }
@@ -81,7 +81,13 @@ export async function POST(
 2. 문서에 없는 종류는 빈 배열 []로 두세요
 3. 재직 중인 경우 endYear/endMonth는 현재 날짜(2026년 1월) 기준으로 입력하세요
 4. startYear/endYear는 4자리 숫자, startMonth/endMonth는 1~12 정수
-5. 이름을 찾을 수 없으면 name을 빈 문자열로 두세요`
+5. 이름을 찾을 수 없으면 name을 빈 문자열로 두세요
+6. 일용근로자(일용직)의 경우 동일 사업장별로 총 근무일수(workDays)를 합산해서 별도 필드로 포함한다.
+   변환 공식: 20일 = 1개월, 220일 = 1년 (나머지 일수는 올림해서 개월로 변환)
+   예: A사업장 총 45일 → 45/20 = 2.25개월 → 3개월로 올림
+   일용직 항목은 startYear/startMonth는 최초 근무월, endYear/endMonth는 최후 근무월로 표기하되,
+   workDays 필드에 실제 총 근무일수를 숫자로 기입한다.
+   일용직이 아닌 경우 workDays는 0으로 기입.`
 
     // 각 PDF를 순차적으로 별도 요청
     const mergedSources: Record<string, unknown[]> = {
@@ -128,11 +134,12 @@ export async function POST(
 
       let parsed: { name?: string; sources: Record<string, unknown[]> }
       try {
-        const cleaned = rawText.replace(/```json|```/g, "").trim()
-        parsed = JSON.parse(cleaned)
+        const jsonMatch = rawText.match(/\{[\s\S]*\}/)
+        if (!jsonMatch) throw new Error("JSON not found in response")
+        parsed = JSON.parse(jsonMatch[0])
       } catch {
         console.error(`JSON parse error (${pdf.name}):`, rawText)
-        return NextResponse.json({ error: `응답 파싱 오류 (${pdf.name})`, raw: rawText }, { status: 500 })
+        return NextResponse.json({ error: `응답 파싱 실패 (${pdf.name})`, raw: rawText }, { status: 500 })
       }
 
       if (parsed.name && !extractedName) extractedName = parsed.name
@@ -144,6 +151,28 @@ export async function POST(
     }
 
     const parsed = { name: extractedName, sources: mergedSources }
+
+    // 일용직 근무기간 변환: workDays > 0인 경우 endYear/endMonth를 실제 일수 기준으로 재계산
+    for (const sourceKey of Object.keys(parsed.sources)) {
+      const entries = parsed.sources[sourceKey] as any[]
+      parsed.sources[sourceKey] = entries.map((entry: any) => {
+        const days = Number(entry.workDays ?? 0)
+        if (days > 0) {
+          const totalMonths = Math.ceil(days / 20)
+          const startTotal = entry.startYear * 12 + (entry.startMonth - 1)
+          const endTotal = startTotal + totalMonths - 1
+          const endYear = Math.floor(endTotal / 12)
+          const endMonth = (endTotal % 12) + 1
+          return {
+            ...entry,
+            endYear,
+            endMonth,
+            jobType: entry.jobType ? `[일용직 ${days}일] ${entry.jobType}` : `[일용직 ${days}일]`,
+          }
+        }
+        return entry
+      })
+    }
 
     const caseWithDetail = await prisma.case.findUnique({
       where: { id: caseId },
