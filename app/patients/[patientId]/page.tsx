@@ -49,10 +49,6 @@ type HearingLossDetail = {
   disabilityRegistrationDate: string | null;
   disabilityDiagnosisDate: string | null;
   disabilityRegistrationLevel: string | null;
-  workHistory: WorkHistoryItem[] | null;
-  workHistoryRaw: WorkHistoryRaw | null;
-  workHistoryMemo: string | null;
-  lastNoiseWorkEndDate: string | null;
   claimSubmittedAt: string | null;
   claimNasPath: string | null;
   telegramSharedAt: string | null;
@@ -155,6 +151,11 @@ type CaseData = {
   receptionDate: string | null;
   isOneStop: boolean;
   memo: string | null;
+  workHistory: WorkHistoryItem[] | null;
+  workHistoryDaily: unknown[] | null;
+  workHistoryRaw: WorkHistoryRaw | null;
+  workHistoryMemo: string | null;
+  lastNoiseWorkEndDate: string | null;
   closedReason: string | null;
   createdAt: string;
   updatedAt: string;
@@ -332,7 +333,6 @@ const EMPTY_DETAIL: HearingLossDetail = {
   id: "", firstClinic: null, firstExamDate: null, firstExamRight: null, firstExamLeft: null,
   firstExamSpeech: null, passedInitialCriteria: false, isDisabilityRegistered: false,
   disabilityRegistrationDate: null, disabilityDiagnosisDate: null, disabilityRegistrationLevel: null,
-  workHistory: null, workHistoryRaw: null, workHistoryMemo: null, lastNoiseWorkEndDate: null,
   claimSubmittedAt: null, claimNasPath: null, telegramSharedAt: null,
   examRequestReceivedAt: null, examPeriodStart: null, examPeriodEnd: null,
   specialClinic: null, examClinicSelectionSubmittedAt: null,
@@ -608,23 +608,6 @@ function HearingLossTab({ caseId, initial }: { caseId: string; initial: HearingL
   );
 
 
-  const handleWorkHistoryChange = (updates: {
-    workHistory?: WorkHistoryItem[] | null;
-    workHistoryRaw?: WorkHistoryRaw | null;
-    workHistoryMemo?: string | null;
-    lastNoiseWorkEndDate?: string | null;
-  }) => {
-    setDetail((prev) => ({ ...prev, ...updates }));
-  };
-
-  const saveLastNoiseWorkEndDate = async (isoDate: string) => {
-    await fetch(`/api/cases/${caseId}/hearing-loss`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ lastNoiseWorkEndDate: isoDate }),
-    });
-  };
-
   return (
     <div>
       {/* (1) 사건초기 */}
@@ -671,16 +654,6 @@ function HearingLossTab({ caseId, initial }: { caseId: string; initial: HearingL
                 </div>
               )}
             </div>
-
-            <WorkHistorySection
-              caseId={caseId}
-              workHistory={detail.workHistory ?? []}
-              workHistoryRaw={detail.workHistoryRaw ?? { 고용산재: [], 건보: [], 소득금액: [], 연금: [], 건근공: [] }}
-              workHistoryMemo={detail.workHistoryMemo}
-              lastNoiseWorkEndDate={detail.lastNoiseWorkEndDate}
-              onChange={handleWorkHistoryChange}
-              onSaveLastDate={saveLastNoiseWorkEndDate}
-            />
 
             <div style={{ marginTop: 16 }}><SaveBar /></div>
           </div>
@@ -1216,6 +1189,7 @@ function CaseCommonInfoSection({ caseItem, onUpdated }: { caseItem: CaseData; on
   const [closedReason, setClosedReason] = useState(caseItem.closedReason ?? "");
   const [savingClosed, setSavingClosed] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [workHistorySaving, setWorkHistorySaving] = useState(false);
   const [users, setUsers] = useState<{ id: string; name: string }[]>([]);
   useEffect(() => {
     fetch("/api/users").then(r => r.ok ? r.json() : []).then(d => setUsers(Array.isArray(d) ? d : d.users ?? [])).catch(() => {});
@@ -1276,6 +1250,36 @@ function CaseCommonInfoSection({ caseItem, onUpdated }: { caseItem: CaseData; on
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleWorkHistoryChange = async (updates: {
+    workHistory?: WorkHistoryItem[] | null;
+    workHistoryRaw?: WorkHistoryRaw | null;
+    workHistoryMemo?: string | null;
+    lastNoiseWorkEndDate?: string | null;
+  }) => {
+    setWorkHistorySaving(true);
+    try {
+      await fetch(`/api/cases/${caseItem.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updates),
+      });
+      onUpdated({ ...caseItem, ...updates });
+    } catch (e) {
+      console.error("직업력 저장 실패:", e);
+    } finally {
+      setWorkHistorySaving(false);
+    }
+  };
+
+  const saveLastNoiseWorkEndDate = async (isoDate: string) => {
+    await fetch(`/api/cases/${caseItem.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ lastNoiseWorkEndDate: isoDate }),
+    });
+    onUpdated({ ...caseItem, lastNoiseWorkEndDate: isoDate });
   };
 
   return (
@@ -1421,6 +1425,19 @@ function CaseCommonInfoSection({ caseItem, onUpdated }: { caseItem: CaseData; on
               </div>
             </div>
           )}
+          {/* 직업력 */}
+          <div style={{ marginTop: 16, borderTop: "1px solid #e5e7eb", paddingTop: 16 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: "#6b7280", letterSpacing: 1, marginBottom: 12 }}>직업력</div>
+            <WorkHistorySection
+              caseId={caseItem.id}
+              workHistory={(caseItem.workHistory as WorkHistoryItem[]) ?? []}
+              workHistoryRaw={(caseItem.workHistoryRaw as WorkHistoryRaw) ?? { 고용산재: [], 건보: [], 소득금액: [], 연금: [], 건근공: [] }}
+              workHistoryMemo={caseItem.workHistoryMemo}
+              lastNoiseWorkEndDate={caseItem.lastNoiseWorkEndDate}
+              onChange={handleWorkHistoryChange}
+              onSaveLastDate={saveLastNoiseWorkEndDate}
+            />
+          </div>
         </div>
       )}
     </div>

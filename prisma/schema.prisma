@@ -64,6 +64,13 @@ model Case {
   memo String?
   closedReason String? // 반려 / 파기
 
+  // 직업력 (상병 공통)
+  workHistory      Json?   // 상용직 최종 직업력
+  workHistoryDaily Json?   // 일용직 직업력
+  workHistoryRaw   Json?   // 소스별 원시 직업력
+  workHistoryMemo  String? // 직업력 메모
+  lastNoiseWorkEndDate DateTime? // 마지막 소음작업 중단일
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -101,12 +108,6 @@ model HearingLossDetail {
   disabilityRegistrationDate  DateTime? // 국가장애 등록일자
   disabilityDiagnosisDate     DateTime? // 국가장애 진단일자
   disabilityRegistrationLevel String?   // 국가장애 급수
-
-  // 직업력
-  workHistory          Json?
-  workHistoryRaw       Json?  // 기초자료별 원시 직업력 (소스별 분리 저장)
-  workHistoryMemo      String?
-  lastNoiseWorkEndDate DateTime?
 
   // 접수/청구
   claimSubmittedAt DateTime?

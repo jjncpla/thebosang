@@ -52,6 +52,15 @@ export async function PATCH(
       salesRoute, contractDate, receptionDate, isOneStop, status, memo,
     } = body;
 
+    const workHistoryData: Record<string, unknown> = {}
+    if (body.workHistory !== undefined) workHistoryData.workHistory = body.workHistory
+    if (body.workHistoryDaily !== undefined) workHistoryData.workHistoryDaily = body.workHistoryDaily
+    if (body.workHistoryRaw !== undefined) workHistoryData.workHistoryRaw = body.workHistoryRaw
+    if (body.workHistoryMemo !== undefined) workHistoryData.workHistoryMemo = body.workHistoryMemo
+    if (body.lastNoiseWorkEndDate !== undefined) {
+      workHistoryData.lastNoiseWorkEndDate = body.lastNoiseWorkEndDate ? new Date(body.lastNoiseWorkEndDate) : null
+    }
+
     const updated = await prisma.case.update({
       where: { id: caseId },
       data: {
@@ -65,6 +74,7 @@ export async function PATCH(
         ...(isOneStop !== undefined && { isOneStop }),
         ...(status !== undefined && { status }),
         ...(memo !== undefined && { memo }),
+        ...workHistoryData,
       },
       include: {
         patient: true,

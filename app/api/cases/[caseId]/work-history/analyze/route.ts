@@ -211,17 +211,8 @@ export async function POST(
       })
     }
 
-    const caseWithDetail = await prisma.case.findUnique({
+    await prisma.case.update({
       where: { id: caseId },
-      include: { hearingLoss: true },
-    })
-
-    if (!caseWithDetail?.hearingLoss) {
-      return NextResponse.json({ error: "사건 정보를 찾을 수 없습니다" }, { status: 404 })
-    }
-
-    await prisma.hearingLossDetail.update({
-      where: { caseId },
       data: {
         workHistoryRaw: parsed.sources as object,
       },

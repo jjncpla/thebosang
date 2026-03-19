@@ -70,14 +70,14 @@ export async function PATCH(
   const { caseId } = await params;
   const body = await req.json();
 
-  const updated = await prisma.hearingLossDetail.update({
-    where: { caseId },
-    data: {
-      ...(body.lastNoiseWorkEndDate !== undefined && {
-        lastNoiseWorkEndDate: new Date(body.lastNoiseWorkEndDate),
-      }),
-    },
-  });
+  // lastNoiseWorkEndDate is now on Case model — update there
+  if (body.lastNoiseWorkEndDate !== undefined) {
+    const updated = await prisma.case.update({
+      where: { id: caseId },
+      data: { lastNoiseWorkEndDate: body.lastNoiseWorkEndDate ? new Date(body.lastNoiseWorkEndDate) : null },
+    });
+    return NextResponse.json({ success: true, updated });
+  }
 
-  return NextResponse.json({ success: true, updated });
+  return NextResponse.json({ success: true });
 }
