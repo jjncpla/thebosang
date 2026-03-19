@@ -85,7 +85,7 @@ export async function POST(
       "anthropic-beta": "pdfs-2024-09-25",
     },
     body: JSON.stringify({
-      model: "claude-opus-4-6",
+      model: "claude-sonnet-4-6",
       max_tokens: 4096,
       messages: [{ role: "user", content: userContent }],
     }),
