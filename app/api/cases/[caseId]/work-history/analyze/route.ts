@@ -5,6 +5,34 @@ import { PDFDocument } from "pdf-lib"
 
 export const maxDuration = 300
 
+async function callClaudeWithRetry(body: object, apiKey: string, maxRetries = 3): Promise<Response> {
+  let lastError: Error | null = null
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    if (attempt > 0) {
+      const waitMs = 30000 * attempt // 30초, 60초, 90초
+      console.log("Rate limit hit, waiting", waitMs / 1000, "seconds before retry", attempt)
+      await new Promise((r) => setTimeout(r, waitMs))
+    }
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+        "anthropic-beta": "pdfs-2024-09-25",
+      },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(120000),
+    })
+    if (res.status === 429) {
+      lastError = new Error("rate_limit")
+      continue
+    }
+    return res
+  }
+  throw lastError ?? new Error("Max retries exceeded")
+}
+
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ caseId: string }> }
@@ -22,9 +50,9 @@ export async function POST(
       return NextResponse.json({ error: "파일이 없습니다" }, { status: 400 })
     }
 
-    // 파일을 청크 단위 base64 배열로 변환 (3MB 초과 시 10페이지씩 분할)
+    // 파일을 청크 단위 base64 배열로 변환 (3MB 초과 시 5페이지씩 분할)
     const SIZE_LIMIT = 3 * 1024 * 1024
-    const CHUNK_PAGES = 10
+    const CHUNK_PAGES = 5
     const pdfContents: { name: string; base64: string }[] = []
 
     for (const file of files) {
@@ -32,7 +60,7 @@ export async function POST(
       if (buffer.byteLength <= SIZE_LIMIT) {
         pdfContents.push({ name: file.name, base64: Buffer.from(buffer).toString("base64") })
       } else {
-        // pdf-lib로 10페이지씩 분할
+        // pdf-lib로 5페이지씩 분할
         const srcDoc = await PDFDocument.load(buffer)
         const totalPages = srcDoc.getPageCount()
         for (let start = 0; start < totalPages; start += CHUNK_PAGES) {
@@ -116,21 +144,11 @@ export async function POST(
         { type: "text", text: PROMPT_TEXT },
       ]
 
-      const claudeRes = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": apiKey,
-          "anthropic-version": "2023-06-01",
-          "anthropic-beta": "pdfs-2024-09-25",
-        },
-        body: JSON.stringify({
-          model: "claude-sonnet-4-6",
-          max_tokens: 4096,
-          messages: [{ role: "user", content: userContent }],
-        }),
-        signal: AbortSignal.timeout(120000),
-      })
+      const claudeRes = await callClaudeWithRetry({
+        model: "claude-sonnet-4-6",
+        max_tokens: 4096,
+        messages: [{ role: "user", content: userContent }],
+      }, apiKey)
 
       if (!claudeRes.ok) {
         const err = await claudeRes.text()
@@ -165,7 +183,7 @@ export async function POST(
       }
 
       if (pdfIdx < pdfContents.length - 1) {
-        await new Promise((r) => setTimeout(r, 3000))
+        await new Promise((r) => setTimeout(r, 15000))
       }
     }
 
