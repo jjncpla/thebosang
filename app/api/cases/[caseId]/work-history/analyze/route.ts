@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/auth"
 import { prisma } from "@/lib/prisma"
+import { PDFDocument } from "pdf-lib"
 
 export async function POST(
   req: NextRequest,
@@ -19,11 +20,32 @@ export async function POST(
       return NextResponse.json({ error: "파일이 없습니다" }, { status: 400 })
     }
 
+    // 파일을 청크 단위 base64 배열로 변환 (3MB 초과 시 10페이지씩 분할)
+    const SIZE_LIMIT = 3 * 1024 * 1024
+    const CHUNK_PAGES = 10
     const pdfContents: { name: string; base64: string }[] = []
+
     for (const file of files) {
       const buffer = await file.arrayBuffer()
-      const base64 = Buffer.from(buffer).toString("base64")
-      pdfContents.push({ name: file.name, base64 })
+      if (buffer.byteLength <= SIZE_LIMIT) {
+        pdfContents.push({ name: file.name, base64: Buffer.from(buffer).toString("base64") })
+      } else {
+        // pdf-lib로 10페이지씩 분할
+        const srcDoc = await PDFDocument.load(buffer)
+        const totalPages = srcDoc.getPageCount()
+        for (let start = 0; start < totalPages; start += CHUNK_PAGES) {
+          const end = Math.min(start + CHUNK_PAGES, totalPages)
+          const chunkDoc = await PDFDocument.create()
+          const pageIndices = Array.from({ length: end - start }, (_, i) => start + i)
+          const copiedPages = await chunkDoc.copyPages(srcDoc, pageIndices)
+          copiedPages.forEach((p) => chunkDoc.addPage(p))
+          const chunkBytes = await chunkDoc.save()
+          pdfContents.push({
+            name: `${file.name} (p${start + 1}-${end})`,
+            base64: Buffer.from(chunkBytes).toString("base64"),
+          })
+        }
+      }
     }
 
     const apiKey = process.env.ANTHROPIC_API_KEY
