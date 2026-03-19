@@ -56,7 +56,7 @@ JSON 형식:
 
   if (docType === "고용산재_상용") {
     return base + `이 문서는 고용보험 자격이력내역서입니다.
-상용직(기능원및관련근로자, 단순노무직근로자, 청소종사자 등 월급제) 이력만 추출하라.
+모든 근로자(근로자 구분: 근로자) 이력을 추출하라. 일용직 여부와 관계없이 자격이력내역서에 있는 모든 항목을 추출한다. 단 피보험자가 아닌 항목은 제외.
 직종코드가 있으면 jobType에 포함하라.
 취득일이 시작일, 상실일이 종료일이다.
 
@@ -183,7 +183,8 @@ export async function POST(
         // pdf-lib로 5페이지씩 분할
         const srcDoc = await PDFDocument.load(buffer)
         const totalPages = srcDoc.getPageCount()
-        for (let start = 0; start < totalPages; start += CHUNK_PAGES) {
+        const STEP = CHUNK_PAGES - 1 // 1페이지 overlap: 0-4, 4-9, 9-14
+        for (let start = 0; start < totalPages; start += STEP) {
           const end = Math.min(start + CHUNK_PAGES, totalPages)
           const chunkDoc = await PDFDocument.create()
           const pageIndices = Array.from({ length: end - start }, (_, i) => start + i)
