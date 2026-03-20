@@ -139,6 +139,7 @@ export function WorkHistorySection({
       const res = await fetch(`/api/cases/${caseId}/work-history/analyze`, { method: "POST", body: formData });
       if (!res.ok) { const err = await res.json(); throw new Error(err.error ?? "분석 실패"); }
       const data = await res.json();
+      console.log('API response:', JSON.stringify(data.sources))
 
       const newRaw = { ...workHistoryRaw };
       ["고용산재", "건보", "소득금액", "연금", "건근공"].forEach((src) => {
