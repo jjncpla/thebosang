@@ -129,6 +129,7 @@ export function WorkHistorySection({
 
   const handleAnalyze = async () => {
     const valid = pendingFiles.filter(f => f.docType !== "");
+    console.log('handleAnalyze called, valid:', valid.length, 'pending:', pendingFiles.length, pendingFiles.map(f => f.docType));
     if (valid.length === 0) { setAnalyzeError("문서 종류를 선택해주세요"); return; }
     setIsAnalyzing(true);
     setAnalyzeError(null);
