@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server"
+﻿import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/auth"
 import { prisma } from "@/lib/prisma"
 import { PDFDocument } from "pdf-lib"
@@ -34,30 +34,30 @@ async function callClaudeWithRetry(body: object, apiKey: string, maxRetries = 3)
 }
 
 function getPromptForDocType(docType: string): string {
-  const base = '[중요] 반드시 JSON만 응답하라. 설명 텍스트, 코드블록, 주석을 절대 포함하지 마라. 첫 글자 { 마지막 글자 }인 순수 JSON만 출력하라.\n\n'
+  const base = "[중요] 반드시 JSON만 응답하라. 설명 텍스트, 코드블록, 주석을 절대 포함하지 마라. 첫 글자 { 마지막 글자 }인 순수 JSON만 출력하라.\n\n"
 
-  if (docType === '건보') {
-    return base + '이 문서는 건강보험자격득실확인서이다.\n가입자구분이 직장가입자인 항목만 추출하라.\n지역가입자, 지역세대원, 지역세대주, 직장피부양자는 반드시 제외하라.\n사업장명은 사업장명칭 컬럼에서 추출하라.\n자격취득일이 시작일, 자격상실일이 종료일이다. 상실일이 없으면 현재(2026-01)로 표기.\n\nJSON 형식:\n{"name":"성명","sources":{"건보":[{"company":"사업장명","startYear":2000,"startMonth":1,"endYear":2005,"endMonth":12,"department":"","jobType":"","workDays":0}],"고용산재":[],"소득금액":[],"연금":[]},"dailyEntries":[]}'
+  if (docType === "건보") {
+    return base + "이 문서는 건강보험자격득실확인서이다. 가입자구분이 직장가입자인 항목만 추출하라. 지역가입자, 지역세대원, 지역세대주, 직장피부양자는 반드시 제외하라. 사업장명칭 컬럼에서 사업장명을 추출하라. 자격취득일이 시작일, 자격상실일이 종료일이다. 상실일이 없으면 현재(2026-01)로 표기.\n\n반드시 이 JSON 형식으로만 응답하라:\n{\"name\":\"성명\",\"sources\":{\"건보\":[{\"company\":\"사업장명\",\"startYear\":2000,\"startMonth\":1,\"endYear\":2005,\"endMonth\":12,\"department\":\"\",\"jobType\":\"\",\"workDays\":0}],\"고용산재\":[],\"소득금액\":[],\"연금\":[]},\"dailyEntries\":[]}"
   }
-  if (docType === '고용산재_전체') {
-    return base + '이 문서는 고용보험 자료로, 자격이력내역서(상용직)와 일용근로노무제공내역서(일용직)가 함께 포함되어 있을 수 있다.\n\n[상용직 추출 규칙]\n고용보험 자격이력내역서 섹션에서 추출하라.\n비고가 근로자인 항목을 모두 추출하라.\n직종명(코드), 사업장명, 취득일(시작), 상실일(종료)을 추출한다.\n상실일이 없으면 현재(2026-01)로 표기.\n\n[일용직 추출 규칙]\n일용근로노무제공내역서 섹션에서 추출하라.\n문서에 나와있는 모든 행을 그대로 추출하라. 합산하거나 묶지 마라.\n각 행의 사업장명, 직종명, 근무일수를 추출한다.\n사업장명에 [업체명] 형태가 있으면 [] 안의 업체명을 company로 사용하라.\n근무일수는 비고란의 날짜 숫자들의 개수를 세어라.\nstartYear/startMonth는 해당 행의 연월.\nconvertedMonths = Math.ceil(totalDays / 20).\n\nJSON 형식:\n{"name":"성명","sources":{"고용산재":[{"company":"사업장명","startYear":2000,"startMonth":1,"endYear":2005,"endMonth":12,"department":"","jobType":"직종명(코드)","workDays":0}],"건보":[],"소득금액":[],"연금":[]},"dailyEntries":[{"company":"사업장명","jobType":"직종명","totalDays":5,"startYear":2013,"startMonth":1,"convertedMonths":1,"source":"고용산재","memo":""}]}'
+  if (docType === "고용산재_전체") {
+    return base + "이 문서는 고용보험 자료이다. 상용직과 일용직을 모두 추출하라.\n\n[상용직] 자격이력내역서 섹션에서 비고가 근로자인 항목을 sources.고용산재 배열에 추출하라. 직종명(코드), 사업장명, 취득일(시작), 상실일(종료). 상실일 없으면 2026-01.\n\n[일용직] 일용근로노무제공내역서 섹션의 모든 행을 dailyEntries 배열에 추출하라. 합산하지 말고 행 그대로. 사업장명에 [업체명]이 있으면 []안의 이름을 company로 사용. 근무일수는 비고란 날짜 숫자 개수. startYear/startMonth는 해당 행의 연월. convertedMonths=Math.ceil(totalDays/20).\n\n반드시 이 JSON 형식으로만 응답하라:\n{\"name\":\"성명\",\"sources\":{\"고용산재\":[{\"company\":\"미소식당\",\"startYear\":2016,\"startMonth\":9,\"endYear\":2016,\"endMonth\":11,\"department\":\"\",\"jobType\":\"식당서비스관련종사자(132)\",\"workDays\":0}],\"건보\":[],\"소득금액\":[],\"연금\":[]},\"dailyEntries\":[{\"company\":\"삼호개발\",\"jobType\":\"건설단순종사자\",\"totalDays\":5,\"startYear\":2013,\"startMonth\":1,\"convertedMonths\":1,\"source\":\"고용산재\",\"memo\":\"\"}]}"
   }
-  if (docType === '고용산재_상용') {
-    return base + '이 문서는 고용보험 자격이력내역서이다.\n비고가 근로자인 항목을 모두 추출하라.\n직종명(코드), 사업장명, 취득일(시작), 상실일(종료)을 추출한다.\n상실일이 없으면 현재(2026-01)로 표기.\n\nJSON 형식:\n{"name":"성명","sources":{"고용산재":[{"company":"사업장명","startYear":2000,"startMonth":1,"endYear":2005,"endMonth":12,"department":"","jobType":"직종명(코드)","workDays":0}],"건보":[],"소득금액":[],"연금":[]},"dailyEntries":[]}'
+  if (docType === "고용산재_상용") {
+    return base + "이 문서는 고용보험 자격이력내역서이다. 비고가 근로자인 항목을 모두 추출하라. 직종명(코드), 사업장명, 취득일(시작), 상실일(종료). 상실일 없으면 2026-01.\n\n반드시 이 JSON 형식으로만 응답하라:\n{\"name\":\"성명\",\"sources\":{\"고용산재\":[{\"company\":\"사업장명\",\"startYear\":2000,\"startMonth\":1,\"endYear\":2005,\"endMonth\":12,\"department\":\"\",\"jobType\":\"직종명(코드)\",\"workDays\":0}],\"건보\":[],\"소득금액\":[],\"연금\":[]},\"dailyEntries\":[]}"
   }
-  if (docType === '일용직') {
-    return base + '이 문서는 고용보험 일용근로노무제공내역서이다.\n문서에 나와있는 모든 행을 그대로 추출하라. 합산하거나 묶지 마라.\n각 행의 사업장명, 직종명, 근무일수를 추출한다.\n사업장명에 [업체명] 형태가 있으면 [] 안의 업체명을 company로 사용하라.\n근무일수는 비고란의 날짜 숫자들의 개수를 세어라. 예: 1,2,3,4,5 이면 5일.\nstartYear/startMonth는 해당 행의 연월.\nconvertedMonths = Math.ceil(totalDays / 20).\n\nJSON 형식:\n{"name":"성명","sources":{"고용산재":[],"건보":[],"소득금액":[],"연금":[]},"dailyEntries":[{"company":"사업장명","jobType":"직종명","totalDays":5,"startYear":2013,"startMonth":1,"convertedMonths":1,"source":"고용산재","memo":""}]}'
+  if (docType === "일용직") {
+    return base + "이 문서는 고용보험 일용근로노무제공내역서이다. 모든 행을 그대로 추출하라. 합산하지 마라. 사업장명에 [업체명]이 있으면 []안의 이름을 company로 사용. 근무일수는 비고란 날짜 숫자 개수. startYear/startMonth는 해당 행 연월. convertedMonths=Math.ceil(totalDays/20).\n\n반드시 이 JSON 형식으로만 응답하라:\n{\"name\":\"성명\",\"sources\":{\"고용산재\":[],\"건보\":[],\"소득금액\":[],\"연금\":[]},\"dailyEntries\":[{\"company\":\"사업장명\",\"jobType\":\"직종명\",\"totalDays\":5,\"startYear\":2013,\"startMonth\":1,\"convertedMonths\":1,\"source\":\"고용산재\",\"memo\":\"\"}]}"
   }
-  if (docType === '연금') {
-    return base + '이 문서는 국민연금 가입증명 또는 가입내역확인서이다.\n사업장취득/사업장사용관계종결 이벤트에서 사업장명과 기간을 추출하라.\n사업장 명칭 변경 내역이 있으면 최신 명칭으로 통일하라.\n지역가입자 구간은 제외하라.\n가입자격취득일이 시작일, 사업장사용관계종결일이 종료일이다.\n\nJSON 형식:\n{"name":"성명","sources":{"연금":[{"company":"사업장명","startYear":2000,"startMonth":1,"endYear":2005,"endMonth":12,"department":"","jobType":"","workDays":0}],"고용산재":[],"건보":[],"소득금액":[]},"dailyEntries":[]}'
+  if (docType === "연금") {
+    return base + "이 문서는 국민연금 가입증명 또는 가입내역확인서이다. 사업장취득/사업장사용관계종결 이벤트에서 사업장명과 기간을 추출하라. 사업장 명칭 변경 내역이 있으면 최신 명칭으로 통일하라. 지역가입자 구간은 제외하라. 가입자격취득일이 시작일, 사업장사용관계종결일이 종료일이다.\n\n반드시 이 JSON 형식으로만 응답하라:\n{\"name\":\"성명\",\"sources\":{\"연금\":[{\"company\":\"사업장명\",\"startYear\":2000,\"startMonth\":1,\"endYear\":2005,\"endMonth\":12,\"department\":\"\",\"jobType\":\"\",\"workDays\":0}],\"고용산재\":[],\"건보\":[],\"소득금액\":[]},\"dailyEntries\":[]}"
   }
-  if (docType === '건근공') {
-    return base + '이 문서는 건설근로자공제회 내역서이다.\n사업장별로 총 근무일수를 합산하라. 변환 기준: 20일=1개월.\nconvertedMonths = Math.ceil(totalDays / 20).\n\nJSON 형식:\n{"name":"성명","sources":{"고용산재":[],"건보":[],"소득금액":[],"연금":[]},"dailyEntries":[{"company":"사업장명","jobType":"건설일용직","totalDays":60,"startYear":2013,"startMonth":1,"convertedMonths":3,"source":"건근공","memo":""}]}'
+  if (docType === "건근공") {
+    return base + "이 문서는 건설근로자공제회 내역서이다. 사업장별로 총 근무일수를 합산하라. convertedMonths=Math.ceil(totalDays/20).\n\n반드시 이 JSON 형식으로만 응답하라:\n{\"name\":\"성명\",\"sources\":{\"고용산재\":[],\"건보\":[],\"소득금액\":[],\"연금\":[]},\"dailyEntries\":[{\"company\":\"사업장명\",\"jobType\":\"건설일용직\",\"totalDays\":60,\"startYear\":2013,\"startMonth\":1,\"convertedMonths\":3,\"source\":\"건근공\",\"memo\":\"\"}]}"
   }
-  if (docType === '경력증명서') {
-    return base + '이 문서는 경력증명서 또는 재직증명서이다.\n회사명(사업장명), 재직기간(입사일~퇴사일), 직위/직종을 추출하라.\n퇴사일이 없거나 재직중이면 현재(2026-01)로 표기.\n입사일이 시작일, 퇴사일이 종료일이다.\n\nJSON 형식:\n{"name":"성명","sources":{"고용산재":[{"company":"사업장명","startYear":2000,"startMonth":1,"endYear":2005,"endMonth":12,"department":"","jobType":"직위/직종","workDays":0}],"건보":[],"소득금액":[],"연금":[]},"dailyEntries":[]}'
+  if (docType === "경력증명서") {
+    return base + "이 문서는 경력증명서 또는 재직증명서이다. 회사명, 재직기간, 직위/직종을 추출하라. 퇴사일 없으면 2026-01. 입사일이 시작일, 퇴사일이 종료일.\n\n반드시 이 JSON 형식으로만 응답하라:\n{\"name\":\"성명\",\"sources\":{\"고용산재\":[{\"company\":\"사업장명\",\"startYear\":2000,\"startMonth\":1,\"endYear\":2005,\"endMonth\":12,\"department\":\"\",\"jobType\":\"직위/직종\",\"workDays\":0}],\"건보\":[],\"소득금액\":[],\"연금\":[]},\"dailyEntries\":[]}"
   }
-  return base + '이 문서에서 직업력 이력을 추출하라.\nJSON 형식:\n{"name":"성명","sources":{"고용산재":[],"건보":[],"소득금액":[],"연금":[]},"dailyEntries":[]}'
+  return base + "이 문서에서 직업력 이력을 추출하라.\n\n반드시 이 JSON 형식으로만 응답하라:\n{\"name\":\"성명\",\"sources\":{\"고용산재\":[],\"건보\":[],\"소득금액\":[],\"연금\":[]},\"dailyEntries\":[]}"
 }
 
 export async function POST(
@@ -147,7 +147,7 @@ export async function POST(
       if (!claudeRes.ok) {
         const err = await claudeRes.text()
         console.error(`Claude API error (${pdf.name}):`, err)
-        continue // 에러 시 해당 파일 스킵하고 계속 진행
+        continue
       }
 
       const claudeData = await claudeRes.json()
@@ -160,7 +160,7 @@ export async function POST(
         parsed = JSON.parse(jsonMatch[0])
       } catch {
         console.error(`JSON parse error (${pdf.name}):`, rawText)
-        continue // 파싱 실패 시 스킵
+        continue
       }
 
       if (parsed.name && !extractedName) extractedName = parsed.name
