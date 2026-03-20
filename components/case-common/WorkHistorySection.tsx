@@ -64,6 +64,7 @@ export function WorkHistorySection({
     { value: "일용직", label: "고용보험 일용근로노무제공내역서" },
     { value: "연금", label: "국민연금 가입증명/가입내역확인서" },
     { value: "건근공", label: "건설근로자공제회 내역서" },
+    { value: "경력증명서", label: "경력증명서 (재직증명서)" },
   ];
 
   const SOURCE_LABELS: Record<string, string> = {
@@ -313,6 +314,9 @@ export function WorkHistorySection({
             </div>
           </div>
         )}
+        <div style={{ fontSize: 11, color: '#6b7280', marginTop: 6, padding: '6px 12px', background: '#f9fafb', borderRadius: 6, border: '1px solid #e5e7eb' }}>
+          💡 소득금액증명원 및 그 외 자료들은 수동으로 기입해주세요 (소득금액증명원 탭 직접 입력)
+        </div>
       </div>
 
       {/* 소스 탭 */}

@@ -124,6 +124,23 @@ JSON 형식:
 }`
   }
 
+  if (docType === "경력증명서") {
+    return base + `이 문서는 경력증명서 또는 재직증명서이다.
+회사명(사업장명), 재직기간(입사일~퇴사일), 직위/직종을 추출하라.
+퇴사일이 없거나 재직중이면 현재(2026-01)로 표기.
+입사일이 시작일, 퇴사일이 종료일이다.
+
+JSON 형식:
+{
+  "name": "성명",
+  "sources": {
+    "고용산재": [{ "company": "사업장명", "startYear": 2000, "startMonth": 1, "endYear": 2005, "endMonth": 12, "department": "", "jobType": "직위/직종", "workDays": 0 }],
+    "건보": [], "소득금액": [], "연금": []
+  },
+  "dailyEntries": []
+}`
+  }
+
   // fallback
   return base + `이 문서에서 직업력 이력을 추출하라.
 JSON 형식:
