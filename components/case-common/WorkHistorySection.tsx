@@ -52,7 +52,6 @@ export function WorkHistorySection({
   const [pendingFiles, setPendingFiles] = useState<{ file: File; docType: string }[]>([]);
   const [showFileSelector, setShowFileSelector] = useState(false);
   const [showMemoModal, setShowMemoModal] = useState(false);
-  const [localRaw, setLocalRaw] = useState<WorkHistoryRaw>(workHistoryRaw);
   const [mergeResult, setMergeResult] = useState<{ regularMonths: number; dailyMonths: number; totalMonths: number } | null>(null);
 
   const RAW_SOURCES = ["고용산재", "건보", "소득금액", "연금", "건근공", "일용직"] as const;
@@ -149,7 +148,6 @@ export function WorkHistorySection({
         }
       });
       console.log('newRaw after update:', JSON.stringify(Object.fromEntries(Object.entries(newRaw).map(([k,v]) => [k, Array.isArray(v) ? v.length : v]))));
-      setLocalRaw(newRaw as WorkHistoryRaw);
       onChange({ workHistoryRaw: newRaw });
 
       if (data.dailyEntries?.length > 0) {
@@ -169,7 +167,6 @@ export function WorkHistorySection({
   const handleClearAll = () => {
     if (!window.confirm("직업력 데이터를 전체 초기화합니다. 계속하시겠습니까?")) return;
     const emptyRaw: WorkHistoryRaw = { 고용산재: [], 건보: [], 소득금액: [], 연금: [], 건근공: [], 일용직: [] };
-    setLocalRaw({ 고용산재: [], 건보: [], 소득금액: [], 연금: [], 건근공: [], 일용직: [] });
     onChange({ workHistory: [], workHistoryRaw: emptyRaw, workHistoryMemo: null, lastNoiseWorkEndDate: null });
     onChangeDaily([]);
     setMergeResult(null);
@@ -337,9 +334,9 @@ export function WorkHistorySection({
             borderColor: activeRawSource === src ? "#29ABE2" : "#d1d5db",
           }}>
             {SOURCE_LABELS[src] ?? src}
-            {(localRaw[src]?.length ?? 0) > 0 && (
+            {(workHistoryRaw[src]?.length ?? 0) > 0 && (
               <span style={{ marginLeft: 4, background: activeRawSource === src ? "rgba(255,255,255,0.3)" : "#e0e7ff", color: activeRawSource === src ? "white" : "#3730a3", borderRadius: 999, padding: "1px 6px", fontSize: 11 }}>
-                {localRaw[src].length}
+                {workHistoryRaw[src].length}
               </span>
             )}
           </button>
@@ -357,7 +354,7 @@ export function WorkHistorySection({
             </tr>
           </thead>
           <tbody>
-            {(localRaw[activeRawSource] ?? []).map((row, i) => (
+            {(workHistoryRaw[activeRawSource] ?? []).map((row, i) => (
               <tr key={i}>
                 {(["company", "department", "jobType"] as (keyof WorkHistoryRawEntry)[]).map((k) => (
                   <td key={k} style={{ padding: 3, border: "1px solid #f1f5f9" }}>
@@ -389,7 +386,7 @@ export function WorkHistorySection({
                 </td>
               </tr>
             ))}
-            {(localRaw[activeRawSource]?.length ?? 0) === 0 && (
+            {(workHistoryRaw[activeRawSource]?.length ?? 0) === 0 && (
               <tr><td colSpan={6} style={{ padding: "12px", textAlign: "center", color: "#9ca3af", fontSize: 12 }}>데이터 없음</td></tr>
             )}
           </tbody>
@@ -418,7 +415,7 @@ export function WorkHistorySection({
           </div>
         ) : (
           <span style={{ fontSize: 12, color: "#15803d" }}>
-            총 {RAW_SOURCES.reduce((sum, src) => sum + (localRaw[src]?.length ?? 0), 0)}개 항목 + 일용직 {workHistoryDaily.length}건 → 합산하여 최종 직업력 생성
+            총 {RAW_SOURCES.reduce((sum, src) => sum + (workHistoryRaw[src]?.length ?? 0), 0)}개 항목 + 일용직 {workHistoryDaily.length}건 → 합산하여 최종 직업력 생성
           </span>
         )}
       </div>
