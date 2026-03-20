@@ -147,6 +147,7 @@ export function WorkHistorySection({
           (newRaw as Record<string, unknown>)[src] = data.sources[src];
         }
       });
+      console.log('newRaw after update:', JSON.stringify(Object.fromEntries(Object.entries(newRaw).map(([k,v]) => [k, Array.isArray(v) ? v.length : v]))));
       onChange({ workHistoryRaw: newRaw });
 
       if (data.dailyEntries?.length > 0) {
