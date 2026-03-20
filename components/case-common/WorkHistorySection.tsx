@@ -1,6 +1,6 @@
-"use client";
+﻿"use client";
 
-import { useState } from "react";
+import React, { useState } from "react";
 import { WorkHistoryItem, WorkHistoryRaw, WorkHistoryRawEntry, WorkHistoryDailyEntry } from "./WorkHistoryTypes";
 
 interface WorkHistorySectionProps {
