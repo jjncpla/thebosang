@@ -60,8 +60,9 @@ export function WorkHistorySection({
 
   const DOC_TYPE_OPTIONS = [
     { value: "건보", label: "건강보험 자격득실확인서" },
-    { value: "고용산재_상용", label: "고용보험 자격이력내역서 (상용직)" },
-    { value: "일용직", label: "고용보험 일용근로노무제공내역서" },
+    { value: "고용산재_전체", label: "고용보험 (자격이력 + 일용근로 통합)" },
+    { value: "고용산재_상용", label: "고용보험 자격이력내역서 (상용직만)" },
+    { value: "일용직", label: "고용보험 일용근로노무제공내역서 (일용직만)" },
     { value: "연금", label: "국민연금 가입증명/가입내역확인서" },
     { value: "건근공", label: "건설근로자공제회 내역서" },
     { value: "경력증명서", label: "경력증명서 (재직증명서)" },

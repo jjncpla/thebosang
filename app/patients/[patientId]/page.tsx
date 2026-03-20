@@ -1258,18 +1258,16 @@ function CaseCommonInfoSection({ caseItem, onUpdated }: { caseItem: CaseData; on
     workHistoryMemo?: string | null;
     lastNoiseWorkEndDate?: string | null;
   }) => {
-    setWorkHistorySaving(true);
+    // 즉시 UI 업데이트 (낙관적 업데이트)
+    onUpdated({ ...caseItem, ...updates });
     try {
       await fetch(`/api/cases/${caseItem.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(updates),
       });
-      onUpdated({ ...caseItem, ...updates });
     } catch (e) {
       console.error("직업력 저장 실패:", e);
-    } finally {
-      setWorkHistorySaving(false);
     }
   };
 
@@ -1437,12 +1435,17 @@ function CaseCommonInfoSection({ caseItem, onUpdated }: { caseItem: CaseData; on
               lastNoiseWorkEndDate={caseItem.lastNoiseWorkEndDate}
               onChange={handleWorkHistoryChange}
               onChangeDaily={async (entries) => {
-                await fetch(`/api/cases/${caseItem.id}`, {
-                  method: "PATCH",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ workHistoryDaily: entries }),
-                });
+                // 즉시 UI 업데이트
                 onUpdated({ ...caseItem, workHistoryDaily: entries });
+                try {
+                  await fetch(`/api/cases/${caseItem.id}`, {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ workHistoryDaily: entries }),
+                  });
+                } catch (e) {
+                  console.error("일용직 저장 실패:", e);
+                }
               }}
               onSaveLastDate={saveLastNoiseWorkEndDate}
             />
