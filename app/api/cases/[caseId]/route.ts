@@ -74,6 +74,7 @@ export async function PATCH(
         ...(isOneStop !== undefined && { isOneStop }),
         ...(status !== undefined && { status }),
         ...(memo !== undefined && { memo }),
+        ...(body.kwcOfficeName !== undefined && { kwcOfficeName: body.kwcOfficeName || null }),
         ...workHistoryData,
       },
       include: {

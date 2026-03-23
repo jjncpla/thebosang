@@ -71,6 +71,9 @@ model Case {
   workHistoryMemo  String? // 직업력 메모
   lastNoiseWorkEndDate DateTime? // 마지막 소음작업 중단일
 
+  // 관할 근로복지공단 지사 (서식 자동생성용)
+  kwcOfficeName   String?   // 관할 공단 지사명 (예: "울산", "부산동부") → "근로복지공단 {{kwcOfficeName}}장 귀하"
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -454,6 +457,16 @@ model User {
   name      String
   role      String   @default("READONLY")
   createdAt DateTime @default(now())
+
+  // 노무사 전문 정보 (서식 자동생성용)
+  licenseNo     String?   // 공인노무사 등록번호
+  birthDate     String?   // 생년월일 "YY.MM.DD" 형식 (예: "65.03.12")
+  officeAddress String?   // 사무소 주소
+  officeTel     String?   // 사무실 전화
+  officeFax     String?   // 팩스
+  branchName    String?   // 지사/상호 (예: "울산지사")
+  department    String?   // 부서
+  jobTitle      String?   // 직책
 
   salesCases     Case[]          @relation("SalesManager")
   managedCases   Case[]          @relation("CaseManager")

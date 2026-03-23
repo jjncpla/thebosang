@@ -6,6 +6,12 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 
 type User = { id: string; email: string; name: string; role: string; createdAt: string };
+type EditUser = {
+  id: string; role: string;
+  licenseNo: string; birthDate: string; officeAddress: string;
+  officeTel: string; officeFax: string; branchName: string;
+  department: string; jobTitle: string;
+};
 const ROLES = ["ADMIN", "STAFF", "READONLY"];
 
 export default function AdminUsersPage() {
@@ -19,6 +25,10 @@ export default function AdminUsersPage() {
   // 추가 폼 상태
   const [form, setForm] = useState({ email: "", password: "", name: "", role: "READONLY" });
   const [adding, setAdding] = useState(false);
+
+  // 편집 상태
+  const [editUser, setEditUser] = useState<EditUser | null>(null);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (status === "unauthenticated") { router.replace("/login"); return; }
@@ -61,6 +71,31 @@ export default function AdminUsersPage() {
     await fetchUsers();
   }
 
+  async function handleEdit(u: User) {
+    const res = await fetch(`/api/admin/users/${u.id}`);
+    const prof = res.ok ? await res.json() : {};
+    setEditUser({
+      id: u.id, role: u.role,
+      licenseNo: prof.licenseNo ?? "", birthDate: prof.birthDate ?? "",
+      officeAddress: prof.officeAddress ?? "", officeTel: prof.officeTel ?? "",
+      officeFax: prof.officeFax ?? "", branchName: prof.branchName ?? "",
+      department: prof.department ?? "", jobTitle: prof.jobTitle ?? "",
+    });
+  }
+
+  async function handleSaveEdit() {
+    if (!editUser) return;
+    setSaving(true);
+    await fetch(`/api/admin/users/${editUser.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(editUser),
+    });
+    setSaving(false);
+    setEditUser(null);
+    await fetchUsers();
+  }
+
   async function handleDelete(id: string, name: string) {
     if (!confirm(`"${name}" 계정을 삭제하시겠습니까?`)) return;
     const res = await fetch(`/api/admin/users/${id}`, { method: "DELETE" });
@@ -93,6 +128,67 @@ export default function AdminUsersPage() {
         </div>
       </form>
 
+      {/* 편집 모달 */}
+      {editUser && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div style={{ background: "white", borderRadius: 12, padding: 28, width: 480, maxHeight: "90vh", overflowY: "auto", boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}>
+            <h3 style={{ margin: "0 0 16px", fontSize: 16, fontWeight: 700, color: "#374151" }}>계정 편집</h3>
+
+            <div style={{ marginBottom: 12 }}>
+              <label style={s.lbl}>권한</label>
+              <select value={editUser.role} onChange={(e) => setEditUser({ ...editUser, role: e.target.value })} style={s.inp}>
+                {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
+              </select>
+            </div>
+
+            <div style={{ borderTop: "1px solid #eee", paddingTop: 12, marginTop: 12 }}>
+              <div style={{ fontWeight: "bold", fontSize: 13, marginBottom: 8, color: "#006838" }}>노무사 정보 (서식 자동생성용)</div>
+              <div style={{ marginBottom: 8 }}>
+                <label style={s.lbl}>공인노무사 등록번호</label>
+                <input style={s.inp} type="text" value={editUser.licenseNo} onChange={(e) => setEditUser({ ...editUser, licenseNo: e.target.value })} placeholder="예: 2024-0001" />
+              </div>
+              <div style={{ marginBottom: 8 }}>
+                <label style={s.lbl}>생년월일 (YY.MM.DD)</label>
+                <input style={s.inp} type="text" value={editUser.birthDate} onChange={(e) => setEditUser({ ...editUser, birthDate: e.target.value })} placeholder="예: 85.03.12" />
+              </div>
+              <div style={{ marginBottom: 8 }}>
+                <label style={s.lbl}>지사명 (상호)</label>
+                <input style={s.inp} type="text" value={editUser.branchName} onChange={(e) => setEditUser({ ...editUser, branchName: e.target.value })} placeholder="예: 울산지사" />
+              </div>
+              <div style={{ marginBottom: 8 }}>
+                <label style={s.lbl}>사무소 주소</label>
+                <input style={s.inp} type="text" value={editUser.officeAddress} onChange={(e) => setEditUser({ ...editUser, officeAddress: e.target.value })} placeholder="사무소 주소 입력" />
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
+                <div>
+                  <label style={s.lbl}>사무실 전화 (Tel)</label>
+                  <input style={s.inp} type="text" value={editUser.officeTel} onChange={(e) => setEditUser({ ...editUser, officeTel: e.target.value })} placeholder="052-000-0000" />
+                </div>
+                <div>
+                  <label style={s.lbl}>팩스 (Fax)</label>
+                  <input style={s.inp} type="text" value={editUser.officeFax} onChange={(e) => setEditUser({ ...editUser, officeFax: e.target.value })} placeholder="052-000-0000" />
+                </div>
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                <div>
+                  <label style={s.lbl}>부서</label>
+                  <input style={s.inp} type="text" value={editUser.department} onChange={(e) => setEditUser({ ...editUser, department: e.target.value })} placeholder="예: 울산TF" />
+                </div>
+                <div>
+                  <label style={s.lbl}>직책</label>
+                  <input style={s.inp} type="text" value={editUser.jobTitle} onChange={(e) => setEditUser({ ...editUser, jobTitle: e.target.value })} placeholder="예: 노무사" />
+                </div>
+              </div>
+            </div>
+
+            <div style={{ display: "flex", gap: 8, marginTop: 20 }}>
+              <button onClick={handleSaveEdit} disabled={saving} style={{ ...s.addBtn, flex: 1 }}>{saving ? "저장 중…" : "저장"}</button>
+              <button onClick={() => setEditUser(null)} style={{ padding: "9px 16px", fontSize: 13, border: "1px solid #d1d5db", borderRadius: 6, cursor: "pointer", background: "white" }}>취소</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 사용자 목록 */}
       <div style={s.tableWrap}>
         <h2 style={s.sectionTitle}>계정 목록 ({users.length}명)</h2>
@@ -119,9 +215,12 @@ export default function AdminUsersPage() {
                 </td>
                 <td style={s.td}>{new Date(u.createdAt).toLocaleDateString("ko-KR")}</td>
                 <td style={s.td}>
-                  {u.id !== session?.user?.id && (
-                    <button onClick={() => handleDelete(u.id, u.name)} style={s.delBtn}>삭제</button>
-                  )}
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <button onClick={() => handleEdit(u)} style={s.editBtn}>편집</button>
+                    {u.id !== session?.user?.id && (
+                      <button onClick={() => handleDelete(u.id, u.name)} style={s.delBtn}>삭제</button>
+                    )}
+                  </div>
                 </td>
               </tr>
             ))}
@@ -152,4 +251,6 @@ const s = {
   selfRow:      { background: "#eff6ff" } as React.CSSProperties,
   roleSelect:   { padding: "4px 8px", fontSize: 12, border: "1px solid #d1d5db", borderRadius: 4, cursor: "pointer" } as React.CSSProperties,
   delBtn:       { padding: "4px 12px", fontSize: 12, fontWeight: 600, color: "#dc2626", border: "1px solid #fecaca", borderRadius: 4, background: "#fef2f2", cursor: "pointer" } as React.CSSProperties,
+  editBtn:      { padding: "4px 12px", fontSize: 12, fontWeight: 600, color: "#1e40af", border: "1px solid #bfdbfe", borderRadius: 4, background: "#eff6ff", cursor: "pointer" } as React.CSSProperties,
+  lbl:          { display: "block", fontSize: 11, color: "#6b7280", marginBottom: 3 } as React.CSSProperties,
 };

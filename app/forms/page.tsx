@@ -1,0 +1,574 @@
+"use client";
+
+import { useState, useEffect, useCallback, useRef } from "react";
+import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
+
+const FORMS = [
+  { type: "DISABILITY_CLAIM",   label: "장해급여 청구서",                    pages: 1 },
+  { type: "NOISE_WORK_CONFIRM", label: "소음작업 종사 사실 확인서",           pages: 1 },
+  { type: "AGENT_APPOINTMENT",  label: "대리인 선임신고서",                   pages: 1 },
+  { type: "POWER_OF_ATTORNEY",  label: "위임장",                              pages: 1 },
+  { type: "SPECIAL_CLINIC",     label: "특진의료기관 선택 확인서 (특진)",      pages: 1 },
+  { type: "EXPERT_CLINIC",      label: "특진의료기관 선택 확인서 (전문조사)",  pages: 1 },
+  { type: "WORK_HISTORY",       label: "직업력 조사 표준문답서",               pages: 3 },
+];
+
+const FORM_FIELDS: Record<string, { key: string; label: string; x: number; y: number }[]> = {
+  DISABILITY_CLAIM: [
+    { key: "name",       label: "성명 (근로자명)",   x: 155, y: 669 },
+    { key: "birthY1",    label: "생년 Y1",           x: 300, y: 660 },
+    { key: "birthY2",    label: "생년 Y2",           x: 312, y: 660 },
+    { key: "birthY3",    label: "생년 Y3",           x: 324, y: 660 },
+    { key: "birthY4",    label: "생년 Y4",           x: 336, y: 660 },
+    { key: "birthM1",    label: "생월 M1",           x: 352, y: 660 },
+    { key: "birthM2",    label: "생월 M2",           x: 364, y: 660 },
+    { key: "birthD1",    label: "생일 D1",           x: 380, y: 660 },
+    { key: "birthD2",    label: "생일 D2",           x: 392, y: 660 },
+    { key: "address",    label: "주소",              x: 99,  y: 655 },
+    { key: "phone",      label: "연락처",            x: 340, y: 655 },
+    { key: "injY1",      label: "재해일 y1",         x: 115, y: 630 },
+    { key: "injY2",      label: "재해일 y2",         x: 127, y: 630 },
+    { key: "injY3",      label: "재해일 y3",         x: 139, y: 630 },
+    { key: "injY4",      label: "재해일 y4",         x: 151, y: 630 },
+    { key: "injM1",      label: "재해월 m1",         x: 167, y: 630 },
+    { key: "injM2",      label: "재해월 m2",         x: 179, y: 630 },
+    { key: "injD1",      label: "재해일 d1",         x: 215, y: 630 },
+    { key: "injD2",      label: "재해일 d2",         x: 227, y: 630 },
+    { key: "todayYear",  label: "오늘 연도",          x: 390, y: 333 },
+    { key: "todayMonth", label: "오늘 월",            x: 440, y: 333 },
+    { key: "todayDay",   label: "오늘 일",            x: 475, y: 333 },
+    { key: "ptName",     label: "청구인 성명",        x: 310, y: 321 },
+    { key: "ptPhone",    label: "청구인 연락처",       x: 450, y: 321 },
+    { key: "mgrName",    label: "대리인 성명",        x: 310, y: 307 },
+    { key: "mgrTel",     label: "대리인 Tel",         x: 450, y: 307 },
+    { key: "kwc",        label: "관할공단",           x: 270, y: 86  },
+  ],
+  NOISE_WORK_CONFIRM: [
+    { key: "name",    label: "성명",          x: 175, y: 686 },
+    { key: "ssn1",    label: "주민번호 1",    x: 203, y: 664 },
+    { key: "ssn2",    label: "주민번호 2",    x: 218, y: 664 },
+    { key: "ssn3",    label: "주민번호 3",    x: 233, y: 664 },
+    { key: "ssn4",    label: "주민번호 4",    x: 248, y: 664 },
+    { key: "ssn5",    label: "주민번호 5",    x: 263, y: 664 },
+    { key: "ssn6",    label: "주민번호 6",    x: 278, y: 664 },
+    { key: "ssn7",    label: "주민번호 7",    x: 390, y: 664 },
+    { key: "address", label: "주소",          x: 115, y: 638 },
+    { key: "injY1",   label: "재해일 y1",     x: 206, y: 560 },
+    { key: "injY2",   label: "재해일 y2",     x: 218, y: 560 },
+    { key: "injY3",   label: "재해일 y3",     x: 230, y: 560 },
+    { key: "injY4",   label: "재해일 y4",     x: 242, y: 560 },
+    { key: "injM1",   label: "재해월 m1",     x: 258, y: 560 },
+    { key: "injM2",   label: "재해월 m2",     x: 270, y: 560 },
+    { key: "injD1",   label: "재해일 d1",     x: 310, y: 560 },
+    { key: "injD2",   label: "재해일 d2",     x: 322, y: 560 },
+    { key: "todayYear",  label: "오늘 연도",   x: 215, y: 136 },
+    { key: "todayMonth", label: "오늘 월",     x: 270, y: 136 },
+    { key: "todayDay",   label: "오늘 일",     x: 320, y: 136 },
+    { key: "ptName",  label: "청구인 성명",    x: 250, y: 110 },
+    { key: "ptPhone", label: "청구인 연락처",  x: 415, y: 110 },
+    { key: "mgrName", label: "대리인 성명",    x: 250, y: 98  },
+    { key: "mgrTel",  label: "대리인 Tel",     x: 415, y: 98  },
+  ],
+  AGENT_APPOINTMENT: [
+    { key: "caseTitle",  label: "사건명",           x: 175, y: 656 },
+    { key: "name",       label: "성명 (근로자)",     x: 175, y: 621 },
+    { key: "birthDate",  label: "생년월일",          x: 400, y: 621 },
+    { key: "address",    label: "주소 (근로자)",     x: 175, y: 581 },
+    { key: "phone",      label: "연락처 (근로자)",   x: 350, y: 565 },
+    { key: "mgrBranch",  label: "상호 (지사명)",     x: 175, y: 507 },
+    { key: "mgrLicense", label: "등록번호",          x: 450, y: 491 },
+    { key: "mgrName",    label: "대리인 성명",       x: 175, y: 454 },
+    { key: "mgrJobTitle",label: "대리인 직책",       x: 430, y: 454 },
+    { key: "mgrAddress", label: "대리인 주소",       x: 175, y: 414 },
+    { key: "mgrHP",      label: "대리인 H.P",        x: 230, y: 391 },
+    { key: "mgrTel",     label: "대리인 Tel",        x: 335, y: 391 },
+    { key: "mgrFax",     label: "대리인 Fax",        x: 450, y: 391 },
+    { key: "scope",      label: "대리의 범위",       x: 175, y: 354 },
+    { key: "injDate",    label: "선임일 (재해일)",   x: 175, y: 310 },
+    { key: "todayYear",  label: "오늘 연도",         x: 355, y: 195 },
+    { key: "todayMonth", label: "오늘 월",           x: 405, y: 195 },
+    { key: "todayDay",   label: "오늘 일",           x: 450, y: 195 },
+    { key: "ptName",     label: "신고인 성명",       x: 340, y: 163 },
+    { key: "kwc",        label: "관할공단",          x: 270, y: 131 },
+  ],
+  POWER_OF_ATTORNEY: [
+    { key: "mgrBranch",  label: "법인명 (지사)",     x: 220, y: 649 },
+    { key: "mgrAddress", label: "소재지",            x: 220, y: 630 },
+    { key: "mgrTel",     label: "전화",              x: 220, y: 612 },
+    { key: "mgrFax",     label: "FAX",               x: 220, y: 595 },
+    { key: "mgrLicense", label: "등록번호",          x: 270, y: 577 },
+    { key: "mgrName",    label: "성명 (노무사)",     x: 220, y: 559 },
+    { key: "todayYear",  label: "오늘 연도",         x: 355, y: 273 },
+    { key: "todayMonth", label: "오늘 월",           x: 403, y: 273 },
+    { key: "todayDay",   label: "오늘 일",           x: 460, y: 273 },
+    { key: "name",       label: "성명 (근로자)",     x: 230, y: 226 },
+    { key: "ssn",        label: "주민번호",          x: 230, y: 197 },
+    { key: "address",    label: "주소 (근로자)",     x: 230, y: 169 },
+  ],
+  SPECIAL_CLINIC: [
+    { key: "name",       label: "성명",              x: 100, y: 686 },
+    { key: "ssn1",       label: "주민번호 1",        x: 195, y: 671 },
+    { key: "ssn2",       label: "주민번호 2",        x: 208, y: 671 },
+    { key: "ssn3",       label: "주민번호 3",        x: 221, y: 671 },
+    { key: "ssn4",       label: "주민번호 4",        x: 234, y: 671 },
+    { key: "ssn5",       label: "주민번호 5",        x: 247, y: 671 },
+    { key: "ssn6",       label: "주민번호 6",        x: 260, y: 671 },
+    { key: "ssn7",       label: "주민번호 7",        x: 278, y: 671 },
+    { key: "injY1",      label: "재해일 y1",         x: 415, y: 671 },
+    { key: "injY2",      label: "재해일 y2",         x: 428, y: 671 },
+    { key: "injY3",      label: "재해일 y3",         x: 441, y: 671 },
+    { key: "injY4",      label: "재해일 y4",         x: 454, y: 671 },
+    { key: "injM1",      label: "재해월 m1",         x: 470, y: 671 },
+    { key: "injM2",      label: "재해월 m2",         x: 483, y: 671 },
+    { key: "injD1",      label: "재해일 d1",         x: 522, y: 671 },
+    { key: "injD2",      label: "재해일 d2",         x: 535, y: 671 },
+    { key: "address",    label: "주소",              x: 100, y: 647 },
+    { key: "phone",      label: "연락처",            x: 440, y: 647 },
+    { key: "clinicName", label: "특진의료기관명",    x: 145, y: 518 },
+    { key: "clinicAddr", label: "특진의료기관 주소", x: 290, y: 518 },
+    { key: "todayYear",  label: "오늘 연도",         x: 335, y: 187 },
+    { key: "todayMonth", label: "오늘 월",           x: 368, y: 187 },
+    { key: "todayDay",   label: "오늘 일",           x: 400, y: 187 },
+    { key: "ptName",     label: "작성인 성명",       x: 145, y: 175 },
+    { key: "ptPhone",    label: "작성인 연락처",     x: 460, y: 175 },
+    { key: "mgrName",    label: "대리인 성명",       x: 145, y: 157 },
+    { key: "mgrTel",     label: "대리인 Tel",        x: 360, y: 157 },
+    { key: "kwc",        label: "관할공단",          x: 165, y: 60  },
+  ],
+  EXPERT_CLINIC: [
+    { key: "name",       label: "성명",              x: 100, y: 686 },
+    { key: "ssn1",       label: "주민번호 1",        x: 195, y: 671 },
+    { key: "ssn2",       label: "주민번호 2",        x: 208, y: 671 },
+    { key: "ssn3",       label: "주민번호 3",        x: 221, y: 671 },
+    { key: "ssn4",       label: "주민번호 4",        x: 234, y: 671 },
+    { key: "ssn5",       label: "주민번호 5",        x: 247, y: 671 },
+    { key: "ssn6",       label: "주민번호 6",        x: 260, y: 671 },
+    { key: "ssn7",       label: "주민번호 7",        x: 278, y: 671 },
+    { key: "injY1",      label: "재해일 y1",         x: 415, y: 671 },
+    { key: "injY2",      label: "재해일 y2",         x: 428, y: 671 },
+    { key: "injY3",      label: "재해일 y3",         x: 441, y: 671 },
+    { key: "injY4",      label: "재해일 y4",         x: 454, y: 671 },
+    { key: "injM1",      label: "재해월 m1",         x: 470, y: 671 },
+    { key: "injM2",      label: "재해월 m2",         x: 483, y: 671 },
+    { key: "injD1",      label: "재해일 d1",         x: 522, y: 671 },
+    { key: "injD2",      label: "재해일 d2",         x: 535, y: 671 },
+    { key: "address",    label: "주소",              x: 100, y: 647 },
+    { key: "phone",      label: "연락처",            x: 440, y: 647 },
+    { key: "clinicName", label: "전문조사기관명",    x: 145, y: 518 },
+    { key: "clinicAddr", label: "전문조사기관 주소", x: 290, y: 518 },
+    { key: "todayYear",  label: "오늘 연도",         x: 335, y: 187 },
+    { key: "todayMonth", label: "오늘 월",           x: 368, y: 187 },
+    { key: "todayDay",   label: "오늘 일",           x: 400, y: 187 },
+    { key: "ptName",     label: "작성인 성명",       x: 145, y: 175 },
+    { key: "ptPhone",    label: "작성인 연락처",     x: 460, y: 175 },
+    { key: "mgrName",    label: "대리인 성명",       x: 145, y: 157 },
+    { key: "mgrTel",     label: "대리인 Tel",        x: 360, y: 157 },
+    { key: "kwc",        label: "관할공단",          x: 165, y: 60  },
+  ],
+  WORK_HISTORY: [
+    { key: "name",       label: "성명 (p1)",         x: 156, y: 632 },
+    { key: "phone",      label: "연락처 (p1)",       x: 156, y: 604 },
+    { key: "address",    label: "주소 (p1)",         x: 156, y: 576 },
+    { key: "totalDur",   label: "합계 근무기간 (p2)", x: 430, y: 595 },
+    { key: "todayYear",  label: "오늘 연도 (p3)",    x: 222, y: 302 },
+    { key: "todayMonth", label: "오늘 월 (p3)",      x: 276, y: 302 },
+    { key: "todayDay",   label: "오늘 일 (p3)",      x: 318, y: 302 },
+    { key: "ptName",     label: "청구인 성명 (p3)",  x: 185, y: 257 },
+    { key: "ptPhone",    label: "청구인 연락처 (p3)", x: 440, y: 257 },
+    { key: "mgrName",    label: "대리인 성명 (p3)",  x: 185, y: 214 },
+    { key: "mgrTel",     label: "대리인 Tel (p3)",   x: 440, y: 214 },
+  ],
+};
+
+type FieldEntry = { key: string; label: string; x: number; y: number };
+
+// pdf-lib pt 좌표계 (좌하단 원점, A4=595×841)
+const PDF_W = 595;
+const PDF_H = 841;
+
+export default function FormsPage() {
+  const { data: session, status } = useSession();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (status === "unauthenticated") { router.replace("/login"); return; }
+    if (status === "authenticated" && (session.user as { role?: string }).role !== "ADMIN") { router.replace("/"); return; }
+  }, [status, session, router]);
+
+  const [selectedForm, setSelectedForm]   = useState<string | null>(null);
+  const [previewPage, setPreviewPage]     = useState(1);
+  const [selectedField, setSelectedField] = useState<FieldEntry | null>(null);
+  const [coordFields, setCoordFields]     = useState<Record<string, FieldEntry[]>>({});
+  const [coordOutput, setCoordOutput]     = useState("");
+
+  // PNG 미리보기 상태
+  const [imgSize, setImgSize]             = useState<{ w: number; h: number } | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewType, setPreviewType]     = useState<"png" | "pdf">("png");
+
+  const imgRef       = useRef<HTMLImageElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // 서식 선택
+  const handleSelectForm = (type: string) => {
+    setSelectedForm(type);
+    setPreviewPage(1);
+    setSelectedField(null);
+    setImgSize(null);
+    setPreviewType("png");
+    if (!coordFields[type]) {
+      setCoordFields(prev => ({
+        ...prev,
+        [type]: (FORM_FIELDS[type] ?? []).map(f => ({ ...f })),
+      }));
+    }
+  };
+
+  const updateCoordOutput = useCallback((form: string, fields: FieldEntry[]) => {
+    const lines = fields.map(f => `{ key: '${f.key}', label: '${f.label}', x: ${f.x}, y: ${f.y} },`).join("\n");
+    setCoordOutput(lines);
+  }, []);
+
+  const updateFieldCoord = useCallback((axis: "x" | "y", value: number) => {
+    setSelectedField(prev => {
+      if (!prev) return prev;
+      const updated = { ...prev, [axis]: value };
+      setCoordFields(cf => {
+        if (!selectedForm) return cf;
+        const newFields = (cf[selectedForm] ?? []).map(f => f.key === updated.key ? updated : f);
+        updateCoordOutput(selectedForm, newFields);
+        return { ...cf, [selectedForm]: newFields };
+      });
+      return updated;
+    });
+  }, [selectedForm, updateCoordOutput]);
+
+  // 필드 선택 + 컨테이너 포커스
+  const handleSelectField = (key: string) => {
+    if (!selectedForm) return;
+    const f = coordFields[selectedForm]?.find(f => f.key === key) ?? null;
+    setSelectedField(f);
+    setTimeout(() => containerRef.current?.focus(), 50);
+  };
+
+  // 이미지 클릭 → 마커 이동
+  const handleImageClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!selectedField || !imgRef.current || !imgSize) return;
+    const rect = imgRef.current.getBoundingClientRect();
+    const clickX = e.clientX - rect.left;
+    const clickY = e.clientY - rect.top;
+    const scaleX = imgSize.w / rect.width;
+    const scaleY = imgSize.h / rect.height;
+    const pdfX = Math.round(clickX * scaleX * (PDF_W / imgSize.w));
+    const pdfY = Math.round(PDF_H - (clickY * scaleY * (PDF_H / imgSize.h)));
+    updateFieldCoord("x", pdfX);
+    updateFieldCoord("y", pdfY);
+  };
+
+  // 방향키 핸들러 (컨테이너 div)
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (!selectedField) return;
+    const arrows = ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"];
+    if (!arrows.includes(e.key)) return;
+    e.preventDefault();
+    const step = e.shiftKey ? 5 : 1;
+    switch (e.key) {
+      case "ArrowLeft":  updateFieldCoord("x", selectedField.x - step); break;
+      case "ArrowRight": updateFieldCoord("x", selectedField.x + step); break;
+      case "ArrowUp":    updateFieldCoord("y", selectedField.y + step); break;
+      case "ArrowDown":  updateFieldCoord("y", selectedField.y - step); break;
+    }
+  };
+
+  const handleLoadCoords = () => {
+    if (!selectedForm) return;
+    const fields = coordFields[selectedForm] ?? (FORM_FIELDS[selectedForm] ?? []).map(f => ({ ...f }));
+    setCoordFields(prev => ({ ...prev, [selectedForm]: fields }));
+    updateCoordOutput(selectedForm, fields);
+  };
+
+  const handleCopyCoords = () => {
+    navigator.clipboard.writeText(coordOutput);
+    alert("좌표가 클립보드에 복사되었습니다.");
+  };
+
+  const handleBlankPrint = async (type: string, label: string) => {
+    const res = await fetch(`/api/forms/blank?type=${type}`);
+    if (!res.ok) { alert("공란 인쇄 실패"); return; }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = `[공란]${label}.pdf`; a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  if (status === "loading") return <div style={{ padding: 40, color: "#9ca3af" }}>불러오는 중…</div>;
+
+  const currentFormMeta = FORMS.find(f => f.type === selectedForm);
+  const previewUrl = selectedForm
+    ? `/api/forms/preview?type=${selectedForm}&page=${previewPage}&t=${Date.now()}`
+    : "";
+
+  return (
+    <div style={{ display: "flex", height: "calc(100vh - 56px)", fontFamily: "'Malgun Gothic','Apple SD Gothic Neo','Segoe UI',sans-serif", fontSize: 13 }}>
+
+      {/* ── 좌측 패널: 서식 목록 ── */}
+      <div style={{ width: 260, borderRight: "1px solid #e5e7eb", padding: 16, overflowY: "auto", background: "#fafafa", flexShrink: 0 }}>
+        <h2 style={{ fontSize: 15, fontWeight: "bold", marginBottom: 14, color: "#111827" }}>서식 목록</h2>
+        {FORMS.map((form) => (
+          <div
+            key={form.type}
+            onClick={() => handleSelectForm(form.type)}
+            style={{
+              padding: 10, marginBottom: 8, borderRadius: 6,
+              border: `1px solid ${selectedForm === form.type ? "#29ABE2" : "#e5e7eb"}`,
+              backgroundColor: selectedForm === form.type ? "#e8f7fd" : "white",
+              cursor: "pointer",
+            }}
+          >
+            <div style={{ fontWeight: "bold", fontSize: 12, color: "#111827" }}>{form.label}</div>
+            <div style={{ fontSize: 10, color: "#9ca3af", marginTop: 2 }}>{form.pages}페이지</div>
+            <button
+              onClick={(e) => { e.stopPropagation(); handleBlankPrint(form.type, form.label); }}
+              style={{ marginTop: 6, padding: "3px 8px", fontSize: 11, backgroundColor: "#f3f4f6", border: "1px solid #d1d5db", borderRadius: 4, cursor: "pointer", color: "#374151" }}
+            >
+              🖨️ 공란 인쇄
+            </button>
+          </div>
+        ))}
+      </div>
+
+      {/* ── 우측 패널: 에디터 ── */}
+      <div style={{ flex: 1, padding: 12, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+          <h2 style={{ fontSize: 15, fontWeight: "bold", margin: 0, color: "#111827" }}>
+            좌표 에디터{selectedForm ? ` — ${currentFormMeta?.label}` : ""}
+          </h2>
+          {selectedForm && (
+            <button onClick={handleLoadCoords} style={{ padding: "3px 8px", fontSize: 11, border: "1px solid #d1d5db", borderRadius: 4, cursor: "pointer", background: "white" }}>
+              좌표 불러오기
+            </button>
+          )}
+        </div>
+
+        {!selectedForm ? (
+          <div style={{ color: "#9ca3af", fontSize: 13, paddingTop: 60, textAlign: "center" }}>
+            좌측에서 서식을 선택하세요.
+          </div>
+        ) : (
+          <div style={{ display: "flex", gap: 12, flex: 1, overflow: "hidden" }}>
+
+            {/* ── PDF 미리보기 컨테이너 ── */}
+            <div
+              ref={containerRef}
+              style={{
+                position: "relative",
+                flex: 1,
+                border: "1px solid #d1d5db",
+                borderRadius: 6,
+                backgroundColor: "#666",
+                overflow: "auto",
+                display: "flex",
+                alignItems: "flex-start",
+                justifyContent: "center",
+                outline: "none",
+              }}
+              tabIndex={0}
+              onKeyDown={handleKeyDown}
+              onClick={handleImageClick}
+            >
+              {previewType === "png" ? (
+                <>
+                  <img
+                    ref={imgRef}
+                    src={previewUrl}
+                    alt="서식 미리보기"
+                    style={{
+                      display: "block",
+                      maxWidth: "100%",
+                      cursor: selectedField ? "crosshair" : "default",
+                      userSelect: "none",
+                    }}
+                    onLoad={(e) => {
+                      const img = e.currentTarget;
+                      setImgSize({ w: img.naturalWidth, h: img.naturalHeight });
+                      setPreviewLoading(false);
+                    }}
+                    onLoadStart={() => setPreviewLoading(true)}
+                    onError={() => setPreviewType("pdf")}
+                    draggable={false}
+                  />
+
+                  {/* 마커 오버레이 */}
+                  {selectedField && imgSize && imgRef.current && (() => {
+                    const rendered = imgRef.current.getBoundingClientRect();
+                    const scaleX = rendered.width / imgSize.w;
+                    const scaleY = rendered.height / imgSize.h;
+                    const pxPerPtX = imgSize.w / PDF_W;
+                    const pxPerPtY = imgSize.h / PDF_H;
+                    const markerX = selectedField.x * pxPerPtX * scaleX;
+                    const markerY = (PDF_H - selectedField.y) * pxPerPtY * scaleY;
+
+                    return (
+                      <div
+                        style={{
+                          position: "absolute",
+                          left: imgRef.current.offsetLeft,
+                          top: imgRef.current.offsetTop,
+                          width: rendered.width,
+                          height: rendered.height,
+                          pointerEvents: "none",
+                        }}
+                      >
+                        {/* 십자선 */}
+                        <div style={{ position: "absolute", left: markerX - 10, top: markerY - 10, width: 20, height: 20, pointerEvents: "none" }}>
+                          <div style={{ position: "absolute", left: 0, top: 9, width: 20, height: 2, backgroundColor: "#FF0000", opacity: 0.9 }} />
+                          <div style={{ position: "absolute", left: 9, top: 0, width: 2, height: 20, backgroundColor: "#FF0000", opacity: 0.9 }} />
+                        </div>
+                        {/* 라벨 */}
+                        <div style={{
+                          position: "absolute",
+                          left: markerX + 12,
+                          top: markerY - 18,
+                          backgroundColor: "rgba(220,38,38,0.9)",
+                          color: "white",
+                          fontSize: 10,
+                          padding: "1px 5px",
+                          borderRadius: 3,
+                          whiteSpace: "nowrap",
+                          pointerEvents: "none",
+                        }}>
+                          {selectedField.label} ({selectedField.x}, {selectedField.y})
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </>
+              ) : (
+                // fallback: pdftoppm 없는 환경
+                <iframe
+                  key={`${selectedForm}-${previewPage}`}
+                  src={`/api/forms/blank?type=${selectedForm}`}
+                  style={{ flex: 1, border: "none", width: "100%", height: "100%", minHeight: 600 }}
+                  title="서식 미리보기"
+                />
+              )}
+
+              {/* 로딩 오버레이 */}
+              {previewLoading && previewType === "png" && (
+                <div style={{
+                  position: "absolute", inset: 0,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  backgroundColor: "rgba(255,255,255,0.7)",
+                  fontSize: 14, color: "#666",
+                }}>
+                  로딩 중...
+                </div>
+              )}
+
+              {/* 페이지 네비게이션 */}
+              {(currentFormMeta?.pages ?? 1) > 1 && (
+                <div style={{
+                  position: "absolute", bottom: 8, left: "50%", transform: "translateX(-50%)",
+                  display: "flex", gap: 8, alignItems: "center",
+                  background: "rgba(255,255,255,0.92)", padding: "4px 14px", borderRadius: 20, border: "1px solid #e5e7eb",
+                }}>
+                  <button onClick={(e) => { e.stopPropagation(); setPreviewPage(p => Math.max(1, p - 1)); }} disabled={previewPage <= 1} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 14, color: previewPage <= 1 ? "#d1d5db" : "#374151" }}>◀</button>
+                  <span style={{ fontSize: 12, color: "#374151" }}>{previewPage} / {currentFormMeta?.pages ?? 1}</span>
+                  <button onClick={(e) => { e.stopPropagation(); setPreviewPage(p => Math.min(currentFormMeta?.pages ?? 1, p + 1)); }} disabled={previewPage >= (currentFormMeta?.pages ?? 1)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 14, color: previewPage >= (currentFormMeta?.pages ?? 1) ? "#d1d5db" : "#374151" }}>▶</button>
+                </div>
+              )}
+
+              {/* 힌트 */}
+              {selectedField && previewType === "png" && (
+                <div style={{ position: "absolute", top: 8, left: "50%", transform: "translateX(-50%)", background: "rgba(0,0,0,0.6)", color: "white", fontSize: 10, padding: "2px 8px", borderRadius: 10, pointerEvents: "none", whiteSpace: "nowrap" }}>
+                  클릭으로 마커 이동 · 방향키(Shift: 5pt)로 미세 조정
+                </div>
+              )}
+            </div>
+
+            {/* ── 우측 좌표 패널 ── */}
+            <div style={{ width: 240, display: "flex", flexDirection: "column", gap: 10, overflowY: "auto", flexShrink: 0 }}>
+
+              {/* 필드 선택 */}
+              <div>
+                <label style={{ fontSize: 11, fontWeight: "bold", display: "block", marginBottom: 4, color: "#374151" }}>필드 선택</label>
+                <select
+                  value={selectedField?.key ?? ""}
+                  onChange={(e) => handleSelectField(e.target.value)}
+                  style={{ width: "100%", padding: "6px 8px", fontSize: 12, border: "1px solid #d1d5db", borderRadius: 4 }}
+                >
+                  <option value="">-- 필드 선택 --</option>
+                  {(coordFields[selectedForm] ?? []).map((f) => (
+                    <option key={f.key} value={f.key}>{f.label}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* 선택 필드 좌표 */}
+              {selectedField && (
+                <div style={{ padding: 10, border: "1px solid #29ABE2", borderRadius: 6, fontSize: 12, backgroundColor: "#e8f7fd" }}>
+                  <div style={{ fontWeight: "bold", marginBottom: 6, color: "#29ABE2" }}>
+                    📍 {selectedField.label}
+                  </div>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <div>
+                      <label style={{ fontSize: 11, color: "#666", display: "block", marginBottom: 2 }}>x (pt)</label>
+                      <input
+                        type="number"
+                        value={selectedField.x}
+                        onChange={(e) => updateFieldCoord("x", Number(e.target.value))}
+                        style={{ width: 70, padding: "4px 6px", fontSize: 12, border: "1px solid #d1d5db", borderRadius: 4, display: "block" }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: 11, color: "#666", display: "block", marginBottom: 2 }}>y (pt)</label>
+                      <input
+                        type="number"
+                        value={selectedField.y}
+                        onChange={(e) => updateFieldCoord("y", Number(e.target.value))}
+                        style={{ width: 70, padding: "4px 6px", fontSize: 12, border: "1px solid #d1d5db", borderRadius: 4, display: "block" }}
+                      />
+                    </div>
+                  </div>
+                  <div style={{ marginTop: 6, fontSize: 10, color: "#888" }}>
+                    이미지 클릭 또는 방향키(Shift: 5pt)로 이동
+                  </div>
+                </div>
+              )}
+
+              {/* 전체 좌표 복사 */}
+              <button
+                onClick={handleCopyCoords}
+                style={{ padding: "7px 10px", fontSize: 12, backgroundColor: "#8DC63F", color: "white", border: "none", borderRadius: 4, cursor: "pointer", fontWeight: 600 }}
+              >
+                📋 전체 좌표 복사
+              </button>
+
+              {/* 좌표 출력 */}
+              <textarea
+                value={coordOutput}
+                readOnly
+                rows={12}
+                style={{ fontSize: 10, fontFamily: "monospace", resize: "vertical", padding: 8, border: "1px solid #e5e7eb", borderRadius: 4, color: "#374151", background: "#f9fafb" }}
+                placeholder="필드를 선택하고 좌표를 입력하면 여기에 출력됩니다."
+              />
+
+              {/* 안내 */}
+              <div style={{ fontSize: 10, color: "#9ca3af", padding: "8px 10px", background: "#f9fafb", borderRadius: 4, border: "1px solid #f3f4f6" }}>
+                <div style={{ fontWeight: 600, marginBottom: 4 }}>사용 방법</div>
+                <div>1. 서식 선택 → PNG 미리보기 표시</div>
+                <div>2. 필드 선택 → 빨간 마커 표시</div>
+                <div>3. 이미지 클릭 → 마커 이동</div>
+                <div>4. 방향키(Shift: 5pt) 미세 조정</div>
+                <div>5. 전체 좌표 복사 → PDF API에 적용</div>
+                <div style={{ marginTop: 4, color: "#d97706" }}>※ 좌하단 원점, A4 = 595×841pt</div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

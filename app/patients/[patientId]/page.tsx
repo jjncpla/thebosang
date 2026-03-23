@@ -151,6 +151,7 @@ type CaseData = {
   receptionDate: string | null;
   isOneStop: boolean;
   memo: string | null;
+  kwcOfficeName: string | null;
   workHistory: WorkHistoryItem[] | null;
   workHistoryDaily: WorkHistoryDailyEntry[] | null;
   workHistoryRaw: WorkHistoryRaw | null;
@@ -656,6 +657,12 @@ function HearingLossTab({ caseId, initial }: { caseId: string; initial: HearingL
             </div>
 
             <div style={{ marginTop: 16 }}><SaveBar /></div>
+
+            {/* 접수 서식 생성 */}
+            <div style={{ marginTop: 16, padding: 16, backgroundColor: "#f0faf4", borderRadius: 8, border: "1px solid #8DC63F" }}>
+              <div style={{ fontWeight: "bold", fontSize: 14, marginBottom: 12, color: "#006838" }}>📄 접수 서식 생성</div>
+              <FormButtons caseId={caseId} />
+            </div>
           </div>
         )}
       </div>
@@ -1148,19 +1155,65 @@ function PneumoconiosisTab({ caseId }: { caseId: string }) {
 }
 
 /* ── 서식 생성 ── */
-function FormTab({ caseId }: { caseId: string }) {
-  const forms = ["요양급여신청서", "장해급여청구서", "간병급여청구서", "휴업급여청구서", "유족급여청구서", "장의비청구서"];
+const FORMS = [
+  { type: "DISABILITY_CLAIM",   label: "장해급여 청구서" },
+  { type: "NOISE_WORK_CONFIRM", label: "소음작업 종사 사실 확인서" },
+  { type: "AGENT_APPOINTMENT",  label: "대리인 선임신고서" },
+  { type: "POWER_OF_ATTORNEY",  label: "위임장" },
+  { type: "SPECIAL_CLINIC",     label: "특진의료기관 선택 확인서 (특진)" },
+  { type: "EXPERT_CLINIC",      label: "특진의료기관 선택 확인서 (전문조사)" },
+  { type: "WORK_HISTORY",       label: "직업력 조사 표준문답서" },
+];
+
+function FormButtons({ caseId }: { caseId: string }) {
+  const [loading, setLoading] = useState<string | null>(null);
+
+  const handleDownload = async (type: string, label: string) => {
+    setLoading(type);
+    try {
+      const res = await fetch(`/api/cases/${caseId}/forms?type=${type}`);
+      if (!res.ok) throw new Error("생성 실패");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${label}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      alert("서식 생성에 실패했습니다.");
+    } finally {
+      setLoading(null);
+    }
+  };
+
+  const handleDownloadAll = async () => {
+    for (const form of FORMS) {
+      await handleDownload(form.type, form.label);
+    }
+  };
+
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
-      {forms.map((name) => (
-        <div key={name} style={{ background: "white", border: "1px solid #e5e7eb", borderRadius: 10, padding: "20px 16px", display: "flex", flexDirection: "column", gap: 12, boxShadow: "0 1px 3px rgba(0,0,0,0.05)" }}>
-          <div style={{ fontSize: 24, textAlign: "center" }}>📄</div>
-          <div style={{ fontSize: 13, fontWeight: 600, color: "#374151", textAlign: "center" }}>{name}</div>
-          <a href={`/api/cases/${caseId}/generate-disability-claim`} style={{ display: "block", background: "#29ABE2", color: "white", border: "none", borderRadius: 6, padding: "7px 0", fontSize: 12, fontWeight: 600, textAlign: "center", textDecoration: "none", cursor: "pointer" }}>
-            PDF 생성
-          </a>
-        </div>
-      ))}
+    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      <button
+        onClick={handleDownloadAll}
+        disabled={!!loading}
+        style={{ padding: "10px 16px", backgroundColor: "#006838", color: "white", border: "none", borderRadius: 6, cursor: loading ? "not-allowed" : "pointer", fontWeight: "bold", fontSize: 14, opacity: loading ? 0.7 : 1 }}
+      >
+        {loading ? "생성 중..." : "📄 접수 서식 일괄 생성"}
+      </button>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+        {FORMS.map((form) => (
+          <button
+            key={form.type}
+            onClick={() => handleDownload(form.type, form.label)}
+            disabled={!!loading}
+            style={{ padding: "8px 12px", backgroundColor: loading === form.type ? "#29ABE2" : "#f5f5f5", color: loading === form.type ? "white" : "#333", border: "1px solid #ddd", borderRadius: 4, cursor: loading ? "not-allowed" : "pointer", fontSize: 12, textAlign: "left", opacity: loading && loading !== form.type ? 0.5 : 1 }}
+          >
+            {loading === form.type ? "⏳ " : "📋 "}{form.label}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
@@ -1185,6 +1238,7 @@ function CaseCommonInfoSection({ caseItem, onUpdated }: { caseItem: CaseData; on
     receptionDate: toInputDate(caseItem.receptionDate),
     isOneStop: caseItem.isOneStop,
     memo: caseItem.memo ?? "",
+    kwcOfficeName: caseItem.kwcOfficeName ?? "",
   });
   const [closedReason, setClosedReason] = useState(caseItem.closedReason ?? "");
   const [savingClosed, setSavingClosed] = useState(false);
@@ -1239,6 +1293,7 @@ function CaseCommonInfoSection({ caseItem, onUpdated }: { caseItem: CaseData; on
           salesRoute, contractDate: form.contractDate || null,
           receptionDate: form.receptionDate || null,
           isOneStop: form.isOneStop, memo: form.memo,
+          kwcOfficeName: form.kwcOfficeName || null,
         }),
       });
       if (!res.ok) throw new Error();
@@ -1303,6 +1358,7 @@ function CaseCommonInfoSection({ caseItem, onUpdated }: { caseItem: CaseData; on
                   ["원스톱", caseItem.isOneStop ? "예" : "아니오"],
                   ["약정일", formatDate(caseItem.contractDate)],
                   ["접수일", formatDate(caseItem.receptionDate)],
+                  ["관할 공단", caseItem.kwcOfficeName ?? "-"],
                 ] as [string, string][]).map(([label, value]) => (
                   <div key={label} style={{ display: "flex", gap: 8, borderBottom: "1px solid #f9fafb", padding: "7px 12px", background: "white" }}>
                     <span style={{ fontSize: 11, color: "#9ca3af", width: 56, flexShrink: 0 }}>{label}</span>
@@ -1411,6 +1467,11 @@ function CaseCommonInfoSection({ caseItem, onUpdated }: { caseItem: CaseData; on
                 <label style={{ fontSize: 11, color: "#9ca3af" }}>원스톱</label>
                 <input type="checkbox" checked={form.isOneStop} onChange={(e) => setForm({ ...form, isOneStop: e.target.checked })} />
               </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                <label style={{ fontSize: 11, color: "#9ca3af" }}>관할 공단</label>
+                <input style={inputStyle} value={form.kwcOfficeName} placeholder="예: 울산, 부산동부" onChange={(e) => setForm({ ...form, kwcOfficeName: e.target.value })} />
+              </div>
+              <div />
               <div style={{ gridColumn: "1 / -1", display: "flex", flexDirection: "column", gap: 3 }}>
                 <label style={{ fontSize: 11, color: "#9ca3af" }}>메모</label>
                 <textarea style={{ ...inputStyle, minHeight: 60, resize: "vertical" }} value={form.memo} onChange={(e) => setForm({ ...form, memo: e.target.value })} />
@@ -1591,10 +1652,6 @@ function CaseTabContent({ caseItem, onCaseUpdated }: { caseItem: CaseData; onCas
     <div>
       <CaseCommonInfoSection caseItem={caseItem} onUpdated={onCaseUpdated} />
       <CaseDetailPanel caseItem={caseItem} />
-      <div style={{ background: "white", borderRadius: 10, border: "1px solid #e5e7eb", padding: 20, boxShadow: "0 1px 3px rgba(0,0,0,0.05)" }}>
-        <div style={{ fontSize: 11, fontWeight: 700, color: "#6b7280", letterSpacing: 1, marginBottom: 16 }}>서식 생성</div>
-        <FormTab caseId={caseItem.id} />
-      </div>
     </div>
   );
 }

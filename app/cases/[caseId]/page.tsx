@@ -138,6 +138,7 @@ type CaseData = {
   receptionDate: string | null;
   isOneStop: boolean;
   memo: string | null;
+  kwcOfficeName: string | null;
   createdAt: string;
   updatedAt: string;
   hearingLoss: HearingLossDetail | null;
@@ -1539,23 +1540,6 @@ function BasicInfoTab({ caseData, onUpdated }: { caseData: CaseData; onUpdated: 
   );
 }
 
-/* ── 서식 생성 탭 ── */
-function FormTab({ caseId }: { caseId: string }) {
-  const forms = ["요양급여신청서", "장해급여청구서", "간병급여청구서", "휴업급여청구서", "유족급여청구서", "장의비청구서"];
-  return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
-      {forms.map((name) => (
-        <div key={name} style={{ background: "white", border: "1px solid #e5e7eb", borderRadius: 10, padding: "20px 16px", display: "flex", flexDirection: "column", gap: 12, boxShadow: "0 1px 3px rgba(0,0,0,0.05)" }}>
-          <div style={{ fontSize: 24, textAlign: "center" }}>📄</div>
-          <div style={{ fontSize: 13, fontWeight: 600, color: "#374151", textAlign: "center" }}>{name}</div>
-          <a href={`/api/cases/${caseId}/generate-disability-claim`} style={{ display: "block", background: "#29ABE2", color: "white", border: "none", borderRadius: 6, padding: "7px 0", fontSize: 12, fontWeight: 600, textAlign: "center", textDecoration: "none", cursor: "pointer" }}>
-            PDF 생성
-          </a>
-        </div>
-      ))}
-    </div>
-  );
-}
 
 /* ── 메인 페이지 ── */
 export default function CaseDetailPage() {
@@ -1610,7 +1594,6 @@ export default function CaseDetailPage() {
     ...(isHearingLoss ? ["난청 상세"] : []),
     ...(isCopd ? ["COPD 상세"] : []),
     ...(isPneumo ? ["진폐 상세"] : []),
-    "서식 생성",
   ];
 
   return (
@@ -1652,7 +1635,6 @@ export default function CaseDetailPage() {
         {activeTab === "난청 상세" && isHearingLoss && <HearingLossTab caseId={caseData.id} initial={caseData.hearingLoss} status={getCaseStatus(caseData)} onStatusChange={(s) => setCaseData((prev) => prev ? { ...prev, status: s } : prev)} />}
         {activeTab === "COPD 상세" && isCopd && <CopdTab caseId={caseData.id} />}
         {activeTab === "진폐 상세" && isPneumo && <PneumoconiosisTab caseId={caseData.id} />}
-        {activeTab === "서식 생성" && <FormTab caseId={caseData.id} />}
       </div>
     </div>
   );
