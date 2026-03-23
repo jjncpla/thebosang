@@ -97,55 +97,49 @@ export async function GET(
         const bf = parseBirthDate(patient.ssn ?? "");
         const df = parseDateFields(detail?.firstExamDate ? new Date(detail.firstExamDate) : null);
 
-        T(patient.name, 155, 669);
-        T(bf.Y1, 300, 660); T(bf.Y2, 312, 660); T(bf.Y3, 324, 660); T(bf.Y4, 336, 660);
-        T(bf.M1, 352, 660); T(bf.M2, 364, 660);
-        T(bf.D1, 380, 660); T(bf.D2, 392, 660);
-        T(df.y1, 115, 630); T(df.y2, 127, 630); T(df.y3, 139, 630); T(df.y4, 151, 630);
-        T(df.m1, 167, 630); T(df.m2, 179, 630);
-        T(df.d1, 215, 630); T(df.d2, 227, 630);
-        T(patient.address ?? "", 99, 655, 8);
-        T(patient.phone ?? "", 340, 655);
-        T(today.연도, 390, 333); T(today.월자, 440, 333); T(today.일자, 475, 333);
-        T(patient.name, 310, 321); T(patient.phone ?? "", 450, 321);
-        T(manager?.name ?? "", 310, 307); T(manager?.officeTel ?? "", 450, 307);
-        T(caseData.kwcOfficeName ?? "", 270, 86);
+        T(patient.name, 157, 670);
+        T(bf.Y1, 286, 671); T(bf.Y2, 303, 671); T(bf.Y3, 320, 671); T(bf.Y4, 337, 671);
+        T(bf.M1, 368, 671); T(bf.M2, 385, 671);
+        T(bf.D1, 415, 671); T(bf.D2, 433, 671);
+        T(df.y1, 103, 639); T(df.y2, 120, 639); T(df.y3, 137, 639); T(df.y4, 153, 639);
+        T(df.m1, 185, 639); T(df.m2, 202, 639);
+        T(df.d1, 233, 639); T(df.d2, 250, 639);
+        T(today.연도, 392, 340); T(today.월자, 440, 340); T(today.일자, 473, 340);
+        T(patient.name, 325, 328);
+        T(patient.phone ?? '', 465, 327);
+        T(`공인노무사 ${manager?.name ?? ''}`, 325, 313);
+        T(manager?.officeTel ?? '', 483, 313);
+        T(caseData.kwcOfficeName ?? '', 299, 93);
 
-        // 수령계좌 변경 여부 — 계좌 입력시 예, 미입력시 아니오
-        if (detail?.bankAccount) {
-          T('√', 0, 0); // 예 위치 — 에디터에서 조정
-        } else {
-          T('√', 0, 0); // 아니오 위치 — 에디터에서 조정
-        }
-        T(detail?.bankName ?? '', 0, 0);
-        T(detail?.bankAccount ?? '', 0, 0);
-        T(detail?.bankAccountHolder ?? '', 0, 0);
-        if (detail?.bankAccountType === '전용계좌') {
-          T('√', 0, 0); // 전용계좌 위치 — 에디터에서 조정
-        } else {
-          T('√', 0, 0); // 보통계좌 위치 — 에디터에서 조정
-        }
+        // 수령계좌 변경여부
+        T(detail?.bankAccount ? '√' : '', 287, 619);
+        T(!detail?.bankAccount ? '√' : '', 362, 619);
+        T(detail?.bankName ?? '', 189, 600);
+        T(detail?.bankAccount ?? '', 169, 581);
+        T(detail?.bankAccountHolder ?? '', 470, 581);
+        T(detail?.bankAccountType !== '전용계좌' ? '√' : '', 120, 561);
+        T(detail?.bankAccountType === '전용계좌' ? '√' : '', 222, 562);
+
         // 확인사항 ①
-        if (detail?.confirmPriorDisability) {
-          T('√', 0, 0); // 예 위치
-        } else {
-          T('√', 0, 0); // 아니오 위치
-        }
+        T(detail?.confirmPriorDisability === true ? '√' : '', 434, 539);
+        T(detail?.confirmPriorDisability !== true ? '√' : '', 483, 539);
+
         // 확인사항 ②
-        if (detail?.confirmPriorCompensation) {
-          T('√', 0, 0); // 예 위치
-          T(detail?.receiptDate ?? '', 0, 0);
-          T(detail?.receiptAmount ?? '', 0, 0);
-          T(detail?.receiptPayer ?? '', 0, 0);
-        } else {
-          T('√', 0, 0); // 아니오 위치
-        }
+        T(detail?.confirmPriorCompensation === true ? '√' : '', 428, 509);
+        T(detail?.confirmPriorCompensation !== true ? '√' : '', 469, 509);
+
+        // 수령내역
+        T(detail?.receiptDate ?? '', 127, 464, 8);
+        T(detail?.receiptAmount ?? '', 209, 465, 8);
+        T(detail?.receiptPayer ?? '', 297, 466, 8);
+
         // 이송비
-        T(detail?.transferCost ?? '', 0, 0);
-        T(detail?.transferCostDetail ?? '', 0, 0);
+        T(detail?.transferCost ?? '', 183, 440);
+        T(detail?.transferCostDetail ?? '', 317, 440, 8);
+
         // 합병증
-        T(detail?.complicationPart ?? '', 0, 0);
-        T(detail?.complicationHospital ?? '', 0, 0);
+        T(detail?.complicationPart ?? '', 207, 396, 8);
+        T(detail?.complicationHospital ?? '', 453, 396, 8);
 
         pdfBytes = await pdfDoc.save();
         break;
