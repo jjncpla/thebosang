@@ -34,7 +34,7 @@ type Consultation = {
 type Stats = { total: number; contract: number; waiting: number; closed: number };
 
 const CASE_TYPE_OPTIONS = ["소음성난청", "COPD", "진폐", "근골격계", "업무상사고", "직업성암", "뇌심혈관계", "유족", "기타"];
-const STATUS_OPTIONS = ["진행중", "초진 대기", "약정", "종결", "연락대기"];
+const STATUS_OPTIONS = ["진행중", "초진 대기", "약정", "종결", "연락대기", "보류"];
 
 const REFERRAL_DATA: Record<string, Record<string, string[]>> = {
   "소개": {
@@ -75,6 +75,7 @@ const STATUS_BADGE: Record<string, { bg: string; color: string; border: string }
   종결: { bg: "#F1F5F9", color: "#64748B", border: "1px solid #CBD5E1" },
   연락대기: { bg: "#FEF3C7", color: "#92400E", border: "1px solid #FCD34D" },
   진행중: { bg: "#D0EAD9", color: "#006838", border: "1px solid #00854A" },
+  보류: { bg: "#f1f5f9", color: "#475569", border: "1px solid #cbd5e1" },
 };
 
 function StatusBadge({ status }: { status: string }) {

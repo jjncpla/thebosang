@@ -627,6 +627,10 @@ function HearingLossTab({ caseId, initial, status, onStatusChange }: { caseId: s
   const [sec3Open, setSec3Open] = useState(true);
   const [showReExam, setShowReExam] = useState(false);
   const [showReReExam, setShowReReExam] = useState(false);
+  const [initialExamRounds, setInitialExamRounds] = useState<number[]>(() => {
+    const existing = (initial?.exams ?? []).filter((e) => e.examSet === "INITIAL").map((e) => e.examRound);
+    return existing.length > 0 ? [...new Set(existing)].sort((a, b) => a - b) : [1, 2, 3];
+  });
 
   const d = (key: keyof HearingLossDetail) => {
     const v = detail[key];
@@ -692,13 +696,36 @@ function HearingLossTab({ caseId, initial, status, onStatusChange }: { caseId: s
   const years = Array.from({ length: 60 }, (_, i) => new Date().getFullYear() - i);
   const months = Array.from({ length: 12 }, (_, i) => i + 1);
 
+  const isDailyWorker = (item: WorkHistoryItem) =>
+    (item.jobType?.includes("일용") ?? false) ||
+    (item.company?.includes("일용") ?? false) ||
+    (item.source?.includes("일용") ?? false) ||
+    (item.department?.includes("일용") ?? false);
+
+  const calcWorkDays = (item: WorkHistoryItem): number => {
+    if (!item.startYear || !item.endYear) return 0;
+    const start = new Date(item.startYear, (item.startMonth ?? 1) - 1, 1);
+    const end = new Date(item.endYear, (item.endMonth ?? 12) - 1, 28);
+    return Math.max(0, Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)));
+  };
+
   const totalNoiseMonths = workHistory.filter((r) => r.noiseExposure).reduce((sum, r) => {
+    if (isDailyWorker(r)) {
+      return sum + Math.floor(calcWorkDays(r) / 20);
+    }
     const start = r.startYear * 12 + (r.startMonth - 1);
     const end = r.endYear * 12 + (r.endMonth - 1);
     return sum + Math.max(0, end - start);
   }, 0);
   const totalNoiseYears = Math.floor(totalNoiseMonths / 12);
   const totalNoiseRemMonths = totalNoiseMonths % 12;
+
+  const dailyUnder20Items = workHistory.filter((r) => r.noiseExposure && isDailyWorker(r) && calcWorkDays(r) < 20);
+  const dailyUnder20TotalDays = dailyUnder20Items.reduce((sum, r) => sum + calcWorkDays(r), 0);
+  const dailyUnder20Months = Math.floor(dailyUnder20TotalDays / 20);
+  const dailyUnder20MemoText = dailyUnder20Items.length > 0
+    ? `[일용직 합산 처리] ${dailyUnder20Items.length}개 사업장(${dailyUnder20Items.map((i) => i.company || "미상").join(", ")})의 일용직 근무일수 합계 ${dailyUnder20TotalDays}일 → ${dailyUnder20Months}개월로 산정. 나머지 ${dailyUnder20TotalDays % 20}일은 20일 미달로 소거.`
+    : null;
 
   const changeStatus = async (newStatus: string) => {
     try {
@@ -821,6 +848,11 @@ function HearingLossTab({ caseId, initial, status, onStatusChange }: { caseId: s
             </div>
             <Field label="특이사항">
               <textarea style={{ ...inputStyle, minHeight: 60, resize: "vertical" }} value={d("workHistoryMemo")} onChange={(e) => setD("workHistoryMemo", e.target.value || null)} />
+              {dailyUnder20MemoText && (
+                <p style={{ marginTop: 4, fontSize: 12, color: "#92400e", background: "#fffbeb", border: "1px solid #fcd34d", borderRadius: 4, padding: "4px 8px" }}>
+                  ⚠ {dailyUnder20MemoText}
+                </p>
+              )}
             </Field>
             <div style={{ marginTop: 16 }}>
               <SaveBar />
@@ -870,9 +902,16 @@ function HearingLossTab({ caseId, initial, status, onStatusChange }: { caseId: s
               <DField label="3차 참석자" k="specialExam3Attendee" />
             </div>
             <SectionTitle>최초특진 검사결과</SectionTitle>
-            {([1, 2, 3] as const).map((r) => (
+            {initialExamRounds.map((r) => (
               <ExamRoundBlock key={r} caseId={caseId} examSet="INITIAL" round={r} label={`${r}차`} exams={exams} setExams={setExams} />
             ))}
+            <button
+              type="button"
+              onClick={() => setInitialExamRounds((prev) => [...prev, Math.max(...prev) + 1])}
+              style={{ marginTop: 8, marginBottom: 12, fontSize: 12, color: "#0284c7", background: "white", border: "1px solid #bae6fd", borderRadius: 6, padding: "5px 14px", cursor: "pointer" }}
+            >
+              + {Math.max(...initialExamRounds) + 1}차 특진 추가
+            </button>
 
             <div style={{ marginBottom: 12 }}>
               <button onClick={() => setShowReExam((v) => !v)} style={{ background: showReExam ? "#eff6ff" : "white", border: "1px solid #d1d5db", borderRadius: 6, padding: "6px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer", color: showReExam ? "#1A95C8" : "#374151" }}>

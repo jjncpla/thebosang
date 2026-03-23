@@ -290,7 +290,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                               borderLeft: childActive
                                 ? "3px solid #29ABE2"
                                 : "3px solid transparent",
-                              color: childActive ? "#a8e6f8" : "#64748b",
+                              color: childActive ? "#a8e6f8" : "rgba(255,255,255,0.85)",
                               display: "flex",
                               alignItems: "center",
                               padding: "8px 14px 8px 44px",
