@@ -98,6 +98,20 @@ type HearingLossDetail = {
   reSpecialExam3Date: string | null;
   reSpecialExam3Contact: string | null;
   reSpecialExam3Attendee: string | null;
+  // 장해급여청구서
+  bankName: string | null;
+  bankAccount: string | null;
+  bankAccountHolder: string | null;
+  bankAccountType: string | null;
+  confirmPriorDisability: boolean | null;
+  confirmPriorCompensation: boolean | null;
+  receiptDate: string | null;
+  receiptAmount: string | null;
+  receiptPayer: string | null;
+  transferCost: string | null;
+  transferCostDetail: string | null;
+  complicationPart: string | null;
+  complicationHospital: string | null;
   exams: HearingLossExam[];
 };
 
@@ -351,6 +365,11 @@ const EMPTY_DETAIL: HearingLossDetail = {
   reSpecialExam1Date: null, reSpecialExam1Contact: null, reSpecialExam1Attendee: null,
   reSpecialExam2Date: null, reSpecialExam2Contact: null, reSpecialExam2Attendee: null,
   reSpecialExam3Date: null, reSpecialExam3Contact: null, reSpecialExam3Attendee: null,
+  bankName: null, bankAccount: null, bankAccountHolder: null, bankAccountType: null,
+  confirmPriorDisability: null, confirmPriorCompensation: null,
+  receiptDate: null, receiptAmount: null, receiptPayer: null,
+  transferCost: null, transferCostDetail: null,
+  complicationPart: null, complicationHospital: null,
   exams: [],
 };
 
@@ -545,6 +564,15 @@ function HearingLossTab({ caseId, initial }: { caseId: string; initial: HearingL
   const setD = (key: keyof HearingLossDetail, val: unknown) =>
     setDetail((prev) => ({ ...prev, [key]: val }));
 
+  const updateHlField = async (key: keyof HearingLossDetail, val: unknown) => {
+    setD(key, val);
+    await fetch(`/api/cases/${caseId}/hearing-loss`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ [key]: val }),
+    });
+  };
+
   const saveDetail = async (closedReasonForCalc?: string | null) => {
     setSaving(true);
     try {
@@ -657,6 +685,177 @@ function HearingLossTab({ caseId, initial }: { caseId: string; initial: HearingL
             </div>
 
             <div style={{ marginTop: 16 }}><SaveBar /></div>
+
+            {/* 장해급여청구서 추가 정보 */}
+            <div style={{
+              marginTop: '12px',
+              padding: '14px',
+              backgroundColor: '#fafafa',
+              borderRadius: '6px',
+              border: '1px solid #e5e7eb',
+            }}>
+              <div style={{ fontWeight: 'bold', fontSize: '13px', marginBottom: '12px', color: '#374151' }}>
+                장해급여청구서 추가 정보
+              </div>
+
+              {/* 수령계좌 */}
+              <div style={{ marginBottom: '10px' }}>
+                <div style={{ fontSize: '12px', color: '#6b7280', marginBottom: '6px', fontWeight: '600' }}>수령계좌</div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', marginBottom: '6px' }}>
+                  <div>
+                    <label style={{ fontSize: '11px', color: '#9ca3af' }}>은행(증권사)명</label>
+                    <input
+                      type="text"
+                      value={detail.bankName ?? ''}
+                      onChange={(e) => updateHlField('bankName', e.target.value || null)}
+                      placeholder="예: 국민은행"
+                      style={inputStyle}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: '11px', color: '#9ca3af' }}>예금주</label>
+                    <input
+                      type="text"
+                      value={detail.bankAccountHolder ?? ''}
+                      onChange={(e) => updateHlField('bankAccountHolder', e.target.value || null)}
+                      style={inputStyle}
+                    />
+                  </div>
+                </div>
+                <div style={{ marginBottom: '6px' }}>
+                  <label style={{ fontSize: '11px', color: '#9ca3af' }}>계좌번호</label>
+                  <input
+                    type="text"
+                    value={detail.bankAccount ?? ''}
+                    onChange={(e) => updateHlField('bankAccount', e.target.value || null)}
+                    placeholder="계좌번호 입력"
+                    style={inputStyle}
+                  />
+                </div>
+                <div style={{ display: 'flex', gap: '12px', fontSize: '12px' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer' }}>
+                    <input
+                      type="radio"
+                      name={`bankType-${caseId}`}
+                      checked={detail.bankAccountType === '보통계좌'}
+                      onChange={() => updateHlField('bankAccountType', '보통계좌')}
+                    />
+                    보통계좌
+                  </label>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer' }}>
+                    <input
+                      type="radio"
+                      name={`bankType-${caseId}`}
+                      checked={detail.bankAccountType === '전용계좌'}
+                      onChange={() => updateHlField('bankAccountType', '전용계좌')}
+                    />
+                    보험급여 전용계좌(희망지킴이)
+                  </label>
+                </div>
+              </div>
+
+              {/* 확인사항 */}
+              <div style={{ marginBottom: '10px' }}>
+                <div style={{ fontSize: '12px', color: '#6b7280', marginBottom: '6px', fontWeight: '600' }}>확인사항</div>
+
+                <div style={{ marginBottom: '6px', fontSize: '12px' }}>
+                  <div style={{ marginBottom: '4px', color: '#374151' }}>① 재해발생 이전 업무외 사유로 장해 남은 사실?</div>
+                  <div style={{ display: 'flex', gap: '12px' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer' }}>
+                      <input type="radio" name={`confirm1-${caseId}`}
+                        checked={detail.confirmPriorDisability === true}
+                        onChange={() => updateHlField('confirmPriorDisability', true)} />
+                      예
+                    </label>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer' }}>
+                      <input type="radio" name={`confirm1-${caseId}`}
+                        checked={detail.confirmPriorDisability === false}
+                        onChange={() => updateHlField('confirmPriorDisability', false)} />
+                      아니오
+                    </label>
+                  </div>
+                </div>
+
+                <div style={{ marginBottom: '6px', fontSize: '12px' }}>
+                  <div style={{ marginBottom: '4px', color: '#374151' }}>② 동일사유로 민법 등 배상/보상 수령?</div>
+                  <div style={{ display: 'flex', gap: '12px' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer' }}>
+                      <input type="radio" name={`confirm2-${caseId}`}
+                        checked={detail.confirmPriorCompensation === true}
+                        onChange={() => updateHlField('confirmPriorCompensation', true)} />
+                      예
+                    </label>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer' }}>
+                      <input type="radio" name={`confirm2-${caseId}`}
+                        checked={detail.confirmPriorCompensation === false}
+                        onChange={() => updateHlField('confirmPriorCompensation', false)} />
+                      아니오
+                    </label>
+                  </div>
+                </div>
+
+                {detail.confirmPriorCompensation === true && (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '6px', marginTop: '6px' }}>
+                    <div>
+                      <label style={{ fontSize: '11px', color: '#9ca3af' }}>수령일자</label>
+                      <input type="text" value={detail.receiptDate ?? ''}
+                        onChange={(e) => updateHlField('receiptDate', e.target.value || null)}
+                        placeholder="예: 2024.03.01" style={inputStyle} />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: '11px', color: '#9ca3af' }}>수령금액</label>
+                      <input type="text" value={detail.receiptAmount ?? ''}
+                        onChange={(e) => updateHlField('receiptAmount', e.target.value || null)}
+                        placeholder="원" style={inputStyle} />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: '11px', color: '#9ca3af' }}>지급한 자</label>
+                      <input type="text" value={detail.receiptPayer ?? ''}
+                        onChange={(e) => updateHlField('receiptPayer', e.target.value || null)}
+                        style={inputStyle} />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* 이송비 */}
+              <div style={{ marginBottom: '10px' }}>
+                <div style={{ fontSize: '12px', color: '#6b7280', marginBottom: '6px', fontWeight: '600' }}>이송비</div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '6px' }}>
+                  <div>
+                    <label style={{ fontSize: '11px', color: '#9ca3af' }}>이송비용 (원)</label>
+                    <input type="text" value={detail.transferCost ?? ''}
+                      onChange={(e) => updateHlField('transferCost', e.target.value || null)}
+                      placeholder="0" style={inputStyle} />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: '11px', color: '#9ca3af' }}>산출내역</label>
+                    <input type="text" value={detail.transferCostDetail ?? ''}
+                      onChange={(e) => updateHlField('transferCostDetail', e.target.value || null)}
+                      style={inputStyle} />
+                  </div>
+                </div>
+              </div>
+
+              {/* 합병증 등 예방관리 */}
+              <div>
+                <div style={{ fontSize: '12px', color: '#6b7280', marginBottom: '6px', fontWeight: '600' }}>합병증 등 예방관리</div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
+                  <div>
+                    <label style={{ fontSize: '11px', color: '#9ca3af' }}>구체적 부위 (또는 상병명)</label>
+                    <input type="text" value={detail.complicationPart ?? ''}
+                      onChange={(e) => updateHlField('complicationPart', e.target.value || null)}
+                      style={inputStyle} />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: '11px', color: '#9ca3af' }}>예방관리 의료기관명</label>
+                    <input type="text" value={detail.complicationHospital ?? ''}
+                      onChange={(e) => updateHlField('complicationHospital', e.target.value || null)}
+                      style={inputStyle} />
+                  </div>
+                </div>
+              </div>
+            </div>
 
             {/* 접수 서식 생성 */}
             <div style={{ marginTop: 16, padding: 16, backgroundColor: "#f0faf4", borderRadius: 8, border: "1px solid #8DC63F" }}>

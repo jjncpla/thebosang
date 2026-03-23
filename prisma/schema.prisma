@@ -177,6 +177,27 @@ model HearingLossDetail {
   rejectionReason            String?
   reviewMemo                 String?
 
+  // 장해급여청구서 — 수령계좌
+  bankName              String?   // 은행(증권사)명
+  bankAccount           String?   // 계좌번호
+  bankAccountHolder     String?   // 예금주
+  bankAccountType       String?   // "보통계좌" | "전용계좌"
+
+  // 장해급여청구서 — 확인사항
+  confirmPriorDisability   Boolean?  // ① 재해 이전 장해 여부
+  confirmPriorCompensation Boolean?  // ② 동일사유 배상/보상 수령 여부
+  receiptDate              String?   // 수령일자
+  receiptAmount            String?   // 수령금액
+  receiptPayer             String?   // 지급한 자
+
+  // 장해급여청구서 — 이송비
+  transferCost       String?   // 이송비용 (원)
+  transferCostDetail String?   // 이송비 산출내역
+
+  // 장해급여청구서 — 합병증 등 예방관리
+  complicationPart     String?   // 구체적 부위 또는 상병명
+  complicationHospital String?   // 합병증 등 예방관리 의료기관명
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

@@ -66,7 +66,21 @@ export async function GET(
 
   const patient = caseData.patient;
   const manager = caseData.caseManager;
-  const detail = caseData.hearingLoss;
+  const detail = caseData.hearingLoss as (typeof caseData.hearingLoss & {
+    bankName?: string | null;
+    bankAccount?: string | null;
+    bankAccountHolder?: string | null;
+    bankAccountType?: string | null;
+    confirmPriorDisability?: boolean | null;
+    confirmPriorCompensation?: boolean | null;
+    receiptDate?: string | null;
+    receiptAmount?: string | null;
+    receiptPayer?: string | null;
+    transferCost?: string | null;
+    transferCostDetail?: string | null;
+    complicationPart?: string | null;
+    complicationHospital?: string | null;
+  }) | null;
   const workHistory = (caseData.workHistory as WorkHistoryItem[] | null) ?? [];
   const today = parseDateFields(new Date());
 
@@ -96,6 +110,42 @@ export async function GET(
         T(patient.name, 310, 321); T(patient.phone ?? "", 450, 321);
         T(manager?.name ?? "", 310, 307); T(manager?.officeTel ?? "", 450, 307);
         T(caseData.kwcOfficeName ?? "", 270, 86);
+
+        // 수령계좌 변경 여부 — 계좌 입력시 예, 미입력시 아니오
+        if (detail?.bankAccount) {
+          T('√', 0, 0); // 예 위치 — 에디터에서 조정
+        } else {
+          T('√', 0, 0); // 아니오 위치 — 에디터에서 조정
+        }
+        T(detail?.bankName ?? '', 0, 0);
+        T(detail?.bankAccount ?? '', 0, 0);
+        T(detail?.bankAccountHolder ?? '', 0, 0);
+        if (detail?.bankAccountType === '전용계좌') {
+          T('√', 0, 0); // 전용계좌 위치 — 에디터에서 조정
+        } else {
+          T('√', 0, 0); // 보통계좌 위치 — 에디터에서 조정
+        }
+        // 확인사항 ①
+        if (detail?.confirmPriorDisability) {
+          T('√', 0, 0); // 예 위치
+        } else {
+          T('√', 0, 0); // 아니오 위치
+        }
+        // 확인사항 ②
+        if (detail?.confirmPriorCompensation) {
+          T('√', 0, 0); // 예 위치
+          T(detail?.receiptDate ?? '', 0, 0);
+          T(detail?.receiptAmount ?? '', 0, 0);
+          T(detail?.receiptPayer ?? '', 0, 0);
+        } else {
+          T('√', 0, 0); // 아니오 위치
+        }
+        // 이송비
+        T(detail?.transferCost ?? '', 0, 0);
+        T(detail?.transferCostDetail ?? '', 0, 0);
+        // 합병증
+        T(detail?.complicationPart ?? '', 0, 0);
+        T(detail?.complicationHospital ?? '', 0, 0);
 
         pdfBytes = await pdfDoc.save();
         break;

@@ -79,5 +79,16 @@ export async function PATCH(
     return NextResponse.json({ success: true, updated });
   }
 
+  // General HearingLossDetail field patch
+  const { id: _id, caseId: _cId, createdAt: _ca, updatedAt: _ua, exams: _ex, ...fields } = body;
+  if (Object.keys(fields).length > 0) {
+    const updated = await prisma.hearingLossDetail.upsert({
+      where: { caseId },
+      create: { caseId, ...fields },
+      update: fields,
+    });
+    return NextResponse.json({ success: true, updated });
+  }
+
   return NextResponse.json({ success: true });
 }
