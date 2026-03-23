@@ -555,6 +555,10 @@ function HearingLossTab({ caseId, initial }: { caseId: string; initial: HearingL
   const [sec3Open, setSec3Open] = useState(true);
   const [showReExam, setShowReExam] = useState(false);
   const [showReReExam, setShowReReExam] = useState(false);
+  const [initialExamRounds, setInitialExamRounds] = useState<number[]>(() => {
+    const existing = (initial?.exams ?? []).filter((e) => e.examSet === "INITIAL").map((e) => e.examRound);
+    return existing.length > 0 ? [...new Set(existing)].sort((a, b) => a - b) : [1, 2, 3];
+  });
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analyzeError, setAnalyzeError] = useState<string | null>(null);
 
@@ -907,9 +911,16 @@ function HearingLossTab({ caseId, initial }: { caseId: string; initial: HearingL
               <DField label="3차 참석자" k="specialExam3Attendee" />
             </div>
             <SectionTitle>최초특진 검사결과</SectionTitle>
-            {([1, 2, 3] as const).map((r) => (
+            {initialExamRounds.map((r) => (
               <ExamRoundBlock key={r} caseId={caseId} examSet="INITIAL" round={r} label={`${r}차`} exams={exams} setExams={setExams} />
             ))}
+            <button
+              type="button"
+              onClick={() => setInitialExamRounds((prev) => [...prev, Math.max(...prev) + 1])}
+              style={{ marginTop: 8, marginBottom: 12, fontSize: 12, color: "#0284c7", background: "white", border: "1px solid #bae6fd", borderRadius: 6, padding: "5px 14px", cursor: "pointer" }}
+            >
+              + {Math.max(...initialExamRounds) + 1}차 특진 추가
+            </button>
             <div style={{ marginBottom: 12 }}>
               <button onClick={() => setShowReExam((v) => !v)} style={{ background: showReExam ? "#eff6ff" : "white", border: "1px solid #d1d5db", borderRadius: 6, padding: "6px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer", color: showReExam ? "#1A95C8" : "#374151" }}>
                 {showReExam ? "▲ 재특진 숨기기" : "▼ 재특진 입력"}
