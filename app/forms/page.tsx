@@ -401,10 +401,13 @@ export default function FormsPage() {
                   />
 
                   {/* 마커 오버레이 */}
-                  {selectedField && imgSize && imgRef.current && (() => {
-                    const rendered = imgRef.current.getBoundingClientRect();
-                    const scaleX = rendered.width / imgSize.w;
-                    const scaleY = rendered.height / imgSize.h;
+                  {selectedField && imgSize && imgRef.current && containerRef.current && (() => {
+                    const containerRect = containerRef.current!.getBoundingClientRect();
+                    const imgRect = imgRef.current.getBoundingClientRect();
+                    const relLeft = imgRect.left - containerRect.left + containerRef.current!.scrollLeft;
+                    const relTop  = imgRect.top  - containerRect.top  + containerRef.current!.scrollTop;
+                    const scaleX = imgRect.width / imgSize.w;
+                    const scaleY = imgRect.height / imgSize.h;
                     const pxPerPtX = imgSize.w / PDF_W;
                     const pxPerPtY = imgSize.h / PDF_H;
                     const markerX = selectedField.x * pxPerPtX * scaleX;
@@ -414,10 +417,10 @@ export default function FormsPage() {
                       <div
                         style={{
                           position: "absolute",
-                          left: imgRef.current.offsetLeft,
-                          top: imgRef.current.offsetTop,
-                          width: rendered.width,
-                          height: rendered.height,
+                          left: relLeft,
+                          top: relTop,
+                          width: imgRect.width,
+                          height: imgRect.height,
                           pointerEvents: "none",
                         }}
                       >
