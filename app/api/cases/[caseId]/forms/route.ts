@@ -152,35 +152,56 @@ export async function GET(
         const T = (text: string, x: number, y: number, size = 9) => drawText(page, text, x, y, font, size);
 
         const jf = parseJumin(patient.ssn ?? "");
-        const df = parseDateFields(detail?.firstExamDate ? new Date(detail.firstExamDate) : null);
-
-        T(patient.name, 175, 686);
-        T(jf["1"], 203, 664); T(jf["2"], 218, 664); T(jf["3"], 233, 664);
-        T(jf["4"], 248, 664); T(jf["5"], 263, 664); T(jf["6"], 278, 664);
-        T(jf["7"], 390, 664);
-        T(patient.address ?? "", 115, 638, 8);
-        T("√", 406, 613); // 퇴직 체크
-        T("√", 195, 484); // 근로자 체크
-        T((caseData as { workplaceName?: string | null }).workplaceName ?? "", 175, 450, 8);
-        T(df.y1, 206, 560); T(df.y2, 218, 560); T(df.y3, 230, 560); T(df.y4, 242, 560);
-        T(df.m1, 258, 560); T(df.m2, 270, 560);
-        T(df.d1, 310, 560); T(df.d2, 322, 560);
-
-        const lastJob = workHistory[workHistory.length - 1];
-        T(lastJob?.jobType ?? "", 430, 563, 8);
-
         const noiseJobs = workHistory.filter((w) => w.noiseExposure);
-        const rowYs = [315, 285, 252, 220, 188];
-        noiseJobs.slice(0, 5).forEach((job, i) => {
-          const ry = rowYs[i];
-          T(job.company, 155, ry, 7);
-          T(fmtPeriod(job), 260, ry, 7);
-          T(job.jobType ?? "", 345, ry, 7);
-        });
+        const lastJob = workHistory[workHistory.length - 1];
 
-        T(today.연도, 215, 136); T(today.월자, 270, 136); T(today.일자, 320, 136);
-        T(patient.name, 250, 110); T(patient.phone ?? "", 415, 110);
-        T(manager?.name ?? "", 250, 98); T(manager?.officeTel ?? "", 415, 98);
+        // 성명
+        T(patient.name ?? "", 0, 0);
+
+        // 주민번호 13자리
+        T(jf["1"] ?? "", 0, 0); T(jf["2"] ?? "", 0, 0); T(jf["3"] ?? "", 0, 0);
+        T(jf["4"] ?? "", 0, 0); T(jf["5"] ?? "", 0, 0); T(jf["6"] ?? "", 0, 0);
+        T(jf["7"] ?? "", 0, 0); T(jf["8"] ?? "", 0, 0); T(jf["9"] ?? "", 0, 0);
+        T(jf["10"] ?? "", 0, 0); T(jf["11"] ?? "", 0, 0); T(jf["12"] ?? "", 0, 0);
+        T(jf["13"] ?? "", 0, 0);
+
+        // 주소, 연락처, 직종
+        T(patient.address ?? "", 0, 0, 8);
+        T(patient.phone ?? "", 0, 0);
+        T(lastJob?.jobType ?? "", 0, 0, 8);
+
+        // 재직/퇴직 체크 (기본: 퇴직)
+        T("", 0, 0);   // 재직 체크 (빈칸)
+        T("√", 0, 0);  // 퇴직 체크
+
+        // 사업장명
+        T((caseData as { workplaceName?: string | null }).workplaceName ?? "", 0, 0, 8);
+
+        // 오늘 날짜
+        T(today.연도, 0, 0); T(today.월자, 0, 0); T(today.일자, 0, 0);
+
+        // 청구인
+        T(patient.name ?? "", 0, 0); T(patient.phone ?? "", 0, 0);
+
+        // 대리인
+        T(manager?.name ?? "", 0, 0); T(manager?.officeTel ?? "", 0, 0);
+
+        // 관할공단
+        T(caseData.kwcOfficeName ?? "", 0, 0);
+
+        // 소음사업장 직력 (최대 5행)
+        for (let i = 0; i < 5; i++) {
+          const job = noiseJobs[i];
+          if (job) {
+            const period = `${job.startYear}.${String(job.startMonth).padStart(2, "0")}~${job.endYear}.${String(job.endMonth).padStart(2, "0")}`;
+            T(job.company ?? "", 0, 0, 7);
+            T(period, 0, 0, 7);
+            T(job.jobType ?? "", 0, 0, 7);
+          }
+        }
+
+        // 별지사용 체크 (5개 초과 시)
+        T(noiseJobs.length > 5 ? "√" : "", 0, 0);
 
         pdfBytes = await pdfDoc.save();
         break;
