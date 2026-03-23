@@ -243,7 +243,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                       background: active ? "rgba(41,171,226,0.2)" : "none",
                       border: "none",
                       borderLeft: active ? "3px solid #29ABE2" : "3px solid transparent",
-                      color: active ? "#a8e6f8" : restricted ? "rgba(148,163,184,0.35)" : "#94a3b8",
+                      color: active ? "#a8e6f8" : restricted ? "rgba(255,255,255,0.2)" : "rgba(255,255,255,0.85)",
                       display: "flex",
                       alignItems: "center",
                       gap: 10,
@@ -262,7 +262,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                           {item.label}
                         </span>
                         {item.children && (
-                          <span style={{ fontSize: 10, color: "#475569" }}>
+                          <span style={{ fontSize: 10, color: "rgba(255,255,255,0.45)" }}>
                             {isOpen ? "▲" : "▼"}
                           </span>
                         )}
