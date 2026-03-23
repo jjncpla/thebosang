@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, Suspense } from "react";
+import React, { useEffect, useState, useCallback, Suspense } from "react";
 import { useRouter, useParams, useSearchParams } from "next/navigation";
 import { CASE_TYPE_LABELS, DISPOSAL_TYPE, GRADE_TYPE, STATUS_BY_CASE_TYPE, HEARING_LOSS_STATUS, CASE_STATUS_LABELS } from "@/lib/constants/case";
 import { OCC_DISEASE_COMMITTEES } from "@/constants/occDiseaseCommittees";
@@ -89,6 +89,12 @@ type HearingLossDetail = {
   specialExam3Date: string | null;
   specialExam3Contact: string | null;
   specialExam3Attendee: string | null;
+  specialExam4Date: string | null;
+  specialExam4Contact: string | null;
+  specialExam4Attendee: string | null;
+  specialExam5Date: string | null;
+  specialExam5Contact: string | null;
+  specialExam5Attendee: string | null;
   reSpecialExam1Date: string | null;
   reSpecialExam1Contact: string | null;
   reSpecialExam1Attendee: string | null;
@@ -362,6 +368,8 @@ const EMPTY_DETAIL: HearingLossDetail = {
   specialExam1Date: null, specialExam1Contact: null, specialExam1Attendee: null,
   specialExam2Date: null, specialExam2Contact: null, specialExam2Attendee: null,
   specialExam3Date: null, specialExam3Contact: null, specialExam3Attendee: null,
+  specialExam4Date: null, specialExam4Contact: null, specialExam4Attendee: null,
+  specialExam5Date: null, specialExam5Contact: null, specialExam5Attendee: null,
   reSpecialExam1Date: null, reSpecialExam1Contact: null, reSpecialExam1Attendee: null,
   reSpecialExam2Date: null, reSpecialExam2Contact: null, reSpecialExam2Attendee: null,
   reSpecialExam3Date: null, reSpecialExam3Contact: null, reSpecialExam3Attendee: null,
@@ -900,15 +908,13 @@ function HearingLossTab({ caseId, initial }: { caseId: string; initial: HearingL
             </div>
             <SectionTitle>최초특진 일정 및 참석</SectionTitle>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 12 }}>
-              <DField label="1차 특진일정" k="specialExam1Date" type="datetime-local" />
-              <DField label="1차 연락담당자" k="specialExam1Contact" />
-              <DField label="1차 참석자" k="specialExam1Attendee" />
-              <DField label="2차 특진일정" k="specialExam2Date" type="datetime-local" />
-              <DField label="2차 연락담당자" k="specialExam2Contact" />
-              <DField label="2차 참석자" k="specialExam2Attendee" />
-              <DField label="3차 특진일정" k="specialExam3Date" type="datetime-local" />
-              <DField label="3차 연락담당자" k="specialExam3Contact" />
-              <DField label="3차 참석자" k="specialExam3Attendee" />
+              {initialExamRounds.map((r) => (
+                <React.Fragment key={`sched-${r}`}>
+                  <DField label={`${r}차 특진일정`} k={`specialExam${r}Date` as keyof HearingLossDetail} type="datetime-local" />
+                  <DField label={`${r}차 연락담당자`} k={`specialExam${r}Contact` as keyof HearingLossDetail} />
+                  <DField label={`${r}차 참석자`} k={`specialExam${r}Attendee` as keyof HearingLossDetail} />
+                </React.Fragment>
+              ))}
             </div>
             <SectionTitle>최초특진 검사결과</SectionTitle>
             {initialExamRounds.map((r) => (

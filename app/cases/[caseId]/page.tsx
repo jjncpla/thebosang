@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { CASE_TYPE_LABELS, DISPOSAL_TYPE, GRADE_TYPE, STATUS_BY_CASE_TYPE, CASE_STATUS_LABELS } from "@/lib/constants/case";
 import { OCC_DISEASE_COMMITTEES } from "@/constants/occDiseaseCommittees";
@@ -108,6 +108,12 @@ type HearingLossDetail = {
   specialExam3Date: string | null;
   specialExam3Contact: string | null;
   specialExam3Attendee: string | null;
+  specialExam4Date: string | null;
+  specialExam4Contact: string | null;
+  specialExam4Attendee: string | null;
+  specialExam5Date: string | null;
+  specialExam5Contact: string | null;
+  specialExam5Attendee: string | null;
   reSpecialExam1Date: string | null;
   reSpecialExam1Contact: string | null;
   reSpecialExam1Attendee: string | null;
@@ -289,6 +295,8 @@ const EMPTY_DETAIL: HearingLossDetail = {
   specialExam1Date: null, specialExam1Contact: null, specialExam1Attendee: null,
   specialExam2Date: null, specialExam2Contact: null, specialExam2Attendee: null,
   specialExam3Date: null, specialExam3Contact: null, specialExam3Attendee: null,
+  specialExam4Date: null, specialExam4Contact: null, specialExam4Attendee: null,
+  specialExam5Date: null, specialExam5Contact: null, specialExam5Attendee: null,
   reSpecialExam1Date: null, reSpecialExam1Contact: null, reSpecialExam1Attendee: null,
   reSpecialExam2Date: null, reSpecialExam2Contact: null, reSpecialExam2Attendee: null,
   reSpecialExam3Date: null, reSpecialExam3Contact: null, reSpecialExam3Attendee: null,
@@ -720,6 +728,18 @@ function HearingLossTab({ caseId, initial, status, onStatusChange }: { caseId: s
   const totalNoiseYears = Math.floor(totalNoiseMonths / 12);
   const totalNoiseRemMonths = totalNoiseMonths % 12;
 
+  const calcMonthsDisplay = (item: WorkHistoryItem): string => {
+    if (isDailyWorker(item)) {
+      const days = calcWorkDays(item);
+      if (days === 0) return "-";
+      const m = Math.floor(days / 20);
+      return m === 0 ? `${days}일 (20일 미달)` : `${m}개월`;
+    }
+    if (!item.startYear || !item.endYear) return "-";
+    const total = (item.endYear - item.startYear) * 12 + ((item.endMonth ?? 12) - (item.startMonth ?? 1));
+    return `${Math.max(0, total)}개월`;
+  };
+
   const dailyUnder20Items = workHistory.filter((r) => r.noiseExposure && isDailyWorker(r) && calcWorkDays(r) < 20);
   const dailyUnder20TotalDays = dailyUnder20Items.reduce((sum, r) => sum + calcWorkDays(r), 0);
   const dailyUnder20Months = Math.floor(dailyUnder20TotalDays / 20);
@@ -777,7 +797,7 @@ function HearingLossTab({ caseId, initial, status, onStatusChange }: { caseId: s
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
                 <thead>
                   <tr style={{ background: "#f9fafb" }}>
-                    {["회사명", "직종", "작업내용", "시작년월", "종료년월", "소음노출", "소음(dB)", "근무시간", "출처", ""].map((h) => (
+                    {["회사명", "직종", "작업내용", "시작년월", "종료년월", "근무기간", "소음노출", "소음(dB)", "근무시간", "출처", ""].map((h) => (
                       <th key={h} style={{ padding: "6px 8px", border: "1px solid #e5e7eb", fontWeight: 600, color: "#6b7280", whiteSpace: "nowrap" }}>{h}</th>
                     ))}
                   </tr>
@@ -809,6 +829,9 @@ function HearingLossTab({ caseId, initial, status, onStatusChange }: { caseId: s
                             {months.map((m) => <option key={m} value={m}>{m}월</option>)}
                           </select>
                         </div>
+                      </td>
+                      <td style={{ padding: 4, border: "1px solid #f1f5f9", textAlign: "center", whiteSpace: "nowrap", color: isDailyWorker(row) ? "#92400e" : "#374151", fontSize: 11 }}>
+                        {calcMonthsDisplay(row)}
                       </td>
                       <td style={{ padding: 4, border: "1px solid #f1f5f9", textAlign: "center" }}>
                         <input type="checkbox" checked={row.noiseExposure} onChange={(e) => setWorkField(i, "noiseExposure", e.target.checked)} />
@@ -891,15 +914,13 @@ function HearingLossTab({ caseId, initial, status, onStatusChange }: { caseId: s
 
             <SectionTitle>최초특진 일정 및 참석</SectionTitle>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 12 }}>
-              <DField label="1차 특진일정" k="specialExam1Date" type="datetime-local" />
-              <DField label="1차 연락담당자" k="specialExam1Contact" />
-              <DField label="1차 참석자" k="specialExam1Attendee" />
-              <DField label="2차 특진일정" k="specialExam2Date" type="datetime-local" />
-              <DField label="2차 연락담당자" k="specialExam2Contact" />
-              <DField label="2차 참석자" k="specialExam2Attendee" />
-              <DField label="3차 특진일정" k="specialExam3Date" type="datetime-local" />
-              <DField label="3차 연락담당자" k="specialExam3Contact" />
-              <DField label="3차 참석자" k="specialExam3Attendee" />
+              {initialExamRounds.map((r) => (
+                <React.Fragment key={`sched-${r}`}>
+                  <DField label={`${r}차 특진일정`} k={`specialExam${r}Date` as keyof HearingLossDetail} type="datetime-local" />
+                  <DField label={`${r}차 연락담당자`} k={`specialExam${r}Contact` as keyof HearingLossDetail} />
+                  <DField label={`${r}차 참석자`} k={`specialExam${r}Attendee` as keyof HearingLossDetail} />
+                </React.Fragment>
+              ))}
             </div>
             <SectionTitle>최초특진 검사결과</SectionTitle>
             {initialExamRounds.map((r) => (
