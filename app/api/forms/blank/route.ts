@@ -11,16 +11,20 @@ type FormType =
   | "POWER_OF_ATTORNEY"
   | "SPECIAL_CLINIC"
   | "EXPERT_CLINIC"
-  | "WORK_HISTORY";
+  | "WORK_HISTORY"
+  | "INFO_DISCLOSURE"
+  | "LABOR_ATTORNEY_RECORD";
 
 const FILE_MAP: Record<FormType, string> = {
-  DISABILITY_CLAIM:   "disability_claim.pdf",
-  NOISE_WORK_CONFIRM: "noise_work_confirm.pdf",
-  AGENT_APPOINTMENT:  "agent_appointment.pdf",
-  POWER_OF_ATTORNEY:  "power_of_attorney.pdf",
-  SPECIAL_CLINIC:     "special_clinic.pdf",
-  EXPERT_CLINIC:      "expert_clinic.pdf",
-  WORK_HISTORY:       "work_history.pdf",
+  DISABILITY_CLAIM:       "disability_claim.pdf",
+  NOISE_WORK_CONFIRM:     "noise_work_confirm.pdf",
+  AGENT_APPOINTMENT:      "agent_appointment.pdf",
+  POWER_OF_ATTORNEY:      "power_of_attorney.pdf",
+  SPECIAL_CLINIC:         "special_clinic.pdf",
+  EXPERT_CLINIC:          "expert_clinic.pdf",
+  WORK_HISTORY:           "work_history.pdf",
+  INFO_DISCLOSURE:        "info_disclosure.pdf",
+  LABOR_ATTORNEY_RECORD:  "labor_attorney_record.pdf",
 };
 
 export async function GET(req: NextRequest) {

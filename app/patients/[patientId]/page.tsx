@@ -570,6 +570,44 @@ function HearingLossTab({ caseId, initial }: { caseId: string; initial: HearingL
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analyzeError, setAnalyzeError] = useState<string | null>(null);
 
+  // 정보공개청구서
+  const INFO_ITEMS = [
+    "특별진찰 의뢰 및 회신서",
+    "업무관련성 평가 특별진찰 의뢰 및 회신서",
+    "업무관련성 평가 소견서",
+    "장해진단서",
+    "재해조사서",
+    "소음노출수준조사",
+    "직업력조사(소음성 난청)",
+    "통합심사 의뢰 및 결과서",
+    "업무상 질병 자문 의뢰 및 회신서",
+    "보험가입자 의견서",
+    "평균임금 산정내역서",
+  ] as const;
+  const [infoChecked, setInfoChecked] = useState<string[]>([]);
+  const [infoLoading, setInfoLoading] = useState(false);
+
+  const handleInfoDisclosureDownload = async () => {
+    setInfoLoading(true);
+    try {
+      const content = infoChecked.map((item, i) => `${i + 1}. ${item}`).join("\n");
+      const params = new URLSearchParams({ type: "INFO_DISCLOSURE", content });
+      const res = await fetch(`/api/cases/${caseId}/forms?${params}`);
+      if (!res.ok) throw new Error();
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `정보공개청구서.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      alert("생성 실패");
+    } finally {
+      setInfoLoading(false);
+    }
+  };
+
   const d = (key: keyof HearingLossDetail) => {
     const v = detail[key]; return v === null || v === undefined ? "" : String(v);
   };
@@ -873,6 +911,47 @@ function HearingLossTab({ caseId, initial }: { caseId: string; initial: HearingL
             <div style={{ marginTop: 16, padding: 16, backgroundColor: "#f0faf4", borderRadius: 8, border: "1px solid #8DC63F" }}>
               <div style={{ fontWeight: "bold", fontSize: 14, marginBottom: 12, color: "#006838" }}>📄 접수 서식 생성</div>
               <FormButtons caseId={caseId} />
+            </div>
+
+            {/* 정보공개 청구서 */}
+            <div style={{ marginTop: 16, padding: 14, backgroundColor: "#fafafa", borderRadius: 6, border: "1px solid #e5e7eb" }}>
+              <div style={{ fontWeight: "bold", fontSize: 13, marginBottom: 10, color: "#374151" }}>
+                📋 정보공개 청구서 생성
+              </div>
+              <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 8 }}>청구할 서류 선택:</div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 4, marginBottom: 12 }}>
+                {INFO_ITEMS.map((item) => (
+                  <label key={item} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, cursor: "pointer" }}>
+                    <input
+                      type="checkbox"
+                      checked={infoChecked.includes(item)}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setInfoChecked((prev) => [...prev, item]);
+                        } else {
+                          setInfoChecked((prev) => prev.filter((i) => i !== item));
+                        }
+                      }}
+                    />
+                    {item}
+                  </label>
+                ))}
+              </div>
+              <button
+                onClick={handleInfoDisclosureDownload}
+                disabled={infoChecked.length === 0 || infoLoading}
+                style={{
+                  padding: "8px 16px",
+                  backgroundColor: infoChecked.length === 0 ? "#d1d5db" : "#29ABE2",
+                  color: "white",
+                  border: "none",
+                  borderRadius: 4,
+                  cursor: infoChecked.length === 0 ? "not-allowed" : "pointer",
+                  fontSize: 13,
+                }}
+              >
+                {infoLoading ? "생성 중..." : `📄 정보공개 청구서 생성 (${infoChecked.length}개 선택)`}
+              </button>
             </div>
           </div>
         )}

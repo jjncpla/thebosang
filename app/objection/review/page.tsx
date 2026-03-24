@@ -271,6 +271,18 @@ export default function ObjectionReviewPage() {
   const [filterWageResult, setFilterWageResult] = useState("");
   const [searchWage, setSearchWage] = useState("");
 
+  const handleLaborRecordDownload = async (targetCaseId: string) => {
+    const res = await fetch(`/api/cases/${targetCaseId}/forms?type=LABOR_ATTORNEY_RECORD`);
+    if (!res.ok) { alert("생성 실패"); return; }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "공인노무사업무처리부.pdf";
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const fetchReviews = useCallback(async () => {
     const p = new URLSearchParams();
     if (filterTf) p.set("tfName", filterTf);
@@ -429,6 +441,9 @@ export default function ObjectionReviewPage() {
                         <td style={{ padding: "10px 12px", color: "#374151" }}>{item.progressStatus || <span style={{ color: "#9ca3af" }}>미검토</span>}</td>
                         <td style={{ padding: "10px 12px", color: item.hasInfoDisclosure ? "#15803d" : "#9ca3af" }}>{item.hasInfoDisclosure ? "✓ 있음" : "없음"}</td>
                         <td style={{ padding: "10px 12px" }}>
+                          {item.caseId && (
+                            <button onClick={(e) => { e.stopPropagation(); handleLaborRecordDownload(item.caseId!); }} style={{ border: "none", borderRadius: 4, padding: "3px 8px", fontSize: 11, color: "white", background: "#006838", cursor: "pointer", marginRight: 4 }}>📋 업무처리부</button>
+                          )}
                           <button onClick={async e => { e.stopPropagation(); if (!confirm("삭제하시겠습니까?")) return; await fetch(`/api/objection/review/${item.id}`, { method: "DELETE" }); fetchReviews(); }} style={{ border: "1px solid #e5e7eb", borderRadius: 5, padding: "3px 8px", fontSize: 11, color: "#dc2626", background: "white", cursor: "pointer" }}>삭제</button>
                         </td>
                       </tr>

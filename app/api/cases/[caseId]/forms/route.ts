@@ -378,6 +378,67 @@ export async function GET(
         break;
       }
 
+      case "INFO_DISCLOSURE": {
+        const pdfDoc = await loadBlankForm("info_disclosure.pdf");
+        const font = await loadKoreanFont(pdfDoc);
+        const page = pdfDoc.getPages()[0];
+
+        // 청구인 정보 (노무사)
+        drawText(page, manager?.name ?? "",          0, 0, font, 9);  // 청구인 성명
+        drawText(page, manager?.officeAddress ?? "",  0, 0, font, 8);  // 주소
+        drawText(page, manager?.officeTel ?? "",      0, 0, font, 9);  // 전화
+        drawText(page, manager?.officeFax ?? "",      0, 0, font, 9);  // 팩스
+
+        // 청구 내용: content 파라미터로 전달받음
+        const content = req.nextUrl.searchParams.get("content") ?? "";
+        const contentX = 0;
+        const contentY = 0;
+        const lines = content.split("\n");
+        lines.forEach((line, i) => {
+          drawText(page, line, contentX, contentY - i * 12, font, 8);
+        });
+
+        // 날짜
+        drawText(page, today.연도, 0, 0, font, 9);
+        drawText(page, today.월자, 0, 0, font, 9);
+        drawText(page, today.일자, 0, 0, font, 9);
+
+        // 관할공단
+        drawText(page, caseData.kwcOfficeName ?? "", 0, 0, font, 9);
+
+        pdfBytes = await pdfDoc.save();
+        break;
+      }
+
+      case "LABOR_ATTORNEY_RECORD": {
+        const pdfDoc = await loadBlankForm("labor_attorney_record.pdf");
+        const font = await loadKoreanFont(pdfDoc);
+        const page = pdfDoc.getPages()[0];
+        const bf = parseBirthDate(patient.ssn ?? "");
+        const df = parseDateFields(detail?.firstExamDate ?? null);
+
+        // 업무 의뢰인
+        drawText(page, `노무법인 더보상 ${manager?.branchName ?? ""}`, 0, 0, font, 9); // 상호
+        drawText(page, patient.name ?? "",                              0, 0, font, 9); // 성명(대표자)
+        drawText(page, `${bf.Y1}${bf.Y2}${bf.Y3}${bf.Y4}.${bf.M1}${bf.M2}.${bf.D1}${bf.D2}`, 0, 0, font, 9); // 생년월일
+        drawText(page, patient.address ?? "",                           0, 0, font, 8); // 주소
+        drawText(page, `${df.연도}.${df.월자}.${df.일자}`,             0, 0, font, 9); // 직무위촉연월일
+
+        // 수수료 (빈칸 — 수동 입력)
+        drawText(page, "", 0, 0, font, 9); // 계약금
+        drawText(page, "", 0, 0, font, 9); // 착수금
+
+        // 직무 요지 (고정 텍스트)
+        drawText(page, "산업재해보상보험법에 의한 보험급여 청구 및 이의제기에 관한 사항 일체", 0, 0, font, 8);
+
+        // 처리 결과, 특기사항 (빈칸)
+        drawText(page, "", 0, 0, font, 9); // 처리 결과
+        drawText(page, "", 0, 0, font, 9); // 특기사항
+
+        pdfBytes = await pdfDoc.save();
+        break;
+      }
+
       default:
         return NextResponse.json({ error: `지원하지 않는 서식: ${type}` }, { status: 400 });
     }

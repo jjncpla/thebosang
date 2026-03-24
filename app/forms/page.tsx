@@ -12,6 +12,8 @@ const FORMS = [
   { type: "SPECIAL_CLINIC",     label: "특진의료기관 선택 확인서 (특진)",      pages: 1 },
   { type: "EXPERT_CLINIC",      label: "특진의료기관 선택 확인서 (전문조사)",  pages: 1 },
   { type: "WORK_HISTORY",       label: "직업력 조사 표준문답서",               pages: 3 },
+  { type: "INFO_DISCLOSURE",      label: "정보공개 청구서",        pages: 1 },
+  { type: "LABOR_ATTORNEY_RECORD",label: "공인노무사 업무처리부",  pages: 1 },
 ];
 
 const FORM_FIELDS: Record<string, { key: string; label: string; x: number; y: number }[]> = {
@@ -216,6 +218,29 @@ const FORM_FIELDS: Record<string, { key: string; label: string; x: number; y: nu
     { key: "ptPhone",    label: "청구인 연락처 (p3)", x: 485, y: 267 },
     { key: "mgrName",    label: "대리인 성명 (p3)",   x: 283, y: 222 },
     { key: "mgrTel",     label: "대리인 Tel (p3)",    x: 485, y: 222 },
+  ],
+  INFO_DISCLOSURE: [
+    { key: "mgrName",      label: "청구인 성명",   x: 0, y: 0 },
+    { key: "mgrAddress",   label: "청구인 주소",   x: 0, y: 0 },
+    { key: "mgrTel",       label: "전화번호",      x: 0, y: 0 },
+    { key: "mgrFax",       label: "팩스번호",      x: 0, y: 0 },
+    { key: "content",      label: "청구 내용",     x: 0, y: 0 },
+    { key: "todayYear",    label: "오늘 연도",     x: 0, y: 0 },
+    { key: "todayMonth",   label: "오늘 월",       x: 0, y: 0 },
+    { key: "todayDay",     label: "오늘 일",       x: 0, y: 0 },
+    { key: "kwc",          label: "관할공단",      x: 0, y: 0 },
+  ],
+  LABOR_ATTORNEY_RECORD: [
+    { key: "branchName",     label: "상호(지사명)",    x: 0, y: 0 },
+    { key: "ptName",         label: "성명(대표자)",    x: 0, y: 0 },
+    { key: "birthDate",      label: "생년월일",        x: 0, y: 0 },
+    { key: "address",        label: "주소",            x: 0, y: 0 },
+    { key: "commissionDate", label: "직무위촉연월일",  x: 0, y: 0 },
+    { key: "feeContract",    label: "수수료 계약금",   x: 0, y: 0 },
+    { key: "feeAdvance",     label: "착수금",          x: 0, y: 0 },
+    { key: "jobSummary",     label: "직무 요지",       x: 0, y: 0 },
+    { key: "result",         label: "처리 결과",       x: 0, y: 0 },
+    { key: "note",           label: "특기사항",        x: 0, y: 0 },
   ],
 };
 
