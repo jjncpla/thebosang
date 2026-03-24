@@ -717,32 +717,53 @@ function HearingLossTab({ caseId, initial, status, onStatusChange }: { caseId: s
     return Math.max(0, Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)));
   };
 
-  const totalNoiseMonths = workHistory.filter((r) => r.noiseExposure).reduce((sum, r) => {
-    if (isDailyWorker(r)) {
-      return sum + Math.floor(calcWorkDays(r) / 20);
-    }
-    const start = r.startYear * 12 + (r.startMonth - 1);
-    const end = r.endYear * 12 + (r.endMonth - 1);
-    return sum + Math.max(0, end - start);
+  // 소음 노출 일용직/일반직 분리
+  const noiseDailyItems = workHistory.filter(
+    (item) => item.noiseExposure && isDailyWorker(item)
+  );
+  const noiseNormalItems = workHistory.filter(
+    (item) => item.noiseExposure && !isDailyWorker(item)
+  );
+
+  // 일용직: 20일 이상은 개별 환산, 20일 미만은 합산 후 일괄 환산
+  const dailyOver20Months = noiseDailyItems
+    .filter((item) => calcWorkDays(item) >= 20)
+    .reduce((sum, item) => sum + Math.floor(calcWorkDays(item) / 20), 0);
+
+  const dailyUnder20TotalDays = noiseDailyItems
+    .filter((item) => calcWorkDays(item) < 20)
+    .reduce((sum, item) => sum + calcWorkDays(item), 0);
+
+  const dailyUnder20Months = Math.floor(dailyUnder20TotalDays / 20);
+
+  // 일반직: 년월 차이 합산
+  const normalMonths = noiseNormalItems.reduce((sum, item) => {
+    if (!item.startYear || !item.endYear) return sum;
+    const m =
+      (item.endYear - item.startYear) * 12 +
+      ((item.endMonth ?? 12) - (item.startMonth ?? 1));
+    return sum + Math.max(0, m);
   }, 0);
+
+  const totalNoiseMonths = dailyOver20Months + dailyUnder20Months + normalMonths;
   const totalNoiseYears = Math.floor(totalNoiseMonths / 12);
   const totalNoiseRemMonths = totalNoiseMonths % 12;
 
   const calcMonthsDisplay = (item: WorkHistoryItem): string => {
-    if (isDailyWorker(item)) {
-      const days = calcWorkDays(item);
-      if (days === 0) return "-";
-      const m = Math.floor(days / 20);
-      return m === 0 ? `${days}일 (20일 미달)` : `${m}개월`;
+    if (!isDailyWorker(item)) {
+      if (!item.startYear || !item.endYear) return "-";
+      const totalMonths =
+        (item.endYear - item.startYear) * 12 +
+        ((item.endMonth ?? 12) - (item.startMonth ?? 1));
+      return `${Math.max(0, totalMonths)}개월`;
     }
-    if (!item.startYear || !item.endYear) return "-";
-    const total = (item.endYear - item.startYear) * 12 + ((item.endMonth ?? 12) - (item.startMonth ?? 1));
-    return `${Math.max(0, total)}개월`;
+    const days = calcWorkDays(item);
+    if (days === 0) return "-";
+    if (days < 20) return `${days}일 (합산 대기)`;
+    return `${Math.floor(days / 20)}개월`;
   };
 
-  const dailyUnder20Items = workHistory.filter((r) => r.noiseExposure && isDailyWorker(r) && calcWorkDays(r) < 20);
-  const dailyUnder20TotalDays = dailyUnder20Items.reduce((sum, r) => sum + calcWorkDays(r), 0);
-  const dailyUnder20Months = Math.floor(dailyUnder20TotalDays / 20);
+  const dailyUnder20Items = noiseDailyItems.filter((item) => calcWorkDays(item) < 20);
   const dailyUnder20MemoText = dailyUnder20Items.length > 0
     ? `[일용직 합산 처리] ${dailyUnder20Items.length}개 사업장(${dailyUnder20Items.map((i) => i.company || "미상").join(", ")})의 일용직 근무일수 합계 ${dailyUnder20TotalDays}일 → ${dailyUnder20Months}개월로 산정. 나머지 ${dailyUnder20TotalDays % 20}일은 20일 미달로 소거.`
     : null;
@@ -871,9 +892,12 @@ function HearingLossTab({ caseId, initial, status, onStatusChange }: { caseId: s
             </div>
             <Field label="특이사항">
               <textarea style={{ ...inputStyle, minHeight: 60, resize: "vertical" }} value={d("workHistoryMemo")} onChange={(e) => setD("workHistoryMemo", e.target.value || null)} />
-              {dailyUnder20MemoText && (
-                <p style={{ marginTop: 4, fontSize: 12, color: "#92400e", background: "#fffbeb", border: "1px solid #fcd34d", borderRadius: 4, padding: "4px 8px" }}>
-                  ⚠ {dailyUnder20MemoText}
+              {dailyUnder20Items.length > 0 && (
+                <p className="mt-2 text-xs bg-amber-50 border border-amber-200 text-amber-800 rounded px-3 py-2">
+                  ⚠ 20일 미만 일용직 {dailyUnder20Items.length}건 합산:
+                  {" "}{dailyUnder20Items.map((i) => `${i.company || "미상"}(${calcWorkDays(i)}일)`).join(" + ")}
+                  {" "}= 총 {dailyUnder20TotalDays}일 → {dailyUnder20Months}개월
+                  {dailyUnder20TotalDays % 20 > 0 && ` (나머지 ${dailyUnder20TotalDays % 20}일 소거)`}
                 </p>
               )}
             </Field>
