@@ -149,59 +149,36 @@ export async function GET(
         const pdfDoc = await loadBlankForm("noise_work_confirm.pdf");
         const font = await loadKoreanFont(pdfDoc);
         const page = pdfDoc.getPages()[0];
-        const T = (text: string, x: number, y: number, size = 9) => drawText(page, text, x, y, font, size);
-
         const jf = parseJumin(patient.ssn ?? "");
         const noiseJobs = workHistory.filter((w) => w.noiseExposure);
-        const lastJob = workHistory[workHistory.length - 1];
 
-        // 성명
-        T(patient.name ?? "", 0, 0);
-
-        // 주민번호 13자리
-        T(jf["1"] ?? "", 0, 0); T(jf["2"] ?? "", 0, 0); T(jf["3"] ?? "", 0, 0);
-        T(jf["4"] ?? "", 0, 0); T(jf["5"] ?? "", 0, 0); T(jf["6"] ?? "", 0, 0);
-        T(jf["7"] ?? "", 0, 0); T(jf["8"] ?? "", 0, 0); T(jf["9"] ?? "", 0, 0);
-        T(jf["10"] ?? "", 0, 0); T(jf["11"] ?? "", 0, 0); T(jf["12"] ?? "", 0, 0);
-        T(jf["13"] ?? "", 0, 0);
-
-        // 주소, 연락처, 직종
-        T(patient.address ?? "", 0, 0, 8);
-        T(patient.phone ?? "", 0, 0);
-        T(lastJob?.jobType ?? "", 0, 0, 8);
-
+        drawText(page, patient.name ?? "",    270, 693, font, 9);
+        drawText(page, jf["1"]  ?? "",        278, 670, font, 9);
+        drawText(page, jf["2"]  ?? "",        295, 670, font, 9);
+        drawText(page, jf["3"]  ?? "",        312, 670, font, 9);
+        drawText(page, jf["4"]  ?? "",        329, 670, font, 9);
+        drawText(page, jf["5"]  ?? "",        346, 670, font, 9);
+        drawText(page, jf["6"]  ?? "",        363, 670, font, 9);
+        drawText(page, jf["7"]  ?? "",        389, 670, font, 9);
+        drawText(page, jf["8"]  ?? "",        406, 670, font, 9);
+        drawText(page, jf["9"]  ?? "",        422, 670, font, 9);
+        drawText(page, jf["10"] ?? "",        440, 670, font, 9);
+        drawText(page, jf["11"] ?? "",        456, 670, font, 9);
+        drawText(page, jf["12"] ?? "",        474, 670, font, 9);
+        drawText(page, jf["13"] ?? "",        491, 670, font, 9);
+        drawText(page, patient.address ?? "", 164, 645, font, 8);
         // 재직/퇴직 체크 (기본: 퇴직)
-        T("", 0, 0);   // 재직 체크 (빈칸)
-        T("√", 0, 0);  // 퇴직 체크
-
-        // 사업장명
-        T((caseData as { workplaceName?: string | null }).workplaceName ?? "", 0, 0, 8);
-
-        // 오늘 날짜
-        T(today.연도, 0, 0); T(today.월자, 0, 0); T(today.일자, 0, 0);
-
-        // 청구인
-        T(patient.name ?? "", 0, 0); T(patient.phone ?? "", 0, 0);
-
-        // 대리인
-        T(manager?.name ?? "", 0, 0); T(manager?.officeTel ?? "", 0, 0);
-
-        // 관할공단
-        T(caseData.kwcOfficeName ?? "", 0, 0);
-
-        // 소음사업장 직력 (최대 5행)
-        for (let i = 0; i < 5; i++) {
-          const job = noiseJobs[i];
-          if (job) {
-            const period = `${job.startYear}.${String(job.startMonth).padStart(2, "0")}~${job.endYear}.${String(job.endMonth).padStart(2, "0")}`;
-            T(job.company ?? "", 0, 0, 7);
-            T(period, 0, 0, 7);
-            T(job.jobType ?? "", 0, 0, 7);
-          }
-        }
-
-        // 별지사용 체크 (5개 초과 시)
-        T(noiseJobs.length > 5 ? "√" : "", 0, 0);
+        drawText(page, "",  316, 620, font, 9);  // 재직
+        drawText(page, "√", 401, 620, font, 9);  // 퇴직
+        drawText(page, today.연도, 204, 143, font, 9);
+        drawText(page, today.월자, 275, 143, font, 9);
+        drawText(page, today.일자, 331, 143, font, 9);
+        drawText(page, patient.name ?? "",      268, 118, font, 9);
+        drawText(page, patient.phone ?? "",     431, 118, font, 9);
+        drawText(page, manager?.name ?? "",     268, 106, font, 9);
+        drawText(page, manager?.officeTel ?? "",431, 106, font, 9);
+        // 별지사용 (소음직력 5개 초과 시 자동)
+        drawText(page, noiseJobs.length > 5 ? "√" : "", 367, 374, font, 9);
 
         pdfBytes = await pdfDoc.save();
         break;
@@ -211,30 +188,29 @@ export async function GET(
         const pdfDoc = await loadBlankForm("agent_appointment.pdf");
         const font = await loadKoreanFont(pdfDoc);
         const page = pdfDoc.getPages()[0];
-        const T = (text: string, x: number, y: number, size = 9) => drawText(page, text, x, y, font, size);
-
         const bf = parseBirthDate(patient.ssn ?? "");
-        const df = parseDateFields(detail?.firstExamDate ? new Date(detail.firstExamDate) : null);
+        const df = parseDateFields(detail?.firstExamDate ?? null);
 
-        T("장해급여 청구(소음성 난청)", 175, 656);
-        T(patient.name, 175, 621);
-        T(`${bf.Y1}${bf.Y2}${bf.Y3}${bf.Y4}.${bf.M1}${bf.M2}.${bf.D1}${bf.D2}`, 400, 621);
-        T(patient.address ?? "", 175, 581, 8);
-        T(patient.phone ?? "", 350, 565);
-        T("√", 175, 539); // 근로자 체크
-        T(`노무법인 더보상 ${manager?.branchName ?? ""}`, 175, 507);
-        T(manager?.licenseNo ?? "", 450, 491);
-        T(`공인노무사 ${manager?.name ?? ""}`, 175, 454);
-        T(manager?.jobTitle ?? "", 430, 454);
-        T(manager?.officeAddress ?? "", 175, 414, 8);
-        T(manager?.officeTel ?? "", 230, 391, 8);
-        T(manager?.officeTel ?? "", 335, 391, 8);
-        T(manager?.officeFax ?? "", 450, 391, 8);
-        T("소음성 난청 장해급여 청구에 관한 사항 일체", 175, 354);
-        T(`${df.연도}.${df.월자}.${df.일자}`, 175, 310);
-        T(today.연도, 355, 195); T(today.월자, 405, 195); T(today.일자, 450, 195);
-        T(patient.name, 340, 163);
-        T(caseData.kwcOfficeName ?? "", 270, 131);
+        drawText(page, "장해급여 청구(소음성 난청)",                    184, 664, font, 9);
+        drawText(page, patient.name ?? "",                              193, 629, font, 9);
+        drawText(page, `${bf.Y1}${bf.Y2}${bf.Y3}${bf.Y4}.${bf.M1}${bf.M2}.${bf.D1}${bf.D2}`, 452, 629, font, 9);
+        drawText(page, patient.address ?? "",                           186, 599, font, 8);
+        drawText(page, patient.phone ?? "",                             372, 574, font, 9);
+        drawText(page, `노무법인 더보상 ${manager?.branchName ?? ""}`,  222, 505, font, 9);
+        drawText(page, manager?.licenseNo ?? "",                        470, 505, font, 9);
+        drawText(page, `공인노무사 ${manager?.name ?? ""}`,             250, 460, font, 9);
+        drawText(page, manager?.jobTitle ?? "",                         477, 460, font, 9);
+        drawText(page, manager?.officeAddress ?? "",                    186, 425, font, 8);
+        drawText(page, manager?.officeTel ?? "",                        227, 400, font, 9);
+        drawText(page, manager?.officeTel ?? "",                        342, 400, font, 9);
+        drawText(page, manager?.officeFax ?? "",                        450, 391, font, 9);
+        drawText(page, "소음성 난청 장해급여 청구에 관한 사항 일체",    271, 356, font, 9);
+        drawText(page, `${df.연도}.${df.월자}.${df.일자}`,             199, 315, font, 9);
+        drawText(page, today.연도, 340, 203, font, 9);
+        drawText(page, today.월자, 412, 203, font, 9);
+        drawText(page, today.일자, 461, 203, font, 9);
+        drawText(page, patient.name ?? "", 367, 173, font, 9);
+        drawText(page, caseData.kwcOfficeName ?? "", 346, 140, font, 9);
 
         pdfBytes = await pdfDoc.save();
         break;
@@ -244,18 +220,19 @@ export async function GET(
         const pdfDoc = await loadBlankForm("power_of_attorney.pdf");
         const font = await loadKoreanFont(pdfDoc);
         const page = pdfDoc.getPages()[0];
-        const T = (text: string, x: number, y: number, size = 9) => drawText(page, text, x, y, font, size);
 
-        T(`노무법인 더보상 ${manager?.branchName ?? ""}`, 220, 649, 10);
-        T(manager?.officeAddress ?? "", 220, 630);
-        T(manager?.officeTel ?? "", 220, 612);
-        T(manager?.officeFax ?? "", 220, 595);
-        T(`제 ${manager?.licenseNo ?? ""}호`, 270, 577);
-        T(`공인노무사 ${manager?.name ?? ""}`, 220, 559);
-        T(today.연도, 355, 273, 10); T(today.월자, 403, 273, 10); T(today.일자, 460, 273, 10);
-        T(patient.name, 230, 226, 10);
-        T(patient.ssn ?? "", 230, 197);
-        T(patient.address ?? "", 230, 169);
+        drawText(page, `노무법인 더보상 ${manager?.branchName ?? ""}`, 240, 657, font, 9);
+        drawText(page, manager?.officeAddress ?? "", 240, 638, font, 8);
+        drawText(page, manager?.officeTel ?? "",     240, 620, font, 9);
+        drawText(page, manager?.officeFax ?? "",     240, 602, font, 9);
+        drawText(page, `제 ${manager?.licenseNo ?? ""}호`, 295, 585, font, 9);
+        drawText(page, `공인노무사 ${manager?.name ?? ""}`, 233, 567, font, 9);
+        drawText(page, today.연도, 345, 280, font, 10);
+        drawText(page, today.월자, 409, 280, font, 10);
+        drawText(page, today.일자, 468, 280, font, 10);
+        drawText(page, patient.name ?? "",  285, 234, font, 10);
+        drawText(page, patient.ssn ?? "",   285, 206, font, 9);
+        drawText(page, patient.address ?? "", 285, 176, font, 9);
 
         pdfBytes = await pdfDoc.save();
         break;
@@ -265,34 +242,49 @@ export async function GET(
         const pdfDoc = await loadBlankForm("special_clinic.pdf");
         const font = await loadKoreanFont(pdfDoc);
         const page = pdfDoc.getPages()[0];
-        const T = (text: string, x: number, y: number, size = 9) => drawText(page, text, x, y, font, size);
-
         const jf = parseJumin(patient.ssn ?? "");
-        const df = parseDateFields(detail?.firstExamDate ? new Date(detail.firstExamDate) : null);
-        const clinicName = detail?.specialClinic ?? "";
-        const clinicAddr = getHospitalRegion(clinicName);
-        const mgrPhone = (manager as { phone?: string | null } | null)?.phone ?? manager?.officeTel ?? "";
+        const df = parseDateFields(detail?.firstExamDate ?? null);
 
-        T(patient.name, 100, 686);
-        T(jf["1"], 195, 671); T(jf["2"], 208, 671); T(jf["3"], 221, 671);
-        T(jf["4"], 234, 671); T(jf["5"], 247, 671); T(jf["6"], 260, 671);
-        T(jf["7"], 278, 671);
-        T(df.y1, 415, 671); T(df.y2, 428, 671); T(df.y3, 441, 671); T(df.y4, 454, 671);
-        T(df.m1, 470, 671); T(df.m2, 483, 671);
-        T(df.d1, 522, 671); T(df.d2, 535, 671);
-        T(patient.address ?? "", 100, 647, 8);
-        T(patient.phone ?? "", 440, 647);
-        T("소음성 난청(특별진찰)", 145, 580);
-        T(`- 대리인 Tel: ${manager?.officeTel ?? ""}  Fax: ${manager?.officeFax ?? ""}`, 145, 568, 8);
-        T(clinicName, 145, 518);
-        if (clinicAddr) T(clinicAddr, 290, 518, 8);
-        T("√", 512, 518); // 첫 번째 행 체크
-        T(today.연도, 335, 187); T(today.월자, 368, 187); T(today.일자, 400, 187);
-        T(patient.name, 145, 175); T(patient.phone ?? "", 460, 175);
-        T(manager?.name ?? "", 145, 157);
-        T(manager?.officeTel ?? "", 360, 157);
-        T(mgrPhone, 480, 157);
-        T(caseData.kwcOfficeName ?? "", 165, 60);
+        drawText(page, patient.name ?? "", 93, 676, font, 9);
+        // 주민번호 1~7 (좌표 확정)
+        drawText(page, jf["1"] ?? "", 173, 676, font, 9);
+        drawText(page, jf["2"] ?? "", 190, 676, font, 9);
+        drawText(page, jf["3"] ?? "", 206, 676, font, 9);
+        drawText(page, jf["4"] ?? "", 223, 676, font, 9);
+        drawText(page, jf["5"] ?? "", 240, 676, font, 9);
+        drawText(page, jf["6"] ?? "", 257, 676, font, 9);
+        drawText(page, jf["7"] ?? "", 276, 676, font, 9);
+        // 주민번호 8~13 (좌표 미정 — 추후 반영)
+
+        // 재해일
+        drawText(page, df.y1, 399, 676, font, 9);
+        drawText(page, df.y2, 416, 676, font, 9);
+        drawText(page, df.y3, 432, 676, font, 9);
+        drawText(page, df.y4, 450, 676, font, 9);
+        drawText(page, df.m1, 474, 676, font, 9);
+        drawText(page, df.m2, 491, 676, font, 9);
+        drawText(page, df.d1, 515, 676, font, 9);
+        drawText(page, df.d2, 533, 676, font, 9);
+
+        drawText(page, patient.address ?? "", 148, 642, font, 8);
+        drawText(page, patient.phone ?? "",   465, 640, font, 9);
+
+        // 특진 사유 (고정 텍스트)
+        drawText(page, "소음성 난청(특별진찰)", 148, 572, font, 9);
+        drawText(page, `- 대리인 Tel: ${manager?.officeTel ?? ""}  Fax: ${manager?.officeFax ?? ""}`, 148, 560, font, 8);
+
+        // 특진의료기관 1행
+        drawText(page, detail?.specialClinic ?? "", 171, 524, font, 9);
+        drawText(page, "√", 530, 524, font, 9);  // 1행 체크
+
+        drawText(page, today.연도, 338, 195, font, 9);
+        drawText(page, today.월자, 385, 195, font, 9);
+        drawText(page, today.일자, 418, 195, font, 9);
+        drawText(page, patient.name ?? "",       174, 182, font, 9);
+        drawText(page, patient.phone ?? "",      503, 182, font, 9);
+        drawText(page, manager?.name ?? "",      174, 165, font, 9);
+        drawText(page, manager?.officeTel ?? "", 503, 164, font, 9);
+        drawText(page, caseData.kwcOfficeName ?? "", 133, 69, font, 9);
 
         pdfBytes = await pdfDoc.save();
         break;
@@ -302,35 +294,49 @@ export async function GET(
         const pdfDoc = await loadBlankForm("expert_clinic.pdf");
         const font = await loadKoreanFont(pdfDoc);
         const page = pdfDoc.getPages()[0];
-        const T = (text: string, x: number, y: number, size = 9) => drawText(page, text, x, y, font, size);
-
         const jf = parseJumin(patient.ssn ?? "");
-        const df = parseDateFields(detail?.firstExamDate ? new Date(detail.firstExamDate) : null);
-        const clinicName = detail?.expertClinic ?? "";
-        const clinicAddr = getHospitalRegion(clinicName);
-        const mgrPhone = (manager as { phone?: string | null } | null)?.phone ?? manager?.officeTel ?? "";
+        const df = parseDateFields(detail?.firstExamDate ?? null);
 
-        T(patient.name, 100, 686);
-        T(jf["1"], 195, 671); T(jf["2"], 208, 671); T(jf["3"], 221, 671);
-        T(jf["4"], 234, 671); T(jf["5"], 247, 671); T(jf["6"], 260, 671);
-        T(jf["7"], 278, 671);
-        T(df.y1, 415, 671); T(df.y2, 428, 671); T(df.y3, 441, 671); T(df.y4, 454, 671);
-        T(df.m1, 470, 671); T(df.m2, 483, 671);
-        T(df.d1, 522, 671); T(df.d2, 535, 671);
-        T(patient.address ?? "", 100, 647, 8);
-        T(patient.phone ?? "", 440, 647);
-        T("소음성 난청(업무관련성 평가)", 145, 580);
-        T(`- 대리인 H.P: ${mgrPhone}  Tel: ${manager?.officeTel ?? ""}`, 145, 568, 8);
-        T(`  Fax: ${manager?.officeFax ?? ""}`, 145, 558, 8);
-        T(clinicName, 145, 518);
-        if (clinicAddr) T(clinicAddr, 290, 518, 8);
-        T("√", 512, 518);
-        T(today.연도, 335, 187); T(today.월자, 368, 187); T(today.일자, 400, 187);
-        T(patient.name, 145, 175); T(patient.phone ?? "", 460, 175);
-        T(manager?.name ?? "", 145, 157);
-        T(manager?.officeTel ?? "", 360, 157);
-        T(mgrPhone, 480, 157);
-        T(caseData.kwcOfficeName ?? "", 165, 60);
+        drawText(page, patient.name ?? "", 93, 676, font, 9);
+        // 주민번호 1~7 (좌표 확정)
+        drawText(page, jf["1"] ?? "", 173, 676, font, 9);
+        drawText(page, jf["2"] ?? "", 190, 676, font, 9);
+        drawText(page, jf["3"] ?? "", 206, 676, font, 9);
+        drawText(page, jf["4"] ?? "", 223, 676, font, 9);
+        drawText(page, jf["5"] ?? "", 240, 676, font, 9);
+        drawText(page, jf["6"] ?? "", 257, 676, font, 9);
+        drawText(page, jf["7"] ?? "", 276, 676, font, 9);
+        // 주민번호 8~13 (좌표 미정 — 추후 반영)
+
+        // 재해일
+        drawText(page, df.y1, 399, 676, font, 9);
+        drawText(page, df.y2, 416, 676, font, 9);
+        drawText(page, df.y3, 432, 676, font, 9);
+        drawText(page, df.y4, 450, 676, font, 9);
+        drawText(page, df.m1, 474, 676, font, 9);
+        drawText(page, df.m2, 491, 676, font, 9);
+        drawText(page, df.d1, 515, 676, font, 9);
+        drawText(page, df.d2, 533, 676, font, 9);
+
+        drawText(page, patient.address ?? "", 148, 642, font, 8);
+        drawText(page, patient.phone ?? "",   465, 640, font, 9);
+
+        // 특진 사유
+        drawText(page, "소음성 난청(업무관련성 평가)", 148, 572, font, 9);
+        drawText(page, `- 대리인 H.P: ${manager?.officeTel ?? ""}  Tel: ${manager?.officeTel ?? ""}  Fax: ${manager?.officeFax ?? ""}`, 148, 560, font, 8);
+
+        // 전문조사기관
+        drawText(page, detail?.expertClinic ?? "", 171, 524, font, 9);
+        drawText(page, "√", 530, 524, font, 9);  // 1행 체크
+
+        drawText(page, today.연도, 338, 195, font, 9);
+        drawText(page, today.월자, 385, 195, font, 9);
+        drawText(page, today.일자, 418, 195, font, 9);
+        drawText(page, patient.name ?? "",       174, 182, font, 9);
+        drawText(page, patient.phone ?? "",      503, 182, font, 9);
+        drawText(page, manager?.name ?? "",      174, 165, font, 9);
+        drawText(page, manager?.officeTel ?? "", 503, 164, font, 9);
+        drawText(page, caseData.kwcOfficeName ?? "", 133, 69, font, 9);
 
         pdfBytes = await pdfDoc.save();
         break;
@@ -339,49 +345,34 @@ export async function GET(
       case "WORK_HISTORY": {
         const pdfDoc = await loadBlankForm("work_history.pdf");
         const font = await loadKoreanFont(pdfDoc);
-        const pages = pdfDoc.getPages();
+        const allJobs = workHistory;
 
-        // 페이지 1: 인적사항 + 문1~4
-        const p1 = pages[0];
-        const T1 = (text: string, x: number, y: number, size = 9) => drawText(p1, text, x, y, font, size);
-        T1(patient.name, 156, 632);
-        T1(patient.phone ?? "", 156, 604);
-        T1(patient.address ?? "", 156, 576, 8);
+        // 1페이지
+        const page1 = pdfDoc.getPages()[0];
+        drawText(page1, patient.name ?? "",    172, 638, font, 9);
+        drawText(page1, patient.phone ?? "",   174, 609, font, 9);
+        drawText(page1, patient.address ?? "", 174, 582, font, 8);
 
-        // 페이지 2: 문5~9 + 사업장근무력 테이블
-        if (pages.length > 1) {
-          const p2 = pages[1];
-          const T2 = (text: string, x: number, y: number, size = 9) => drawText(p2, text, x, y, font, size);
+        // 2페이지 — 사업장 근무력 조사표
+        const page2 = pdfDoc.getPages()[1];
 
-          // 상단 테이블 첫 행 (allJobs[0])
-          if (workHistory[0]) {
-            const j = workHistory[0];
-            const months = calcMonths(j);
-            const yrs = Math.floor(months / 12); const mths = months % 12;
-            T2("1", 98, 623, 8);
-            T2(fmtPeriod(j), 145, 623, 7);
-            T2(`${j.company}(${j.jobType ?? ""})`, 225, 623, 7);
-            T2(`${yrs}년 ${mths}개월`, 383, 623, 7);
-            if (j.source?.includes("건강")) T2("√", 414, 623, 7);
-            if (j.source?.includes("연금")) T2("√", 440, 623, 7);
-            if (j.source?.includes("고용")) T2("√", 465, 623, 7);
-            if (j.source?.includes("소득")) T2("√", 490, 623, 7);
-          }
+        // 총 근무기간 계산
+        const totalMonths = allJobs.reduce((acc: number, j) => {
+          return acc + (j.endYear - j.startYear) * 12 + ((j.endMonth ?? 0) - (j.startMonth ?? 0));
+        }, 0);
+        const totalYears = Math.floor(totalMonths / 12);
+        const totalRem = totalMonths % 12;
+        drawText(page2, `총 약 ${totalYears}년 ${totalRem}개월`, 109, 687, font, 8);
 
-          const totalMonths = workHistory.reduce((acc, j) => acc + calcMonths(j), 0);
-          const totalYrs = Math.floor(totalMonths / 12);
-          const totalMths = totalMonths % 12;
-          T2(`${totalYrs}년 ${totalMths}개월`, 430, 595, 8);
-        }
-
-        // 페이지 3: 문10~13 + 서명
-        if (pages.length > 2) {
-          const p3 = pages[2];
-          const T3 = (text: string, x: number, y: number, size = 9) => drawText(p3, text, x, y, font, size);
-          T3(today.연도, 222, 302); T3(today.월자, 276, 302); T3(today.일자, 318, 302);
-          T3(patient.name, 185, 257); T3(patient.phone ?? "", 440, 257);
-          T3(manager?.name ?? "", 185, 214); T3(manager?.officeTel ?? "", 440, 214);
-        }
+        // 3페이지
+        const page3 = pdfDoc.getPages()[2];
+        drawText(page3, today.연도, 219, 309, font, 9);
+        drawText(page3, today.월자, 282, 308, font, 9);
+        drawText(page3, today.일자, 329, 308, font, 9);
+        drawText(page3, patient.name ?? "",       283, 267, font, 9);
+        drawText(page3, patient.phone ?? "",      485, 267, font, 9);
+        drawText(page3, `공인노무사 ${manager?.name ?? ""}`, 283, 222, font, 9);
+        drawText(page3, manager?.officeTel ?? "", 485, 222, font, 9);
 
         pdfBytes = await pdfDoc.save();
         break;
