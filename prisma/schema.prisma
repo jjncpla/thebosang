@@ -627,6 +627,7 @@ model ObjectionCase {
   // 진행 상태
   progressStatus        String    // 진행중 / 종결 / 송무인계 / 검토중
   memo                  String?
+  reasonContent         String?   // 이유서·의견서 본문 내용
   // 소송 인계 관련
   litigationHandover    Boolean   @default(false) // 송무 인계 여부
   litigationMemo        String?

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useState } from "react";
 
 const FORM_TYPES = [
   {
@@ -50,6 +50,20 @@ export default function ObjectionDocumentPage() {
   const [memo, setMemo] = useState("");
   const [toast, setToast] = useState<string | null>(null);
   const [searching, setSearching] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [generating, setGenerating] = useState(false);
+
+  const loadReasonContent = useCallback(async (caseId: string) => {
+    try {
+      const res = await fetch(`/api/objection/cases/${caseId}/reason`);
+      if (res.ok) {
+        const data = await res.json();
+        setMemo(data.reasonContent ?? "");
+      }
+    } catch (e) {
+      console.error("이유서 로드 실패", e);
+    }
+  }, []);
 
   const handleSearch = async () => {
     if (!query.trim()) return;
@@ -75,9 +89,71 @@ export default function ObjectionDocumentPage() {
     setSelectedSub(ft?.subTypes[0] ?? "");
   };
 
-  const handleGenerate = () => {
-    setToast("준비 중인 기능입니다.");
-    setTimeout(() => setToast(null), 3000);
+  const handleSaveReason = async () => {
+    if (!selectedCase) return;
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/objection/cases/${selectedCase.id}/reason`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reasonContent: memo }),
+      });
+      if (res.ok) {
+        setToast("저장되었습니다.");
+      } else {
+        setToast("저장 실패. 다시 시도해주세요.");
+      }
+    } catch {
+      setToast("저장 중 오류가 발생했습니다.");
+    } finally {
+      setSaving(false);
+      setTimeout(() => setToast(null), 3000);
+    }
+  };
+
+  const handleGenerate = async () => {
+    if (!selectedCase) {
+      setToast("사건을 먼저 선택해주세요.");
+      setTimeout(() => setToast(null), 3000);
+      return;
+    }
+
+    const isReason = selectedForm === "reason";
+    const isOpinion = selectedForm === "attachment"; // 의견서 대응 가능 시 확장
+
+    if (!isReason) {
+      setToast("이유서를 선택해주세요. 나머지 서식은 준비 중입니다.");
+      setTimeout(() => setToast(null), 3000);
+      return;
+    }
+
+    setGenerating(true);
+    try {
+      const res = await fetch(`/api/objection/cases/${selectedCase.id}/generate-reason`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ docType: "reason" }),
+      });
+
+      if (!res.ok) {
+        setToast("PDF 생성 실패. 다시 시도해주세요.");
+        setTimeout(() => setToast(null), 3000);
+        return;
+      }
+
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `이유서_${selectedCase.patientName}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      setToast("PDF 생성 중 오류가 발생했습니다.");
+      setTimeout(() => setToast(null), 3000);
+    } finally {
+      setGenerating(false);
+    }
   };
 
   return (
@@ -107,7 +183,7 @@ export default function ObjectionDocumentPage() {
         {searchResults.length > 0 && !selectedCase && (
           <div style={{ border: "1px solid #e5e7eb", borderRadius: 6, marginTop: 8, maxHeight: 200, overflowY: "auto" }}>
             {searchResults.map(c => (
-              <div key={c.id} onClick={() => { setSelectedCase(c); setSearchResults([]); }} style={{ padding: "9px 14px", cursor: "pointer", fontSize: 13, borderBottom: "1px solid #f1f5f9", color: "#374151" }} onMouseEnter={e => e.currentTarget.style.background = "#f8fafc"} onMouseLeave={e => e.currentTarget.style.background = "white"}>
+              <div key={c.id} onClick={() => { setSelectedCase(c); setSearchResults([]); loadReasonContent(c.id); }} style={{ padding: "9px 14px", cursor: "pointer", fontSize: 13, borderBottom: "1px solid #f1f5f9", color: "#374151" }} onMouseEnter={e => e.currentTarget.style.background = "#f8fafc"} onMouseLeave={e => e.currentTarget.style.background = "white"}>
                 <span style={{ fontWeight: 600, color: "#111827" }}>{c.patientName}</span>
                 <span style={{ marginLeft: 8, color: "#6b7280", fontSize: 12 }}>{c.caseType}</span>
               </div>
@@ -118,7 +194,7 @@ export default function ObjectionDocumentPage() {
           <div style={{ marginTop: 8, display: "flex", alignItems: "center", gap: 10, background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: 6, padding: "8px 12px" }}>
             <span style={{ fontSize: 13, fontWeight: 700, color: "#1d4ed8" }}>{selectedCase.patientName}</span>
             <span style={{ fontSize: 12, color: "#6b7280" }}>{selectedCase.caseType}</span>
-            <button onClick={() => { setSelectedCase(null); setQuery(""); }} style={{ marginLeft: "auto", background: "none", border: "none", cursor: "pointer", fontSize: 12, color: "#6b7280" }}>변경</button>
+            <button onClick={() => { setSelectedCase(null); setQuery(""); setMemo(""); }} style={{ marginLeft: "auto", background: "none", border: "none", cursor: "pointer", fontSize: 12, color: "#6b7280" }}>변경</button>
           </div>
         )}
       </div>
@@ -197,7 +273,7 @@ export default function ObjectionDocumentPage() {
                   <div style={{ color: "#9ca3af" }}>대리인 신분증: 추후 일괄 DB 등록 예정</div>
                 </div>
               )}
-              <button onClick={handleGenerate} style={{ background: "#29ABE2", color: "white", border: "none", borderRadius: 6, padding: "8px 20px", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>PDF 생성</button>
+              <button onClick={handleGenerate} disabled={generating} style={{ background: generating ? "#9ca3af" : "#29ABE2", color: "white", border: "none", borderRadius: 6, padding: "8px 20px", fontSize: 13, fontWeight: 700, cursor: generating ? "default" : "pointer" }}>{generating ? "생성 중..." : "PDF 생성"}</button>
             </div>
           )}
 
@@ -211,7 +287,7 @@ export default function ObjectionDocumentPage() {
               style={{ width: "100%", border: "1px solid #e5e7eb", borderRadius: 6, padding: "10px 12px", fontSize: 13, color: "#374151", background: "#f9fafb", outline: "none", resize: "vertical", minHeight: 160, fontFamily: "inherit", boxSizing: "border-box" }}
             />
             <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 8 }}>
-              <button onClick={() => setToast("메모가 저장되었습니다.")} style={{ background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: 6, padding: "6px 16px", fontSize: 12, color: "#374151", cursor: "pointer" }}>저장</button>
+              <button onClick={handleSaveReason} disabled={saving || !selectedCase} style={{ background: saving ? "#9ca3af" : "#f9fafb", border: "1px solid #e5e7eb", borderRadius: 6, padding: "6px 16px", fontSize: 12, color: "#374151", cursor: saving || !selectedCase ? "default" : "pointer" }}>{saving ? "저장 중..." : "저장"}</button>
             </div>
           </div>
         </div>
