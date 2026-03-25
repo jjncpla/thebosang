@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 /* ═══════════════════════════════════════════════════════════════
    [타입 정의]
@@ -8,28 +8,22 @@ import { useState } from "react";
 type TaskType = "정산요청" | "이의제기" | "제척임박" | "일반업무";
 
 interface Task {
-  id: number;
-  date: string; // "YYYY-MM-DD"
-  type: TaskType;
-  content: string;
-  deadline: string; // "YYYY-MM-DD"
+  id: string;
+  title: string;
+  dueDate: string | null;
+  type: string;
+  isDone: boolean;
+  patientName: string | null;
+  memo: string | null;
 }
 
-/* ═══════════════════════════════════════════════════════════════
-   [목업 데이터]
-   ═══════════════════════════════════════════════════════════════ */
-const today = new Date();
-const fmt = (d: Date) => d.toISOString().slice(0, 10);
-const addDays = (d: Date, n: number) => { const r = new Date(d); r.setDate(r.getDate() + n); return r; };
+const TYPE_MAP: Record<string, TaskType> = {
+  OBJECTION_DEADLINE: "이의제기",
+  WAGE_REQUEST: "정산요청",
+  GENERAL: "일반업무",
+};
 
-const MOCK_TASKS: Task[] = [
-  { id: 1, date: fmt(today), type: "정산요청", content: "홍길동 장해급여 정산 검토", deadline: fmt(addDays(today, 3)) },
-  { id: 2, date: fmt(today), type: "이의제기", content: "김철수 불승인 처분 이의제기서 작성", deadline: fmt(addDays(today, 7)) },
-  { id: 3, date: fmt(addDays(today, 1)), type: "제척임박", content: "박영희 소멸시효 임박 — 즉시 처리", deadline: fmt(addDays(today, 1)) },
-  { id: 4, date: fmt(addDays(today, 1)), type: "일반업무", content: "월간 업무 보고서 작성", deadline: fmt(addDays(today, 5)) },
-  { id: 5, date: fmt(addDays(today, 3)), type: "정산요청", content: "이민준 휴업급여 정산 자료 준비", deadline: fmt(addDays(today, 4)) },
-  { id: 6, date: fmt(addDays(today, -2)), type: "이의제기", content: "최지은 재요양 불승인 의견서", deadline: fmt(addDays(today, 2)) },
-];
+const fmt = (d: Date) => d.toISOString().slice(0, 10);
 
 const TYPE_COLORS: Record<TaskType, { bg: string; color: string }> = {
   정산요청: { bg: "#dbeafe", color: "#1e40af" },
@@ -48,9 +42,36 @@ export default function TodoPage() {
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth()); // 0-indexed
   const [selectedDate, setSelectedDate] = useState<string>(fmt(now));
-  const [tasks] = useState<Task[]>(MOCK_TASKS);
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState<Set<TaskType>>(new Set(ALL_TYPES));
-  const [memo, setMemo] = useState("");
+  const [memoText, setMemoText] = useState("");
+
+  useEffect(() => {
+    const fetchTodos = async () => {
+      try {
+        const res = await fetch("/api/todos");
+        if (res.ok) {
+          const data = await res.json();
+          setTasks(data);
+        }
+      } catch (e) {
+        console.error("Todo 로드 실패", e);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchTodos();
+  }, []);
+
+  const handleToggleDone = async (id: string, isDone: boolean) => {
+    await fetch(`/api/todos/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ isDone: !isDone }),
+    });
+    setTasks(prev => prev.map(t => t.id === id ? { ...t, isDone: !isDone } : t));
+  };
 
   const todayStr = fmt(now);
 
@@ -68,11 +89,14 @@ export default function TodoPage() {
   const dateStr = (d: number) =>
     `${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
 
-  const hasTasks = (d: number) => tasks.some(t => t.date === dateStr(d));
+  const getTaskDate = (t: Task) => t.dueDate ? t.dueDate.slice(0, 10) : null;
+  const getTaskType = (t: Task): TaskType => TYPE_MAP[t.type] ?? "일반업무";
+
+  const hasTasks = (d: number) => tasks.some(t => getTaskDate(t) === dateStr(d));
 
   /* 선택된 날짜의 필터된 할일 */
   const dayTasks = tasks.filter(
-    t => t.date === selectedDate && filters.has(t.type)
+    t => getTaskDate(t) === selectedDate && filters.has(getTaskType(t))
   );
 
   const toggleFilter = (type: TaskType) => {
@@ -98,6 +122,8 @@ export default function TodoPage() {
 
   const DAYS = ["일", "월", "화", "수", "목", "금", "토"];
   const MONTH_LABEL = `${year}년 ${month + 1}월`;
+
+  if (loading) return <div style={{ padding: 32, color: "#94a3b8" }}>불러오는 중...</div>;
 
   return (
     <div style={wrap}>
@@ -173,17 +199,29 @@ export default function TodoPage() {
               {dayTasks.length === 0 ? (
                 <div style={empty}>등록된 업무가 없습니다.</div>
               ) : (
-                dayTasks.map(t => (
-                  <div key={t.id} style={taskRow}>
-                    <span style={{ ...badge, background: TYPE_COLORS[t.type].bg, color: TYPE_COLORS[t.type].color }}>
-                      {t.type}
-                    </span>
-                    <span style={{ flex: 1, fontSize: 13, color: "#1e293b" }}>{t.content}</span>
-                    <span style={{ fontSize: 12, color: "#94a3b8", whiteSpace: "nowrap" }}>
-                      기한 {t.deadline}
-                    </span>
-                  </div>
-                ))
+                dayTasks.map(t => {
+                  const tt = getTaskType(t);
+                  return (
+                    <div key={t.id} style={{ ...taskRow, opacity: t.isDone ? 0.5 : 1 }}>
+                      <input
+                        type="checkbox"
+                        checked={t.isDone}
+                        onChange={() => handleToggleDone(t.id, t.isDone)}
+                        style={{ cursor: "pointer" }}
+                      />
+                      <span style={{ ...badge, background: TYPE_COLORS[tt].bg, color: TYPE_COLORS[tt].color }}>
+                        {tt}
+                      </span>
+                      <span style={{ flex: 1, fontSize: 13, color: "#1e293b", textDecoration: t.isDone ? "line-through" : "none" }}>
+                        {t.title}
+                        {t.patientName && <span style={{ color: "#6b7280", marginLeft: 4 }}>({t.patientName})</span>}
+                      </span>
+                      <span style={{ fontSize: 12, color: "#94a3b8", whiteSpace: "nowrap" }}>
+                        {t.dueDate ? `기한 ${t.dueDate.slice(0, 10)}` : ""}
+                      </span>
+                    </div>
+                  );
+                })
               )}
             </div>
           </div>
@@ -226,8 +264,8 @@ export default function TodoPage() {
             <div style={sideCardH}>메모</div>
             <div style={{ padding: "12px 16px" }}>
               <textarea
-                value={memo}
-                onChange={e => setMemo(e.target.value)}
+                value={memoText}
+                onChange={e => setMemoText(e.target.value)}
                 placeholder="메모를 입력하세요..."
                 style={memoArea}
               />

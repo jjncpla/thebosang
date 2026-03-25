@@ -91,6 +91,7 @@ model Case {
 
   messages  Message[]
   timelines TimelineEvent[]
+  todos     Todo[]
 }
 
 model HearingLossDetail {
@@ -501,6 +502,7 @@ model User {
   timelineEvents TimelineEvent[]
   consultations  Consultation[]  @relation("ConsultationManager")
   objectionCases ObjectionCase[] @relation("ObjectionManager")
+  todos          Todo[]
 }
 
 model SignupRequest {
@@ -690,4 +692,21 @@ model WageReviewData {
   additionalReview      String?   // 추가 검토
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
+}
+
+model Todo {
+  id          String    @id @default(cuid())
+  title       String
+  dueDate     DateTime?
+  type        String    // OBJECTION_DEADLINE / WAGE_REQUEST / GENERAL
+  caseId      String?
+  patientName String?
+  assignedTo  String?
+  isDone      Boolean   @default(false)
+  memo        String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  case        Case?     @relation(fields: [caseId], references: [id])
+  user        User?     @relation(fields: [assignedTo], references: [id])
 }
