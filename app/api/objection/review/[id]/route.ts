@@ -75,6 +75,53 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }
   }
 
+  // progressStatus 변경 시 Todo 자동 생성
+  const TODO_TRIGGER_STATUS: Record<string, { title: string; type: string }> = {
+    "이의제기 진행": { title: "이의제기 이유서 작성 필요", type: "OBJECTION_DEADLINE" },
+    "평정청구 진행": { title: "평균임금 정정 청구 서류 준비", type: "WAGE_REQUEST" },
+    "송무 검토":    { title: "송무 검토 필요", type: "GENERAL" },
+    "송무 인계":    { title: "송무 인계 처리 필요", type: "GENERAL" },
+  };
+
+  if (body.progressStatus && TODO_TRIGGER_STATUS[body.progressStatus]) {
+    const trigger = TODO_TRIGGER_STATUS[body.progressStatus];
+
+    // 중복 방지: 동일 사건+상태 조합으로 미완료 Todo가 있으면 생성 안 함
+    const existingTodo = await prisma.todo.findFirst({
+      where: {
+        caseId: item.caseId ?? undefined,
+        title: { contains: trigger.title },
+        isDone: false,
+      },
+    });
+
+    if (!existingTodo) {
+      // 담당자 조회
+      let assignedTo = session.user.id;
+      let todoPatientName = item.patientName ?? "재해자";
+
+      if (item.caseId) {
+        const caseInfo = await prisma.case.findUnique({
+          where: { id: item.caseId },
+          select: { caseManagerId: true, patient: { select: { name: true } } },
+        });
+        if (caseInfo?.caseManagerId) assignedTo = caseInfo.caseManagerId;
+        if (caseInfo?.patient?.name) todoPatientName = caseInfo.patient.name;
+      }
+
+      await prisma.todo.create({
+        data: {
+          title: `[${todoPatientName}] ${trigger.title}`,
+          type: trigger.type,
+          caseId: item.caseId ?? null,
+          patientName: todoPatientName,
+          assignedTo,
+          dueDate: null,
+        },
+      });
+    }
+  }
+
   return NextResponse.json(item);
 }
 

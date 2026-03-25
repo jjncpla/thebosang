@@ -319,12 +319,17 @@ export default function ObjectionReviewPage() {
     return true;
   });
 
+  const AUTO_TODO_STATUSES = ["이의제기 진행", "평정청구 진행", "송무 검토", "송무 인계"];
+
   const handleSaveReview = async (form: ReviewForm, id?: string) => {
     const method = id ? "PATCH" : "POST";
     const url = id ? `/api/objection/review/${id}` : "/api/objection/review";
     const res = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(form) });
     if (!res.ok) throw new Error();
     await fetchReviews();
+    if (AUTO_TODO_STATUSES.includes(form.progressStatus)) {
+      alert("To Do List에 할일이 자동 추가되었습니다.");
+    }
   };
 
   // stats (전체 reviews 기준)
@@ -438,7 +443,12 @@ export default function ObjectionReviewPage() {
                           {diff !== null && diff <= 7 && diff >= 0 && " ⚠️"}
                           {diff !== null && diff < 0 && " 🔴"}
                         </td>
-                        <td style={{ padding: "10px 12px", color: "#374151" }}>{item.progressStatus || <span style={{ color: "#9ca3af" }}>미검토</span>}</td>
+                        <td style={{ padding: "10px 12px", color: "#374151" }}>
+                          {item.progressStatus || <span style={{ color: "#9ca3af" }}>미검토</span>}
+                          {item.progressStatus === "이의제기 진행" && (
+                            <a href="/objection/deadline" onClick={(e) => e.stopPropagation()} style={{ fontSize: 11, color: "#29ABE2", textDecoration: "underline", marginLeft: 6 }}>기일 관리 →</a>
+                          )}
+                        </td>
                         <td style={{ padding: "10px 12px", color: item.hasInfoDisclosure ? "#15803d" : "#9ca3af" }}>{item.hasInfoDisclosure ? "✓ 있음" : "없음"}</td>
                         <td style={{ padding: "10px 12px" }}>
                           {item.caseId && (
