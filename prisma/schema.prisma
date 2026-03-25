@@ -713,3 +713,57 @@ model Todo {
   case        Case?     @relation(fields: [caseId], references: [id])
   user        User?     @relation(fields: [assignedTo], references: [id])
 }
+
+// ─────────────────────────────────────────────
+// 운영규정·취업규칙 문서
+// ─────────────────────────────────────────────
+model PolicyDocument {
+  id          String   @id @default(cuid())
+  title       String
+  category    String                        // OPERATION_RULE | WORK_RULE | OTHER
+  version     String?
+  fileUrl     String?
+  content     String?  @db.Text
+  isLatest    Boolean  @default(true)
+  createdBy   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// ─────────────────────────────────────────────
+// 인사평가
+// ─────────────────────────────────────────────
+model StaffEvaluation {
+  id               String   @id @default(cuid())
+  userId           String
+  evaluatorId      String?
+  period           String
+  score            Int?
+  performanceScore Int?
+  attendanceScore  Int?
+  attitudeScore    Int?
+  isPromotionTarget Boolean @default(false)
+  promotionGrade   String?
+  memo             String?  @db.Text
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  user      User @relation("EvaluationTarget", fields: [userId], references: [id])
+}
+
+// ─────────────────────────────────────────────
+// 업무 지시 게시판
+// ─────────────────────────────────────────────
+model WorkOrder {
+  id          String    @id @default(cuid())
+  title       String
+  content     String    @db.Text
+  authorId    String
+  dueDate     DateTime?
+  priority    String    @default("NORMAL")
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  author    User @relation("WorkOrderAuthor", fields: [authorId], references: [id])
+}

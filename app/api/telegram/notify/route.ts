@@ -1,12 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@/auth";
 
 /* ═══════════════════════════════════════════════════════════════
    POST /api/telegram/notify
-   — 외부에서 텔레그램 알림 push용 엔드포인트
+   — TBSS 내부에서 텔레그램 알림 push용 엔드포인트
    body: { message: string, chatId?: string }
    chatId 미지정 시 TELEGRAM_ALLOWED_USER_IDS의 모든 유저에게 전송
    ═══════════════════════════════════════════════════════════════ */
 export async function POST(req: NextRequest) {
+  const session = await auth();
+  if (!session) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
   const botToken = process.env.TELEGRAM_BOT_TOKEN;
   if (!botToken) {
     return NextResponse.json(
