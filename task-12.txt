@@ -1,0 +1,307 @@
+# TASK-12: 정보공개청구서 + 공인노무사 업무처리부 PDF 자동생성
+# 실행: cat task-12.txt | claude --dangerously-skip-permissions
+
+## 개요
+두 서식을 오버레이 방식으로 추가한다.
+- 정보공개청구서: /patients/[patientId] 비고 섹션 아래 신규 섹션
+- 공인노무사 업무처리부: /objection/review 처분검토 페이지에 생성 버튼
+- 두 파일 모두 public/forms/ 로 복사 (영문명)
+
+---
+
+## STEP 1: 파일 복사 및 forms/page.tsx 필드 추가
+
+### 1-A. public/forms/ 파일 복사
+아래 경로에서 복사:
+```
+public/form-backgrounds/공인노무사_업무처리부.pdf → public/forms/labor_attorney_record.pdf
+public/form-backgrounds/정보공개청구서.pdf        → public/forms/info_disclosure.pdf
+```
+fs.copyFileSync 또는 bash cp 명령으로 복사.
+
+### 1-B. forms/page.tsx — FORM_FIELDS에 두 서식 추가
+
+```typescript
+// FORM_FIELDS 객체에 추가
+INFO_DISCLOSURE: [
+  { key: 'mgrName',      label: '청구인 성명',   x: 0, y: 0 },
+  { key: 'mgrAddress',   label: '청구인 주소',   x: 0, y: 0 },
+  { key: 'mgrTel',       label: '전화번호',      x: 0, y: 0 },
+  { key: 'mgrFax',       label: '팩스번호',      x: 0, y: 0 },
+  { key: 'content',      label: '청구 내용',     x: 0, y: 0 },
+  { key: 'todayYear',    label: '오늘 연도',     x: 0, y: 0 },
+  { key: 'todayMonth',   label: '오늘 월',       x: 0, y: 0 },
+  { key: 'todayDay',     label: '오늘 일',       x: 0, y: 0 },
+  { key: 'kwc',          label: '관할공단',      x: 0, y: 0 },
+],
+
+LABOR_ATTORNEY_RECORD: [
+  { key: 'branchName',   label: '상호(지사명)',  x: 0, y: 0 },
+  { key: 'ptName',       label: '성명(대표자)',  x: 0, y: 0 },
+  { key: 'birthDate',    label: '생년월일',      x: 0, y: 0 },
+  { key: 'address',      label: '주소',          x: 0, y: 0 },
+  { key: 'commissionDate', label: '직무위촉연월일', x: 0, y: 0 },
+  { key: 'feeContract',  label: '수수료 계약금', x: 0, y: 0 },
+  { key: 'feeAdvance',   label: '착수금',        x: 0, y: 0 },
+  { key: 'jobSummary',   label: '직무 요지',     x: 0, y: 0 },
+  { key: 'result',       label: '처리 결과',     x: 0, y: 0 },
+  { key: 'note',         label: '특기사항',      x: 0, y: 0 },
+],
+```
+
+### 1-C. forms/page.tsx — FORMS 배열에 두 서식 추가
+```typescript
+{ type: 'INFO_DISCLOSURE',      label: '정보공개 청구서',        pages: 1 },
+{ type: 'LABOR_ATTORNEY_RECORD',label: '공인노무사 업무처리부',  pages: 1 },
+```
+
+### 1-D. forms/blank/route.ts — FILE_MAP에 추가
+```typescript
+INFO_DISCLOSURE:       'info_disclosure.pdf',
+LABOR_ATTORNEY_RECORD: 'labor_attorney_record.pdf',
+```
+
+---
+
+## STEP 2: PDF 생성 API — route.ts에 두 케이스 추가
+
+파일: app/api/cases/[caseId]/forms/route.ts
+
+### 케이스 1: INFO_DISCLOSURE
+
+```typescript
+case 'INFO_DISCLOSURE': {
+  const pdfDoc = await loadBlankForm('info_disclosure.pdf')
+  const font = await loadKoreanFont(pdfDoc)
+  const page = pdfDoc.getPages()[0]
+  const today = parseDateFields(new Date())
+  const manager = caseData.caseManager
+
+  // 청구인 정보 (노무사)
+  drawText(page, manager?.name ?? '',          0, 0, font, 9)  // 청구인 성명
+  drawText(page, manager?.officeAddress ?? '',  0, 0, font, 8)  // 주소
+  drawText(page, manager?.officeTel ?? '',      0, 0, font, 9)  // 전화
+  drawText(page, manager?.officeFax ?? '',      0, 0, font, 9)  // 팩스
+
+  // 청구 내용: 별도 파라미터로 받거나 빈칸 (좌표 조정 후)
+  drawText(page, '',                            0, 0, font, 8)  // 청구 내용
+
+  // 날짜
+  drawText(page, today.연도, 0, 0, font, 9)
+  drawText(page, today.월자, 0, 0, font, 9)
+  drawText(page, today.일자, 0, 0, font, 9)
+
+  // 관할공단
+  drawText(page, caseData.kwcOfficeName ?? '', 0, 0, font, 9)
+
+  break
+}
+```
+
+### 케이스 2: LABOR_ATTORNEY_RECORD
+
+```typescript
+case 'LABOR_ATTORNEY_RECORD': {
+  const pdfDoc = await loadBlankForm('labor_attorney_record.pdf')
+  const font = await loadKoreanFont(pdfDoc)
+  const page = pdfDoc.getPages()[0]
+  const manager = caseData.caseManager
+  const bf = parseBirthDate(patient.ssn ?? '')
+  const df = parseDateFields(detail?.firstExamDate ?? null)
+
+  // 업무 의뢰인
+  drawText(page, `노무법인 더보상 ${manager?.branchName ?? ''}`, 0, 0, font, 9) // 상호
+  drawText(page, patient.name ?? '',                              0, 0, font, 9) // 성명(대표자)
+  drawText(page, `${bf.Y1}${bf.Y2}${bf.Y3}${bf.Y4}.${bf.M1}${bf.M2}.${bf.D1}${bf.D2}`, 0, 0, font, 9) // 생년월일
+  drawText(page, patient.address ?? '',                           0, 0, font, 8) // 주소
+  drawText(page, `${df.연도}.${df.월자}.${df.일자}`,             0, 0, font, 9) // 직무위촉연월일
+
+  // 수수료 (빈칸 — 수동 입력)
+  drawText(page, '', 0, 0, font, 9) // 계약금
+  drawText(page, '', 0, 0, font, 9) // 착수금
+
+  // 직무 요지 (고정 텍스트)
+  drawText(page, '산업재해보상보험법에 의한 보험급여 청구 및 이의제기에 관한 사항 일체', 0, 0, font, 8)
+
+  // 처리 결과, 특기사항 (빈칸)
+  drawText(page, '', 0, 0, font, 9) // 처리 결과
+  drawText(page, '', 0, 0, font, 9) // 특기사항
+
+  break
+}
+```
+
+※ 모든 좌표 0,0 — /forms 에디터에서 조정 예정
+
+---
+
+## STEP 3: 정보공개청구서 UI — /patients/[patientId] 비고 섹션 아래
+
+파일: app/patients/[patientId]/page.tsx
+
+비고(memo) 섹션 바로 아래에 "정보공개 청구서 생성" 섹션 추가.
+
+### 3-A. State 추가
+```typescript
+// 정보공개청구서 체크박스 상태
+const INFO_ITEMS = [
+  '특별진찰 의뢰 및 회신서',
+  '업무관련성 평가 특별진찰 의뢰 및 회신서',
+  '업무관련성 평가 소견서',
+  '장해진단서',
+  '재해조사서',
+  '소음노출수준조사',
+  '직업력조사(소음성 난청)',
+  '통합심사 의뢰 및 결과서',
+  '업무상 질병 자문 의뢰 및 회신서',
+  '보험가입자 의견서',
+  '평균임금 산정내역서',
+] as const
+
+const [infoChecked, setInfoChecked] = useState<string[]>([])
+const [infoLoading, setInfoLoading] = useState(false)
+```
+
+### 3-B. 핸들러
+```typescript
+const handleInfoDisclosureDownload = async () => {
+  setInfoLoading(true)
+  try {
+    // 선택된 항목을 줄바꿈으로 조합해서 쿼리로 전달
+    const content = infoChecked.map((item, i) => `${i + 1}. ${item}`).join('\n')
+    const params = new URLSearchParams({ type: 'INFO_DISCLOSURE', content })
+    const res = await fetch(`/api/cases/${caseId}/forms?${params}`)
+    if (!res.ok) throw new Error()
+    const blob = await res.blob()
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `정보공개청구서_${patient?.name ?? ''}.pdf`
+    a.click()
+    URL.revokeObjectURL(url)
+  } catch {
+    alert('생성 실패')
+  } finally {
+    setInfoLoading(false)
+  }
+}
+```
+
+### 3-C. UI 블록 (비고 섹션 아래 삽입)
+
+소음성 난청(HEARING_LOSS) 탭에만 적용. HearingLossTab 내부, 비고 섹션 아래:
+
+```tsx
+{/* 정보공개 청구서 */}
+<div style={{
+  marginTop: '16px',
+  padding: '14px',
+  backgroundColor: '#fafafa',
+  borderRadius: '6px',
+  border: '1px solid #e5e7eb',
+}}>
+  <div style={{ fontWeight: 'bold', fontSize: '13px', marginBottom: '10px', color: '#374151' }}>
+    📋 정보공개 청구서 생성
+  </div>
+  <div style={{ fontSize: '12px', color: '#6b7280', marginBottom: '8px' }}>청구할 서류 선택:</div>
+  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px', marginBottom: '12px' }}>
+    {INFO_ITEMS.map((item) => (
+      <label key={item} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', cursor: 'pointer' }}>
+        <input
+          type="checkbox"
+          checked={infoChecked.includes(item)}
+          onChange={(e) => {
+            if (e.target.checked) {
+              setInfoChecked(prev => [...prev, item])
+            } else {
+              setInfoChecked(prev => prev.filter(i => i !== item))
+            }
+          }}
+        />
+        {item}
+      </label>
+    ))}
+  </div>
+  <button
+    onClick={handleInfoDisclosureDownload}
+    disabled={infoChecked.length === 0 || infoLoading}
+    style={{
+      padding: '8px 16px',
+      backgroundColor: infoChecked.length === 0 ? '#d1d5db' : '#29ABE2',
+      color: 'white',
+      border: 'none',
+      borderRadius: '4px',
+      cursor: infoChecked.length === 0 ? 'not-allowed' : 'pointer',
+      fontSize: '13px',
+    }}
+  >
+    {infoLoading ? '생성 중...' : `📄 정보공개 청구서 생성 (${infoChecked.length}개 선택)`}
+  </button>
+</div>
+```
+
+### 3-D. route.ts — content 파라미터 수신
+
+INFO_DISCLOSURE 케이스에서:
+```typescript
+const content = req.nextUrl.searchParams.get('content') ?? ''
+// content를 청구 내용란 위치에 drawText로 출력
+// 긴 텍스트는 줄바꿈(\n) 처리 — drawText를 여러 줄로 분리
+const lines = content.split('\n')
+lines.forEach((line, i) => {
+  drawText(page, line, contentX, contentY - i * 12, font, 8)
+})
+```
+
+---
+
+## STEP 4: 공인노무사 업무처리부 UI — /objection/review
+
+파일: app/objection/review/page.tsx 또는 처분검토 관련 컴포넌트
+
+처분검토 목록의 각 사건 행에 "업무처리부" 버튼 추가.
+또는 사건 선택 후 상세 패널에 버튼 배치 (기존 UI 패턴 따를 것).
+
+```tsx
+<button
+  onClick={() => handleLaborRecordDownload(caseId)}
+  style={{
+    padding: '4px 10px',
+    backgroundColor: '#006838',
+    color: 'white',
+    border: 'none',
+    borderRadius: '4px',
+    fontSize: '12px',
+    cursor: 'pointer',
+  }}
+>
+  📋 업무처리부
+</button>
+```
+
+핸들러:
+```typescript
+const handleLaborRecordDownload = async (caseId: string) => {
+  const res = await fetch(`/api/cases/${caseId}/forms?type=LABOR_ATTORNEY_RECORD`)
+  if (!res.ok) { alert('생성 실패'); return }
+  const blob = await res.blob()
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = '공인노무사업무처리부.pdf'
+  a.click()
+  URL.revokeObjectURL(url)
+}
+```
+
+---
+
+## 완료 확인
+
+1. public/forms/에 info_disclosure.pdf, labor_attorney_record.pdf 존재
+2. /forms 에디터에서 두 서식 선택 가능
+3. /patients/[id] HEARING_LOSS 탭 비고 섹션 아래 체크박스 UI 표시
+4. 체크박스 선택 후 생성 버튼 클릭 시 PDF 다운로드
+5. /objection/review 에 업무처리부 버튼 표시
+6. TypeScript 컴파일 에러 없음
+

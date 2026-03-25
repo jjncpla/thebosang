@@ -163,8 +163,104 @@ async function handleClaudeChat(chatId: number, userText: string) {
 /* ═══════════════════════════════════════════════════════════════
    POST /api/telegram/webhook
    ═══════════════════════════════════════════════════════════════ */
+/* ═══════════════════════════════════════════════════════════════
+   /조회 [재해자이름] 명령어
+   ═══════════════════════════════════════════════════════════════ */
+async function handleCaseQuery(chatId: number, searchName: string) {
+  if (!searchName) {
+    await sendMessage(chatId, "조회할 재해자 이름을 입력해주세요.\n예) /조회 홍길동");
+    return;
+  }
+
+  const cases = await prisma.case.findMany({
+    where: { patient: { name: { contains: searchName } } },
+    include: { patient: { select: { name: true } } },
+    take: 5,
+  });
+
+  if (cases.length === 0) {
+    await sendMessage(chatId, `"${searchName}" 검색 결과가 없습니다.`);
+    return;
+  }
+
+  const statusMap: Record<string, string> = {
+    CONSULTING: "상담 중",
+    CONTRACTED: "약정 완료",
+    DOC_COLLECTING: "서류 수집",
+    SUBMITTED: "접수 완료",
+    EXAM_REQUESTED: "특진 요구",
+    EXAM_CLINIC_SELECTED: "특진 병원 선정",
+    EXAM_SCHEDULED: "특진 일정 확정",
+    IN_EXAM: "특진 진행 중",
+    EXAM_DONE: "특진 완료",
+    EXPERT_REQUESTED: "전문조사 요구",
+    EXPERT_CLINIC_SELECTED: "전문조사 기관 선정",
+    EXPERT_DONE: "전문조사 완료",
+    BANK_REQUESTED: "은행 요청",
+    BANK_SUBMITTED: "은행 제출",
+    DECISION_RECEIVED: "결정 수령",
+    REVIEWING: "검토 중",
+    APPROVED: "승인",
+    REJECTED: "불승인",
+    OBJECTION: "이의제기 진행 중",
+    WAGE_CORRECTION: "평균임금 정정",
+    CLOSED: "종결",
+  };
+
+  const resultText = cases
+    .map((c) => {
+      const status = statusMap[c.status] ?? c.status;
+      return `• ${c.patient?.name} — ${status}`;
+    })
+    .join("\n");
+
+  await sendMessage(chatId, `검색 결과 (${cases.length}건):\n${resultText}`);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   키워드 감지 — 승인/불승인, 특진 일정, 접수 완료
+   ═══════════════════════════════════════════════════════════════ */
+type KeywordMatch = { type: string; value: string };
+
+function detectKeyword(text: string): KeywordMatch | null {
+  if (text.includes("승인") && (text.includes("처분") || text.includes("판정"))) {
+    return { type: "APPROVAL_RESULT", value: text };
+  }
+  if (text.includes("특진") && text.includes("일정")) {
+    return { type: "EXAM_SCHEDULE", value: text };
+  }
+  if (text.includes("접수") && text.includes("완료")) {
+    return { type: "SUBMISSION_DONE", value: text };
+  }
+  return null;
+}
+
+async function handleKeywordSave(
+  chatId: number,
+  text: string,
+  match: KeywordMatch,
+) {
+  try {
+    console.log("[텔레그램 키워드 감지]", match.type, text.slice(0, 100));
+  } catch (e) {
+    console.error("키워드 저장 실패", e);
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   POST /api/telegram/webhook
+   ═══════════════════════════════════════════════════════════════ */
 export async function POST(req: NextRequest) {
   try {
+    // webhook 시크릿 검증
+    const secret = req.headers.get("X-Telegram-Bot-Api-Secret-Token");
+    if (
+      process.env.TELEGRAM_WEBHOOK_SECRET &&
+      secret !== process.env.TELEGRAM_WEBHOOK_SECRET
+    ) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
     let body: TelegramUpdate;
 
     try {
@@ -192,6 +288,21 @@ export async function POST(req: NextRequest) {
     const text = msg.text.trim();
     console.log("📩 수신 메시지:", { chatId, text: text.substring(0, 50) });
 
+    // 라우팅: /조회 → 사건 조회
+    if (text.startsWith("/조회")) {
+      const searchName = text.replace("/조회", "").trim();
+      await handleCaseQuery(chatId, searchName);
+      return NextResponse.json({ ok: true });
+    }
+
+    // 라우팅: 키워드 감지 → DB 로깅
+    const keywordMatch = detectKeyword(text);
+    if (keywordMatch) {
+      await handleKeywordSave(chatId, text, keywordMatch);
+      // 키워드 감지 후에도 기존 로직 계속 진행 (Claude 응답 등)
+    }
+
+    // 기존 명령어 처리
     if (text === "/status" || text === "/status@bot") {
       console.log("📊 /status 명령어 처리");
       await handleStatus(chatId);

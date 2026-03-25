@@ -1,0 +1,358 @@
+# Task F: 관리자 페이지 상세 기획 구현
+# 목표: 조직관리자 전용 지사장 관리·운영 페이지 상세 구현
+#   1. 운영규정·취업규칙 조회 (파일 업로드 + 조회)
+#   2. 인사평가 및 승진 대상자 여부 판단
+#   3. 업무 지시 알림 게시판
+# 접근 권한: 조직관리자 이상 (ADMIN 포함)
+
+---
+
+## 사전 확인
+
+아래 파일 읽어서 현재 구현 상태 파악:
+- app/branch/page.tsx (지사장 관리 페이지로 추정)
+- schema.prisma (관련 모델 확인)
+
+기존 코드 구조 파악 후 수술적 수정.
+
+---
+
+## STEP 1: 스키마 추가
+
+파일: prisma/schema.prisma
+기존 모델 아래에 아래 3개 모델 추가:
+
+```prisma
+// 운영규정·취업규칙 문서
+model PolicyDocument {
+  id          String   @id @default(cuid())
+  title       String                        // 문서 제목
+  category    String                        // OPERATION_RULE(운영규정) | WORK_RULE(취업규칙) | OTHER
+  version     String?                       // 버전 (예: 2026-01)
+  fileUrl     String?                       // 파일 URL (추후 스토리지 연동)
+  content     String?  @db.Text            // 텍스트 내용 (직접 입력 시)
+  isLatest    Boolean  @default(true)       // 최신 버전 여부
+  createdBy   String?                       // 작성자 User ID
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// 인사평가
+model StaffEvaluation {
+  id              String   @id @default(cuid())
+  userId          String                        // 평가 대상 User ID
+  evaluatorId     String?                       // 평가자 User ID
+  period          String                        // 평가 기간 (예: 2026-Q1)
+  score           Int?                          // 총점 (100점 만점)
+  performanceScore Int?                         // 업무 성과 점수
+  attendanceScore  Int?                         // 근태 점수
+  attitudeScore    Int?                         // 태도 점수
+  isPromotionTarget Boolean @default(false)     // 승진 대상 여부
+  promotionGrade   String?                      // 승진 대상 직급
+  memo            String?  @db.Text
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user      User @relation("EvaluationTarget", fields: [userId], references: [id])
+}
+
+// 업무 지시 게시판
+model WorkOrder {
+  id          String    @id @default(cuid())
+  title       String
+  content     String    @db.Text
+  authorId    String
+  dueDate     DateTime?                     // 기한
+  priority    String    @default("NORMAL")  // URGENT | NORMAL
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  author    User @relation("WorkOrderAuthor", fields: [authorId], references: [id])
+}
+```
+
+User 모델에 역관계 추가:
+```prisma
+evaluations   StaffEvaluation[] @relation("EvaluationTarget")
+workOrders    WorkOrder[]       @relation("WorkOrderAuthor")
+```
+
+스키마 수정 후:
+```
+$env:DATABASE_URL="postgres://postgres:SRLSqrRWpIAywlMHYSmdMZANmiESHQZf@caboose.proxy.rlwy.net:18869/railway"; npx prisma db push
+```
+
+---
+
+## STEP 2: API Routes 생성
+
+### 2-1. 운영규정 API
+파일: app/api/admin/policy/route.ts
+
+```typescript
+import { NextRequest, NextResponse } from 'next/server'
+import { auth } from '@/auth'
+import { prisma } from '@/lib/prisma'
+
+const ALLOWED_ROLES = ['ADMIN', '조직관리자']
+
+export async function GET(req: NextRequest) {
+  const session = await auth()
+  if (!session || !ALLOWED_ROLES.includes(session.user.role))
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
+  const { searchParams } = new URL(req.url)
+  const category = searchParams.get('category')
+
+  const docs = await prisma.policyDocument.findMany({
+    where: {
+      isLatest: true,
+      ...(category ? { category } : {}),
+    },
+    orderBy: { createdAt: 'desc' },
+  })
+
+  return NextResponse.json(docs)
+}
+
+export async function POST(req: NextRequest) {
+  const session = await auth()
+  if (!session || !ALLOWED_ROLES.includes(session.user.role))
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
+  const body = await req.json()
+  const { title, category, version, content } = body
+
+  // 기존 최신 문서 isLatest=false 처리
+  if (category) {
+    await prisma.policyDocument.updateMany({
+      where: { category, isLatest: true },
+      data: { isLatest: false },
+    })
+  }
+
+  const doc = await prisma.policyDocument.create({
+    data: {
+      title,
+      category: category ?? 'OTHER',
+      version,
+      content,
+      isLatest: true,
+      createdBy: session.user.id,
+    },
+  })
+
+  return NextResponse.json(doc)
+}
+```
+
+### 2-2. 인사평가 API
+파일: app/api/admin/evaluation/route.ts
+
+```typescript
+import { NextRequest, NextResponse } from 'next/server'
+import { auth } from '@/auth'
+import { prisma } from '@/lib/prisma'
+
+const ALLOWED_ROLES = ['ADMIN', '조직관리자']
+
+export async function GET(req: NextRequest) {
+  const session = await auth()
+  if (!session || !ALLOWED_ROLES.includes(session.user.role))
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
+  const { searchParams } = new URL(req.url)
+  const period = searchParams.get('period')
+  const promotionOnly = searchParams.get('promotionOnly') === 'true'
+
+  const evaluations = await prisma.staffEvaluation.findMany({
+    where: {
+      ...(period ? { period } : {}),
+      ...(promotionOnly ? { isPromotionTarget: true } : {}),
+    },
+    include: {
+      user: { select: { id: true, name: true, email: true } },
+    },
+    orderBy: { createdAt: 'desc' },
+  })
+
+  return NextResponse.json(evaluations)
+}
+
+export async function POST(req: NextRequest) {
+  const session = await auth()
+  if (!session || !ALLOWED_ROLES.includes(session.user.role))
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
+  const body = await req.json()
+  const {
+    userId, period, score,
+    performanceScore, attendanceScore, attitudeScore,
+    isPromotionTarget, promotionGrade, memo
+  } = body
+
+  // 승진 대상 여부 자동 판단 (점수 80점 이상 시 대상)
+  const autoPromotion = (score ?? 0) >= 80
+
+  const evaluation = await prisma.staffEvaluation.create({
+    data: {
+      userId,
+      evaluatorId: session.user.id,
+      period,
+      score,
+      performanceScore,
+      attendanceScore,
+      attitudeScore,
+      isPromotionTarget: isPromotionTarget ?? autoPromotion,
+      promotionGrade,
+      memo,
+    },
+  })
+
+  return NextResponse.json(evaluation)
+}
+```
+
+### 2-3. 업무 지시 게시판 API
+파일: app/api/admin/work-orders/route.ts
+
+```typescript
+import { NextRequest, NextResponse } from 'next/server'
+import { auth } from '@/auth'
+import { prisma } from '@/lib/prisma'
+
+const WRITE_ROLES = ['ADMIN', '조직관리자']
+
+export async function GET(req: NextRequest) {
+  const session = await auth()
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const orders = await prisma.workOrder.findMany({
+    where: { isActive: true },
+    include: { author: { select: { name: true } } },
+    orderBy: [{ priority: 'desc' }, { createdAt: 'desc' }],
+  })
+
+  return NextResponse.json(orders)
+}
+
+export async function POST(req: NextRequest) {
+  const session = await auth()
+  if (!session || !WRITE_ROLES.includes(session.user.role))
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
+  const { title, content, dueDate, priority } = await req.json()
+
+  const order = await prisma.workOrder.create({
+    data: {
+      title,
+      content,
+      authorId: session.user.id,
+      dueDate: dueDate ? new Date(dueDate) : null,
+      priority: priority ?? 'NORMAL',
+    },
+  })
+
+  return NextResponse.json(order)
+}
+```
+
+---
+
+## STEP 3: 지사장 관리 페이지 UI 구성
+
+파일: app/branch/page.tsx (기존 파일 확인 후 수술적 수정)
+
+기존 파일을 읽은 후, 없거나 플레이스홀더 상태라면 아래 구조로 신규 작성.
+있다면 기존 구조에 탭을 추가하는 방식으로 수정.
+
+페이지 구조 (탭 방식):
+- 탭1: 운영규정·취업규칙
+- 탭2: 인사평가 / 승진 대상자
+- 탭3: 업무 지시 게시판
+
+### 탭1 — 운영규정·취업규칙
+```tsx
+// 상태
+const [policies, setPolicies] = useState<any[]>([])
+const [selectedCategory, setSelectedCategory] = useState('ALL')
+const [showAddForm, setShowAddForm] = useState(false)
+const [newPolicy, setNewPolicy] = useState({ title: '', category: 'OPERATION_RULE', version: '', content: '' })
+
+// 카테고리 옵션
+const CATEGORIES = [
+  { value: 'ALL', label: '전체' },
+  { value: 'OPERATION_RULE', label: '운영규정' },
+  { value: 'WORK_RULE', label: '취업규칙' },
+  { value: 'OTHER', label: '기타' },
+]
+
+// 로드
+useEffect(() => {
+  fetch('/api/admin/policy').then(r => r.json()).then(setPolicies)
+}, [])
+
+// UI: 카테고리 필터 버튼 + 문서 목록 카드 + 추가 폼 (ADMIN/조직관리자만)
+```
+
+### 탭2 — 인사평가
+```tsx
+// 상태
+const [evaluations, setEvaluations] = useState<any[]>([])
+const [showPromotionOnly, setShowPromotionOnly] = useState(false)
+
+// 로드
+useEffect(() => {
+  const url = showPromotionOnly
+    ? '/api/admin/evaluation?promotionOnly=true'
+    : '/api/admin/evaluation'
+  fetch(url).then(r => r.json()).then(setEvaluations)
+}, [showPromotionOnly])
+
+// UI: 
+// - "승진 대상자만 보기" 토글
+// - 직원별 평가 테이블 (이름, 기간, 총점, 업무/근태/태도, 승진대상여부)
+// - 승진 대상: 초록 배지 (#8DC63F), 비대상: 회색 배지
+// - 평가 입력 폼 (ADMIN/조직관리자만)
+```
+
+### 탭3 — 업무 지시 게시판
+```tsx
+// 상태
+const [workOrders, setWorkOrders] = useState<any[]>([])
+const [showAddForm, setShowAddForm] = useState(false)
+
+// 로드
+useEffect(() => {
+  fetch('/api/admin/work-orders').then(r => r.json()).then(setWorkOrders)
+}, [])
+
+// UI:
+// - 긴급 공지: 상단 고정, 빨간 배지
+// - 일반 공지: 일반 카드
+// - 기한 표시 (오늘 기한: 빨간색, 내일: 주황색)
+// - 작성 폼: 제목, 내용(textarea), 기한, 긴급여부 (ADMIN/조직관리자만)
+```
+
+### 권한 체크 (페이지 최상단)
+```tsx
+const session = useSession()
+const isManager = ['ADMIN', '조직관리자'].includes(session.data?.user?.role ?? '')
+
+// isManager가 false면 접근 차단
+if (!isManager) {
+  return <div className="p-8 text-red-500">접근 권한이 없습니다.</div>
+}
+```
+
+---
+
+## 완료 후 확인
+- [ ] 타입 에러 없음
+- [ ] /branch 접속 → 탭 3개 표시
+- [ ] 운영규정 탭: 문서 목록 로드, 추가 폼 동작
+- [ ] 인사평가 탭: 목록 로드, 승진 대상자 필터 동작
+- [ ] 업무 지시 탭: 공지 목록 로드, 추가 폼 동작
+- [ ] STAFF 계정으로 접속 시 접근 차단 확인
+- [ ] git add . && git commit -m "feat: 지사장 관리 페이지 상세 구현 (운영규정/인사평가/업무지시)" && git push

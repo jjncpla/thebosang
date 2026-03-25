@@ -1,0 +1,299 @@
+# Task E: 텔레그램 webhook 양방향 고도화
+# 목표: 텔레그램 ↔ TBSS 양방향 연동 전면 구현
+#   1. 텔레그램 → TBSS: 키워드 감지 → DB 자동 저장
+#   2. 텔레그램 → TBSS: 사건 상태 자연어 조회 응답
+#   3. TBSS → 텔레그램: 기일/Todo 알림 자동 발송
+# 전제: TELEGRAM_BOT_TOKEN, TELEGRAM_WEBHOOK_SECRET 환경변수 Railway에 설정되어 있어야 함
+
+---
+
+## 사전 확인
+
+아래 파일들을 먼저 읽어서 현재 구현 상태 파악:
+- app/api/telegram/webhook/route.ts
+- app/api/telegram/notify/route.ts (있는 경우)
+- app/api/webhook/telegram/route.ts (있는 경우)
+
+기존 코드를 파악한 후 수술적으로 수정. 전체 재작성 금지.
+
+---
+
+## STEP 1: webhook 수신 핸들러 고도화
+
+파일: app/api/telegram/webhook/route.ts (기존 파일 수정)
+
+기존 POST 핸들러에 아래 로직을 추가한다.
+기존 코드는 유지하고, 메시지 파싱 후 분기 처리만 추가.
+
+### 1-1. webhook 검증 추가 (없으면 추가, 있으면 유지)
+```typescript
+// 환경변수로 시크릿 검증
+const secret = req.headers.get('X-Telegram-Bot-Api-Secret-Token')
+if (process.env.TELEGRAM_WEBHOOK_SECRET && secret !== process.env.TELEGRAM_WEBHOOK_SECRET) {
+  return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+}
+```
+
+### 1-2. 메시지 파싱 및 분기 처리
+기존 webhook body 파싱 이후에 아래 분기 추가:
+
+```typescript
+const message = body?.message
+const text = message?.text ?? ''
+const chatId = message?.chat?.id
+const from = message?.from
+
+if (!text || !chatId) {
+  return NextResponse.json({ ok: true })
+}
+
+// 분기 1: /조회 커맨드 → 사건 상태 조회
+if (text.startsWith('/조회')) {
+  const searchName = text.replace('/조회', '').trim()
+  await handleCaseQuery(chatId, searchName)
+  return NextResponse.json({ ok: true })
+}
+
+// 분기 2: 키워드 패턴 감지 → DB 자동 저장
+const keywordMatch = detectKeyword(text)
+if (keywordMatch) {
+  await handleKeywordSave(chatId, text, keywordMatch, from)
+  return NextResponse.json({ ok: true })
+}
+
+// 분기 3: 기타 메시지 → 기존 처리 유지
+```
+
+### 1-3. 사건 조회 함수 추가
+같은 파일 하단에 추가:
+
+```typescript
+async function handleCaseQuery(chatId: number, searchName: string) {
+  if (!searchName) {
+    await sendTelegramMessage(chatId, '조회할 재해자 성명을 입력해주세요.\n예: /조회 홍길동')
+    return
+  }
+
+  const cases = await prisma.case.findMany({
+    where: { patient: { name: { contains: searchName } } },
+    include: { patient: { select: { name: true } } },
+    take: 5,
+  })
+
+  if (cases.length === 0) {
+    await sendTelegramMessage(chatId, `"${searchName}" 검색 결과가 없습니다.`)
+    return
+  }
+
+  const resultText = cases.map(c => {
+    const statusMap: Record<string, string> = {
+      CONSULTING: '상담 중',
+      CONTRACTED: '약정 완료',
+      SUBMITTED: '공단 접수 완료',
+      IN_EXAM: '특진 진행 중',
+      EXAM_DONE: '특진 완료',
+      APPROVED: '승인',
+      REJECTED: '불승인',
+      CLOSED: '종결',
+      OBJECTION: '이의제기 진행 중',
+    }
+    const status = statusMap[c.status] ?? c.status
+    return `📋 ${c.patient?.name} — ${status}`
+  }).join('\n')
+
+  await sendTelegramMessage(chatId, `검색 결과 (${cases.length}건):\n${resultText}`)
+}
+```
+
+### 1-4. 키워드 감지 함수 추가
+```typescript
+type KeywordMatch = { type: string; value: string }
+
+function detectKeyword(text: string): KeywordMatch | null {
+  // 패턴 1: 승인/불승인 결과 공유
+  if (text.includes('승인') && (text.includes('난청') || text.includes('소음'))) {
+    return { type: 'APPROVAL_RESULT', value: text }
+  }
+  // 패턴 2: 특진 일정
+  if (text.includes('특진') && text.includes('일정')) {
+    return { type: 'EXAM_SCHEDULE', value: text }
+  }
+  // 패턴 3: 접수 완료
+  if (text.includes('접수') && text.includes('완료')) {
+    return { type: 'SUBMISSION_DONE', value: text }
+  }
+  return null
+}
+
+async function handleKeywordSave(
+  chatId: number,
+  text: string,
+  match: KeywordMatch,
+  from: any
+) {
+  // TelegramMessage 테이블이 있으면 저장, 없으면 로그만
+  try {
+    // 기존 TelegramMessage 모델 확인 후 저장
+    // 모델이 없는 경우: console.log로만 처리
+    console.log('[텔레그램 키워드 감지]', match.type, text.slice(0, 100))
+
+    // 감지 확인 메시지 (선택적)
+    // await sendTelegramMessage(chatId, `✅ "${match.type}" 패턴이 감지되어 기록되었습니다.`)
+  } catch (e) {
+    console.error('키워드 저장 실패', e)
+  }
+}
+```
+
+### 1-5. 텔레그램 메시지 발송 유틸 추가
+```typescript
+async function sendTelegramMessage(chatId: number, text: string) {
+  const token = process.env.TELEGRAM_BOT_TOKEN
+  if (!token) return
+
+  await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      chat_id: chatId,
+      text,
+      parse_mode: 'HTML',
+    }),
+  })
+}
+```
+
+---
+
+## STEP 2: TBSS → 텔레그램 알림 발송 API
+
+파일: app/api/telegram/notify/route.ts (없으면 신규 생성, 있으면 수정)
+
+```typescript
+import { NextRequest, NextResponse } from 'next/server'
+import { auth } from '@/auth'
+import { prisma } from '@/lib/prisma'
+
+export async function POST(req: NextRequest) {
+  const session = await auth()
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const { chatId, message } = await req.json()
+
+  const token = process.env.TELEGRAM_BOT_TOKEN
+  if (!token) {
+    return NextResponse.json({ error: 'TELEGRAM_BOT_TOKEN 미설정' }, { status: 500 })
+  }
+
+  const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      chat_id: chatId,
+      text: message,
+      parse_mode: 'HTML',
+    }),
+  })
+
+  const data = await res.json()
+  return NextResponse.json(data)
+}
+```
+
+---
+
+## STEP 3: 기일/Todo 알림 자동 발송 크론 API
+
+파일: app/api/telegram/cron-notify/route.ts (신규 생성)
+
+```typescript
+import { NextRequest, NextResponse } from 'next/server'
+import { prisma } from '@/lib/prisma'
+
+// Railway 크론잡 또는 외부 크론으로 매일 오전 9시 호출
+// 호출 방법: GET https://thebosang-production.up.railway.app/api/telegram/cron-notify
+//            헤더: Authorization: Bearer {CRON_SECRET}
+
+export async function GET(req: NextRequest) {
+  // 크론 시크릿 검증
+  const auth = req.headers.get('Authorization')
+  if (auth !== `Bearer ${process.env.CRON_SECRET}`) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
+  const token = process.env.TELEGRAM_BOT_TOKEN
+  if (!token) return NextResponse.json({ error: 'BOT_TOKEN 없음' }, { status: 500 })
+
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const tomorrow = new Date(today)
+  tomorrow.setDate(tomorrow.getDate() + 1)
+
+  // 오늘 기한인 Todo 조회
+  const dueTodos = await prisma.todo.findMany({
+    where: {
+      isDone: false,
+      dueDate: { gte: today, lt: tomorrow },
+    },
+    include: {
+      user: { select: { name: true } },
+    },
+  })
+
+  if (dueTodos.length === 0) {
+    return NextResponse.json({ ok: true, sent: 0 })
+  }
+
+  // 담당자별 그룹핑
+  const grouped: Record<string, typeof dueTodos> = {}
+  for (const todo of dueTodos) {
+    const key = todo.assignedTo ?? 'unknown'
+    if (!grouped[key]) grouped[key] = []
+    grouped[key].push(todo)
+  }
+
+  // TBSS_NOTIFY_CHAT_ID 환경변수로 공통 채널에 발송
+  const chatId = process.env.TBSS_NOTIFY_CHAT_ID
+  if (!chatId) return NextResponse.json({ error: 'CHAT_ID 없음' }, { status: 500 })
+
+  const messageLines = [`📅 <b>오늘의 TBSS 할일 (${dueTodos.length}건)</b>\n`]
+  for (const todo of dueTodos) {
+    messageLines.push(`• ${todo.title} (${todo.user?.name ?? '담당자 미지정'})`)
+  }
+
+  await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      chat_id: chatId,
+      text: messageLines.join('\n'),
+      parse_mode: 'HTML',
+    }),
+  })
+
+  return NextResponse.json({ ok: true, sent: dueTodos.length })
+}
+```
+
+---
+
+## STEP 4: 필요한 환경변수 목록 (코드에 추가하지 말고 주석으로만 명시)
+
+아래 환경변수들이 Railway에 설정되어 있어야 함.
+설정되지 않은 경우 해당 기능만 비활성화되고 앱은 정상 동작.
+
+```
+TELEGRAM_BOT_TOKEN      — 텔레그램 봇 API 토큰
+TELEGRAM_WEBHOOK_SECRET — webhook 검증 시크릿
+TBSS_NOTIFY_CHAT_ID     — 알림 발송할 텔레그램 채널/그룹 ID
+CRON_SECRET             — 크론 API 호출 시크릿
+```
+
+---
+
+## 완료 후 확인
+- [ ] 타입 에러 없음
+- [ ] /api/telegram/webhook POST — 기존 기능 유지 + 분기 추가됨
+- [ ] /api/telegram/notify POST — 텔레그램 발송 API 존재
+- [ ] /api/telegram/cron-notify GET — 크론 API 존재
+- [ ] git add . && git commit -m "feat: 텔레그램 webhook 양방향 고도화" && git push

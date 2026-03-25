@@ -503,6 +503,8 @@ model User {
   consultations  Consultation[]  @relation("ConsultationManager")
   objectionCases ObjectionCase[] @relation("ObjectionManager")
   todos          Todo[]
+  evaluations    StaffEvaluation[] @relation("EvaluationTarget")
+  workOrders     WorkOrder[]       @relation("WorkOrderAuthor")
 }
 
 model SignupRequest {

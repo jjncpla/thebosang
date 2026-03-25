@@ -1,0 +1,118 @@
+# 일용직 20일 미만 항목 합산 후 환산 수정
+
+## 문제 요약
+현재: 각 일용직 항목을 개별로 Math.floor(days/20) → 1일짜리도 독립 계산됨
+목표: 20일 미만 항목들의 일수를 먼저 모두 합산 → 합산 일수를 한 번에 ÷20
+
+---
+
+## 1단계: 관련 코드 위치 확인
+
+```bash
+grep -n "calcMonthsDisplay\|isDailyWorker\|calcWorkDays\|totalNoiseMonths\|workHistory" \
+  src/app/patients/*/page.tsx 2>/dev/null | head -60
+
+grep -rn "calcMonthsDisplay\|isDailyWorker\|totalNoiseMonths" \
+  src --include="*.tsx" | head -40
+```
+
+---
+
+## 2단계: 핵심 로직 교체
+
+아래 3개 함수를 찾아서 교체한다.
+(patients/[patientId]/page.tsx 와 cases/[caseId]/page.tsx 두 파일 모두 적용)
+
+### [1] calcMonthsDisplay — 테이블 셀 표시용
+
+```typescript
+// 개별 행 표시: 20일 미만이면 "N일 (합산 대기)"로 표시
+function calcMonthsDisplay(item: WorkHistoryItem): string {
+  if (!isDailyWorker(item)) {
+    // 일반직: 년월 차이
+    if (!item.startYear || !item.endYear) return '-';
+    const totalMonths =
+      (item.endYear - item.startYear) * 12 +
+      ((item.endMonth ?? 12) - (item.startMonth ?? 1));
+    return `${Math.max(0, totalMonths)}개월`;
+  }
+
+  // 일용직
+  const days = calcWorkDays(item);
+  if (days === 0) return '-';
+  if (days < 20) return `${days}일 (합산 대기)`;          // 20일 미만: 개월 환산 안 함
+  return `${Math.floor(days / 20)}개월`;                  // 20일 이상: 정상 환산
+}
+```
+
+### [2] totalNoiseMonths — 소음 노출 총 개월수 합산
+
+```typescript
+// 소음 노출 일용직 항목 분리
+const noiseDailyItems = (workHistory ?? []).filter(
+  item => item.noiseExposure && isDailyWorker(item)
+);
+const noiseNormalItems = (workHistory ?? []).filter(
+  item => item.noiseExposure && !isDailyWorker(item)
+);
+
+// 일용직: 20일 이상 항목은 개별 환산, 20일 미만 항목은 일수 합산 후 일괄 환산
+const dailyOver20Months = noiseDailyItems
+  .filter(item => calcWorkDays(item) >= 20)
+  .reduce((sum, item) => sum + Math.floor(calcWorkDays(item) / 20), 0);
+
+const dailyUnder20TotalDays = noiseDailyItems
+  .filter(item => calcWorkDays(item) < 20)
+  .reduce((sum, item) => sum + calcWorkDays(item), 0);
+
+const dailyUnder20Months = Math.floor(dailyUnder20TotalDays / 20); // 합산 후 일괄 환산
+
+// 일반직: 년월 차이 합산
+const normalMonths = noiseNormalItems.reduce((sum, item) => {
+  if (!item.startYear || !item.endYear) return sum;
+  const m =
+    (item.endYear - item.startYear) * 12 +
+    ((item.endMonth ?? 12) - (item.startMonth ?? 1));
+  return sum + Math.max(0, m);
+}, 0);
+
+const totalNoiseMonths = dailyOver20Months + dailyUnder20Months + normalMonths;
+```
+
+### [3] 경고 메시지 — 20일 미만 합산 내역 표시
+
+직업력 섹션 하단(또는 workHistoryMemo 아래)에 추가:
+
+```tsx
+{/* 20일 미만 일용직 합산 안내 */}
+{(() => {
+  const under20Items = (workHistory ?? []).filter(
+    item => item.noiseExposure && isDailyWorker(item) && calcWorkDays(item) < 20
+  );
+  if (under20Items.length === 0) return null;
+
+  const totalDays = under20Items.reduce((sum, item) => sum + calcWorkDays(item), 0);
+  const pooledMonths = Math.floor(totalDays / 20);
+  const remainDays = totalDays % 20;
+
+  return (
+    <p className="mt-2 text-xs bg-amber-50 border border-amber-200 text-amber-800 rounded px-3 py-2">
+      ⚠ 20일 미만 일용직 {under20Items.length}건 합산:
+      {' '}{under20Items.map(i => `${i.company || '미상'}(${calcWorkDays(i)}일)`).join(' + ')}
+      {' '}= 총 {totalDays}일 → {pooledMonths}개월
+      {remainDays > 0 && ` (나머지 ${remainDays}일 소거)`}
+    </p>
+  );
+})()}
+```
+
+---
+
+## 3단계: 타입 체크 후 커밋
+
+```bash
+npx tsc --noEmit 2>&1 | head -20
+git add -A
+git commit -m "fix: 일용직 20일 미만 항목 합산 후 개월 환산 (개별 환산 버그 수정)"
+git push origin main
+```

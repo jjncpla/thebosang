@@ -1,0 +1,386 @@
+# Task C: 이유서·의견서 자동 서식 완성
+# 목표: app/objection/document/page.tsx의 stub 상태 기능 완성
+#   1. 이유서 내용 DB 저장 (현재 토스트만)
+#   2. PDF 생성 실제 구현 (현재 토스트만)
+# 전제: prisma, pdf-lib, @pdf-lib/fontkit, NotoSansKR 이미 설치됨
+
+---
+
+## STEP 1: ObjectionCase 스키마에 이유서 필드 추가
+
+파일: prisma/schema.prisma
+ObjectionCase 모델 내부 기존 memo 필드 아래에 한 줄 추가:
+
+```prisma
+reasonContent   String?   // 이유서·의견서 본문 내용
+```
+
+스키마 수정 후 실행:
+```
+$env:DATABASE_URL="postgres://postgres:비밀번호@caboose.proxy.rlwy.net:18869/railway"
+npx prisma db push
+npx prisma generate
+```
+
+---
+
+## STEP 2: 이유서 내용 저장/조회 API 추가
+
+파일: app/api/objection/cases/[id]/reason/route.ts (신규 생성)
+
+```typescript
+import { NextRequest, NextResponse } from 'next/server'
+import { auth } from '@/auth'
+import { prisma } from '@/lib/prisma'
+
+// GET: 이유서 내용 조회
+export async function GET(
+  req: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  const session = await auth()
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const objCase = await prisma.objectionCase.findUnique({
+    where: { id: params.id },
+    select: { reasonContent: true },
+  })
+
+  return NextResponse.json({ reasonContent: objCase?.reasonContent ?? '' })
+}
+
+// PATCH: 이유서 내용 저장
+export async function PATCH(
+  req: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  const session = await auth()
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const { reasonContent } = await req.json()
+
+  const updated = await prisma.objectionCase.update({
+    where: { id: params.id },
+    data: { reasonContent },
+  })
+
+  return NextResponse.json({ ok: true, reasonContent: updated.reasonContent })
+}
+```
+
+---
+
+## STEP 3: PDF 생성 API 추가
+
+파일: app/api/objection/cases/[id]/generate-reason/route.ts (신규 생성)
+
+```typescript
+import { NextRequest, NextResponse } from 'next/server'
+import { auth } from '@/auth'
+import { prisma } from '@/lib/prisma'
+import { PDFDocument, rgb } from 'pdf-lib'
+import fontkit from '@pdf-lib/fontkit'
+import fs from 'fs'
+import path from 'path'
+
+// A4 기준 상수
+const PAGE_WIDTH = 595.28   // pt
+const PAGE_HEIGHT = 841.89  // pt
+const MARGIN = 60
+const LINE_HEIGHT = 22
+
+export async function POST(
+  req: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  const session = await auth()
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const { docType } = await req.json()
+  // docType: 'reason'(이유서) | 'opinion'(의견서)
+
+  // 사건 정보 조회
+  const objCase = await prisma.objectionCase.findUnique({
+    where: { id: params.id },
+    select: {
+      patientName: true,
+      caseType: true,
+      tfName: true,
+      decisionDate: true,
+      examClaimDate: true,
+      reExamClaimDate: true,
+      reasonContent: true,
+      manager: { select: { name: true } },
+    },
+  })
+
+  if (!objCase) {
+    return NextResponse.json({ error: '사건을 찾을 수 없습니다' }, { status: 404 })
+  }
+
+  // PDF 생성
+  const pdfDoc = await PDFDocument.create()
+  pdfDoc.registerFontkit(fontkit)
+
+  // NotoSansKR 폰트 로드 (기존 프로젝트 폰트 경로 사용)
+  const fontPath = path.join(process.cwd(), 'public', 'fonts', 'NotoSansKR-Regular.ttf')
+  const fontBytes = fs.readFileSync(fontPath)
+  const font = await pdfDoc.embedFont(fontBytes)
+
+  const boldFontPath = path.join(process.cwd(), 'public', 'fonts', 'NotoSansKR-Bold.ttf')
+  const boldFontBytes = fs.readFileSync(boldFontPath)
+  const boldFont = await pdfDoc.embedFont(boldFontBytes)
+
+  const page = pdfDoc.addPage([PAGE_WIDTH, PAGE_HEIGHT])
+  let y = PAGE_HEIGHT - MARGIN
+
+  const docTitle = docType === 'reason' ? '이    유    서' : '의    견    서'
+
+  // 제목
+  page.drawText(docTitle, {
+    x: PAGE_WIDTH / 2 - boldFont.widthOfTextAtSize(docTitle, 18) / 2,
+    y,
+    size: 18,
+    font: boldFont,
+    color: rgb(0, 0, 0),
+  })
+  y -= LINE_HEIGHT * 2.5
+
+  // 구분선
+  page.drawLine({
+    start: { x: MARGIN, y },
+    end: { x: PAGE_WIDTH - MARGIN, y },
+    thickness: 1,
+    color: rgb(0, 0, 0),
+  })
+  y -= LINE_HEIGHT * 1.5
+
+  // 사건 정보 헤더
+  const headerItems = [
+    { label: '재해자', value: objCase.patientName ?? '' },
+    { label: '사건분류', value: objCase.caseType ?? '' },
+    { label: '담당 TF', value: objCase.tfName ?? '' },
+    { label: '처분일', value: objCase.decisionDate
+        ? new Date(objCase.decisionDate).toLocaleDateString('ko-KR')
+        : '' },
+    { label: '담당 노무사', value: objCase.manager?.name ?? '' },
+  ]
+
+  for (const item of headerItems) {
+    page.drawText(`${item.label}: ${item.value}`, {
+      x: MARGIN,
+      y,
+      size: 11,
+      font,
+      color: rgb(0, 0, 0),
+    })
+    y -= LINE_HEIGHT
+  }
+
+  y -= LINE_HEIGHT
+
+  // 구분선
+  page.drawLine({
+    start: { x: MARGIN, y },
+    end: { x: PAGE_WIDTH - MARGIN, y },
+    thickness: 0.5,
+    color: rgb(0.5, 0.5, 0.5),
+  })
+  y -= LINE_HEIGHT * 1.5
+
+  // 이유서 본문
+  page.drawText('【 이    유 】', {
+    x: MARGIN,
+    y,
+    size: 13,
+    font: boldFont,
+    color: rgb(0, 0, 0),
+  })
+  y -= LINE_HEIGHT * 1.5
+
+  const content = objCase.reasonContent ?? '(내용 없음)'
+  const maxWidth = PAGE_WIDTH - MARGIN * 2
+  const fontSize = 11
+
+  // 줄바꿈 처리 (한 줄에 들어가는 글자 수 기준으로 분할)
+  const lines = content.split('\n')
+  for (const line of lines) {
+    // 빈 줄 처리
+    if (!line.trim()) {
+      y -= LINE_HEIGHT
+      continue
+    }
+    // 긴 줄 자동 줄바꿈
+    let remaining = line
+    while (remaining.length > 0) {
+      let chunk = remaining
+      while (font.widthOfTextAtSize(chunk, fontSize) > maxWidth && chunk.length > 1) {
+        chunk = chunk.slice(0, -1)
+      }
+      page.drawText(chunk, {
+        x: MARGIN,
+        y,
+        size: fontSize,
+        font,
+        color: rgb(0, 0, 0),
+      })
+      y -= LINE_HEIGHT
+      remaining = remaining.slice(chunk.length)
+
+      // 페이지 넘침 처리 (기본 대응 — 여백 부족 시 새 페이지)
+      if (y < MARGIN + LINE_HEIGHT * 3) {
+        const newPage = pdfDoc.addPage([PAGE_WIDTH, PAGE_HEIGHT])
+        y = PAGE_HEIGHT - MARGIN
+        // 이후 내용은 새 페이지에서 계속
+      }
+    }
+  }
+
+  // 서명란
+  y -= LINE_HEIGHT * 2
+  const today = new Date().toLocaleDateString('ko-KR')
+  page.drawText(`작성일: ${today}`, {
+    x: PAGE_WIDTH - MARGIN - font.widthOfTextAtSize(`작성일: ${today}`, 11),
+    y,
+    size: 11,
+    font,
+    color: rgb(0, 0, 0),
+  })
+  y -= LINE_HEIGHT * 1.5
+  page.drawText(`노무법인 더보상  ${objCase.manager?.name ?? '담당노무사'}  (인)`, {
+    x: PAGE_WIDTH - MARGIN - font.widthOfTextAtSize(`노무법인 더보상  ${objCase.manager?.name ?? '담당노무사'}  (인)`, 11),
+    y,
+    size: 11,
+    font,
+    color: rgb(0, 0, 0),
+  })
+
+  const pdfBytes = await pdfDoc.save()
+
+  const fileName = `${docType === 'reason' ? '이유서' : '의견서'}_${objCase.patientName}_${today.replace(/\./g, '')}.pdf`
+
+  return new NextResponse(Buffer.from(pdfBytes), {
+    status: 200,
+    headers: {
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(fileName)}`,
+    },
+  })
+}
+```
+
+---
+
+## STEP 4: app/objection/document/page.tsx — stub 로직 교체
+
+파일: app/objection/document/page.tsx
+
+### 4-1. 사건 선택 시 이유서 내용 자동 로드
+기존 사건 선택 핸들러(사건 클릭 시 selectedCase를 세팅하는 부분)를 찾아서,
+selectedCase 세팅 직후 아래 로직 추가:
+
+```typescript
+// 사건 선택 시 기존 저장된 이유서 내용 로드
+const loadReasonContent = async (caseId: string) => {
+  try {
+    const res = await fetch(`/api/objection/cases/${caseId}/reason`)
+    if (res.ok) {
+      const data = await res.json()
+      setMemo(data.reasonContent ?? '')  // 기존 memo state 재사용
+    }
+  } catch (e) {
+    console.error('이유서 로드 실패', e)
+  }
+}
+// 사건 선택 핸들러 안에서 호출
+loadReasonContent(selectedCaseId)
+```
+
+### 4-2. 저장 버튼 핸들러 교체
+기존 저장 버튼 핸들러에서 토스트만 띄우는 부분을 아래로 교체:
+
+```typescript
+const handleSave = async () => {
+  if (!selectedCase) return
+  try {
+    const res = await fetch(`/api/objection/cases/${selectedCase.id}/reason`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reasonContent: memo }),
+    })
+    if (res.ok) {
+      // 기존 프로젝트 토스트 방식 유지
+      alert('저장되었습니다.')
+    } else {
+      alert('저장 실패. 다시 시도해주세요.')
+    }
+  } catch (e) {
+    alert('저장 중 오류가 발생했습니다.')
+  }
+}
+```
+
+### 4-3. PDF 생성 핸들러 교체
+기존 handleGenerate에서 토스트만 띄우는 부분을 아래로 교체:
+
+```typescript
+const handleGenerate = async () => {
+  if (!selectedCase) {
+    alert('사건을 먼저 선택해주세요.')
+    return
+  }
+
+  // 서식 유형 판단 (selectedForm 또는 selectedTemplate 등 기존 변수명 확인 후 사용)
+  // 이유서 → 'reason', 의견서 → 'opinion', 나머지 → 추후 구현
+  const isReason = selectedForm === '이유서'    // 기존 변수명에 맞게 수정
+  const isOpinion = selectedForm === '의견서'   // 기존 변수명에 맞게 수정
+
+  if (!isReason && !isOpinion) {
+    alert('이유서 또는 의견서를 선택해주세요. 나머지 서식은 준비 중입니다.')
+    return
+  }
+
+  try {
+    const res = await fetch(`/api/objection/cases/${selectedCase.id}/generate-reason`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ docType: isReason ? 'reason' : 'opinion' }),
+    })
+
+    if (!res.ok) {
+      alert('PDF 생성 실패. 다시 시도해주세요.')
+      return
+    }
+
+    // PDF 다운로드
+    const blob = await res.blob()
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `이유서_${selectedCase.patientName}.pdf`
+    a.click()
+    URL.revokeObjectURL(url)
+  } catch (e) {
+    alert('PDF 생성 중 오류가 발생했습니다.')
+  }
+}
+```
+
+---
+
+## 주의사항
+
+- NotoSansKR 폰트 파일 경로: `public/fonts/NotoSansKR-Regular.ttf`, `NotoSansKR-Bold.ttf`
+  기존 프로젝트의 실제 폰트 경로를 확인하여 맞게 수정할 것
+- 기존 page.tsx의 변수명(selectedForm, memo, selectedCase 등)은
+  실제 파일의 변수명을 확인 후 그대로 사용할 것 (임의로 바꾸지 말 것)
+- 기존 토스트 방식이 alert가 아닌 라이브러리라면 그 방식 유지
+
+---
+
+## 완료 후 확인
+- [ ] 사건 선택 → 기존 저장된 이유서 내용이 textarea에 자동 로드됨
+- [ ] 내용 수정 후 저장 → DB 저장 성공 확인
+- [ ] 다시 같은 사건 선택 → 저장한 내용이 유지됨
+- [ ] 이유서 선택 후 PDF 생성 → 파일 다운로드됨
+- [ ] PDF 내용에 재해자명, 사건분류, 이유서 본문 포함됨
