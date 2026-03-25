@@ -119,20 +119,36 @@ export default function ObjectionDocumentPage() {
     }
 
     const isReason = selectedForm === "reason";
-    const isOpinion = selectedForm === "attachment"; // 의견서 대응 가능 시 확장
+    const isAgentOrProxy = selectedForm === "agent" || selectedForm === "proxy";
 
-    if (!isReason) {
-      setToast("이유서를 선택해주세요. 나머지 서식은 준비 중입니다.");
+    if (!isReason && !isAgentOrProxy) {
+      setToast("이유서, 대리인선임신고서, 위임장만 PDF 생성 가능합니다. 나머지 서식은 준비 중입니다.");
       setTimeout(() => setToast(null), 3000);
       return;
     }
 
     setGenerating(true);
     try {
-      const res = await fetch(`/api/objection/cases/${selectedCase.id}/generate-reason`, {
+      let apiUrl: string;
+      let body: string;
+      let downloadName: string;
+
+      if (isReason) {
+        apiUrl = `/api/objection/cases/${selectedCase.id}/generate-reason`;
+        body = JSON.stringify({ docType: "reason" });
+        downloadName = `이유서_${selectedCase.patientName}.pdf`;
+      } else {
+        apiUrl = `/api/objection/cases/${selectedCase.id}/generate-form`;
+        body = JSON.stringify({ formType: selectedForm });
+        downloadName = selectedForm === "agent"
+          ? `대리인선임신고서_${selectedCase.patientName}.pdf`
+          : `위임장_${selectedCase.patientName}.pdf`;
+      }
+
+      const res = await fetch(apiUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ docType: "reason" }),
+        body,
       });
 
       if (!res.ok) {
@@ -145,7 +161,7 @@ export default function ObjectionDocumentPage() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `이유서_${selectedCase.patientName}.pdf`;
+      a.download = downloadName;
       a.click();
       URL.revokeObjectURL(url);
     } catch {
