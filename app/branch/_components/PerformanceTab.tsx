@@ -105,8 +105,14 @@ export default function PerformanceTab() {
 
   // 직원 명단 + 약정건수 로드
   const loadSales = useCallback(async () => {
-    // 현재 달 기준, 또는 선택한 달 중 가장 이른 달
-    const refMonth = month ?? (quarter ? QUARTER_MONTHS[quarter][0] : new Date().getMonth() + 1)
+    // 분기 선택 시 마지막 달 기준으로 재직자 조회
+    // → 그래야 분기 중간/마지막에 입사한 직원도 목록에 포함되고,
+    //   각 월별 표에서 개별 필터링으로 정확히 표시됨
+    const refMonth = month
+      ? month
+      : quarter
+        ? QUARTER_MONTHS[quarter][2]   // 분기 마지막 달 (3,6,9,12)
+        : new Date().getMonth() + 1     // 현재 달
 
     // 1. 재직 중인 직원 명단
     const rRes = await fetch(`/api/branch/staff-roster?branchName=${encodeURIComponent(branch)}&year=${year}&month=${refMonth}`)
@@ -288,8 +294,7 @@ export default function PerformanceTab() {
     let failCount = 0
 
     try {
-      // 필터 적용
-      let toSave: typeof importPreview = importPreview
+      let toSave: SettlementRow[] = importPreview
       if (month) {
         toSave = importPreview.filter(r => r.month === month)
       } else if (quarter) {
@@ -299,32 +304,34 @@ export default function PerformanceTab() {
 
       if (toSave.length === 0) {
         alert('선택된 기간에 해당하는 건이 없습니다.')
+        setImportSaving(false)
         return
       }
 
-      // 병렬 저장 (최대 5개씩 배치)
       const BATCH = 5
       for (let i = 0; i < toSave.length; i += BATCH) {
         const batch = toSave.slice(i, i + BATCH)
         const results = await Promise.allSettled(
           batch.map(row => {
-            const rowYear  = (row.year  != null && !isNaN(row.year))  ? row.year  : year
-            const rowMonth = (row.month != null && !isNaN(row.month)) ? row.month : (month ?? 1)
+            const rowYear  = (row.year  != null && !isNaN(Number(row.year)))  ? Number(row.year)  : year
+            const rowMonth = (row.month != null && !isNaN(Number(row.month))) ? Number(row.month) : (month ?? 1)
 
             const body = {
               branchName:          branch,
               year:                rowYear,
               month:               rowMonth,
-              paymentDate:         row.paymentDate || null,
-              victimName:          row.victimName  || '(미상)',
-              caseType:            row.caseType    || null,
-              tfName:              row.tfName      || null,
+              paymentDate:         row.paymentDate   || null,
+              victimName:          row.victimName    || '(미상)',
+              caseType:            row.caseType      || null,
+              tfName:              row.tfName        || null,
               salesStaffName:      row.salesStaffName      || null,
               settlementStaffName: row.settlementStaffName || null,
-              grossAmount:         row.grossAmount || 0,
-              deduction:           row.deduction   || 0,
-              memo:                row.memo        || null,
-              allocations:         Array.isArray(row.allocations) ? row.allocations.filter(a => a.staffName) : [],
+              grossAmount:         Number(row.grossAmount) || 0,
+              deduction:           Number(row.deduction)   || 0,
+              memo:                row.memo || null,
+              allocations: Array.isArray(row.allocations)
+                ? row.allocations.filter(a => a.staffName && a.staffName.trim())
+                : [],
             }
 
             return fetch('/api/branch/settlement-records', {
@@ -333,8 +340,8 @@ export default function PerformanceTab() {
               body: JSON.stringify(body),
             }).then(async res => {
               if (!res.ok) {
-                const err = await res.json().catch(() => ({}))
-                throw new Error(`HTTP ${res.status}: ${JSON.stringify(err)}`)
+                const errText = await res.text().catch(() => '')
+                throw new Error(`HTTP ${res.status}: ${errText.slice(0, 100)}`)
               }
               return res.json()
             })
@@ -345,7 +352,7 @@ export default function PerformanceTab() {
           if (result.status === 'fulfilled') successCount++
           else {
             failCount++
-            console.error('저장 실패:', result.reason)
+            console.error('정산 저장 실패:', result.reason)
           }
         }
       }
@@ -353,16 +360,16 @@ export default function PerformanceTab() {
       setImportPreview(null)
 
       if (failCount > 0) {
-        alert(`${successCount}건 저장 완료, ${failCount}건 실패\n콘솔에서 오류를 확인하세요.`)
+        alert(`${successCount}건 저장 완료, ${failCount}건 실패`)
       }
 
       await loadSettlements()
 
     } catch (e) {
-      console.error('confirmImport 오류:', e)
-      alert('저장 중 오류가 발생했습니다: ' + (e as Error).message)
+      console.error('confirmImport 전체 오류:', e)
+      alert('저장 중 오류: ' + (e as Error).message)
     } finally {
-      setImportSaving(false)
+      setImportSaving(false)   // ← 반드시 실행
     }
   }
 
