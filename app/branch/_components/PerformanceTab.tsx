@@ -94,7 +94,9 @@ export default function PerformanceTab() {
 
   // 직원 추가 모달
   const [showAddStaff, setShowAddStaff] = useState(false)
-  const [addStaffName, setAddStaffName] = useState('')
+  const [addStaffName, setAddStaffName]       = useState('')   // select 값 ('__custom__' 포함)
+  const [addStaffCustom, setAddStaffCustom]   = useState('')   // 직접입력 텍스트
+  const [isCustomInput, setIsCustomInput]     = useState(false)
   const [addStaffFrom, setAddStaffFrom] = useState<{ y: number; m: number }>({ y: currentYear, m: new Date().getMonth() + 1 })
 
   // 퇴사 처리
@@ -103,9 +105,8 @@ export default function PerformanceTab() {
 
   // 직원 명단 + 약정건수 로드
   const loadSales = useCallback(async () => {
-    const refMonth = quarter
-      ? QUARTER_MONTHS[quarter][0]
-      : month || 1
+    // 현재 달 기준, 또는 선택한 달 중 가장 이른 달
+    const refMonth = month ?? (quarter ? QUARTER_MONTHS[quarter][0] : new Date().getMonth() + 1)
 
     // 1. 재직 중인 직원 명단
     const rRes = await fetch(`/api/branch/staff-roster?branchName=${encodeURIComponent(branch)}&year=${year}&month=${refMonth}`)
@@ -185,20 +186,32 @@ export default function PerformanceTab() {
   }
 
   async function handleAddStaff() {
-    const name = addStaffName.trim()
+    const name = isCustomInput ? addStaffCustom.trim() : addStaffName.trim()
     if (!name || name === '__custom__') return
-    await fetch('/api/branch/staff-roster', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        branchName: branch,
-        staffName: name,
-        startYear: addStaffFrom.y,
-        startMonth: addStaffFrom.m,
-      }),
-    })
+    try {
+      const res = await fetch('/api/branch/staff-roster', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          branchName: branch,
+          staffName: name,
+          startYear: addStaffFrom.y,
+          startMonth: addStaffFrom.m,
+        }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        alert('추가 실패: ' + JSON.stringify(err))
+        return
+      }
+    } catch (e) {
+      alert('네트워크 오류: ' + (e as Error).message)
+      return
+    }
     setShowAddStaff(false)
     setAddStaffName('')
+    setAddStaffCustom('')
+    setIsCustomInput(false)
     await loadSales()
   }
 
@@ -271,61 +284,86 @@ export default function PerformanceTab() {
     if (!importPreview || importPreview.length === 0) return
     setImportSaving(true)
 
-    let toSave = importPreview
-    if (month) toSave = importPreview.filter(r => r.month === month)
-    if (quarter) {
-      const qm = QUARTER_MONTHS[quarter]
-      toSave = importPreview.filter(r => r.month && qm.includes(r.month as 1|2|3|4|5|6|7|8|9|10|11|12))
-    }
-
     let successCount = 0
     let failCount = 0
 
-    for (const row of toSave) {
-      const rowYear  = row.year  || year
-      const rowMonth = row.month || (month || 1)
-
-      const body = {
-        branchName: branch,
-        year:   rowYear,
-        month:  rowMonth,
-        paymentDate:         row.paymentDate || null,
-        victimName:          row.victimName,
-        caseType:            row.caseType || null,
-        tfName:              row.tfName || null,
-        salesStaffName:      row.salesStaffName || null,
-        settlementStaffName: row.settlementStaffName || null,
-        grossAmount:         row.grossAmount,
-        deduction:           row.deduction || 0,
-        memo:                row.memo || null,
-        allocations: row.allocations || [],
+    try {
+      // 필터 적용
+      let toSave: typeof importPreview = importPreview
+      if (month) {
+        toSave = importPreview.filter(r => r.month === month)
+      } else if (quarter) {
+        const qm = QUARTER_MONTHS[quarter] as readonly number[]
+        toSave = importPreview.filter(r => r.month != null && qm.includes(r.month))
       }
 
-      try {
-        const res = await fetch('/api/branch/settlement-records', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body),
-        })
-        if (res.ok) successCount++
-        else {
-          const err = await res.json().catch(() => ({}))
-          console.error('저장 실패:', err)
-          failCount++
+      if (toSave.length === 0) {
+        alert('선택된 기간에 해당하는 건이 없습니다.')
+        return
+      }
+
+      // 병렬 저장 (최대 5개씩 배치)
+      const BATCH = 5
+      for (let i = 0; i < toSave.length; i += BATCH) {
+        const batch = toSave.slice(i, i + BATCH)
+        const results = await Promise.allSettled(
+          batch.map(row => {
+            const rowYear  = (row.year  != null && !isNaN(row.year))  ? row.year  : year
+            const rowMonth = (row.month != null && !isNaN(row.month)) ? row.month : (month ?? 1)
+
+            const body = {
+              branchName:          branch,
+              year:                rowYear,
+              month:               rowMonth,
+              paymentDate:         row.paymentDate || null,
+              victimName:          row.victimName  || '(미상)',
+              caseType:            row.caseType    || null,
+              tfName:              row.tfName      || null,
+              salesStaffName:      row.salesStaffName      || null,
+              settlementStaffName: row.settlementStaffName || null,
+              grossAmount:         row.grossAmount || 0,
+              deduction:           row.deduction   || 0,
+              memo:                row.memo        || null,
+              allocations:         Array.isArray(row.allocations) ? row.allocations.filter(a => a.staffName) : [],
+            }
+
+            return fetch('/api/branch/settlement-records', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(body),
+            }).then(async res => {
+              if (!res.ok) {
+                const err = await res.json().catch(() => ({}))
+                throw new Error(`HTTP ${res.status}: ${JSON.stringify(err)}`)
+              }
+              return res.json()
+            })
+          })
+        )
+
+        for (const result of results) {
+          if (result.status === 'fulfilled') successCount++
+          else {
+            failCount++
+            console.error('저장 실패:', result.reason)
+          }
         }
-      } catch (e) {
-        console.error('네트워크 오류:', e)
-        failCount++
       }
-    }
 
-    setImportSaving(false)
-    setImportPreview(null)
+      setImportPreview(null)
 
-    if (failCount > 0) {
-      alert(`${successCount}건 저장 완료, ${failCount}건 실패`)
+      if (failCount > 0) {
+        alert(`${successCount}건 저장 완료, ${failCount}건 실패\n콘솔에서 오류를 확인하세요.`)
+      }
+
+      await loadSettlements()
+
+    } catch (e) {
+      console.error('confirmImport 오류:', e)
+      alert('저장 중 오류가 발생했습니다: ' + (e as Error).message)
+    } finally {
+      setImportSaving(false)
     }
-    await loadSettlements()
   }
 
   async function deleteSettlement(id: string) {
@@ -359,7 +397,7 @@ export default function PerformanceTab() {
 
   // ─── 스타일 ────────────────────────────────────────────────
   const cellCls = 'border border-gray-200 px-2 py-1 text-sm'
-  const thCls   = `${cellCls} bg-gray-50 font-medium text-center`
+  const thCls   = `${cellCls} bg-gray-50 font-medium text-center whitespace-nowrap`
 
   // ─── 렌더 ─────────────────────────────────────────────────
   return (
@@ -456,7 +494,12 @@ export default function PerformanceTab() {
                   <label className="text-xs text-gray-500">직원명</label>
                   <select
                     value={addStaffName}
-                    onChange={e => setAddStaffName(e.target.value)}
+                    onChange={e => {
+                      const v = e.target.value
+                      setAddStaffName(v)
+                      setIsCustomInput(v === '__custom__')
+                      if (v !== '__custom__') setAddStaffCustom('')
+                    }}
                     className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm mt-1"
                   >
                     <option value="">선택</option>
@@ -466,11 +509,14 @@ export default function PerformanceTab() {
                     }
                     <option value="__custom__">직접 입력</option>
                   </select>
-                  {addStaffName === '__custom__' && (
+                  {isCustomInput && (
                     <input
                       className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm mt-1"
                       placeholder="직원명 직접 입력"
-                      onChange={e => setAddStaffName(e.target.value)}
+                      autoFocus
+                      value={addStaffCustom}
+                      onChange={e => setAddStaffCustom(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && handleAddStaff()}
                     />
                   )}
                 </div>
@@ -561,14 +607,14 @@ export default function PerformanceTab() {
                   </div>
 
                   <div className="overflow-x-auto">
-                    <table className="border-collapse text-xs w-full">
+                    <table className="border-collapse text-xs w-full min-w-max">
                       <thead>
                         <tr>
-                          <th className={`${thCls} w-24 sticky left-0 z-10`}>성명</th>
+                          <th className={`${thCls} min-w-[80px] sticky left-0 z-10`}>성명</th>
                           {CASE_TYPES.map(ct => (
-                            <th key={ct.id} className={thCls}>{ct.label}</th>
+                            <th key={ct.id} className={`${thCls} min-w-[52px]`}>{ct.label}</th>
                           ))}
-                          <th className={`${thCls} bg-sky-50 text-sky-700`}>합계</th>
+                          <th className={`${thCls} bg-sky-50 text-sky-700 min-w-[48px]`}>합계</th>
                           <th className={`${thCls} w-8`}></th>
                         </tr>
                       </thead>
