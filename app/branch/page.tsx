@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import SettlementTab from './_components/SettlementTab'
 
 /* ─── Types ─── */
 type PolicyDoc = {
@@ -19,7 +20,7 @@ type WorkOrder = {
 };
 type StaffUser = { id: string; name: string; email: string };
 
-type Tab = "POLICY" | "EVALUATION" | "WORK_ORDER";
+type Tab = "POLICY" | "EVALUATION" | "WORK_ORDER" | "SETTLEMENT";
 
 const CATEGORIES = [
   { value: "ALL", label: "전체" },
@@ -154,7 +155,7 @@ export default function BranchManagementPage() {
 
       {/* 탭 */}
       <div style={s.tabRow}>
-        {([["POLICY", "운영규정·취업규칙"], ["EVALUATION", "인사평가"], ["WORK_ORDER", "업무 지시 게시판"]] as [Tab, string][]).map(([key, label]) => (
+        {([["POLICY", "운영규정·취업규칙"], ["EVALUATION", "인사평가"], ["WORK_ORDER", "업무 지시 게시판"], ["SETTLEMENT", "1분기 결산"]] as [Tab, string][]).map(([key, label]) => (
           <button key={key} onClick={() => { setTab(key); setMsg(""); }} style={{ ...s.tab, ...(tab === key ? s.tabActive : {}) }}>{label}</button>
         ))}
       </div>
@@ -399,6 +400,8 @@ export default function BranchManagementPage() {
           </div>
         </div>
       )}
+
+      {tab === "SETTLEMENT" && <SettlementTab />}
     </div>
   );
 }

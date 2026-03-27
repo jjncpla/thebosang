@@ -503,8 +503,10 @@ model User {
   consultations  Consultation[]  @relation("ConsultationManager")
   objectionCases ObjectionCase[] @relation("ObjectionManager")
   todos          Todo[]
-  evaluations    StaffEvaluation[] @relation("EvaluationTarget")
-  workOrders     WorkOrder[]       @relation("WorkOrderAuthor")
+  evaluations         StaffEvaluation[]    @relation("EvaluationTarget")
+  workOrders          WorkOrder[]          @relation("WorkOrderAuthor")
+  outdoorPerformances OutdoorPerformance[]
+  indoorWorkloads     IndoorWorkload[]
 }
 
 model SignupRequest {
@@ -766,4 +768,51 @@ model WorkOrder {
   updatedAt   DateTime  @updatedAt
 
   author    User @relation("WorkOrderAuthor", fields: [authorId], references: [id])
+}
+
+model BranchFinancial {
+  id         String   @id @default(cuid())
+  year       Int
+  month      Int
+  branchName String?
+  revenue    Int      @default(0)
+  cost       Int      @default(0)
+  memo       String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([year, month, branchName])
+}
+
+model OutdoorPerformance {
+  id               String   @id @default(cuid())
+  userId           String
+  user             User     @relation(fields: [userId], references: [id])
+  year             Int
+  month            Int
+  contractCount    Int      @default(0)
+  settlementAmount Int      @default(0)
+  memo             String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@unique([userId, year, month])
+}
+
+model IndoorWorkload {
+  id                  String   @id @default(cuid())
+  userId              String
+  user                User     @relation(fields: [userId], references: [id])
+  year                Int
+  month               Int
+  docSentCount        Int      @default(0)
+  docReceivedCount    Int      @default(0)
+  caseRegisteredCount Int      @default(0)
+  tfManagedCount      Int      @default(0)
+  adminTaskDone       Boolean  @default(false)
+  memo                String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@unique([userId, year, month])
 }
