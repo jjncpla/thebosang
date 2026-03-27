@@ -1,0 +1,57 @@
+## 작업 개요
+직업력 섹션에 "전체 초기화" 버튼 추가.
+AI 자동 분석으로 채워진 workHistoryRaw, workHistory, workHistoryDaily를 한번에 초기화.
+
+## 수정 원칙
+- 외과적 수정만
+- 수정 대상: components/case-common/WorkHistorySection.tsx
+
+---
+
+## 작업 1: WorkHistorySection.tsx 수정
+
+### 1-A: handleClearAll 함수 추가
+컴포넌트 내부 handleAnalyze 함수 아래에 추가:
+
+```typescript
+const handleClearAll = async () => {
+  if (!window.confirm("직업력 데이터를 전체 초기화합니다. 계속하시겠습니까?")) return;
+  
+  const emptyRaw: WorkHistoryRaw = {
+    고용산재: [], 건보: [], 소득금액: [], 연금: [], 건근공: [], 일용직: [],
+  };
+  
+  onChange({
+    workHistory: [],
+    workHistoryRaw: emptyRaw,
+    workHistoryMemo: null,
+    lastNoiseWorkEndDate: null,
+  });
+  onChangeDaily([]);
+};
+```
+
+### 1-B: 초기화 버튼 UI 추가
+PDF 파일 선택 버튼이 있는 div (background: "#eff6ff") 안에서
+"PDF 파일 선택" label 버튼 오른쪽에 초기화 버튼 추가:
+
+```tsx
+<button
+  onClick={handleClearAll}
+  style={{
+    background: "white",
+    color: "#dc2626",
+    border: "1px solid #fca5a5",
+    borderRadius: 6,
+    padding: "6px 12px",
+    fontSize: 12,
+    fontWeight: 600,
+    cursor: "pointer",
+    marginLeft: "auto",
+  }}
+>
+  🗑 전체 초기화
+</button>
+```
+
+위치: analyzeError span 바로 앞, marginLeft: "auto"로 오른쪽 정렬.

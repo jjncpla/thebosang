@@ -1,0 +1,378 @@
+# TBSS 4개 수정사항 일괄 처리
+
+아래 4가지를 순서대로 처리해줘. 각 항목 완료 후 다음으로 넘어가고,
+파일 전체 재작성은 절대 금지. 외부 패키지 신규 설치 금지.
+
+---
+
+## [1] 사이드바 하위 메뉴 글씨색 시인성 개선
+
+### 목표
+사이드바 하위 메뉴(서브메뉴) 텍스트 색상이 너무 연해서 잘 보이지 않는 문제 수정.
+브랜드 딥그린 배경(#006838)에서 충분한 대비를 갖도록 색상 강화.
+
+### 작업 순서
+1. 사이드바 컴포넌트 파일 찾기:
+   ```
+   grep -r "하위\|submenu\|sub-menu\|SubMenu\|sidebar\|Sidebar\|nav-item\|NavItem" src/components --include="*.tsx" -l
+   grep -r "text-.*300\|text-.*400\|opacity-.*60\|opacity-.*70" src/components --include="*.tsx" -l
+   ```
+   일반적으로 `src/components/layout/Sidebar.tsx` 또는 유사 경로에 존재.
+
+2. 서브메뉴 항목의 텍스트 색상 클래스를 찾아서:
+   - 현재: `text-green-200`, `text-green-300`, `text-white/60`, `text-white/70`, `opacity-70` 등 연한 색
+   - 변경: `text-white/90` 또는 `text-white` (단, 활성 항목 구분은 유지)
+   - 비활성 서브메뉴: `text-white/75` → `text-white/90`으로 상향
+   - 활성 서브메뉴: 현행 유지 (이미 밝은 색이면 그대로)
+
+3. 예시 패턴 (실제 코드에 맞게 적용):
+   ```tsx
+   // 변경 전 예시
+   className="text-green-200 text-sm"
+   className="text-white/60 pl-4 text-sm"
+   
+   // 변경 후 예시
+   className="text-green-100 text-sm"
+   className="text-white/90 pl-4 text-sm"
+   ```
+
+---
+
+## [2] 소음성 난청 특진 회차 동적 추가 기능 (n차)
+
+### 배경
+현재 최초특진 일정이 1차/2차/3차 고정. 드물게 4차, 5차 특진이 발생하므로
+버튼으로 회차를 추가할 수 있어야 함.
+
+### 관련 파일 탐색
+```
+find src -name "*.tsx" | xargs grep -l "examRound\|특진\|exam1\|exam2\|exam3\|1차.*특진\|HearingLoss" 2>/dev/null
+```
+주요 파일: `src/app/patients/[id]/page.tsx` 또는 `src/app/cases/[caseId]/page.tsx` (탭 구조)
+
+### 스키마 확인
+```
+grep -A 30 "HearingLossExam\|hearingLossExam" prisma/schema.prisma
+```
+
+### 스키마 수정 (필요 시)
+
+`prisma/schema.prisma`에서 `HearingLossExam` 모델을 확인하고,
+`examRound` 필드가 이미 `Int` 타입이면 스키마 변경 불필요.
+
+만약 1/2/3만 지원하는 enum이면 아래처럼 Int로 변경:
+```prisma
+model HearingLossExam {
+  id                   String            @id @default(cuid())
+  hearingLossDetailId  String
+  hearingLossDetail    HearingLossDetail @relation(fields: [hearingLossDetailId], references: [id], onDelete: Cascade)
+  examSet              String            // "INITIAL" | "RE" | "RE2"
+  examRound            Int               // 1, 2, 3, 4, 5 ... (동적)
+  examDate             DateTime?
+  attendedStaffId      String?
+  airRight             Float?
+  airLeft              Float?
+  boneRight            Float?
+  boneLeft             Float?
+  speechRight          Float?
+  speechLeft           Float?
+  abrRight             Float?
+  abrLeft              Float?
+  impedanceRight       String?
+  impedanceLeft        String?
+  isReliable           Boolean?
+  medicalRecordObtained Boolean         @default(false)
+  predictedGrade       String?
+  memo                 String?
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
+}
+```
+
+스키마 변경 시:
+```bash
+npx prisma migrate dev --name add_dynamic_exam_round
+```
+
+### UI 수정
+
+최초특진 섹션(`examSet === "INITIAL"`)에서:
+
+1. 현재 하드코딩된 1차/2차/3차 렌더링을 동적 배열로 변경:
+   ```tsx
+   // 현재 패턴 (대략)
+   {/* 1차 특진일정 */}
+   {/* 2차 특진일정 */}
+   {/* 3차 특진일정 */}
+   
+   // 변경 후 패턴
+   const [examRounds, setExamRounds] = useState<number[]>(
+     existingExams.length > 0 
+       ? existingExams.map(e => e.examRound)
+       : [1, 2, 3]
+   );
+   
+   {examRounds.map((round) => (
+     <ExamRoundRow key={round} round={round} examSet="INITIAL" ... />
+   ))}
+   
+   {/* n차 추가 버튼 */}
+   <button
+     type="button"
+     onClick={() => setExamRounds(prev => [...prev, Math.max(...prev) + 1])}
+     className="mt-2 text-sm text-sky-600 hover:text-sky-800 flex items-center gap-1 border border-sky-300 rounded px-3 py-1.5 hover:bg-sky-50 transition-colors"
+   >
+     <span>+</span> {Math.max(...examRounds) + 1}차 특진 추가
+   </button>
+   ```
+
+2. 각 회차 행의 레이블을 동적으로:
+   ```tsx
+   <label className="text-sm font-medium text-gray-700">
+     {round}차 특진일정
+   </label>
+   ```
+
+3. 저장 시 examRound별로 API에 upsert 처리 (기존 로직 확장).
+
+4. 마지막 추가된 회차가 3 이하면 "4차 추가", 4면 "5차 추가" 식으로 버튼 텍스트 자동 반영.
+
+---
+
+## [3] 일용직 근무일수 20일 기준 월 환산 로직 수정
+
+### 배경
+일용직(jobType 또는 source에 '일용' 포함) 직업력에서
+근무일이 1일이어도 1개월로 산정되는 버그 수정.
+20일 미만인 일용직 항목들은 합산하여 "기타 직업력"으로 통합 표시.
+
+### 관련 파일 탐색
+직업력 렌더링 로직이 있는 파일:
+```
+grep -r "workHistory\|직업력\|개월\|months\|workDays\|일용" src --include="*.tsx" --include="*.ts" -l
+```
+
+### 로직 위치 특정
+일용직 월 산정 함수 또는 직업력 표 렌더링 부분을 찾는다:
+```
+grep -n "월\|month\|기간\|duration\|20\|일용" src/app/patients/[id]/page.tsx
+```
+
+### 수정할 로직
+
+직업력 배열 처리 시 아래 로직을 적용:
+
+```typescript
+// workHistory 아이템의 근무 일수 계산 헬퍼 (이미 있으면 재사용)
+function calcWorkDays(item: WorkHistoryItem): number {
+  // startYear/startMonth ~ endYear/endMonth 기준 일수 계산
+  // 없으면 0 반환
+  if (!item.startYear || !item.endYear) return 0;
+  const start = new Date(item.startYear, (item.startMonth ?? 1) - 1, 1);
+  const end = new Date(item.endYear, (item.endMonth ?? 12) - 1, 28);
+  return Math.max(0, Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)));
+}
+
+// 일용직 여부 판별 (jobType 또는 company에 '일용' 포함 시)
+function isDailyWorker(item: WorkHistoryItem): boolean {
+  return (
+    (item.jobType?.includes('일용') ?? false) ||
+    (item.company?.includes('일용') ?? false) ||
+    (item.source?.includes('일용') ?? false) ||
+    (item.department?.includes('일용') ?? false)
+  );
+}
+
+// 직업력 배열 처리 함수 (렌더링 전 전처리)
+function processWorkHistory(items: WorkHistoryItem[]): {
+  displayItems: DisplayWorkHistoryItem[];
+  memoAddition: string;
+} {
+  const dailyItems = items.filter(isDailyWorker);
+  const normalItems = items.filter(item => !isDailyWorker(item));
+
+  // 일용직 중 20일 미만 항목
+  const underThresholdItems = dailyItems.filter(item => calcWorkDays(item) < 20);
+  // 일용직 중 20일 이상 항목 (정상 처리)
+  const overThresholdItems = dailyItems.filter(item => calcWorkDays(item) >= 20);
+
+  const displayItems: DisplayWorkHistoryItem[] = [
+    ...normalItems.map(item => ({ ...item, _merged: false })),
+    ...overThresholdItems.map(item => ({ ...item, _merged: false })),
+  ];
+
+  let memoAddition = '';
+
+  if (underThresholdItems.length > 0) {
+    const totalDays = underThresholdItems.reduce((sum, item) => sum + calcWorkDays(item), 0);
+    const months = Math.floor(totalDays / 20);
+    const remainingDays = totalDays % 20;
+
+    if (months > 0) {
+      // "기타 직업력" 합산 행 추가
+      displayItems.push({
+        company: '기타 직업력 (일용직 합산)',
+        department: '',
+        jobType: '일용직 합산',
+        startYear: undefined,
+        startMonth: undefined,
+        endYear: undefined,
+        endMonth: undefined,
+        noiseExposure: true,
+        noiseLevel: undefined,
+        workHours: '',
+        source: '',
+        _merged: true,
+        _mergedMonths: months,
+        _mergedTotalDays: totalDays,
+      });
+    }
+
+    // 특이사항 메모에 추가
+    const companiesList = underThresholdItems
+      .map(i => i.company || '미상')
+      .join(', ');
+    memoAddition =
+      `[일용직 합산 처리] ${underThresholdItems.length}개 사업장(${companiesList})의 ` +
+      `일용직 근무일수 합계 ${totalDays}일 → ${months}개월로 산정. ` +
+      `나머지 ${remainingDays}일은 20일 미달로 소거.`;
+  }
+
+  return { displayItems, memoAddition };
+}
+```
+
+### UI 수정
+
+직업력 테이블 렌더링 부분에서:
+
+1. `processWorkHistory`로 전처리 후 렌더링:
+   ```tsx
+   const { displayItems, memoAddition } = processWorkHistory(workHistory ?? []);
+   ```
+
+2. `_merged: true` 항목은 개월수 컬럼에 `{item._mergedMonths}개월` 표시,
+   날짜 컬럼은 '-' 표시.
+
+3. `memoAddition`이 있으면 `workHistoryMemo` 필드 아래에 읽기전용 회색 텍스트로 표시:
+   ```tsx
+   {memoAddition && (
+     <p className="mt-1 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1">
+       ⚠ {memoAddition}
+     </p>
+   )}
+   ```
+
+4. 기존 월 계산 로직도 확인해서 일용직 20일 미만 항목이 "1개월"로 잘못 표시되던 부분 수정:
+   ```typescript
+   // 월 계산 시 일용직은 20일 = 1개월 기준 적용
+   function calcMonthsDisplay(item: WorkHistoryItem): string {
+     if (isDailyWorker(item)) {
+       const days = calcWorkDays(item);
+       const months = Math.floor(days / 20);
+       return months > 0 ? `${months}개월` : `${days}일 (20일 미달)`;
+     }
+     // 일반직은 기존 로직 유지 (년월 차이로 계산)
+     if (!item.startYear || !item.endYear) return '-';
+     const months =
+       (item.endYear - item.startYear) * 12 +
+       ((item.endMonth ?? 12) - (item.startMonth ?? 1));
+     return `${Math.max(0, months)}개월`;
+   }
+   ```
+
+---
+
+## [4] 상담관리 사건수임 상태에 '보류' 추가
+
+### 관련 파일 탐색
+```
+grep -rn "진행중\|초진 대기\|약정\|종결\|연락대기\|사건수임\|caseStatus\|CaseStatus" src --include="*.tsx" --include="*.ts" -l
+grep -rn "진행중\|초진 대기\|약정\|종결\|연락대기" prisma/schema.prisma
+```
+
+### 1단계: Prisma 스키마 enum 수정
+
+`prisma/schema.prisma`에서 상담 수임 상태 enum을 찾아 '보류' 추가:
+```
+grep -n "PENDING\|HOLD\|진행중\|CONSULTING\|consultation" prisma/schema.prisma
+```
+
+Consultation 모델의 `caseStatus` 또는 유사 필드가 String이면:
+→ 스키마 변경 불필요, UI만 수정.
+
+Enum 타입이면 해당 enum에 `HOLD` 추가 후 migration:
+```prisma
+enum ConsultationCaseStatus {
+  IN_PROGRESS   // 진행중
+  INITIAL_WAIT  // 초진 대기
+  CONTRACTED    // 약정
+  CLOSED        // 종결
+  CONTACT_WAIT  // 연락대기
+  HOLD          // 보류  ← 신규 추가
+}
+```
+
+### 2단계: 상담관리 페이지 UI 수정
+
+상담관리 페이지(`src/app/consultation/page.tsx` 또는 유사 경로) 탐색:
+```
+find src -name "*.tsx" | xargs grep -l "상담\|consultation\|Consultation" 2>/dev/null | head -5
+```
+
+**필터 버튼 그룹에 '보류' 추가:**
+현재: `전체 | 진행중 | 초진 대기 | 약정 | 종결 | 연락대기`
+변경: `전체 | 진행중 | 초진 대기 | 약정 | 종결 | 연락대기 | 보류`
+
+```tsx
+// 필터 버튼 배열에 추가
+{ label: '보류', value: 'HOLD' }  // 또는 '보류' (String 필드인 경우)
+```
+
+**수정 모달(상담 수정 팝업)의 사건수임 드롭다운에 '보류' 추가:**
+```tsx
+<select ...>
+  <option value="IN_PROGRESS">진행중</option>
+  <option value="INITIAL_WAIT">초진 대기</option>
+  <option value="CONTRACTED">약정</option>
+  <option value="CLOSED">종결</option>
+  <option value="CONTACT_WAIT">연락대기</option>
+  <option value="HOLD">보류</option>  {/* ← 신규 추가 */}
+</select>
+```
+
+**배지(badge) 색상 지정:**
+보류 상태의 배지 색상: 회색 계열 (`bg-gray-100 text-gray-600 border-gray-200`)
+```tsx
+// 기존 배지 색상 맵에 추가
+const statusColorMap: Record<string, string> = {
+  ...existingMap,
+  'HOLD': 'bg-gray-100 text-gray-600 border border-gray-200',
+  // String 필드면:
+  '보류': 'bg-gray-100 text-gray-600 border border-gray-200',
+};
+```
+
+### 3단계: 마이그레이션 (enum 수정한 경우에만)
+```bash
+npx prisma migrate dev --name add_hold_status_to_consultation
+```
+
+String 필드인 경우 migration 불필요.
+
+---
+
+## 완료 확인
+
+각 수정 후:
+```bash
+npx tsc --noEmit 2>&1 | head -30
+```
+타입 오류 없으면 다음으로 진행.
+
+모든 수정 완료 후:
+```bash
+git add -A
+git commit -m "fix: 사이드바 서브메뉴 가독성 개선, 특진 n차 추가, 일용직 20일 환산 로직, 상담수임 보류 추가"
+git push origin main
+```

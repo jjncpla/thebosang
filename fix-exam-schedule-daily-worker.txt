@@ -1,0 +1,253 @@
+# 수정 2건: 특진 일정 n차 추가 + 일용직 환산 로직
+
+---
+
+## [A] 특진 일정(날짜/참석자) n차 동적 추가
+
+### 현재 문제
+검사결과(수치) 행만 동적으로 추가되고,
+특진 일정(날짜 + 연락처 등) 섹션은 여전히 1/2/3차 하드코딩 상태.
+
+### 1단계: 파일 및 관련 코드 확인
+
+```bash
+# 특진 일정 관련 코드 위치 확인
+grep -n "특진일정\|examDate\|1차 특진\|2차 특진\|3차 특진\|attendedStaff" \
+  src/app/patients/*/page.tsx 2>/dev/null | head -50
+
+grep -rn "특진일정\|examDate\|1차 특진\|2차 특진\|3차 특진" \
+  src --include="*.tsx" | head -50
+```
+
+### 2단계: 하드코딩된 일정 섹션 찾기
+
+아래와 비슷한 패턴을 찾는다:
+```tsx
+{/* 1차 특진일정 */}
+<label>1차 특진일정</label>
+<input type="datetime-local" ... />
+
+{/* 2차 특진일정 */}
+<label>2차 특진일정</label>
+<input type="datetime-local" ... />
+
+{/* 3차 특진일정 */}
+<label>3차 특진일정</label>
+<input type="datetime-local" ... />
+```
+
+### 3단계: 일정 섹션을 initialExamRounds.map으로 동적화
+
+**핵심 원칙**: 검사결과 섹션과 동일하게 `initialExamRounds` 상태를 공유해서
+날짜 추가 버튼을 누르면 일정+결과가 함께 추가되도록.
+
+하드코딩된 1/2/3차 일정 섹션 전체를 아래 패턴으로 교체:
+
+```tsx
+{/* 최초특진 일정 — 동적 */}
+<div className="space-y-4">
+  {initialExamRounds.map((round) => (
+    <div key={`schedule-${round}`} className="grid grid-cols-2 gap-4">
+      {/* 특진일정 날짜 */}
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">
+          {round}차 특진일정
+        </label>
+        <input
+          type="datetime-local"
+          value={
+            // 기존 필드명 패턴에 맞게 — 예: examDate1, examDate2, examDate3, examDate4...
+            (formData[`examDate${round}` as keyof typeof formData] as string) ?? ''
+          }
+          onChange={(e) =>
+            setFormData(prev => ({
+              ...prev,
+              [`examDate${round}`]: e.target.value,
+            }))
+          }
+          className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+        />
+      </div>
+
+      {/* 연락처 or 참석자 — 기존 필드명에 맞게 조정 */}
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">
+          {round}차 연락처
+        </label>
+        <input
+          type="text"
+          value={
+            (formData[`examContact${round}` as keyof typeof formData] as string) ?? ''
+          }
+          onChange={(e) =>
+            setFormData(prev => ({
+              ...prev,
+              [`examContact${round}`]: e.target.value,
+            }))
+          }
+          className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+          placeholder="연락처"
+        />
+      </div>
+    </div>
+  ))}
+</div>
+```
+
+> **주의**: 위 코드에서 `examDate${round}`, `examContact${round}` 등 필드명은
+> 실제 코드의 기존 필드명(예: `exam1Date`, `initialExam1Date` 등)에 맞게 조정할 것.
+> 먼저 기존 1차 일정 input의 `value={}` 바인딩을 확인해서 필드명 패턴 파악.
+
+### 4단계: 추가 버튼은 일정+결과 섹션 전체 아래에 1개만
+
+버튼이 이미 있다면 위치 확인. 일정 섹션과 결과 섹션이 분리되어 있다면
+버튼을 결과 섹션 아래에 두고 `initialExamRounds` 하나로 둘 다 제어.
+
+---
+
+## [B] 일용직 20일 환산 로직 미적용 수정
+
+### 현재 문제
+이전 수정에서 헬퍼 함수(`isDailyWorker`, `calcWorkDays`)는 추가됐으나
+실제 **월수 표시 로직**이 이전 코드를 그대로 쓰고 있어서 반영 안 됨.
+
+### 1단계: 현재 월수 계산 위치 확인
+
+```bash
+grep -n "개월\|months\|duration\|calcMonth\|근무기간\|workMonths" \
+  src/app/patients/*/page.tsx 2>/dev/null | head -40
+
+grep -rn "개월\|workMonths\|calcMonth" \
+  src --include="*.tsx" | head -40
+```
+
+### 2단계: 실제 적용 여부 확인
+
+아래 패턴을 찾는다:
+```tsx
+// 직업력 테이블에서 개월수 표시하는 부분
+<td>{item.months}개월</td>
+// 또는
+<td>{calcDuration(item)}개월</td>
+// 또는
+<td>{getMonths(item.startYear, item.startMonth, item.endYear, item.endMonth)}개월</td>
+```
+
+`isDailyWorker` / `calcWorkDays`가 이 렌더링 경로에 실제로 연결되어 있는지 확인.
+
+### 3단계: 수정
+
+직업력 행 렌더링 부분에서 개월수 셀을 아래로 교체:
+
+```tsx
+// 기존 함수들 (파일 상단 or 컴포넌트 외부에 추가/교체)
+
+function isDailyWorker(item: WorkHistoryItem): boolean {
+  const fields = [item.company, item.department, item.jobType, item.source];
+  return fields.some(f => f?.includes('일용') ?? false);
+}
+
+function calcWorkDays(item: WorkHistoryItem): number {
+  if (!item.startYear || !item.endYear) return 0;
+  const start = new Date(
+    item.startYear,
+    (item.startMonth ?? 1) - 1,
+    1
+  );
+  const end = new Date(
+    item.endYear,
+    (item.endMonth ?? 12),
+    0  // 해당 월 마지막 날
+  );
+  return Math.max(
+    0,
+    Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24))
+  );
+}
+
+function calcMonthsDisplay(item: WorkHistoryItem): string {
+  if (isDailyWorker(item)) {
+    const days = calcWorkDays(item);
+    if (days === 0) return '-';
+    const months = Math.floor(days / 20);
+    if (months === 0) return `${days}일 (20일 미달)`;
+    return `${months}개월`;
+  }
+  // 일반직: 년월 기준 계산
+  if (!item.startYear || !item.endYear) return '-';
+  const totalMonths =
+    (item.endYear - item.startYear) * 12 +
+    ((item.endMonth ?? 12) - (item.startMonth ?? 1));
+  return `${Math.max(0, totalMonths)}개월`;
+}
+```
+
+직업력 테이블의 개월수 셀:
+```tsx
+// 수정 전 (어떤 형태든)
+<td>...기존 개월수 계산...</td>
+
+// 수정 후
+<td className="text-center">
+  {calcMonthsDisplay(item)}
+</td>
+```
+
+### 4단계: totalNoiseMonths(소음노출 총 기간) 합산 로직도 수정
+
+```bash
+grep -n "totalNoise\|소음.*개월\|총.*개월\|noiseMonths" \
+  src/app/patients/*/page.tsx 2>/dev/null | head -20
+```
+
+소음 노출 총 기간 계산 부분도 일용직 기준으로 수정:
+
+```tsx
+const totalNoiseMonths = (workHistory ?? [])
+  .filter(item => item.noiseExposure)
+  .reduce((sum, item) => {
+    if (isDailyWorker(item)) {
+      return sum + Math.floor(calcWorkDays(item) / 20);
+    }
+    // 일반직
+    const m =
+      (item.endYear - item.startYear) * 12 +
+      ((item.endMonth ?? 12) - (item.startMonth ?? 1));
+    return sum + Math.max(0, m);
+  }, 0);
+```
+
+### 5단계: 20일 미달 합산 경고 메시지
+
+소음 노출 일용직 중 20일 미달 항목이 있으면 경고 표시:
+
+```tsx
+const underThresholdDailyItems = (workHistory ?? []).filter(
+  item => item.noiseExposure && isDailyWorker(item) && calcWorkDays(item) < 20
+);
+
+const totalUnderDays = underThresholdDailyItems.reduce(
+  (sum, item) => sum + calcWorkDays(item),
+  0
+);
+
+// 렌더링 (직업력 섹션 하단)
+{underThresholdDailyItems.length > 0 && (
+  <p className="mt-2 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2">
+    ⚠ 일용직 20일 미달 항목 {underThresholdDailyItems.length}건 (합계 {totalUnderDays}일):
+    {' '}{underThresholdDailyItems.map(i => i.company || '미상').join(', ')} —
+    개월수 산정에서 제외됨
+  </p>
+)}
+```
+
+---
+
+## 완료 후
+
+```bash
+npx tsc --noEmit 2>&1 | head -20
+git add -A
+git commit -m "fix: 특진 일정 n차 동적 추가, 일용직 20일 환산 렌더링 적용"
+git push origin main
+```

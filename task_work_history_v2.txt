@@ -1,0 +1,604 @@
+## 작업 개요
+두 가지 개선:
+1. PDF 업로드 시 문서 종류 수동 지정 UI 추가 + 순차 처리 API 개선
+2. 일용직 직업력 별도 합산표 추가 (상용직/일용직 분리)
+
+## 수정 원칙
+- 외과적 수정만. 전체 파일 재작성 금지
+- 수정 대상 파일 3개:
+  - components/case-common/WorkHistoryTypes.ts
+  - components/case-common/WorkHistorySection.tsx
+  - app/api/cases/[caseId]/work-history/analyze/route.ts
+
+---
+
+## 작업 1: WorkHistoryTypes.ts 수정
+
+### 1-A: WorkHistoryDailyEntry 타입 추가
+파일 끝에 추가:
+
+```typescript
+// 일용직 직업력 항목
+export type WorkHistoryDailyEntry = {
+  company: string;       // 대표 사업장명 (또는 "다수")
+  jobType: string;       // 직종
+  totalDays: number;     // 총 근무일수
+  startYear: number;     // 최초 근무 연도
+  startMonth: number;    // 최초 근무 월
+  convertedMonths: number; // 환산 개월수 (totalDays / 20, 올림)
+  source: string;        // 출처 (고용산재, 건근공 등)
+  memo: string;          // 비고
+};
+```
+
+### 1-B: WorkHistoryRaw 타입에 일용직 소스 추가
+WorkHistoryRaw 타입에서 기존 필드는 유지하고 아래 필드 추가:
+```typescript
+일용직: WorkHistoryRawEntry[];
+```
+
+최종 WorkHistoryRaw 타입:
+```typescript
+export type WorkHistoryRaw = {
+  고용산재: WorkHistoryRawEntry[];
+  건보: WorkHistoryRawEntry[];
+  소득금액: WorkHistoryRawEntry[];
+  연금: WorkHistoryRawEntry[];
+  건근공: WorkHistoryRawEntry[];
+  일용직: WorkHistoryRawEntry[];
+};
+```
+
+---
+
+## 작업 2: WorkHistorySection.tsx 전면 수정
+
+### 2-A: Props 인터페이스에 일용직 관련 필드 추가
+WorkHistorySectionProps에 추가:
+```typescript
+workHistoryDaily: WorkHistoryDailyEntry[];
+onChangeDaily: (entries: WorkHistoryDailyEntry[]) => void;
+```
+
+import 문에 WorkHistoryDailyEntry 추가:
+```typescript
+import { WorkHistoryItem, WorkHistoryRaw, WorkHistoryRawEntry, WorkHistoryDailyEntry } from "./WorkHistoryTypes";
+```
+
+### 2-B: RAW_SOURCES 배열에 일용직 추가
+기존:
+```typescript
+const RAW_SOURCES = ["고용산재", "건보", "소득금액", "연금", "건근공"] as const;
+```
+변경:
+```typescript
+const RAW_SOURCES = ["고용산재", "건보", "소득금액", "연금", "건근공", "일용직"] as const;
+```
+
+### 2-C: PDF 업로드 UI를 수동 지정 방식으로 변경
+
+기존 handlePdfAnalyze 함수와 PDF 업로드 버튼 UI 전체를 아래로 교체:
+
+상태 추가 (컴포넌트 내부 useState 선언 블록에):
+```typescript
+const [pendingFiles, setPendingFiles] = useState<{ file: File; docType: string }[]>([]);
+const [showFileSelector, setShowFileSelector] = useState(false);
+```
+
+DOC_TYPE_OPTIONS 상수 추가 (RAW_SOURCES 선언 아래에):
+```typescript
+const DOC_TYPE_OPTIONS = [
+  { value: "건보", label: "건강보험 자격득실확인서" },
+  { value: "고용산재_상용", label: "고용보험 자격이력내역서 (상용직)" },
+  { value: "일용직", label: "고용보험 일용근로노무제공내역서" },
+  { value: "연금", label: "국민연금 가입증명/가입내역확인서" },
+  { value: "소득금액", label: "소득금액증명원" },
+  { value: "건근공", label: "건설근로자공제회 내역서" },
+];
+```
+
+handleFilesSelected 함수 추가:
+```typescript
+const handleFilesSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const files = e.target.files;
+  if (!files || files.length === 0) return;
+  const newFiles = Array.from(files).map(file => ({ file, docType: "" }));
+  setPendingFiles(prev => [...prev, ...newFiles]);
+  setShowFileSelector(true);
+  e.target.value = "";
+};
+
+const handleDocTypeChange = (idx: number, docType: string) => {
+  setPendingFiles(prev => prev.map((f, i) => i === idx ? { ...f, docType } : f));
+};
+
+const handleRemovePending = (idx: number) => {
+  setPendingFiles(prev => prev.filter((_, i) => i !== idx));
+};
+
+const handleAnalyze = async () => {
+  const valid = pendingFiles.filter(f => f.docType !== "");
+  if (valid.length === 0) {
+    setAnalyzeError("문서 종류를 선택해주세요");
+    return;
+  }
+  setIsAnalyzing(true);
+  setAnalyzeError(null);
+  try {
+    const formData = new FormData();
+    valid.forEach(({ file, docType }) => {
+      formData.append("files", file);
+      formData.append("docTypes", docType);
+    });
+    const res = await fetch(`/api/cases/${caseId}/work-history/analyze`, {
+      method: "POST",
+      body: formData,
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error ?? "분석 실패");
+    }
+    const data = await res.json();
+
+    // 상용직 소스 업데이트
+    const newRaw = { ...workHistoryRaw };
+    const regularSources = ["고용산재", "건보", "소득금액", "연금", "건근공"];
+    regularSources.forEach((src) => {
+      if (data.sources?.[src]?.length > 0) {
+        (newRaw as Record<string, unknown>)[src] = data.sources[src];
+      }
+    });
+    onChange({ workHistoryRaw: newRaw });
+
+    // 일용직 결과가 있으면 별도 처리
+    if (data.dailyEntries?.length > 0) {
+      onChangeDaily([...workHistoryDaily, ...data.dailyEntries]);
+    }
+
+    setPendingFiles([]);
+    setShowFileSelector(false);
+  } catch (err) {
+    setAnalyzeError(err instanceof Error ? err.message : "오류가 발생했습니다");
+  } finally {
+    setIsAnalyzing(false);
+  }
+};
+```
+
+### 2-D: PDF 업로드 UI JSX 교체
+
+기존 PDF 업로드 버튼 div 전체를 아래로 교체:
+
+```tsx
+{/* PDF 자동 분석 */}
+<div style={{ marginBottom: 12 }}>
+  <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", background: "#eff6ff", borderRadius: 8, border: "1px solid #bfdbfe", marginBottom: showFileSelector ? 8 : 0 }}>
+    <label style={{
+      display: "inline-flex", alignItems: "center", gap: 6,
+      background: "#2563eb", color: "white", borderRadius: 6,
+      padding: "6px 14px", fontSize: 12, fontWeight: 700,
+      cursor: "pointer",
+    }}>
+      📄 PDF 파일 선택
+      <input type="file" accept="application/pdf" multiple style={{ display: "none" }} onChange={handleFilesSelected} />
+    </label>
+    <span style={{ fontSize: 11, color: "#1d4ed8" }}>
+      건강보험·고용보험·국민연금·소득금액증명원 PDF를 선택하면 종류를 지정할 수 있습니다
+    </span>
+    {analyzeError && (
+      <span style={{ fontSize: 11, color: "#dc2626", marginLeft: 8 }}>⚠ {analyzeError}</span>
+    )}
+  </div>
+
+  {showFileSelector && pendingFiles.length > 0 && (
+    <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, padding: 12, marginBottom: 8 }}>
+      <div style={{ fontSize: 12, fontWeight: 700, color: "#374151", marginBottom: 8 }}>📋 문서 종류 지정</div>
+      {pendingFiles.map((pf, idx) => (
+        <div key={idx} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+          <span style={{ fontSize: 12, color: "#374151", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {pf.file.name}
+          </span>
+          <select
+            value={pf.docType}
+            onChange={(e) => handleDocTypeChange(idx, e.target.value)}
+            style={{ fontSize: 12, border: "1px solid #d1d5db", borderRadius: 6, padding: "4px 8px", background: "white", color: pf.docType ? "#374151" : "#9ca3af" }}
+          >
+            <option value="">-- 종류 선택 --</option>
+            {DOC_TYPE_OPTIONS.map(opt => (
+              <option key={opt.value} value={opt.value}>{opt.label}</option>
+            ))}
+          </select>
+          <button onClick={() => handleRemovePending(idx)} style={{ background: "none", border: "none", color: "#dc2626", cursor: "pointer", fontSize: 14, padding: "0 4px" }}>✕</button>
+        </div>
+      ))}
+      <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+        <button
+          onClick={handleAnalyze}
+          disabled={isAnalyzing || pendingFiles.every(f => !f.docType)}
+          style={{
+            background: isAnalyzing ? "#93c5fd" : "#2563eb",
+            color: "white", border: "none", borderRadius: 6,
+            padding: "6px 16px", fontSize: 12, fontWeight: 700,
+            cursor: isAnalyzing ? "not-allowed" : "pointer",
+          }}
+        >
+          {isAnalyzing ? "⏳ 분석 중..." : "🤖 AI 자동 분석 시작"}
+        </button>
+        <button
+          onClick={() => { setPendingFiles([]); setShowFileSelector(false); }}
+          style={{ background: "white", border: "1px solid #d1d5db", borderRadius: 6, padding: "6px 12px", fontSize: 12, cursor: "pointer", color: "#6b7280" }}
+        >
+          취소
+        </button>
+      </div>
+    </div>
+  )}
+</div>
+```
+
+### 2-E: 일용직 합산표 섹션 추가
+
+기존 "마지막 소음작업 중단 시기" 필드 바로 위에 아래 JSX 추가:
+
+```tsx
+{/* 일용직 직업력 합산표 */}
+<div style={{ marginTop: 16, marginBottom: 16 }}>
+  <div style={{ fontSize: 13, fontWeight: 700, color: "#374151", padding: "14px 0 8px 0", borderBottom: "2px solid #e5e7eb", marginBottom: 12 }}>
+    일용직 직업력
+    <span style={{ fontSize: 11, fontWeight: 400, color: "#9ca3af", marginLeft: 8 }}>
+      (20일=1개월 / 220일=1년 기준)
+    </span>
+  </div>
+
+  <div style={{ overflowX: "auto", marginBottom: 8 }}>
+    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+      <thead>
+        <tr style={{ background: "#fef9ec" }}>
+          {["사업장(대표)", "직종", "총 근무일수", "환산 개월수", "최초 근무", "출처", "비고", ""].map(h => (
+            <th key={h} style={{ padding: "5px 6px", border: "1px solid #fcd34d", fontWeight: 600, color: "#92400e", whiteSpace: "nowrap" }}>{h}</th>
+          ))}
+        </tr>
+      </thead>
+      <tbody>
+        {workHistoryDaily.map((row, i) => (
+          <tr key={i}>
+            <td style={{ padding: 3, border: "1px solid #fef3c7" }}>
+              <input
+                style={{ ...inputStyle, minWidth: 100, fontSize: 12 }}
+                value={row.company}
+                onChange={(e) => {
+                  const updated = [...workHistoryDaily];
+                  updated[i] = { ...updated[i], company: e.target.value };
+                  onChangeDaily(updated);
+                }}
+              />
+            </td>
+            <td style={{ padding: 3, border: "1px solid #fef3c7" }}>
+              <input
+                style={{ ...inputStyle, minWidth: 80, fontSize: 12 }}
+                value={row.jobType}
+                onChange={(e) => {
+                  const updated = [...workHistoryDaily];
+                  updated[i] = { ...updated[i], jobType: e.target.value };
+                  onChangeDaily(updated);
+                }}
+              />
+            </td>
+            <td style={{ padding: 3, border: "1px solid #fef3c7", textAlign: "center" }}>
+              <input
+                type="number"
+                style={{ ...inputStyle, width: 70, fontSize: 12, textAlign: "center" }}
+                value={row.totalDays}
+                onChange={(e) => {
+                  const days = Number(e.target.value) || 0;
+                  const convertedMonths = Math.ceil(days / 20);
+                  const updated = [...workHistoryDaily];
+                  updated[i] = { ...updated[i], totalDays: days, convertedMonths };
+                  onChangeDaily(updated);
+                }}
+              />
+            </td>
+            <td style={{ padding: "3px 8px", border: "1px solid #fef3c7", textAlign: "center", fontWeight: 700, color: "#b45309" }}>
+              {row.convertedMonths}개월
+              <div style={{ fontSize: 10, color: "#9ca3af", fontWeight: 400 }}>
+                ({Math.floor(row.convertedMonths / 12) > 0 ? `${Math.floor(row.convertedMonths / 12)}년 ` : ""}
+                {row.convertedMonths % 12 > 0 ? `${row.convertedMonths % 12}개월` : ""})
+              </div>
+            </td>
+            <td style={{ padding: "3px 8px", border: "1px solid #fef3c7", textAlign: "center", fontSize: 11, color: "#6b7280" }}>
+              {row.startYear}.{String(row.startMonth).padStart(2, "0")}
+            </td>
+            <td style={{ padding: 3, border: "1px solid #fef3c7" }}>
+              <input
+                style={{ ...inputStyle, width: 70, fontSize: 12 }}
+                value={row.source}
+                onChange={(e) => {
+                  const updated = [...workHistoryDaily];
+                  updated[i] = { ...updated[i], source: e.target.value };
+                  onChangeDaily(updated);
+                }}
+              />
+            </td>
+            <td style={{ padding: 3, border: "1px solid #fef3c7" }}>
+              <input
+                style={{ ...inputStyle, minWidth: 80, fontSize: 12 }}
+                value={row.memo}
+                onChange={(e) => {
+                  const updated = [...workHistoryDaily];
+                  updated[i] = { ...updated[i], memo: e.target.value };
+                  onChangeDaily(updated);
+                }}
+              />
+            </td>
+            <td style={{ padding: 3, border: "1px solid #fef3c7", textAlign: "center" }}>
+              <button
+                onClick={() => onChangeDaily(workHistoryDaily.filter((_, idx) => idx !== i))}
+                style={{ background: "none", border: "none", color: "#dc2626", cursor: "pointer", fontSize: 14 }}
+              >✕</button>
+            </td>
+          </tr>
+        ))}
+        {workHistoryDaily.length === 0 && (
+          <tr><td colSpan={8} style={{ padding: "12px", textAlign: "center", color: "#9ca3af", fontSize: 12 }}>일용직 이력 없음</td></tr>
+        )}
+      </tbody>
+      {workHistoryDaily.length > 0 && (
+        <tfoot>
+          <tr style={{ background: "#fef9ec" }}>
+            <td colSpan={2} style={{ padding: "4px 8px", border: "1px solid #fcd34d", fontWeight: 700, color: "#92400e", textAlign: "right" }}>합계</td>
+            <td style={{ padding: "4px 8px", border: "1px solid #fcd34d", fontWeight: 700, color: "#92400e", textAlign: "center" }}>
+              {workHistoryDaily.reduce((sum, r) => sum + r.totalDays, 0)}일
+            </td>
+            <td style={{ padding: "4px 8px", border: "1px solid #fcd34d", fontWeight: 700, color: "#b45309", textAlign: "center" }}>
+              {(() => {
+                const totalMonths = workHistoryDaily.reduce((sum, r) => sum + r.convertedMonths, 0);
+                const y = Math.floor(totalMonths / 12);
+                const m = totalMonths % 12;
+                return y > 0 && m > 0 ? `${y}년 ${m}개월` : y > 0 ? `${y}년` : `${m}개월`;
+              })()}
+            </td>
+            <td colSpan={4} style={{ border: "1px solid #fcd34d" }} />
+          </tr>
+        </tfoot>
+      )}
+    </table>
+  </div>
+  <button
+    onClick={() => onChangeDaily([...workHistoryDaily, { company: "", jobType: "", totalDays: 0, startYear: new Date().getFullYear(), startMonth: 1, convertedMonths: 0, source: "", memo: "" }])}
+    style={{ background: "white", border: "1px solid #fcd34d", borderRadius: 6, padding: "4px 12px", fontSize: 12, cursor: "pointer", color: "#92400e" }}
+  >
+    + 일용직 행 추가
+  </button>
+</div>
+```
+
+---
+
+## 작업 3: API 엔드포인트 수정
+파일: app/api/cases/[caseId]/work-history/analyze/route.ts
+
+### 3-A: formData에서 docTypes 배열 추출
+기존 files 추출 코드 아래에 추가:
+```typescript
+const docTypes = formData.getAll("docTypes") as string[];
+```
+
+### 3-B: 각 파일에 docType 매핑
+pdfContents 배열에 docType 필드 추가:
+```typescript
+const pdfContents: { name: string; base64: string; docType: string }[] = []
+for (let idx = 0; idx < files.length; idx++) {
+  const file = files[idx];
+  const buffer = await file.arrayBuffer();
+  const base64 = Buffer.from(buffer).toString("base64");
+  pdfContents.push({ name: file.name, base64, docType: docTypes[idx] ?? "" });
+}
+```
+
+### 3-C: 프롬프트를 문서 종류별 맞춤 지시로 변경
+각 파일 처리 시 docType에 따라 다른 프롬프트 텍스트를 사용하도록 수정.
+
+기존 프롬프트 텍스트 부분을 아래 함수로 교체:
+
+```typescript
+function getPromptForDocType(docType: string, fileName: string): string {
+  const base = `[중요] 반드시 JSON만 응답하라. 설명 텍스트, 코드블록(\`\`\`), 주석을 절대 포함하지 마라. 첫 글자 { 마지막 글자 }인 순수 JSON만 출력하라.\n\n`;
+
+  if (docType === "건보") {
+    return base + `이 문서는 건강보험자격득실확인서입니다.
+"가입자구분"이 "직장가입자"인 항목만 추출하라.
+지역가입자, 지역세대원, 지역세대주, 직장피부양자는 반드시 제외하라.
+사업장명은 "사업장명칭" 컬럼에서 추출하라.
+자격취득일이 시작일, 자격상실일이 종료일이다. 상실일이 없으면 현재(2026-01)로 표기.
+
+JSON 형식:
+{
+  "name": "성명",
+  "sources": {
+    "건보": [{ "company": "사업장명", "startYear": 2000, "startMonth": 1, "endYear": 2005, "endMonth": 12, "department": "", "jobType": "", "workDays": 0 }],
+    "고용산재": [], "소득금액": [], "연금": []
+  },
+  "dailyEntries": []
+}`;
+  }
+
+  if (docType === "고용산재_상용") {
+    return base + `이 문서는 고용보험 자격이력내역서입니다.
+상용직(기능원및관련근로자, 단순노무직근로자, 청소종사자 등 월급제) 이력만 추출하라.
+직종코드가 있으면 jobType에 포함하라.
+취득일이 시작일, 상실일이 종료일이다.
+
+JSON 형식:
+{
+  "name": "성명",
+  "sources": {
+    "고용산재": [{ "company": "사업장명", "startYear": 2000, "startMonth": 1, "endYear": 2005, "endMonth": 12, "department": "", "jobType": "직종명", "workDays": 0 }],
+    "건보": [], "소득금액": [], "연금": []
+  },
+  "dailyEntries": []
+}`;
+  }
+
+  if (docType === "일용직") {
+    return base + `이 문서는 고용보험 일용근로노무제공내역서입니다.
+사업장별로 총 근무일수(workDays)를 합산하라.
+변환 기준: 20일=1개월, 220일=1년.
+convertedMonths = Math.ceil(totalDays / 20).
+같은 사업장의 여러 달 근무는 하나로 합산하라.
+
+JSON 형식:
+{
+  "name": "성명",
+  "sources": { "고용산재": [], "건보": [], "소득금액": [], "연금": [] },
+  "dailyEntries": [
+    { "company": "사업장명", "jobType": "직종명", "totalDays": 45, "startYear": 2013, "startMonth": 1, "convertedMonths": 3, "source": "고용산재", "memo": "" }
+  ]
+}`;
+  }
+
+  if (docType === "연금") {
+    return base + `이 문서는 국민연금 가입증명 또는 가입내역확인서입니다.
+사업장취득/사업장사용관계종결 이벤트에서 사업장명과 기간을 추출하라.
+"사업장 명칭 변경 내역"이 있으면 최신 명칭으로 통일하라.
+지역가입자 구간은 제외하라.
+
+JSON 형식:
+{
+  "name": "성명",
+  "sources": {
+    "연금": [{ "company": "사업장명", "startYear": 2000, "startMonth": 1, "endYear": 2005, "endMonth": 12, "department": "", "jobType": "", "workDays": 0 }],
+    "고용산재": [], "건보": [], "소득금액": []
+  },
+  "dailyEntries": []
+}`;
+  }
+
+  if (docType === "소득금액") {
+    return base + `이 문서는 소득금액증명원입니다.
+"근로소득" 항목의 법인명(상호)과 귀속연도만 추출하라.
+연금소득, 사업소득, 종교인소득은 제외하라.
+국민연금공단, 건강보험공단 등 공공기관은 사업장으로 기재하지 마라.
+동일 사업장이 연속 연도에 등장하면 하나로 합산하라.
+귀속연도가 시작연도이며 해당 연도 1월~12월로 표기하라.
+
+JSON 형식:
+{
+  "name": "성명",
+  "sources": {
+    "소득금액": [{ "company": "사업장명", "startYear": 2000, "startMonth": 1, "endYear": 2000, "endMonth": 12, "department": "", "jobType": "근로소득", "workDays": 0 }],
+    "고용산재": [], "건보": [], "연금": []
+  },
+  "dailyEntries": []
+}`;
+  }
+
+  if (docType === "건근공") {
+    return base + `이 문서는 건설근로자공제회 내역서입니다.
+사업장별로 총 근무일수를 합산하라. 변환 기준: 20일=1개월.
+
+JSON 형식:
+{
+  "name": "성명",
+  "sources": { "고용산재": [], "건보": [], "소득금액": [], "연금": [] },
+  "dailyEntries": [
+    { "company": "사업장명", "jobType": "건설일용직", "totalDays": 60, "startYear": 2013, "startMonth": 1, "convertedMonths": 3, "source": "건근공", "memo": "" }
+  ]
+}`;
+  }
+
+  // fallback
+  return base + `이 문서에서 직업력 이력을 추출하라.
+JSON 형식:
+{
+  "name": "성명",
+  "sources": {
+    "고용산재": [], "건보": [], "소득금액": [], "연금": []
+  },
+  "dailyEntries": []
+}`;
+}
+```
+
+### 3-D: 각 파일 처리 루프에서 docType별 프롬프트 사용
+기존 프롬프트 text 부분을 getPromptForDocType(pdf.docType, pdf.name) 호출로 교체.
+
+### 3-E: dailyEntries 누적 합산 로직 추가
+기존 sources 병합 코드 아래에 추가:
+```typescript
+// dailyEntries 누적
+const allDailyEntries: unknown[] = [];
+
+// 루프 내부에서 각 응답의 dailyEntries를 누적:
+if (parsed.dailyEntries?.length > 0) {
+  allDailyEntries.push(...parsed.dailyEntries);
+}
+
+// 최종 응답에 포함:
+return NextResponse.json({
+  success: true,
+  sources: mergedSources,
+  dailyEntries: allDailyEntries,
+  name: firstName,
+});
+```
+
+---
+
+## 작업 4: page.tsx (CaseData 타입 및 CaseCommonInfoSection) 수정
+
+### 4-A: CaseData 타입에 workHistoryDaily 필드 확인
+이미 추가되어 있으면 타입을 아래로 변경:
+```typescript
+workHistoryDaily: WorkHistoryDailyEntry[] | null;
+```
+없으면 추가.
+
+WorkHistoryDailyEntry import 추가:
+```typescript
+import type { WorkHistoryItem, WorkHistoryRawEntry, WorkHistoryRaw, WorkHistoryDailyEntry } from "@/components/case-common/WorkHistoryTypes";
+```
+
+### 4-B: CaseCommonInfoSection의 WorkHistorySection 호출부에 일용직 props 추가
+기존:
+```tsx
+<WorkHistorySection
+  caseId={caseItem.id}
+  workHistory={(caseItem.workHistory as WorkHistoryItem[]) ?? []}
+  workHistoryRaw={...}
+  workHistoryMemo={...}
+  lastNoiseWorkEndDate={...}
+  onChange={handleWorkHistoryChange}
+  onSaveLastDate={saveLastNoiseWorkEndDate}
+/>
+```
+
+변경 (workHistoryDaily, onChangeDaily props 추가):
+```tsx
+<WorkHistorySection
+  caseId={caseItem.id}
+  workHistory={(caseItem.workHistory as WorkHistoryItem[]) ?? []}
+  workHistoryRaw={(caseItem.workHistoryRaw as WorkHistoryRaw) ?? { 고용산재: [], 건보: [], 소득금액: [], 연금: [], 건근공: [], 일용직: [] }}
+  workHistoryDaily={(caseItem.workHistoryDaily as WorkHistoryDailyEntry[]) ?? []}
+  workHistoryMemo={caseItem.workHistoryMemo}
+  lastNoiseWorkEndDate={caseItem.lastNoiseWorkEndDate}
+  onChange={handleWorkHistoryChange}
+  onChangeDaily={async (entries) => {
+    await fetch(`/api/cases/${caseItem.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ workHistoryDaily: entries }),
+    });
+    onUpdated({ ...caseItem, workHistoryDaily: entries });
+  }}
+  onSaveLastDate={saveLastNoiseWorkEndDate}
+/>
+```
+
+---
+
+## 완료 후 확인
+1. 빌드 오류 없는지 확인
+2. PDF 파일 선택 → 문서 종류 드롭다운 표시 확인
+3. 각 문서 종류별로 올바른 탭에 데이터 채워지는지 확인
+4. 일용직 합산표 표시 및 수동 입력 확인
+5. git push → Railway 배포 후 최종 테스트

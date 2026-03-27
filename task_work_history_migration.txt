@@ -1,0 +1,252 @@
+## 작업 개요
+직업력을 HearingLossDetail에서 Case 공통 필드로 이동.
+상용직/일용직 분리 저장 구조 추가.
+UI에서 사건공통정보 섹션에 직업력 표시.
+
+## 작업 원칙
+- 외과적 수정만. 전체 파일 재작성 금지
+- 파일 4개 수정 + 마이그레이션 1회
+
+---
+
+## 작업 1: prisma/schema.prisma 수정
+
+### 1-A: Case 모델에 직업력 필드 추가
+Case 모델에서 `memo String?` 필드 바로 아래에 아래 4줄 추가:
+
+```prisma
+  // 직업력 (상병 공통)
+  workHistory      Json?   // 상용직 최종 직업력
+  workHistoryDaily Json?   // 일용직 직업력
+  workHistoryRaw   Json?   // 소스별 원시 직업력
+  workHistoryMemo  String? // 직업력 메모
+  lastNoiseWorkEndDate DateTime? // 마지막 소음작업 중단일
+```
+
+### 1-B: HearingLossDetail 모델에서 직업력 필드 제거
+HearingLossDetail 모델에서 아래 5줄 삭제:
+```
+  workHistory          Json?
+  workHistoryRaw       Json?  // 기초자료별 원시 직업력 (소스별 분리 저장)
+  workHistoryMemo      String?
+  lastNoiseWorkEndDate DateTime?
+```
+
+---
+
+## 작업 2: 마이그레이션 실행
+아래 명령어를 순서대로 실행:
+
+```bash
+npx prisma migrate dev --name move_work_history_to_case
+```
+
+마이그레이션 파일이 생성되면, 기존 HearingLossDetail의 데이터를 Case로 이전하는 SQL을 마이그레이션 파일에 추가:
+마이그레이션 파일(prisma/migrations/..._move_work_history_to_case/migration.sql) 맨 끝에 아래 SQL 추가:
+
+```sql
+-- 기존 HearingLossDetail 직업력 데이터를 Case로 이전
+UPDATE "Case" c
+SET
+  "workHistory" = hld."workHistory",
+  "workHistoryRaw" = hld."workHistoryRaw",
+  "workHistoryMemo" = hld."workHistoryMemo",
+  "lastNoiseWorkEndDate" = hld."lastNoiseWorkEndDate"
+FROM "hearing_loss_details" hld
+WHERE hld."caseId" = c."id"
+  AND (
+    hld."workHistory" IS NOT NULL
+    OR hld."workHistoryRaw" IS NOT NULL
+    OR hld."workHistoryMemo" IS NOT NULL
+    OR hld."lastNoiseWorkEndDate" IS NOT NULL
+  );
+```
+
+SQL 추가 후 다시 실행:
+```bash
+npx prisma migrate dev
+npx prisma generate
+```
+
+---
+
+## 작업 3: API 엔드포인트 수정
+
+### 3-A: app/api/cases/[caseId]/route.ts 수정
+PATCH 핸들러에서 기존 업데이트 가능 필드 목록에 아래 필드들 추가:
+```typescript
+workHistory: body.workHistory,
+workHistoryDaily: body.workHistoryDaily,
+workHistoryRaw: body.workHistoryRaw,
+workHistoryMemo: body.workHistoryMemo,
+lastNoiseWorkEndDate: body.lastNoiseWorkEndDate ? new Date(body.lastNoiseWorkEndDate) : undefined,
+```
+(undefined인 경우 Prisma가 해당 필드를 업데이트하지 않으므로 조건부 처리 필요)
+
+실제 코드 패턴:
+```typescript
+const updateData: Record<string, unknown> = {}
+if (body.workHistory !== undefined) updateData.workHistory = body.workHistory
+if (body.workHistoryDaily !== undefined) updateData.workHistoryDaily = body.workHistoryDaily
+if (body.workHistoryRaw !== undefined) updateData.workHistoryRaw = body.workHistoryRaw
+if (body.workHistoryMemo !== undefined) updateData.workHistoryMemo = body.workHistoryMemo
+if (body.lastNoiseWorkEndDate !== undefined) {
+  updateData.lastNoiseWorkEndDate = body.lastNoiseWorkEndDate ? new Date(body.lastNoiseWorkEndDate) : null
+}
+```
+이 블록을 PATCH 핸들러의 prisma.case.update data 객체에 spread 추가.
+
+### 3-B: app/api/cases/[caseId]/work-history/analyze/route.ts 수정
+DB 저장 부분에서 hearingLossDetail.update 대신 case.update로 변경:
+
+기존:
+```typescript
+await prisma.hearingLossDetail.update({
+  where: { caseId },
+  data: { workHistoryRaw: parsed.sources as object },
+})
+```
+
+변경:
+```typescript
+await prisma.case.update({
+  where: { id: caseId },
+  data: { workHistoryRaw: parsed.sources as object },
+})
+```
+
+### 3-C: app/api/patients/[patientId]/route.ts (또는 GET cases 엔드포인트) 확인
+patients API에서 cases를 include할 때 hearingLoss의 workHistory 관련 필드를 include하고 있으면 제거.
+대신 case 자체에 workHistory 필드가 포함되도록 확인.
+
+---
+
+## 작업 4: TypeScript 타입 수정
+app/patients/[patientId]/page.tsx 수정
+
+### 4-A: CaseData 타입에 직업력 필드 추가
+CaseData 타입 정의에서 `memo: string | null;` 다음에 추가:
+```typescript
+workHistory: WorkHistoryItem[] | null;
+workHistoryDaily: unknown[] | null;
+workHistoryRaw: WorkHistoryRaw | null;
+workHistoryMemo: string | null;
+lastNoiseWorkEndDate: string | null;
+```
+
+### 4-B: HearingLossDetail 타입에서 직업력 필드 제거
+HearingLossDetail 타입에서 아래 4줄 삭제:
+```typescript
+workHistory: WorkHistoryItem[] | null;
+workHistoryRaw: WorkHistoryRaw | null;
+workHistoryMemo: string | null;
+lastNoiseWorkEndDate: string | null;
+```
+
+### 4-C: EMPTY_DETAIL 객체에서 직업력 필드 제거
+EMPTY_DETAIL 객체에서 아래 4줄 삭제:
+```typescript
+workHistory: null, workHistoryRaw: null, workHistoryMemo: null, lastNoiseWorkEndDate: null,
+```
+
+---
+
+## 작업 5: UI 이동 - WorkHistorySection을 CaseCommonInfoSection으로
+
+### 5-A: HearingLossTab에서 직업력 관련 코드 제거
+HearingLossTab 함수에서 아래 항목들 제거:
+
+1. handleWorkHistoryChange 함수 전체 삭제
+2. saveLastNoiseWorkEndDate 함수 전체 삭제
+3. JSX에서 WorkHistorySection 컴포넌트 호출 부분 삭제:
+```tsx
+<WorkHistorySection
+  caseId={caseId}
+  workHistory={detail.workHistory ?? []}
+  workHistoryRaw={detail.workHistoryRaw ?? { 고용산재: [], 건보: [], 소득금액: [], 연금: [], 건근공: [] }}
+  workHistoryMemo={detail.workHistoryMemo}
+  lastNoiseWorkEndDate={detail.lastNoiseWorkEndDate}
+  onChange={handleWorkHistoryChange}
+  onSaveLastDate={saveLastNoiseWorkEndDate}
+/>
+```
+
+### 5-B: CaseCommonInfoSection에 직업력 섹션 추가
+CaseCommonInfoSection 함수에서:
+
+1. 상단 import 확인 (WorkHistorySection, WorkHistoryItem, WorkHistoryRaw 타입이 이미 파일 상단에 import되어 있으므로 추가 불필요)
+
+2. CaseCommonInfoSection 함수 내부 state 추가 (open, editing state 선언 블록 근처):
+```typescript
+const [workHistorySaving, setWorkHistorySaving] = useState(false)
+```
+
+3. CaseCommonInfoSection 함수 내부에 핸들러 추가:
+```typescript
+const handleWorkHistoryChange = async (updates: {
+  workHistory?: WorkHistoryItem[] | null
+  workHistoryRaw?: WorkHistoryRaw | null
+  workHistoryMemo?: string | null
+  lastNoiseWorkEndDate?: string | null
+}) => {
+  setWorkHistorySaving(true)
+  try {
+    await fetch(`/api/cases/${caseItem.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(updates),
+    })
+    onUpdated({ ...caseItem, ...updates })
+  } catch (e) {
+    console.error("직업력 저장 실패:", e)
+  } finally {
+    setWorkHistorySaving(false)
+  }
+}
+
+const saveLastNoiseWorkEndDate = async (isoDate: string) => {
+  await fetch(`/api/cases/${caseItem.id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ lastNoiseWorkEndDate: isoDate }),
+  })
+  onUpdated({ ...caseItem, lastNoiseWorkEndDate: isoDate })
+}
+```
+
+4. CaseCommonInfoSection JSX에서 닫는 `</div>` (padding 16인 div) 바로 앞에 WorkHistorySection 추가:
+```tsx
+{/* 직업력 */}
+<div style={{ marginTop: 16, borderTop: "1px solid #e5e7eb", paddingTop: 16 }}>
+  <div style={{ fontSize: 11, fontWeight: 700, color: "#6b7280", letterSpacing: 1, marginBottom: 12 }}>직업력</div>
+  <WorkHistorySection
+    caseId={caseItem.id}
+    workHistory={(caseItem.workHistory as WorkHistoryItem[]) ?? []}
+    workHistoryRaw={(caseItem.workHistoryRaw as WorkHistoryRaw) ?? { 고용산재: [], 건보: [], 소득금액: [], 연금: [], 건근공: [] }}
+    workHistoryMemo={caseItem.workHistoryMemo}
+    lastNoiseWorkEndDate={caseItem.lastNoiseWorkEndDate}
+    onChange={handleWorkHistoryChange}
+    onSaveLastDate={saveLastNoiseWorkEndDate}
+  />
+</div>
+```
+
+이 위치는 CaseCommonInfoSection의 `{open && (` 블록 안, 맨 아래 `</div>` 직전.
+
+---
+
+## 작업 6: WorkHistorySection 컴포넌트에 일용직 탭 추가
+파일: components/case-common/WorkHistorySection.tsx
+
+WorkHistoryRaw 타입에 workHistoryDaily 관련 처리 추가 여부는 현재 파일 내용 확인 후 판단.
+현재 '건근공' 탭이 있으면 그것을 일용직 합산표로 활용.
+없으면 RAW_SOURCES 배열에 '일용직' 추가.
+
+---
+
+## 완료 후 확인
+1. 빌드 오류 없는지 확인
+2. /patients/[id] 페이지 접속 → 사건공통정보 섹션에 직업력 표시
+3. 소음성난청 탭 (1)사건초기에서 직업력 섹션 사라짐
+4. PDF 자동 분석 기능 정상 작동
+5. 직업력 저장 후 DB 반영 확인

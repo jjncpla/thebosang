@@ -1,0 +1,317 @@
+# TASK-01: 스키마 확장 + 보험급여 서식 PDF API 구현
+# 실행: cat task-01.txt | claude --dangerously-skip-permissions
+
+## 개요
+소음성 난청 접수 서식 PDF 자동 생성 기능 구현.
+User 테이블에 노무사 전문 정보 필드를 추가하고,
+7개 서식의 PDF 생성 API를 pdf-lib 방식으로 구현한다.
+
+---
+
+## STEP 1: schema.prisma — 필드 추가 (2개 테이블)
+
+파일: prisma/schema.prisma
+
+### 1-A. User 모델에 아래 필드 추가 (기존 필드 건드리지 말 것):
+
+```
+// 노무사 전문 정보 (서식 자동생성용)
+licenseNo       String?   // 공인노무사 등록번호 (No)
+birthDate       String?   // 생년월일 (B) — "YY.MM.DD" 형식 (예: "65.03.12")
+officeAddress   String?   // 사무소 주소 (주소*)
+officeTel       String?   // 사무실 전화 (Tel)
+officeFax       String?   // 팩스 (Fax)
+branchName      String?   // 지사/상호 (상호) 예: "울산지사"
+department      String?   // 부서 (SignupRequest에서 이관)
+jobTitle        String?   // 직책 (SignupRequest에서 이관)
+```
+
+### 1-B. Case 모델에 아래 필드 추가 (기존 필드 건드리지 말 것):
+
+```
+// 관할 근로복지공단 지사 (서식 자동생성용)
+kwcOfficeName   String?   // 관할 공단 지사명 (예: "울산", "부산동부")
+                          // 서식 출력 시 "근로복지공단 {{kwcOfficeName}}장 귀하" 로 사용
+```
+
+추가 후 마이그레이션:
+```
+npx prisma migrate dev --name add_user_professional_fields_and_kwc_office
+npx prisma generate
+```
+
+---
+
+## STEP 2: 공통 유틸 함수 — lib/pdf/formUtils.ts 신규 생성
+
+아래 유틸 함수들을 구현한다.
+
+```typescript
+// 주민번호에서 성별 파싱
+// 7번째 자리: 1,3 → "남", 2,4 → "여"
+export function parseGender(jumin: string): string
+
+// 주민번호에서 생년월일 파싱 → { Y1,Y2,Y3,Y4, M1,M2, D1,D2 } (각 1자리 문자)
+export function parseBirthDate(jumin: string): Record<string, string>
+
+// 날짜 문자열(Date | string) → { 연도, 월자, 일자, y1~y4, m1~m2, d1~d2, YY, MM, DD }
+// 연도: 4자리, 월자/일자: 2자리 zero-padded
+// y1~y4: 연도 각 자리, m1~m2: 월 각 자리, d1~d2: 일 각 자리
+// YY: 2자리 연도, MM: 2자리 월, DD: 2자리 일
+export function parseDateFields(date: Date | string | null): Record<string, string>
+
+// 주민번호 → 각 자리 분리 { 1~13 } (하이픈 제거 후 순서대로)
+export function parseJumin(jumin: string): Record<string, string>
+
+// NotoSansKR 폰트 로드 (기존 generate-disability-claim과 동일 방식 사용)
+export async function loadKoreanFont(pdfDoc: PDFDocument): Promise<PDFFont>
+
+// A4 페이지 생성 헬퍼
+// width: 595, height: 842 (pt 기준)
+export function createA4Page(pdfDoc: PDFDocument)
+
+// 텍스트 그리기 헬퍼
+// x, y: pt 좌표 (좌측 하단 원점 기준)
+// fontSize 기본값 9
+export function drawText(
+  page: PDFPage,
+  text: string,
+  x: number,
+  y: number,
+  font: PDFFont,
+  fontSize?: number,
+  color?: RGB
+): void
+
+// 체크박스 [√] 그리기 헬퍼
+export function drawCheck(page: PDFPage, x: number, y: number, font: PDFFont): void
+```
+
+---
+
+## STEP 3: 서식별 PDF 생성 API 구현
+
+### 라우팅 구조
+모든 서식은 단일 엔드포인트로 처리:
+`/api/cases/[caseId]/forms/route.ts`
+
+쿼리 파라미터 `?type=FORM_TYPE` 으로 서식 구분
+
+지원 FORM_TYPE:
+- `DISABILITY_CLAIM` — 장해급여청구서 (기존 API 이전 + 개선)
+- `NOISE_WORK_CONFIRM` — 소음작업 종사 사실 확인서
+- `AGENT_APPOINTMENT` — 대리인 선임신고서
+- `POWER_OF_ATTORNEY` — 위임장
+- `SPECIAL_CLINIC` — 특진의료기관 선택 확인서 (특진용)
+- `EXPERT_CLINIC` — 특진의료기관 선택 확인서 (전문조사용)
+- `WORK_HISTORY` — 직업력 조사 표준문답서
+
+### 공통 데이터 로딩 (모든 서식 공통)
+```typescript
+// Prisma로 가져올 데이터
+const caseData = await prisma.case.findUnique({
+  where: { id: caseId },
+  include: {
+    patient: true,           // 재해자 정보
+    caseManager: true,       // 담당 노무사 (대리인)
+    hearingLossDetail: {
+      include: { exams: true }
+    }
+  }
+})
+
+// 공통 변수 추출
+const patient = caseData.patient
+const manager = caseData.caseManager  // User (대리인)
+const detail = caseData.hearingLossDetail
+
+// 성별 파싱
+const gender = parseGender(patient.jumin)
+
+// 주민번호 각 자리
+const juminFields = parseJumin(patient.jumin)
+
+// 생년월일 각 자리 (주민번호에서)
+const birthFields = parseBirthDate(patient.jumin)
+
+// 재해일 파싱 (detail.firstExamDate 사용)
+const dateFields = parseDateFields(detail?.firstExamDate)
+
+// 오늘 날짜
+const today = parseDateFields(new Date())
+```
+
+---
+
+## STEP 4: 각 서식 PDF 구현
+
+### 4-1. 장해급여청구서 (DISABILITY_CLAIM)
+기존 `/api/cases/[caseId]/generate-disability-claim/route.ts` 로직을
+새 공통 유틸 기반으로 리팩터링.
+- 기존 API 경로는 유지하되, 내부 구현을 공통 유틸 사용으로 교체
+- 기존에 발생하던 폰트 로딩 오류 수정 (loadKoreanFont 유틸 사용)
+- 새 라우트 `/api/cases/[caseId]/forms?type=DISABILITY_CLAIM` 에서도 동일하게 동작
+
+서식 구성: 2페이지
+- 1페이지: 장해급여 청구서 본문
+- 2페이지: 소음작업 종사 사실 확인서 (별지 뒷면)
+
+변수 매핑:
+```
+{{근로자명}}     → patient.name
+{{생년월일}}     → birthFields로 조합 (예: "1960.05.12")
+Y1~Y4, M1~M2, D1~D2 → birthFields (각 1자리)
+재해발생일 y1~y4, m1~m2, d1~d2 → dateFields
+{{연락처}}       → patient.phone
+{{연도}}/{{월자}}/{{일자}} → today
+{{대리인명}}     → manager.name
+{{Tel}}          → manager.officeTel
+{{관할}}         → caseData.kwcOfficeName ?? ""
+```
+
+### 4-2. 소음작업 종사 사실 확인서 (NOISE_WORK_CONFIRM)
+별도 1페이지 서식.
+변수 매핑:
+```
+{{근로자명}}     → patient.name
+주민번호 1~13    → juminFields (각 1자리, 하이픈 포함 위치 주의)
+{{주소}}         → patient.address
+{{직종}}         → detail.workHistory[마지막항목].department 또는 별도 jobType 필드
+재해일 y1~y4 등  → dateFields
+퇴직 체크        → [√] 퇴직 (기본값)
+근로자 유형      → [√] 근로자 (기본값)
+사업장명         → case.workplaceName 또는 detail의 사업장 관련 필드
+{{연도}}/{{월자}}/{{일자}} → today
+{{대리인명}}     → manager.name
+{{Tel}}          → manager.officeTel
+```
+
+직업력 표 (소음사업장 직력):
+detail.workHistory JSON 배열에서 noiseExposure=true인 항목들을 테이블로 출력.
+각 행: 구분번호 | 사업장명(주소) | 직종명 | 근무기간 | 비고
+
+### 4-3. 대리인 선임신고서 (AGENT_APPOINTMENT)
+1페이지 서식.
+변수 매핑:
+```
+{{근로자명}}     → patient.name
+{{생년월일}}     → birthFields 조합 ("YY.MM.DD" 형식)
+{{주소}}         → patient.address
+{{연락처}}       → patient.phone
+{{상호}}         → manager.branchName (예: "울산지사")
+{{No}}           → manager.licenseNo
+{{대리인명}}     → manager.name
+{{B}}            → manager.birthDate
+{{주소*}}        → manager.officeAddress
+{{연락처*}}      → manager.phone (User 기본 phone 필드 or officeTel)
+{{Tel}}          → manager.officeTel
+{{Fax}}          → manager.officeFax
+{{재해일}}       → dateFields 조합 ("YYYY.MM.DD")
+{{연도}}/{{월자}}/{{일자}} → today
+{{관할}}         → caseData.kwcOfficeName ?? ""
+```
+
+### 4-4. 위임장 (POWER_OF_ATTORNEY)
+1페이지 서식.
+변수 매핑:
+```
+{{YY}}/{{MM}}/{{DD}}  → today (2자리 연도)
+{{상호}}         → "노무법인 더보상 " + manager.branchName
+{{주소*}}        → manager.officeAddress
+{{Tel}}          → manager.officeTel
+{{Fax}}          → manager.officeFax
+{{No}}           → manager.licenseNo
+{{대리인명}}     → manager.name
+{{근로자명}}     → patient.name
+{{주민번호}}     → patient.jumin (형식: XXXXXX-XXXXXXX)
+{{주소}}         → patient.address
+```
+
+### 4-5. 특진의료기관 선택 확인서 — 특진용 (SPECIAL_CLINIC)
+1페이지 서식.
+변수 매핑:
+```
+{{근로자명}}     → patient.name
+주민번호 1~13    → juminFields
+재해일자 y1~y4 등 → dateFields
+{{주소}}         → patient.address
+{{연락처}}       → patient.phone
+특진사유         → "소음성 난청(특별진찰)" (고정)
+{{특진}}         → detail.specialClinic (선택된 특진병원명)
+{{특진주소}}     → 특진병원 주소 (special_hospitals.json에서 병원명으로 조회)
+{{연도}}/{{월자}}/{{일자}} → today
+{{대리인명}}     → manager.name
+{{Tel}}          → manager.officeTel
+{{연락처*}}      → manager.phone
+{{Fax}}          → manager.officeFax
+{{관할}}         → caseData.kwcOfficeName ?? ""
+```
+
+### 4-6. 특진의료기관 선택 확인서 — 전문조사용 (EXPERT_CLINIC)
+SPECIAL_CLINIC과 동일 구조, 아래만 다름:
+```
+특진사유         → "소음성 난청(업무관련성 평가)" (고정)
+{{전문}}         → detail.expertClinic (선택된 전문조사기관명)
+{{전문주소}}     → 전문조사기관 주소
+{{연락처*}}      → manager.phone
+```
+
+### 4-7. 직업력 조사 표준문답서 (WORK_HISTORY)
+3페이지 서식 (인적사항 + 문답 + 사업장 근무력 조사).
+
+**자동 입력 항목:**
+```
+{{근로자명}}     → patient.name
+{{연락처}}       → patient.phone
+{{주소}}         → patient.address
+{{연도}}/{{월자}}/{{일자}} → today
+{{대리인명}}     → manager.name
+{{Tel}}          → manager.officeTel
+```
+
+**기입란 (빈칸으로 출력):**
+- 문1 (고향/거주이력) 답변란
+- 문3 (군복무) 답변란
+- 문4 (소음 사업장 외 근무 여부) 답변란
+- 문5 (사업장 목록) — 단, 아래 사업장 근무력 조사 표로 대체
+- 문6 (소속 부서) 답변란
+- 문7 (근무시간/교대) 답변란
+- 문8 (작업내용) 답변란
+- 문9 (산재사고 경험) 답변란
+- 문10 (난청증상 시작) 답변란
+- 문11 (난청 치료 이력) 답변란
+- 문12 (장애인등록) 답변란
+- 문13 (특수건강진단) 답변란
+
+**사업장 근무력 조사 표:**
+detail.workHistory JSON 배열 전체를 테이블로 출력.
+컬럼: 구분 | 기간 | 사업장(직종) | 근무기간 | 자료(건강/연금/고용/소득 체크)
+총 근무기간 합계도 하단에 출력.
+
+---
+
+## STEP 5: 기존 API 정리
+
+기존 `/api/cases/[caseId]/generate-disability-claim/route.ts`:
+- 내부 로직을 공통 유틸 기반으로 교체
+- 엔드포인트 자체는 유지 (기존 호출 코드 깨지지 않도록)
+- 새 라우트로 리다이렉트하거나 동일 로직 공유
+
+---
+
+## STEP 6: 타입 안전성
+
+- 모든 nullable 필드 접근 시 옵셔널 체이닝 사용 (`?.`)
+- manager가 null인 경우 빈 문자열로 fallback
+- patient.jumin이 없거나 형식 불일치 시 parseGender/parseBirthDate에서 "" 반환
+
+---
+
+## 완료 확인
+
+1. `npx prisma migrate dev` 성공
+2. `npx prisma generate` 성공
+3. `/api/cases/[caseId]/forms?type=DISABILITY_CLAIM` 호출 시 PDF 반환
+4. 나머지 6개 type 모두 PDF 반환 (레이아웃은 좌표 미조정 상태라도 텍스트 데이터는 정확히 들어가야 함)
+5. TypeScript 컴파일 에러 없음
+

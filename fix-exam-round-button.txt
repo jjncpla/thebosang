@@ -1,0 +1,112 @@
+# 특진 n차 추가 버튼 미표시 진단 및 수정
+
+## 1단계: 버튼 코드 위치 확인
+
+```bash
+grep -n "N차\|n차\|추가\|initialExamRounds\|examRounds" src/app/patients/*/page.tsx 2>/dev/null | head -40
+grep -rn "N차\|initialExamRounds\|examRounds" src --include="*.tsx" | head -40
+```
+
+## 2단계: 버튼 렌더링 위치와 조건 확인
+
+버튼 코드가 있는 파일을 특정한 뒤:
+
+```bash
+# 버튼 주변 컨텍스트 확인 (라인 ±20)
+grep -n "N차\|추가 버튼\|examRounds" [파일경로] 
+```
+
+아래 패턴 중 어떤 경우인지 확인:
+
+### 원인 A: 편집 모드(isEditing)일 때만 렌더링되는 경우
+버튼이 `{isEditing && ...}` 또는 `{editMode && ...}` 블록 안에 있어서,
+페이지를 처음 열었을 때(읽기 모드) 안 보이는 경우.
+
+→ 수정: 버튼을 편집 모드 블록 밖으로 꺼내거나,
+  편집 모드가 아닐 때도 볼 수 있게 조건 변경.
+
+### 원인 B: examRounds 배열은 있는데 버튼이 배열 밖에 없는 경우
+
+잘못된 구조:
+```tsx
+{initialExamRounds.map((round) => (
+  <div key={round}>...</div>
+  // 버튼이 여기 map 안에 있으면 각 회차마다 반복 표시됨
+))}
+// 버튼이 여기 있어야 하는데 위치가 잘못됨
+```
+
+올바른 구조:
+```tsx
+{initialExamRounds.map((round) => (
+  <div key={round}>...</div>
+))}
+{/* 버튼은 map 바깥, 섹션 안 */}
+<button
+  type="button"
+  onClick={() => setInitialExamRounds(prev => [...prev, Math.max(...prev) + 1])}
+  className="mt-3 text-sm text-sky-600 hover:text-sky-800 flex items-center gap-1 border border-sky-300 rounded px-3 py-1.5 hover:bg-sky-50 transition-colors"
+>
+  + {Math.max(...initialExamRounds) + 1}차 특진 추가
+</button>
+```
+
+### 원인 C: 섹션이 접힘(collapsed) 상태로 감춰진 경우
+특진 섹션 자체가 accordion/toggle로 감춰져 있고 버튼이 그 안에 있는 경우.
+→ 섹션을 펼치면 보이는지 확인 필요. 이 경우 버그 아님.
+
+### 원인 D: CSS로 hidden 처리된 경우
+`hidden`, `invisible`, `opacity-0`, `overflow-hidden` 등으로 가려진 경우.
+
+## 3단계: 수정
+
+확인된 원인에 맞게 수정. 
+가장 흔한 케이스(원인 A, 편집 모드 조건)의 수정 예시:
+
+```tsx
+// 수정 전 (편집 모드에서만 보임)
+{isEditing && (
+  <button onClick={...}>
+    + {Math.max(...initialExamRounds) + 1}차 특진 추가
+  </button>
+)}
+
+// 수정 후 (항상 보임, 단 편집 모드일 때만 동작)
+<button
+  type="button"
+  onClick={() => {
+    if (!isEditing) return; // 편집 모드 아니면 무시 또는
+    setInitialExamRounds(prev => [...prev, Math.max(...prev) + 1]);
+  }}
+  className={`mt-3 text-sm flex items-center gap-1 border rounded px-3 py-1.5 transition-colors ${
+    isEditing
+      ? 'text-sky-600 border-sky-300 hover:bg-sky-50 cursor-pointer'
+      : 'text-gray-400 border-gray-200 cursor-not-allowed'
+  }`}
+>
+  + {Math.max(...initialExamRounds) + 1}차 특진 추가
+</button>
+```
+
+또는 더 단순하게, 편집 모드와 무관하게 항상 표시:
+```tsx
+{/* 편집 모드 블록 밖에 배치 */}
+<div className="mt-3">
+  <button
+    type="button"
+    onClick={() => setInitialExamRounds(prev => [...prev, Math.max(...prev) + 1])}
+    className="text-sm text-sky-600 hover:text-sky-800 flex items-center gap-1 border border-sky-300 rounded px-3 py-1.5 hover:bg-sky-50 transition-colors"
+  >
+    + {Math.max(...initialExamRounds) + 1}차 특진 추가
+  </button>
+</div>
+```
+
+## 4단계: 타입 체크 후 커밋
+
+```bash
+npx tsc --noEmit 2>&1 | head -20
+git add -A
+git commit -m "fix: 특진 n차 추가 버튼 표시 오류 수정"
+git push origin main
+```
