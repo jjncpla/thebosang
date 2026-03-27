@@ -28,11 +28,29 @@ export async function POST(req: NextRequest) {
   const body = await req.json()
   const { year, month, branchName, revenue, cost, memo } = body
 
-  const record = await prisma.branchFinancial.upsert({
-    where: { year_month_branchName: { year, month, branchName: branchName ?? null } },
-    update: { revenue: revenue ?? 0, cost: cost ?? 0, memo: memo ?? null },
-    create: { year, month, branchName: branchName ?? null, revenue: revenue ?? 0, cost: cost ?? 0, memo: memo ?? null },
+  // branchName null 시 Prisma upsert unique 불안정 → findFirst + update/create 분기
+  const existing = await prisma.branchFinancial.findFirst({
+    where: { year, month, branchName: branchName ?? null },
   })
+
+  let record
+  if (existing) {
+    record = await prisma.branchFinancial.update({
+      where: { id: existing.id },
+      data: { revenue: revenue ?? 0, cost: cost ?? 0, memo: memo ?? null },
+    })
+  } else {
+    record = await prisma.branchFinancial.create({
+      data: {
+        year,
+        month,
+        branchName: branchName ?? null,
+        revenue: revenue ?? 0,
+        cost: cost ?? 0,
+        memo: memo ?? null,
+      },
+    })
+  }
 
   return NextResponse.json(record)
 }
