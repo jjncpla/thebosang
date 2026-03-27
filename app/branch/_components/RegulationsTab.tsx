@@ -1,6 +1,7 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
+import { useSession } from 'next-auth/react'
 
 // ─── 타입 ────────────────────────────────────────────────────────
 type AttachItem = {
@@ -17,6 +18,8 @@ type Section = {
   title: string
   body: string
   attaches?: AttachItem[]
+  dbId?: string
+  isFromDb?: boolean
 }
 
 type Chapter = {
@@ -459,40 +462,363 @@ const HR_CH: Chapter = {
   ]
 }
 
-// 취업규칙 — 핵심 조문 요약
-const EMPLOYMENT_RULES_SUMMARY = `■ 제1장 총칙
-제1조(목적): 사원의 채용·복무·근로조건 규정, 노사 공존공영 도모
-제2조(적용범위): 법령·근로계약·기타 회사규정에 별도 정함 없으면 본 규칙 적용. 수습·기간제·단시간근로자는 근로계약 우선.
+// 취업규칙 원문 전체
+const EMPLOYMENT_RULES_FULL = `취 업 규 칙
+노무법인 더 보 상
+▪ 2021. 9. 1. 제정
 
-■ 제2장 인사
-• 수습기간: 3개월 이내 (단축·면제 가능)
-• 정년: 만 65세 도달하는 날 (촉탁직 재고용 가능)
-• 사직원 제출: 퇴직 희망일 30일 전
+제 1 장  총 칙
 
-■ 제3장 복무
-• 시업·종업: 평일 09:00~18:00 / 휴게: 12:00~13:00
-• 출장 등 사업장 밖 근무: 소정근로시간 근로한 것으로 봄
+제1조 (목적)
+본 규칙은 노무법인 더보상(이하 "회사"라 한다) 사원의 채용·복무 및 근로조건에 관한 사항을 정함으로써 사원의 기본적 생활을 향상시키고 회사의 질서를 확립하여 노사 공존공영을 위함에 그 목적이 있다.
 
-■ 제3절 휴일 및 휴가
-• 유급휴일: 주휴일(일요일 원칙), 근로자의 날(5.1.)
-• 연차유급휴가: 1년 80% 이상 출근 시 15일. 3년 이상 근속 시 2년마다 1일 가산 (최대 25일)
-• 경조사 휴가: 본인 결혼 5일 / 배우자·부모·본인 사망 5일 / 조부모·자녀 사망 2일
-• 배우자 출산휴가: 10일 유급 (출산일부터 90일 이내 청구)
-• 육아휴직: 만 8세 이하 또는 초등학교 2학년 이하 자녀, 1년 이내
+제2조 (적용범위)
+① 사원의 복무 및 근로조건에 관하여 법령, 근로계약, 그 밖에 회사규정에 별도로 정함이 있는 경우를 제외하고는 이 규칙에 의한다.
+② 수습과 기간제 및 단시간근로자의 근로조건 등에 대하여 근로계약 등에서 별도로 정하는 바가 있으면 본 규칙에 우선한다.
 
-■ 제4장 임금
-• 임금 지급일: 익월 5일 (토요일·공휴일이면 전일 지급)
-• 임금 산정기간: 매월 1일~말일
-• 자가운전보조비: 월 30만원 이내 (본인·배우자 공동명의 차량)
-• 퇴직급여: 1년 이상 근속자, 1년에 30일분 평균임금
+제 2 장  인사
 
-■ 제5절 표창 및 징계
-• 징계 종류: 경고 → 견책 → 감봉 → 정직(6개월 이내) → 징계해고
-• 주요 징계사유: 기업비밀 누설, 부정한 금품 수수, 무단결근, 공금 횡령 등
+제1절 채용 및 근로계약
 
-■ 제7장 남녀고용평등 / 제8장 직장 내 괴롭힘 예방
-• 동일가치 노동 동일임금
-• 직장 내 괴롭힘 금지 및 신고 시 즉시 조사`
+제3조 (채용관련 제출 서류)
+① 사원은 다음 각 호의 서류를 채용 시 또는 채용된 이후 채용된 날로부터 7일 이내에 작성·제출하여야 한다. 다만, 특별히 사유가 인정되어 사전 승인을 받은 때에는 이를 연장할 수 있으며, 입사 시 제출한 서류는 제외한다.
+  1. 이력서(사진첨부), 자기소개서
+  2. 최종 학력증명서(졸업증명서)
+  3. 주민등록등본
+  4. 급여수령을 위한 통장사본
+  5. 면허, 자격증 사본(해당자)
+  6. 서약서
+  7. 성적 및 경력증명서(회사 요구 시)
+  8. 기타 회사가 요구하는 서류
+② 사원은 회사로부터 복무에 필요한 사항의 신고나 서류의 제출을 명령받은 경우 또는 제출된 서류에 변경사항이 발생한 때에는 사유발생일로부터 14일 이내에 관계서류를 회사에 제출하여야 한다.
+③ 제2항의 신고의무 불이행으로 인한 손해 등의 책임은 신고 의무자가 부담한다.
+
+제4조 (근로계약)
+사원으로 채용된 자가 회사가 제시한 근로조건에 동의하는 경우, 회사 소정양식의 근로계약서에 서명 또는 날인하여 채용일로부터 3일 이내에 회사에 제출하여야 하며, 미제출 시 근로계약체결의 의사가 없는 것으로 간주하여 채용을 취소한다.
+
+제5조 (채용결격 사유)
+다음 각 호 어느 하나에 해당하는 자는 사원으로 채용될 수 없으며, 채용 후라도 다음 각 호의 어느 하나에 해당할 경우에는 즉시 근로계약을 해지할 수 있다.
+  1. 피성년후견인, 피한정후견인 또는 피특정후견인
+  2. 제3조의 제출서류를 포함한 입사 시 제출서류의 주요사항을 허위로 기재한 자
+  3. 신체 또는 정신상의 장애로 인하여 직무를 감당할 수 없다고 인정되는 자
+  4. 기타 사회통념상 채용이나 근로관계유지가 곤란하다고 인정되는 자
+
+제6조 (수습기간)
+① 회사는 신규로 채용한 자에 대해 개별 근로계약에서 정하는 바에 따라 3개월 이내의 수습기간을 둘 수 있다. 다만, 회사의 판단에 따라 이를 단축 또는 면제할 수 있다.
+② 회사는 전항의 수습기간 중 또는 만료 시 사원으로서 계속근로가 부적당 또는 부적합하다고 인정될 때는 본 채용을 거부할 수 있다. 다만, 당해 근로자와 협의에 따라 3개월의 수습기간을 추가부여함으로써 본 채용의 기회를 부여할 수 있다.
+③ 수습기간은 근속년수에 포함한다.
+
+제2절 인사
+
+제7조 (인사이동)
+① 회사는 업무상 필요 및 사원의 능력, 적성, 경력 등을 고려하여 근무지·근무부서·업무내용 변경, 승진, 파견, 전적 등 인사발령을 할 수 있다. 다만, 전적의 경우에는 해당 사원의 동의를 얻어 시행한다.
+② 사원은 제1항의 명령에 대하여 정당한 이유가 없는 한 이에 따라야 하며, 근무지 변경명령의 경우 명령을 받은 날로부터 5일 이내에 부임하여야 한다.
+
+제8조 (대기발령)
+① 회사는 다음 각 호에 해당하는 사원에게 6개월 이내의 범위에서 대기발령을 명할 수 있다.
+  1. 직무수행능력이 부족하다고 판단되는 자
+  2. 사원으로서의 근무태도가 매우 불성실한 자
+  3. 기구의 개편 또는 해체 등에 따른 인력관리상의 잉여인력
+  4. 업무가 종료된 후 새로운 업무가 부여되지 아니한 자
+  5. 징계사유가 발생하거나 징계처분을 받은 자
+  6. 기타 경영상 필요성이 있는 경우
+
+제3절 퇴직·해고 등
+
+제9조 (통상해고)
+사원이 다음 각 호의 어느 하나에 해당할 경우에는 통상해고할 수 있다.
+  1. 정신 또는 신체의 장애, 허약, 노쇠, 질병에 의하여 정상적인 업무 수행을 할 수 없다고 판단되는 자
+  2. 직무수행 상 반드시 요구되는 자격의 상실 등으로 정상적인 업무수행을 할 수 없는 자
+  3. 형사소송에서 실형을 선고받고 복역으로 계속근로가 불가한 자
+  4. 사원의 일신상의 사유로 인하여 사회통념상 근로를 계속할 수 없다고 판단되는 자
+  5. 기타 위에 준하는 경우
+
+제10조 (경영상 해고)
+회사는 경영합리화를 위하여 사업을 축소하거나 경영실적 부진 등 긴박한 경영상의 필요가 있는 경우에는 다음 각 호의 요건을 갖추어 사원을 해고할 수 있다.
+  1. 해고회피 노력
+  2. 합리적이고 공정한 해고 기준을 정하고 이에 따른 대상자 선정
+  3. 해고회피 방법 및 해고 기준 등에 관하여 사원대표에게 해고를 하려는 날의 50일 전에 통보하고 성실하게 협의
+
+제11조 (당연퇴직)
+사원이 다음 각 호의 어느 하나에 해당하는 경우에는 당연퇴직한다.
+  1. 사망
+  2. 정년 도달
+  3. 계약기간 만료
+  4. 휴직기간이 만료되었음에도 불구하고 휴직사유가 소멸하지 않은 자
+  5. 휴직사유가 소멸되거나 휴직기간이 만료되었음에도 정당한 사유 없이 복직원 제출기일까지 복직원을 제출하지 아니한 경우
+
+제12조 (사직원 제출)
+① 사원이 퇴직하고자 할 경우에는 그 사유를 들어 적어도 30일 전에 사직을 제출하여야 한다.
+② 사원의 사직원 제출일이 퇴직을 희망하는 날로부터 30일 전이 아니거나 사직원에 퇴직 일자를 명시하지 아니한 경우 회사는 퇴직일자를 지정하여 사직서를 수리할 수 있다.
+③ 사원이 제2항의 사직서 수리 전에 결근하는 경우에는 회사가 지정한 퇴직일까지를 무단결근으로 처리한다.
+
+제13조 (해고의 통지)
+회사는 사원을 해고하는 경우에는 서면으로 그 사유 및 날짜를 기재하여 통지한다. 근로자를 해고하기 30일 전 해고사유와 시기를 명시하여 서면 해고예고를 한 경우에는 해고사유와 시기를 서면으로 통지한 것으로 본다.
+
+제14조 (정년)
+사원의 정년은 주민등록상의 생년월일을 기준으로 만 65세가 도달하는 날로 한다. 다만, 정년에 도달한 자라 하더라도 회사의 업무상 필요가 있는 경우 회사의 결정에 의해 촉탁직으로 재고용할 수 있다.
+
+제 3 장  복 무
+
+제1절 통칙
+
+제15조 (복무규율)
+사원은 신의성실의 원칙에 입각하여 다음 각 호의 사항을 엄수하여야 한다.
+  1. 회사 경영방침 및 경영목표 달성에 적극 협조하고 상사의 정당한 업무지시에 성실히 응할 것
+  2. 항상 사원으로서의 긍지와 자부심을 갖고, 질서와 규율을 준수하여 업무를 신속 정확히 처리할 것
+  3. 공사(公私)의 구분을 명확히 하고, 사원 간 상호 인격을 존중하여 예의를 지키며 융화에 힘쓸 것
+  4. 사원 간에 어떠한 형태의 폭행이나 성희롱을 하지 말 것
+  5. 회사의 명예를 추락시키거나 훼손하는 언동을 하지 말 것
+  6. 직무상의 비밀을 준수한다는 기밀유지에 관한 서약서에 서명을 하고, 회사의 기밀이 누설되지 않도록 각별히 유의할 것
+  7. 회사의 허가 없이 회사업무 이외의 다른 직무를 겸하거나 영리사업에 종사치 말 것
+  8. 회사의 허가 없이 근로시간 중 회사업무에 관련 없는 일을 하거나 근무장소를 이탈하지 말 것
+  9. 업무를 방해하거나 직장의 풍기와 질서를 문란케 하는 행위를 하지 말 것
+  10. 회사 내에서 도박, 음주 등을 하지 말 것
+  11. 회사의 재산과 시설물을 보호하고 항상 정리정돈 하여야 하며, 회사 물품을 소중히 취급하고 절약하여 사용할 것
+  12. 회사의 물품을 허가 없이 반출하거나 사적(私的)인 용도를 위하여 사용하지 말 것이며, 일상휴대품 이외의 물품을 사내에 반입할 때에는 회사의 허가를 받을 것
+  13. 회사물품을 분실한 경우에는 즉시 소속 상사 및 관리담당자에게 보고할 것
+  14. 직무와 관련하여 부당하게 금품 기타 이익을 수수하지 말 것
+  15. 직장의 청결 및 도난, 화재의 방지를 비롯한 제반 안전유지에 적극 노력할 것
+  16. 대표이사의 허가 없이 회사 또는 부속시설 내에서 집회, 연설, 게시, 인쇄물배포, 회람 및 정치활동 기타 이와 유사한 행위를 하지 말 것
+  17. 회사의 복무규율을 위반하는 행위를 교사, 방조 또는 선동하지 말 것
+  18. 회사를 배경으로 하여 타인의 보증을 서는 행위를 하지 말 것
+  19. 회사의 허가 없이 출입을 금지한 장소에 출입하지 말 것
+  20. 회사의 고객에 대하여 봉사의 정신으로 친절하게 대할 것
+  21. 기타 위 각 호에 준하는 행위와 본 규칙을 포함한 회사 규칙에 반하는 행위를 하지 말 것
+
+제16조 (출·퇴근)
+① 사원은 시업시각 전까지 출근하여 업무에 임할 준비를 하여 정상적인 업무수행에 차질이 없도록 하여야 한다.
+② 회사는 사원의 출근 및 퇴근 시 소정의 방법(지문인식, 카드, 수기 출퇴근 기록부 서명 등)에 의하여 그 확인을 받도록 할 수 있다.
+③ 퇴근 시에는 서류, 집기, 비품 등을 정리한 후 퇴근하여야 한다.
+
+제17조 (지각·조퇴 및 외출)
+① 사원은 지각하였을 경우 지각 사유를 소속 상사에게 신고하고 지각계를 제출하여야 한다. 부득이한 사유로 인한 지각이 아닌 경우에는 징계할 수 있다.
+② 사원이 질병 기타 부득이한 사유로 인하여 조퇴 또는 외출할 때에는 조퇴계 또는 외출계를 제출하여 사전에 소속 상사의 승인을 얻어야 하며, 이를 위반한 경우 무단이탈로 처리하고 징계할 수 있다.
+③ 사원이 지각·조퇴 및 외출한 시간은 무급으로 처리함을 원칙으로 하며, 사원이 동의할 경우 누계 8시간을 연차유급휴가 1일을 사용한 것으로 할 수 있다.
+④ 연장근로수당 산정을 위한 소정 근로시간 초과 근로 여부 판단 시 지각·조퇴 및 외출시간은 제외한다.
+
+제18조 (결근)
+① 사원이 결근하고자 할 때에는 사전에(최소 1일 전) 결근 사유와 예정 일수 등을 기재한 결근계 및 관계서류를 제출하여 회사의 승인을 받아야 하며, 질병으로 인한 결근이 3일 이상 계속될 때에는 의사의 진단서를 첨부하여야 한다.
+② 부득이한 사유로 사전 결근계를 제출하지 못하고 구두로 연락하였을 경우(당일 시업시각 전까지 연락한 경우에 한함)에는 사후에 지체 없이 결근계 및 관계서류를 제출하여야 한다.
+③ 제1항 및 제2항의 절차에 따른 결근일은 연차를 사용한 것으로 처리하며, 잔여 연차가 없는 경우 해당 일을 무급으로 한다.
+④ 정당한 이유 없이 제1항 및 제2항에 따른 절차를 이행하지 아니한 경우 해당일은 무단결근 처리하며 징계할 수 있다.
+
+제2절 근로시간 및 휴게
+
+제22조 (근로시간 및 휴게시간)
+① 소정근로시간은 휴게시간을 제외하고 1일 8시간, 1주 40시간으로 한다.
+② 시업과 종업시각, 휴게시간은 다음 각 호에 정한 시간을 원칙으로 한다.
+  1. 시업시각 및 종업시각: 평일 09:00~18:00
+  2. 휴게시간: 12:00~13:00 (중식시간 포함)
+③ 제1항 및 제2항에도 불구하고 회사는 회사의 사정, 직종, 직무, 업무 특성, 계절 등에 따라 근로기준법에 위반되지 않는 범위 내에서 근로계약서, 근무시간표 등에 의하여 달리 정할 수 있다.
+
+제24조 (연장·야간 및 휴일근로)
+① 회사는 업무상 필요가 있는 경우 연장, 야간(22:00~06:00) 또는 휴일근로를 실시할 수 있다.
+② 별도의 지시가 없는 한 모든 사원은 연장·야간·휴일근로를 행하기 전에 회사의 사전 또는 사후 승인을 받아야 하며, 승인을 받지 아니한 연장·야간·휴일근로는 시간외근로로 인정하지 아니한다.
+
+제3절 휴일 및 휴가
+
+제28조 (유급휴일)
+① 다음 각 호에 정하는 날은 유급휴일로 한다.
+  1. 주휴일은 일요일을 원칙으로 하되, 부서별로 조정하여 실시할 수 있다.
+  2. 근로자의 날(5월 1일)
+② 제1항 각 호의 휴일이 중복될 경우에는 하나의 휴일로 취급한다.
+
+제30조 (연차유급휴가)
+① 1년간 80퍼센트 이상 출근한 사원에게는 15일의 연차유급휴가를 준다.
+② 계속근로년수가 1년 미만인 사원 또는 1년간 80퍼센트 미만 출근한 사원에게는 1개월 개근 시 1일의 유급휴가를 준다.
+③ 1년간 80퍼센트 이상 출근한 자로서 3년 이상 근속한 사원에 대하여는 제1항 규정에 의한 휴가에 최초 1년을 초과하는 계속 근로연수 매 2년에 대하여 1일을 가산한 유급휴가를 주며, 가산휴가를 포함한 총 휴가일수는 25일을 한도로 한다.
+④ 회사는 사원의 연차유급휴가 사용으로 인해 업무에 차질이 예상되는 경우 사원이 청구한 시기를 변경할 수 있다.
+⑤ 사원의 연차유급휴가 청구권은 회사의 귀책사유로 휴가를 사용하지 못한 경우를 제외하고는 발생한 날로부터 1년간 행사하지 아니하는 경우 소멸한다.
+⑥ 연차유급휴가는 그 사용을 원칙으로 하되, 당해 근로자의 자유의사에 의해 수당으로 지급받기를 원하는 경우 연봉급여에 포함하여 지급할 수 있다.
+
+제32조 (경조사 휴가)
+① 회사는 다음 각 호의 어느 하나에 해당하는 범위에서 사원의 신청에 따라 유급의 경조사휴가를 부여할 수 있다.
+  1. 본인의 결혼: 5일
+  2. 본인·배우자의 부모 또는 배우자의 사망: 5일
+  3. 본인·배우자의 조부모 또는 외조부모의 사망: 2일
+  4. 자녀 또는 그 자녀의 배우자의 사망: 2일
+② 제1항에 따른 경조사 휴가기간 중 휴일 또는 휴무일이 포함되어 있는 경우에는 이를 포함하여 휴가기간을 계산한다.
+
+제33조 (보건휴가)
+회사는 여성 사원이 청구하는 경우 월 1일의 무급보건휴가를 부여한다.
+
+제34조 (난임치료휴가)
+① 회사는 사원이 인공수정 또는 체외수정 등 난임치료를 받기 위하여 휴가를 청구하는 경우에 연간 3일 이내의 휴가를 주어야 하며, 이 경우 최초 1일은 유급으로 한다.
+② 회사는 난임치료휴가를 이유로 해고, 징계 등 불리한 처우를 하여서는 아니 된다.
+
+제35조 (출산전·후 휴가 등)
+① 회사는 임신 중의 여성 사원에 대하여는 산전·후를 통하여 90일 이상의 휴가를 주며, 이 경우 산후에 45일 이상이 확보되도록 한다. 한번에 둘 이상 자녀를 임신한 경우에는 120일의 출산전후 휴가를 주며, 이 경우 출산 후 60일 이상이 확보되도록 한다.
+② 최초 60일(한 번에 둘 이상 자녀를 임신한 경우에는 75일)에 대하여는 통상임금을 지급하되, 고용보험에서 지원되는 금액을 제한 차액을 지급한다.
+
+제38조 (배우자 출산휴가)
+① 회사는 사원이 배우자의 출산을 이유로 휴가를 청구하는 경우 10일 이내의 휴가를 유급으로 부여한다.
+② 제1항에 따른 휴가는 사원의 배우자가 출산한 날부터 90일이 지나면 청구할 수 없다.
+③ 배우자 출산휴가는 1회에 한정하여 나누어 사용할 수 있다.
+
+제4절 휴직
+
+제41조 (휴직)
+① 사원이 다음 각 호의 어느 하나에 해당할 경우에는 휴직을 명할 수 있다.
+  1. 일신상의 사정으로 휴직을 신청하여 회사의 승인을 얻은 경우
+  2. 신체상 또는 정신상의 이상으로 7일 이상의 요양을 요할 경우
+  3. 병역법 등 법령에 의한 의무수행으로 직무를 수행할 수 없는 경우
+  4. 형사사건과 관련하여 체포 또는 기소된 경우
+  5. 기타 특별한 사정으로 휴직이 필요하다고 인정되는 경우
+② 휴직기간은 휴직사유 및 근속기간 등을 고려하여 회사가 결정함을 원칙으로 한다.
+
+제42조 (육아휴직 등)
+① 회사는 사원이 만 8세 이하 또는 초등학교 2학년 이하의 자녀(입양한 자녀를 포함한다)를 양육하기 위하여 휴직을 신청하는 경우에는 1년 이내의 범위에서 육아휴직을 부여한다.
+② 제1항의 규정에도 불구하고 다음 각 호의 어느 하나에 해당하는 경우에는 육아휴직을 허용하지 아니한다.
+  1. 육아휴직을 시작하려는 날의 전날까지 회사에서 계속 근로한 기간이 6개월 미만인 사원
+
+제43조 (육아기 근로시간 단축)
+① 제42조의 육아휴직을 사용할 수 있는 사원은 육아휴직 대신 육아기 근로시간 단축을 신청할 수 있다.
+③ 육아기 근로시간 단축의 기간은 육아휴직기간을 포함하여 1년 이내로 한다.
+④ 육아기 근로시간 단축 후 근로시간은 주당 15시간 이상 35시간 이내로 한다.
+
+제44조 (가족돌봄 휴직)
+① 사원은 사원의 부모/배우자/자녀 또는 배우자의 부모/자녀/손자녀가 질병, 사고, 노령으로 인하여 돌봄이 필요한 경우 가족돌봄 휴직을 신청할 수 있다.
+③ 가족돌봄휴직은 연간 최장 90일로 하며, 나누어 사용 가능. 단, 나누어 사용하는 1회의 기간은 30일 이상으로 한다.
+
+제45조 (휴직기간 중의 처우)
+① 휴직기간 중에는 무급을 원칙으로 한다.
+② 휴직기간은 근속년수에 포함하는 것을 원칙으로 한다. 다만, 병역법에 의하여 징집된 기간은 제외한다.
+③ 휴직기간 동안에는 승진되지 않는 것을 원칙으로 하며, 임금의 상승도 제외한다.
+⑤ 휴직자는 사원의 신분을 보유하고 제 사규를 준수하여야 하며, 회사의 승인 없이 타 직장에 취업할 수 없다.
+
+제5절 표창 및 징계
+
+제47조 (표창)
+회사는 사원이 다음 각 호의 1에 해당하는 경우 표창할 수 있다.
+  1. 회사의 업무능률향상에 현저한 공로가 인정된 자
+  2. 회사의 영업활동에 크게 기여한 자
+  3. 업무수행 성적이 우수한 자
+  4. 업무상 창의적 발상, 고안 또는 개선을 한 자
+  5. 기타 표창의 필요가 인정되는 자
+
+제48조 (징계사유)
+다음 각 호의 어느 하나에 해당하는 사원은 해고 등 징계할 수 있다.
+  1. 사기 또는 부정한 방법으로 채용되었음이 발견된 자
+  2. 업무상 비밀을 누설한 자
+  3. 상사의 정당한 업무지시에 정당한 사유 없이 불복한 자
+  4. 폭행, 협박, 문서위조 및 변조 등의 행위로써 직장규율을 문란케 한 자
+  5. 고의 또는 과실로 회사에 재산상의 손실을 초래하거나 회사의 명예 또는 신용에 손상을 입힌 자
+  6. 고의 또는 과실로 사고를 발생시킨 자
+  7. 무단 조퇴·외출·지각·결근한 자
+  8. 회사의 공금을 유용 또는 횡령하거나 업무와 관련하여 부당하게 금품 및 기타 이익을 수수한 자
+  9. 회사 재산, 도면, 문서 등을 절취 또는 사전 허가 없이 사외로 반출하거나 반출하려고 한 자
+  10. 근무태도나 근무성적이 불량한 자
+  11. 도박, 음주 등 직장규율을 어지럽혀 다른 사원에게 악영향을 미친 자
+  12. 회사의 허가 없이 회사 명의를 도용하여 사적인 이익을 도모한 자
+  13. 회사의 허가 없이 타 회사에 취업하거나 자기 사업을 영위한 자
+  14. 다른 사원의 업무를 방해한 자
+  15. 회사가 요구하는 절차, 보고에 허위가 있는 자
+  16. 본 규칙을 포함한 회사의 규칙을 위반한 자
+  17. 기타 전 각 호에 준하는 행위를 한 자
+
+제49조 (징계의 종류)
+  1. 경고: 서면상으로 주의를 촉구하는 것
+  2. 견책: 장래를 위하여 훈계하고 시말서를 받는 것
+  3. 감봉: 사원의 급여를 감액 지급하는 것 (1회 감급액이 1일 평균임금의 반액, 총액은 월 임금총액의 10분의 1 초과 불가)
+  4. 정직: 6개월 이내의 기간을 정해 출근을 정지시키는 것 (임금 미지급)
+  5. 징계해고: 근로관계를 소멸시키는 것 (예고기간 또는 즉시 해고)
+
+제50조 (징계절차)
+징계 결정 시 변명의 기회를 부여하기 위하여 소명의 기회를 충분히 부여하고, 징계 결과는 서면으로 통보한다.
+
+제 4 장  임 금
+
+제1절 임금지급 원칙
+
+제55조 (임금의 구성항목 및 산정방식)
+① 임금은 기본급과 제 수당으로 구성하되, 제 수당의 세부내용은 개별 임금계약 또는 별도로 정하는 바에 따른다.
+② 제1항의 임금계약은 계산의 편의를 위하여 연장·야간·휴일근로수당 등 각종 수당을 포괄 산정하는 방식으로 체결할 수 있다.
+
+제56조 (임금의 계산방법 및 지급방법)
+① 임금 산정기간과 지급일은 다음과 같다.
+  1. 임금 산정기간: 매월 1일부터 말일까지
+  2. 임금 지급일: 익월 5일 (토요일 또는 공휴일이면 그 전일에 지급)
+② 임금은 매월 임금지급일에 전액 사원이 지정한 계좌에 입금하는 것을 원칙으로 한다.
+③ 다음 각 호에 해당하는 것은 임금 지급 시 공제한다.
+  1. 국가 또는 지방자치단체가 징수하는 세금
+  2. 국민건강보험료
+  3. 국민연금보험료
+  4. 고용보험료
+  5. 감급의 제재에 해당하는 금액
+  6. 기타 법령에 의거 공제되는 금액
+
+제57조 (결근 시 급여계산)
+월 소정근로일수의 결근자는 월 급여를 일할 계산하여 결근일과 해당 주의 주휴일을 무급처리한다. 단, 결근일을 연차로 대체한 경우에는 예외로 한다.
+
+제60조 (자가운전보조비)
+① 회사는 사원이 사원 본인의 소유차량을 직접 운전하여 업무수행에 이용하는 경우 월 30만원 이내의 경비를 지급할 수 있다.
+② 제1항은 배우자 공동명의의 차량에도 적용한다.
+
+제61조 (상여금지급)
+회사는 지급일 현재 재직 중인 자에 대하여 경영성과 및 사원의 업무실적에 따라 성과급을 지급할 수 있으며, 지급여부·지급률·지급방법 및 지급시기 등은 회사가 자유로이 결정한다.
+
+제2절 퇴직급여
+
+제62조 (퇴직급여)
+① 회사는 1년 이상 근속한 사원이 퇴직하는 경우 근속년수 1년에 대하여 30일분의 평균임금을 퇴직금으로 지급한다.
+② 회사는 제1항의 퇴직금을 지급하는 대신 근로자퇴직급여보장법에 따른 퇴직연금제도를 적용할 수 있다.
+
+제 5 장  교육
+
+제63조 (교육)
+① 회사는 사원에 대하여 안전보건에 관한 교육 또는 기타 회사에서 필요하다고 인정하는 교육을 실시할 수 있으며, 사원은 교육과정에 성실히 임하여야 한다.
+② 교육은 사원과 합의로 근로시간 이외에도 실시할 수 있다.
+
+제 6 장  안전보건 및 재해보상
+
+제64조 (안전보건)
+① 사원의 안전보건 관리에 대하여는 산업안전보건법 및 관계 법령이 정하는 바에 따른다.
+② 사원은 안전수칙을 준수하고 회사의 재해예방조치에 대하여 협력하여야 한다.
+
+제67조 (재해보상)
+사원이 업무상 재해를 입은 경우에는 근로기준법 및 산업재해보상보험법의 규정에 의한 재해보상을 행한다.
+
+제 7 장  남녀고용평등 등
+
+제68조 (고용에 있어 남녀의 평등한 기회 및 대우)
+① 회사는 사원의 모집 및 채용에 있어서 여성에게 남성과 평등한 기회를 준다.
+② 회사는 동일한 사업 내의 동일가치의 노동에 대하여는 동일한 임금을 지급하며, 동일가치 노동의 기준은 노동수행에서 요구되는 기술, 노력, 책임 및 작업조건 등으로 한다.
+③ 회사는 사원의 교육, 배치, 승진, 정년, 해고에 있어 여성임을 이유로 차별대우 하지 아니한다.
+
+제69조 (성희롱 예방)
+① 회사는 직장 내 성희롱 예방을 위해 노력한다.
+② 회사의 모든 임원 및 사원은 남녀고용평등법에서 금지한 직장 내 성희롱에 해당하는 행위를 하여서는 안 된다.
+
+제70조 (사후조치)
+① 회사는 성희롱 피해신고를 받은 경우 즉시 조사를 실시하며, 성희롱 행위자에 대하여 해고 등 적절한 징계조치를 취할 수 있다.
+
+제 8 장  직장 내 괴롭힘의 예방
+
+제71조 (직장 내 괴롭힘 행위의 금지)
+① 직장 내 괴롭힘이란 임·직원이 직장에서의 지위 또는 관계 등의 우위를 이용하여 업무상 적정범위를 넘어 다른 직원에게 신체적, 정신적 고통을 주거나 근무환경을 악화시키는 행위를 말한다.
+② 직원은 다른 직원 뿐 아니라 협력사 직원에 대하여도 직장 내 괴롭힘 행위를 하여서는 아니 된다.
+
+제72조 (금지되는 직장 내 괴롭힘 행위)
+① 회사에서 금지되는 구체적인 직장 내 괴롭힘 행위는 다음 각 호와 같다.
+  1. 신체에 대하여 폭행하거나 협박하는 행위
+  2. 지속 반복적인 욕설이나 폭언
+  3. 다른 직원들 앞에서 또는 온라인상에서 모욕감을 주거나 개인사에 대한 소문을 퍼뜨리는 등 명예를 훼손하는 행위
+  4. 합리적 이유 없이 반복적으로 개인 심부름 등 사적인 용무를 지시하는 행위
+  5. 합리적 이유 없이 업무능력이나 성과를 인정하지 않거나 조롱하는 행위
+  6. 집단적으로 따돌리거나, 정당한 이유 없이 업무와 관련된 중요한 정보 또는 의사결정 과정에서 배제하거나 무시하는 행위
+  7. 정당한 이유 없이 상당기간 동안 근로계약서 등에 명시되어 있는 업무와 무관한 일을 지시하거나 허드렛일만 시키는 행위
+  8. 정당한 이유 없이 상당기간 동안 일을 거의 주지 않는 행위
+  9. 그밖에 업무의 적정범위를 넘어 직원에게 신체적·정신적 고통을 주거나 근무환경을 악화시키는 행위
+② 회사는 전항에 따른 신고를 접수하거나 직장 내 괴롭힘 발생 사실을 인지한 경우에는 지체 없이 그 사실 확인을 위한 조사를 실시한다.
+
+부 칙
+
+제1조(법령과의 관계) 이 규칙에 정하지 아니한 사항에 대해서는 근로기준법 및 기타 법령이 정하는 바에 따른다.
+제2조(취업규칙의 비치) 회사는 본 규칙을 사업장 내에 비치하여 사원들이 자유롭게 열람할 수 있도록 한다.
+제3조(적용범위) 본 규칙 시행 이전에 회사의 사원으로 채용된 자는 본 규칙에 의거 채용된 것으로 간주하며 이 규칙은 시행일 이전에 입사한 사원에게도 효력이 적용된다.
+제4조(시행세칙) 본 규칙을 시행함에 있어 필요한 사항은 별도 시행세칙 등을 둘 수 있다.
+제5조(시행일) 본 규칙은 2021년 9월 1일부터 시행한다.`
 
 // ─── 컬러 맵 ────────────────────────────────────────────────────
 const COLOR_MAP: Record<string, { header: string; badge: string; text: string }> = {
@@ -546,30 +872,118 @@ function AttachViewer({ item }: { item: AttachItem }) {
   )
 }
 
-// ─── SectionAccordion ────────────────────────────────────────────
-function SectionAccordion({ sec, color }: { sec: Section; color: string }) {
+// ─── SectionAccordion — ADMIN 편집 기능 추가 버전 ───────────────
+function SectionAccordion({
+  sec,
+  color,
+  isAdmin,
+  onSave,
+  onDelete,
+}: {
+  sec: Section
+  color: string
+  isAdmin: boolean
+  onSave: (updated: Partial<Section>) => Promise<void>
+  onDelete: () => Promise<void>
+}) {
   const [open, setOpen] = useState(false)
+  const [editing, setEditing] = useState(false)
+  const [editTitle, setEditTitle] = useState(sec.title)
+  const [editBody, setEditBody] = useState(sec.body)
+  const [saving, setSaving] = useState(false)
   const c = COLOR_MAP[color]
+
+  async function handleSave() {
+    setSaving(true)
+    try {
+      await onSave({ title: editTitle, body: editBody })
+      setEditing(false)
+    } finally {
+      setSaving(false)
+    }
+  }
 
   return (
     <div className="border border-gray-200 rounded-lg overflow-hidden">
-      <button
-        onClick={() => setOpen(o => !o)}
-        className={`w-full flex items-center justify-between px-4 py-3 text-left transition-colors hover:bg-gray-50 ${open ? `${c.header}` : 'bg-white'}`}
-      >
-        <div className="flex items-center gap-2">
+      <div className={`flex items-center justify-between px-4 py-3 transition-colors ${open ? c.header : 'bg-white hover:bg-gray-50'}`}>
+        <button
+          onClick={() => setOpen(o => !o)}
+          className="flex items-center gap-2 flex-1 text-left"
+        >
           <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${c.badge}`}>{sec.num}</span>
           <span className="text-sm font-medium text-gray-800">{sec.title}</span>
+          {sec.isFromDb && (
+            <span className="text-xs text-amber-500 ml-1">(수정됨)</span>
+          )}
+        </button>
+        <div className="flex items-center gap-2 ml-2">
+          {isAdmin && !editing && (
+            <button
+              onClick={(e) => { e.stopPropagation(); setEditing(true); setOpen(true) }}
+              className="text-xs text-gray-400 hover:text-sky-600 px-2 py-0.5 border border-gray-200 rounded hover:border-sky-300 transition-colors"
+            >
+              수정
+            </button>
+          )}
+          <span className="text-gray-400 text-xs">{open ? '▲' : '▼'}</span>
         </div>
-        <span className="text-gray-400 text-xs flex-shrink-0 ml-2">{open ? '▲' : '▼'}</span>
-      </button>
+      </div>
+
       {open && (
         <div className="px-4 py-4 bg-white border-t border-gray-100">
-          <p className="text-sm text-gray-700 whitespace-pre-line leading-relaxed">{sec.body}</p>
-          {sec.attaches && sec.attaches.length > 0 && (
-            <div className="mt-3 space-y-1">
-              {sec.attaches.map(a => <AttachViewer key={a.id} item={a} />)}
+          {editing ? (
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">제목</label>
+                <input
+                  className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-sky-400"
+                  value={editTitle}
+                  onChange={e => setEditTitle(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">내용</label>
+                <textarea
+                  className="w-full border border-gray-300 rounded px-3 py-2 text-sm h-48 resize-y focus:outline-none focus:border-sky-400 font-mono"
+                  value={editBody}
+                  onChange={e => setEditBody(e.target.value)}
+                />
+              </div>
+              <div className="flex items-center justify-between">
+                <button
+                  onClick={async () => {
+                    if (confirm('이 항목을 삭제하시겠습니까?')) await onDelete()
+                  }}
+                  className="text-xs text-red-400 hover:text-red-600 underline"
+                >
+                  항목 삭제
+                </button>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => { setEditing(false); setEditTitle(sec.title); setEditBody(sec.body) }}
+                    className="px-3 py-1.5 text-sm border rounded hover:bg-gray-50"
+                  >
+                    취소
+                  </button>
+                  <button
+                    onClick={handleSave}
+                    disabled={saving}
+                    className="px-3 py-1.5 text-sm bg-sky-500 text-white rounded hover:bg-sky-600 disabled:opacity-50"
+                  >
+                    {saving ? '저장 중...' : '저장'}
+                  </button>
+                </div>
+              </div>
             </div>
+          ) : (
+            <>
+              <p className="text-sm text-gray-700 whitespace-pre-line leading-relaxed">{sec.body}</p>
+              {sec.attaches && sec.attaches.length > 0 && (
+                <div className="mt-3 space-y-1">
+                  {sec.attaches.map(a => <AttachViewer key={a.id} item={a} />)}
+                </div>
+              )}
+            </>
           )}
         </div>
       )}
@@ -577,10 +991,33 @@ function SectionAccordion({ sec, color }: { sec: Section; color: string }) {
   )
 }
 
-// ─── ChapterView ─────────────────────────────────────────────────
-function ChapterView({ chapter, showPrev }: { chapter: Chapter; showPrev: boolean }) {
+// ─── ChapterView — DB 병합 + 신규 추가 기능 ─────────────────────
+function ChapterView({
+  chapter,
+  isAdmin,
+  dbOverrides,
+  onSaveSection,
+  onDeleteSection,
+  onAddSection,
+}: {
+  chapter: Chapter
+  isAdmin: boolean
+  dbOverrides: Record<string, { id: string; title: string; body: string }>
+  onSaveSection: (chapterId: string, secId: string, data: Partial<Section>) => Promise<void>
+  onDeleteSection: (chapterId: string, secId: string, dbId: string) => Promise<void>
+  onAddSection: (chapterId: string) => void
+}) {
   const [prevOpen, setPrevOpen] = useState(false)
   const c = COLOR_MAP[chapter.color]
+
+  // 하드코딩 기본 + DB 오버라이드 병합
+  const mergedSections: Section[] = chapter.sections.map(sec => {
+    const override = dbOverrides[sec.id]
+    if (override) {
+      return { ...sec, title: override.title, body: override.body, dbId: override.id, isFromDb: true }
+    }
+    return sec
+  })
 
   return (
     <div className="space-y-2">
@@ -589,26 +1026,121 @@ function ChapterView({ chapter, showPrev }: { chapter: Chapter; showPrev: boolea
           <span className={`w-2 h-2 rounded-full bg-current ${c.text}`} />
           {chapter.label} — 현행 규정
         </div>
-        {showPrev && (
+        <div className="flex items-center gap-2">
+          {isAdmin && (
+            <button
+              onClick={() => onAddSection(chapter.id)}
+              className="text-xs text-sky-600 hover:text-sky-800 border border-sky-300 rounded px-2 py-1 hover:bg-sky-50 transition-colors"
+            >
+              + 항목 추가
+            </button>
+          )}
           <button
             onClick={() => setPrevOpen(o => !o)}
             className="text-xs text-gray-400 hover:text-gray-600 underline"
           >
             {prevOpen ? '이전 규정 닫기' : '이전 규정 보기 ▼'}
           </button>
-        )}
+        </div>
       </div>
 
-      {showPrev && prevOpen && (
+      {prevOpen && (
         <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-700">
-          이전 규정은 아직 등록되지 않았습니다. 관리자가 추가할 수 있습니다.
+          이전 규정은 아직 등록되지 않았습니다.
         </div>
       )}
 
       <div className="space-y-2">
-        {chapter.sections.map(sec => (
-          <SectionAccordion key={sec.id} sec={sec} color={chapter.color} />
+        {mergedSections.map(sec => (
+          <SectionAccordion
+            key={sec.id}
+            sec={sec}
+            color={chapter.color}
+            isAdmin={isAdmin}
+            onSave={async (updated) => onSaveSection(chapter.id, sec.id, updated)}
+            onDelete={async () => sec.dbId ? onDeleteSection(chapter.id, sec.id, sec.dbId) : Promise.resolve()}
+          />
         ))}
+      </div>
+    </div>
+  )
+}
+
+// ─── 신규 섹션 추가 모달 ────────────────────────────────────────
+function AddSectionModal({
+  chapterId,
+  chapterLabel,
+  onClose,
+  onSubmit,
+}: {
+  chapterId: string
+  chapterLabel: string
+  onClose: () => void
+  onSubmit: (data: { sectionId: string; sectionNum: string; title: string; body: string }) => Promise<void>
+}) {
+  const [num, setNum] = useState('')
+  const [title, setTitle] = useState('')
+  const [body, setBody] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  async function handleSubmit() {
+    if (!num.trim() || !title.trim()) return
+    const sectionId = `${chapterId}_custom_${Date.now()}`
+    setSaving(true)
+    try {
+      await onSubmit({ sectionId, sectionNum: num.trim(), title: title.trim(), body: body.trim() })
+      onClose()
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-lg p-6 space-y-4">
+        <div className="flex items-center justify-between">
+          <h3 className="text-base font-medium">{chapterLabel} — 항목 추가</h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-lg leading-none">✕</button>
+        </div>
+        <div className="space-y-3">
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">조번호 / 항목번호</label>
+            <input
+              className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-sky-400"
+              placeholder="예) 15, 별도1"
+              value={num}
+              onChange={e => setNum(e.target.value)}
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">제목</label>
+            <input
+              className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-sky-400"
+              placeholder="항목 제목 입력"
+              value={title}
+              onChange={e => setTitle(e.target.value)}
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">내용</label>
+            <textarea
+              className="w-full border border-gray-300 rounded px-3 py-2 text-sm h-40 resize-y focus:outline-none focus:border-sky-400 font-mono"
+              placeholder="규정 내용 입력"
+              value={body}
+              onChange={e => setBody(e.target.value)}
+            />
+          </div>
+        </div>
+        <div className="flex justify-end gap-2 pt-2">
+          <button onClick={onClose} className="px-4 py-2 text-sm border rounded hover:bg-gray-50">취소</button>
+          <button
+            onClick={handleSubmit}
+            disabled={saving || !num.trim() || !title.trim()}
+            className="px-4 py-2 text-sm bg-sky-500 text-white rounded hover:bg-sky-600 disabled:opacity-50"
+          >
+            {saving ? '저장 중...' : '추가'}
+          </button>
+        </div>
       </div>
     </div>
   )
@@ -616,14 +1148,73 @@ function ChapterView({ chapter, showPrev }: { chapter: Chapter; showPrev: boolea
 
 // ─── 메인 컴포넌트 ────────────────────────────────────────────────
 export default function RegulationsTab() {
-  const [subTab, setSubTab] = useState<'cost' | 'welfare' | 'hr' | 'rules'>('cost')
+  const { data: session } = useSession()
+  const isAdmin = (session?.user as { role?: string })?.role === 'ADMIN'
 
+  const [subTab, setSubTab] = useState<'cost' | 'welfare' | 'hr' | 'rules'>('cost')
+  const [dbData, setDbData] = useState<Record<string, Record<string, { id: string; title: string; body: string }>>>({})
+  const [addingChapter, setAddingChapter] = useState<string | null>(null)
+
+  const loadDb = useCallback(async () => {
+    try {
+      const res = await fetch('/api/branch/regulations')
+      if (!res.ok) return
+      const rows: { id: string; chapterId: string; sectionId: string; title: string; body: string }[] = await res.json()
+      const grouped: Record<string, Record<string, { id: string; title: string; body: string }>> = {}
+      for (const row of rows) {
+        if (!grouped[row.chapterId]) grouped[row.chapterId] = {}
+        grouped[row.chapterId][row.sectionId] = { id: row.id, title: row.title, body: row.body }
+      }
+      setDbData(grouped)
+    } catch {}
+  }, [])
+
+  useEffect(() => { loadDb() }, [loadDb])
+
+  async function handleSaveSection(chapterId: string, secId: string, data: Partial<Section>) {
+    const chapter = [COST_CH, WELFARE_CH, HR_CH].find(c => c.id === chapterId)
+    const originalSec = chapter?.sections.find(s => s.id === secId)
+    if (!originalSec) return
+
+    await fetch('/api/branch/regulations', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chapterId,
+        sectionId: secId,
+        sectionNum: originalSec.num,
+        title: data.title ?? originalSec.title,
+        body: data.body ?? originalSec.body,
+        sortOrder: 0,
+      }),
+    })
+    await loadDb()
+  }
+
+  async function handleDeleteSection(chapterId: string, secId: string, dbId: string) {
+    await fetch(`/api/branch/regulations/${dbId}`, { method: 'DELETE' })
+    await loadDb()
+  }
+
+  async function handleAddSection(chapterId: string, data: { sectionId: string; sectionNum: string; title: string; body: string }) {
+    await fetch('/api/branch/regulations', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chapterId, ...data, sortOrder: 999 }),
+    })
+    await loadDb()
+    setAddingChapter(null)
+  }
+
+  const chapters = [COST_CH, WELFARE_CH, HR_CH]
   const subTabs = [
     { id: 'cost' as const,    label: '비용규정' },
     { id: 'welfare' as const, label: '복지규정' },
     { id: 'hr' as const,      label: '인사규정' },
     { id: 'rules' as const,   label: '취업규칙' },
   ]
+
+  const activeChapter = chapters.find(c => c.id === subTab)
 
   return (
     <div className="p-4 space-y-4">
@@ -642,21 +1233,44 @@ export default function RegulationsTab() {
         ))}
       </div>
 
-      {/* 콘텐츠 */}
-      {subTab === 'cost'    && <ChapterView chapter={COST_CH}    showPrev />}
-      {subTab === 'welfare' && <ChapterView chapter={WELFARE_CH} showPrev />}
-      {subTab === 'hr'      && <ChapterView chapter={HR_CH}      showPrev />}
-      {subTab === 'rules'   && (
+      {/* 챕터 콘텐츠 */}
+      {activeChapter && (
+        <ChapterView
+          chapter={activeChapter}
+          isAdmin={isAdmin}
+          dbOverrides={dbData[activeChapter.id] ?? {}}
+          onSaveSection={handleSaveSection}
+          onDeleteSection={handleDeleteSection}
+          onAddSection={(chapterId) => setAddingChapter(chapterId)}
+        />
+      )}
+
+      {/* 취업규칙 원문 */}
+      {subTab === 'rules' && (
         <div>
           <div className="mb-3 inline-flex items-center gap-2 px-3 py-1.5 rounded-full border text-sm font-medium bg-gray-100 border-gray-200 text-gray-600">
             <span className="w-2 h-2 rounded-full bg-gray-500" />
             취업규칙 — 현행 (2021.09.01. 시행)
           </div>
-          <div className="bg-white border border-gray-200 rounded-lg p-5 text-sm text-gray-700 whitespace-pre-line leading-relaxed">
-            {EMPLOYMENT_RULES_SUMMARY}
+          <div className="bg-white border border-gray-200 rounded-lg p-5 text-sm text-gray-700 whitespace-pre-line leading-relaxed max-h-[70vh] overflow-y-auto">
+            {EMPLOYMENT_RULES_FULL}
           </div>
         </div>
       )}
+
+      {/* 신규 항목 추가 모달 */}
+      {addingChapter && (() => {
+        const ch = chapters.find(c => c.id === addingChapter)
+        if (!ch) return null
+        return (
+          <AddSectionModal
+            chapterId={ch.id}
+            chapterLabel={ch.label}
+            onClose={() => setAddingChapter(null)}
+            onSubmit={(data) => handleAddSection(addingChapter, data)}
+          />
+        )
+      })()}
     </div>
   )
 }

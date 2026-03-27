@@ -816,3 +816,18 @@ model IndoorWorkload {
 
   @@unique([userId, year, month])
 }
+
+model RegulationContent {
+  id         String   @id @default(cuid())
+  chapterId  String
+  sectionId  String
+  sectionNum String
+  title      String
+  body       String   @db.Text
+  sortOrder  Int      @default(0)
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([chapterId, sectionId])
+}
