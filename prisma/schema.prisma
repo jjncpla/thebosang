@@ -831,3 +831,57 @@ model RegulationContent {
 
   @@unique([chapterId, sectionId])
 }
+
+model SalesContract {
+  id                 String   @id @default(cuid())
+  branchName         String
+  staffName          String
+  year               Int
+  month              Int
+  pneumoconiosis     Float    @default(0)
+  copd               Float    @default(0)
+  hearingLoss        Float    @default(0)
+  wageCorrection     Float    @default(0)
+  disabilityPayment  Float    @default(0)
+  litigation         Float    @default(0)
+  musculoskeletal    Float    @default(0)
+  cerebrovascular    Float    @default(0)
+  occupationalCancer Float    @default(0)
+  accident           Float    @default(0)
+  project            Float    @default(0)
+  other              Float    @default(0)
+  memo               String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@unique([staffName, year, month])
+}
+
+model SettlementRecord {
+  id                  String                 @id @default(cuid())
+  branchName          String
+  year                Int
+  month               Int
+  paymentDate         DateTime?
+  victimName          String
+  caseType            String?
+  tfName              String?
+  salesStaffName      String?
+  settlementStaffName String?
+  grossAmount         Int
+  deduction           Int                    @default(0)
+  memo                String?
+  allocations         SettlementAllocation[]
+  createdAt           DateTime               @default(now())
+  updatedAt           DateTime               @updatedAt
+}
+
+model SettlementAllocation {
+  id                 String           @id @default(cuid())
+  settlementRecordId String
+  settlementRecord   SettlementRecord @relation(fields: [settlementRecordId], references: [id], onDelete: Cascade)
+  staffName          String
+  ratio              Int
+  isExternal         Boolean          @default(false)
+  createdAt          DateTime         @default(now())
+}
