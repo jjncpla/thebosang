@@ -885,3 +885,16 @@ model SettlementAllocation {
   isExternal         Boolean          @default(false)
   createdAt          DateTime         @default(now())
 }
+
+model StaffRoster {
+  id           String   @id @default(cuid())
+  branchName   String
+  staffName    String
+  startYear    Int
+  startMonth   Int
+  endYear      Int?
+  endMonth     Int?
+  createdAt    DateTime @default(now())
+
+  @@unique([branchName, staffName, startYear, startMonth])
+}

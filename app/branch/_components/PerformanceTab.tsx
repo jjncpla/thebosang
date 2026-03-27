@@ -1,13 +1,16 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { CASE_TYPES, QUARTER_MONTHS, CaseTypeId } from '../_constants/performance'
+import { CASE_TYPES, QUARTER_MONTHS } from '../_constants/performance'
 
 // ─── 타입 ────────────────────────────────────────────────────────
-interface SalesRow {
-  id?: string
+interface StaffRosterItem {
+  id: string
   staffName: string
-  [key: string]: number | string | undefined
+  startYear: number
+  startMonth: number
+  endYear: number | null
+  endMonth: number | null
 }
 
 interface AllocationRow {
@@ -18,6 +21,8 @@ interface AllocationRow {
 
 interface SettlementRow {
   id?: string
+  year?: number
+  month?: number
   paymentDate: string
   victimName: string
   caseType: string
@@ -28,7 +33,16 @@ interface SettlementRow {
   deduction: number
   memo: string
   allocations: AllocationRow[]
-  _editing?: boolean
+}
+
+interface UserItem {
+  id: string
+  name: string
+}
+
+interface PatientItem {
+  id: string
+  name: string
 }
 
 // ─── 유틸 ─────────────────────────────────────────────────────────
@@ -42,80 +56,117 @@ function incentiveAmount(gross: number, ratio: number) {
   return Math.floor(netAmount(gross) * (ratio / 100) * 0.1)
 }
 
+const ALL_MONTHS = [1,2,3,4,5,6,7,8,9,10,11,12] as const
+
 // ─── 메인 컴포넌트 ────────────────────────────────────────────────
 export default function PerformanceTab() {
   const currentYear = new Date().getFullYear()
-  const [subTab, setSubTab] = useState<'sales' | 'settlement'>('sales')
+  const [subTab, setSubTab]     = useState<'sales' | 'settlement'>('sales')
+  const [year, setYear]         = useState(currentYear)
+  const [quarter, setQuarter]   = useState<number | null>(null)
+  const [month, setMonth]       = useState<number | null>(null)
+  const [branch, setBranch]     = useState('울산지사')
 
-  // ── 공통 필터
-  const [year, setYear]       = useState(currentYear)
-  const [quarter, setQuarter] = useState<number | null>(null)
-  const [month, setMonth]     = useState<number | null>(null)
-  const [branch, setBranch]   = useState('울산지사')
+  // 공통 — 사용자 목록 (DB)
+  const [users, setUsers] = useState<UserItem[]>([])
+  useEffect(() => {
+    fetch('/api/users').then(r => r.json()).then(data => {
+      if (Array.isArray(data)) setUsers(data)
+    })
+  }, [])
 
-  // ── 영업 약정건수 상태
-  const [salesRows, setSalesRows]     = useState<SalesRow[]>([])
+  const userNames = users.map(u => u.name)
+
+  // ── 선택된 월 목록
+  const viewMonths: number[] = quarter
+    ? [...QUARTER_MONTHS[quarter]]
+    : month
+      ? [month]
+      : [...ALL_MONTHS]
+
+  // ══════════════════════════════════════════════════════════
+  // 서브탭 A: 영업 약정건수
+  // ══════════════════════════════════════════════════════════
+  const [roster, setRoster]       = useState<StaffRosterItem[]>([])
+  const [salesData, setSalesData] = useState<Record<string, Record<string, number>>>({})
   const [salesDirty, setSalesDirty]   = useState(false)
   const [salesSaving, setSalesSaving] = useState(false)
-  const [newStaffName, setNewStaffName] = useState('')
 
-  // ── 정산내역 상태
-  const [settlements, setSettlements]         = useState<SettlementRow[]>([])
-  const [showAddForm, setShowAddForm]         = useState(false)
-  const [importing, setImporting]             = useState(false)
-  const [importPreview, setImportPreview]     = useState<SettlementRow[] | null>(null)
+  // 직원 추가 모달
+  const [showAddStaff, setShowAddStaff] = useState(false)
+  const [addStaffName, setAddStaffName] = useState('')
+  const [addStaffFrom, setAddStaffFrom] = useState<{ y: number; m: number }>({ y: currentYear, m: new Date().getMonth() + 1 })
 
-  // ── 보기 모드 (월별 / 분기 합계)
-  const viewMonths = (() => {
-    if (month) return [month]
-    if (quarter) return [...QUARTER_MONTHS[quarter]]
-    return [1,2,3,4,5,6,7,8,9,10,11,12]
-  })()
+  // 퇴사 처리
+  const [removingStaff, setRemovingStaff] = useState<string | null>(null)
+  const [removeFrom, setRemoveFrom] = useState<{ y: number; m: number }>({ y: currentYear, m: new Date().getMonth() + 1 })
 
-  // ─────────────────────────────────────────────────────────────
-  // 영업 약정건수 로드
+  // 직원 명단 + 약정건수 로드
   const loadSales = useCallback(async () => {
+    const refMonth = quarter
+      ? QUARTER_MONTHS[quarter][0]
+      : month || 1
+
+    // 1. 재직 중인 직원 명단
+    const rRes = await fetch(`/api/branch/staff-roster?branchName=${encodeURIComponent(branch)}&year=${year}&month=${refMonth}`)
+    if (rRes.ok) {
+      const rData: StaffRosterItem[] = await rRes.json()
+      setRoster(rData)
+    }
+
+    // 2. 약정 건수 데이터
     const qs = new URLSearchParams({ year: String(year), branchName: branch })
     if (quarter) qs.set('quarter', String(quarter))
-    if (month) qs.set('month', String(month))
-    const res = await fetch(`/api/branch/sales-contracts?${qs}`)
-    if (!res.ok) return
-    const data: { staffName: string; month: number; [k: string]: unknown }[] = await res.json()
-
-    const staffSet = new Set(data.map(r => r.staffName))
-    const rows: SalesRow[] = []
-    for (const staff of staffSet) {
-      const row: SalesRow = { staffName: staff }
-      for (const m of viewMonths) {
-        const rec = data.find(r => r.staffName === staff && r.month === m)
+    else if (month) qs.set('month', String(month))
+    const sRes = await fetch(`/api/branch/sales-contracts?${qs}`)
+    if (sRes.ok) {
+      const rows: { staffName: string; month: number; [k: string]: unknown }[] = await sRes.json()
+      const map: Record<string, Record<string, number>> = {}
+      for (const r of rows) {
+        if (!map[r.staffName]) map[r.staffName] = {}
         for (const ct of CASE_TYPES) {
-          const key = `${ct.id}_${m}`
-          row[key] = (rec?.[ct.id] as number) || 0
+          map[r.staffName][`${ct.id}_${r.month}`] = (r[ct.id] as number) || 0
         }
       }
-      rows.push(row)
+      setSalesData(map)
     }
-    setSalesRows(rows)
     setSalesDirty(false)
   }, [year, quarter, month, branch])
 
-  useEffect(() => { if (subTab === 'sales') loadSales() }, [subTab, loadSales])
+  useEffect(() => {
+    if (subTab === 'sales') loadSales()
+  }, [subTab, loadSales])
 
-  // 영업 약정건수 저장
+  function getCellValue(staffName: string, caseTypeId: string, m: number): number {
+    return salesData[staffName]?.[`${caseTypeId}_${m}`] || 0
+  }
+
+  function setCellValue(staffName: string, caseTypeId: string, m: number, value: number) {
+    setSalesData(prev => ({
+      ...prev,
+      [staffName]: {
+        ...(prev[staffName] || {}),
+        [`${caseTypeId}_${m}`]: value,
+      }
+    }))
+    setSalesDirty(true)
+  }
+
+  function staffMonthTotal(staffName: string, m: number) {
+    return CASE_TYPES.reduce((s, ct) => s + getCellValue(staffName, ct.id, m), 0)
+  }
+
   async function saveSales() {
     setSalesSaving(true)
     try {
       const saves: Promise<unknown>[] = []
-      for (const row of salesRows) {
+      for (const r of roster) {
         for (const m of viewMonths) {
           const payload: Record<string, unknown> = {
-            branchName: branch,
-            staffName: row.staffName,
-            year,
-            month: m,
+            branchName: branch, staffName: r.staffName, year, month: m,
           }
           for (const ct of CASE_TYPES) {
-            payload[ct.id] = (row[`${ct.id}_${m}`] as number) || 0
+            payload[ct.id] = getCellValue(r.staffName, ct.id, m)
           }
           saves.push(
             fetch('/api/branch/sales-contracts', {
@@ -133,41 +184,55 @@ export default function PerformanceTab() {
     }
   }
 
-  function addStaff() {
-    const name = newStaffName.trim()
-    if (!name || salesRows.find(r => r.staffName === name)) return
-    const row: SalesRow = { staffName: name }
-    for (const m of viewMonths) {
-      for (const ct of CASE_TYPES) {
-        row[`${ct.id}_${m}`] = 0
-      }
-    }
-    setSalesRows(prev => [...prev, row])
-    setNewStaffName('')
-    setSalesDirty(true)
+  async function handleAddStaff() {
+    const name = addStaffName.trim()
+    if (!name || name === '__custom__') return
+    await fetch('/api/branch/staff-roster', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        branchName: branch,
+        staffName: name,
+        startYear: addStaffFrom.y,
+        startMonth: addStaffFrom.m,
+      }),
+    })
+    setShowAddStaff(false)
+    setAddStaffName('')
+    await loadSales()
   }
 
-  function staffMonthTotal(row: SalesRow, m: number) {
-    return CASE_TYPES.reduce((s, ct) => s + ((row[`${ct.id}_${m}`] as number) || 0), 0)
-  }
-  function staffTotal(row: SalesRow) {
-    return viewMonths.reduce((s, m) => s + staffMonthTotal(row, m), 0)
+  async function handleRemoveStaff(rosterId: string) {
+    await fetch(`/api/branch/staff-roster/${rosterId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ endYear: removeFrom.y, endMonth: removeFrom.m }),
+    })
+    setRemovingStaff(null)
+    await loadSales()
   }
 
-  // ─────────────────────────────────────────────────────────────
-  // 정산내역 로드
+  // ══════════════════════════════════════════════════════════
+  // 서브탭 B: 정산내역
+  // ══════════════════════════════════════════════════════════
+  const [settlements, setSettlements]     = useState<SettlementRow[]>([])
+  const [showAddForm, setShowAddForm]     = useState(false)
+  const [importing, setImporting]         = useState(false)
+  const [importPreview, setImportPreview] = useState<SettlementRow[] | null>(null)
+  const [importSaving, setImportSaving]   = useState(false)
+
   const loadSettlements = useCallback(async () => {
     const qs = new URLSearchParams({ year: String(year), branchName: branch })
     if (month) qs.set('month', String(month))
     const res = await fetch(`/api/branch/settlement-records?${qs}`)
     if (!res.ok) return
-    const data = await res.json()
-    setSettlements(data.map((r: SettlementRow) => ({ ...r, _editing: false })))
+    setSettlements(await res.json())
   }, [year, month, branch])
 
-  useEffect(() => { if (subTab === 'settlement') loadSettlements() }, [subTab, loadSettlements])
+  useEffect(() => {
+    if (subTab === 'settlement') loadSettlements()
+  }, [subTab, loadSettlements])
 
-  // 성공보수 엑셀 임포트
   async function handleImport(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
@@ -177,18 +242,20 @@ export default function PerformanceTab() {
     try {
       const res = await fetch('/api/branch/settlement-records/import', { method: 'POST', body: fd })
       const data = await res.json()
-      if (!res.ok) { alert(data.error); return }
+      if (!res.ok) { alert(data.error || '파싱 실패'); return }
       setImportPreview(
-        data.rows.map((r: Partial<SettlementRow>) => ({
-          paymentDate: r.paymentDate || '',
-          victimName: r.victimName || '',
-          caseType: r.caseType || '',
-          tfName: r.tfName || '',
-          salesStaffName: r.salesStaffName || '',
+        data.rows.map((r: SettlementRow & { year: number; month: number }) => ({
+          year:    r.year,
+          month:   r.month,
+          paymentDate:         r.paymentDate,
+          victimName:          r.victimName,
+          caseType:            r.caseType || '',
+          tfName:              r.tfName || '',
+          salesStaffName:      r.salesStaffName || '',
           settlementStaffName: r.settlementStaffName || '',
-          grossAmount: r.grossAmount || 0,
-          deduction: 0,
-          memo: '',
+          grossAmount:         r.grossAmount,
+          deduction:           0,
+          memo:                '',
           allocations: r.settlementStaffName
             ? [{ staffName: r.settlementStaffName, ratio: 100, isExternal: false }]
             : [],
@@ -201,21 +268,63 @@ export default function PerformanceTab() {
   }
 
   async function confirmImport() {
-    if (!importPreview) return
-    const filteredByMonth = month
-      ? importPreview.filter(r => r.paymentDate && parseInt(r.paymentDate.slice(5, 7)) === month)
-      : importPreview
+    if (!importPreview || importPreview.length === 0) return
+    setImportSaving(true)
 
-    for (const row of filteredByMonth) {
-      const rowMonth = row.paymentDate ? parseInt(row.paymentDate.slice(5, 7)) : month || 1
-      const rowYear  = row.paymentDate ? parseInt(row.paymentDate.slice(0, 4)) : year
-      await fetch('/api/branch/settlement-records', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...row, branchName: branch, year: rowYear, month: rowMonth }),
-      })
+    let toSave = importPreview
+    if (month) toSave = importPreview.filter(r => r.month === month)
+    if (quarter) {
+      const qm = QUARTER_MONTHS[quarter]
+      toSave = importPreview.filter(r => r.month && qm.includes(r.month as 1|2|3|4|5|6|7|8|9|10|11|12))
     }
+
+    let successCount = 0
+    let failCount = 0
+
+    for (const row of toSave) {
+      const rowYear  = row.year  || year
+      const rowMonth = row.month || (month || 1)
+
+      const body = {
+        branchName: branch,
+        year:   rowYear,
+        month:  rowMonth,
+        paymentDate:         row.paymentDate || null,
+        victimName:          row.victimName,
+        caseType:            row.caseType || null,
+        tfName:              row.tfName || null,
+        salesStaffName:      row.salesStaffName || null,
+        settlementStaffName: row.settlementStaffName || null,
+        grossAmount:         row.grossAmount,
+        deduction:           row.deduction || 0,
+        memo:                row.memo || null,
+        allocations: row.allocations || [],
+      }
+
+      try {
+        const res = await fetch('/api/branch/settlement-records', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        })
+        if (res.ok) successCount++
+        else {
+          const err = await res.json().catch(() => ({}))
+          console.error('저장 실패:', err)
+          failCount++
+        }
+      } catch (e) {
+        console.error('네트워크 오류:', e)
+        failCount++
+      }
+    }
+
+    setImportSaving(false)
     setImportPreview(null)
+
+    if (failCount > 0) {
+      alert(`${successCount}건 저장 완료, ${failCount}건 실패`)
+    }
     await loadSettlements()
   }
 
@@ -225,35 +334,37 @@ export default function PerformanceTab() {
     await loadSettlements()
   }
 
-  // 담당자별 집계
-  const staffSummary: Record<string, { count: number; totalNet: number; totalIncentive: number }> = {}
-  for (const s of settlements) {
-    const net = netAmount(s.grossAmount) - s.deduction
-    for (const a of s.allocations) {
-      if (!staffSummary[a.staffName]) staffSummary[a.staffName] = { count: 0, totalNet: 0, totalIncentive: 0 }
-      staffSummary[a.staffName].count += 1
-      staffSummary[a.staffName].totalNet += Math.floor(net * a.ratio / 100)
-      staffSummary[a.staffName].totalIncentive += incentiveAmount(s.grossAmount - s.deduction * 1.1, a.ratio)
-    }
-  }
-
-  // 필터 기준 월별 필터링 (정산내역)
+  // 필터된 정산 목록
   const filteredSettlements = settlements.filter(s => {
     const m = s.paymentDate ? parseInt(s.paymentDate.slice(5, 7)) : null
     if (month && m !== month) return false
     if (quarter && m) {
-      const qMonths = QUARTER_MONTHS[quarter]
-      if (!qMonths.includes(m as 1|2|3|4|5|6|7|8|9|10|11|12)) return false
+      const qm = QUARTER_MONTHS[quarter]
+      if (!qm.includes(m as 1|2|3|4|5|6|7|8|9|10|11|12)) return false
     }
     return true
   })
 
-  // ─── 렌더 ─────────────────────────────────────────────────────
+  // 담당자별 집계
+  const staffSummary: Record<string, { count: number; totalNet: number; totalIncentive: number }> = {}
+  for (const s of filteredSettlements) {
+    const net = netAmount(s.grossAmount) - (s.deduction || 0)
+    for (const a of (s.allocations || [])) {
+      if (!staffSummary[a.staffName]) staffSummary[a.staffName] = { count: 0, totalNet: 0, totalIncentive: 0 }
+      staffSummary[a.staffName].count      += 1
+      staffSummary[a.staffName].totalNet   += Math.floor(net * a.ratio / 100)
+      staffSummary[a.staffName].totalIncentive += incentiveAmount(s.grossAmount, a.ratio)
+    }
+  }
+
+  // ─── 스타일 ────────────────────────────────────────────────
   const cellCls = 'border border-gray-200 px-2 py-1 text-sm'
   const thCls   = `${cellCls} bg-gray-50 font-medium text-center`
 
+  // ─── 렌더 ─────────────────────────────────────────────────
   return (
     <div className="p-4 space-y-4">
+
       {/* ── 필터 바 */}
       <div className="flex flex-wrap items-center gap-2">
         <input
@@ -262,7 +373,6 @@ export default function PerformanceTab() {
           className="w-20 border border-gray-300 rounded px-2 py-1 text-sm text-center"
         />
         <span className="text-sm text-gray-400">년</span>
-
         {[1,2,3,4].map(q => (
           <button key={q}
             onClick={() => { setQuarter(quarter === q ? null : q); setMonth(null) }}
@@ -273,15 +383,13 @@ export default function PerformanceTab() {
             {q}분기
           </button>
         ))}
-
         <span className="text-gray-300">|</span>
-
-        {[1,2,3,4,5,6,7,8,9,10,11,12].map(m => (
+        {ALL_MONTHS.map(m => (
           <button key={m}
             onClick={() => { setMonth(month === m ? null : m); setQuarter(null) }}
-            className={`w-8 py-1 text-xs rounded border transition-colors ${
+            className={`w-7 py-1 text-xs rounded border transition-colors ${
               month === m ? 'bg-teal-500 text-white border-teal-500'
-                : (quarter && QUARTER_MONTHS[quarter].includes(m as 1|2|3|4|5|6|7|8|9|10|11|12))
+                : (quarter && (QUARTER_MONTHS[quarter] as readonly number[]).includes(m))
                   ? 'bg-sky-50 border-sky-300 text-sky-600'
                   : 'border-gray-200 text-gray-500 hover:border-gray-400'
             }`}
@@ -289,13 +397,9 @@ export default function PerformanceTab() {
             {m}
           </button>
         ))}
-
         <span className="text-gray-300">|</span>
-        <select
-          value={branch}
-          onChange={e => setBranch(e.target.value)}
-          className="border border-gray-300 rounded px-2 py-1 text-sm"
-        >
+        <select value={branch} onChange={e => setBranch(e.target.value)}
+          className="border border-gray-300 rounded px-2 py-1 text-sm">
           {['울산지사','부산경남지사','서울북부지사','경기안산지사','전북익산지사',
             '경북구미지사','경기의정부지사','강원동해지사','전남여수지사','대구지사',
             '부산중부지사','경기수원지사'].map(b => (
@@ -306,154 +410,229 @@ export default function PerformanceTab() {
 
       {/* ── 서브탭 */}
       <div className="flex gap-1 bg-gray-100 p-1 rounded-lg">
-        <button
-          onClick={() => setSubTab('sales')}
-          className={`flex-1 py-1.5 text-sm rounded-md font-medium transition-colors ${
-            subTab === 'sales' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-          }`}
-        >
-          영업 약정건수
-        </button>
-        <button
-          onClick={() => setSubTab('settlement')}
-          className={`flex-1 py-1.5 text-sm rounded-md font-medium transition-colors ${
-            subTab === 'settlement' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-          }`}
-        >
-          정산내역
-        </button>
+        {[['sales','영업 약정건수'],['settlement','정산내역']].map(([id, label]) => (
+          <button key={id}
+            onClick={() => setSubTab(id as 'sales' | 'settlement')}
+            className={`flex-1 py-1.5 text-sm rounded-md font-medium transition-colors ${
+              subTab === id ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+            }`}
+          >{label}</button>
+        ))}
       </div>
 
-      {/* ══════════════════════════════════════════════
-          서브탭 A: 영업 약정건수
-      ══════════════════════════════════════════════ */}
+      {/* ══════════════════════════════════════════════════════
+          서브탭 A: 영업 약정건수 — 월별 세로 표
+      ══════════════════════════════════════════════════════ */}
       {subTab === 'sales' && (
-        <div className="space-y-3">
-          <div className="overflow-x-auto">
-            <table className="w-full border-collapse text-xs whitespace-nowrap">
-              <thead>
-                <tr>
-                  <th className={`${thCls} sticky left-0 z-10 bg-gray-50 w-24`}>성명</th>
-                  {viewMonths.map(m => (
-                    CASE_TYPES.map(ct => (
-                      <th key={`${m}_${ct.id}`} className={thCls}>
-                        {viewMonths.length > 1 ? `${m}월 ` : ''}{ct.label}
-                      </th>
-                    ))
-                  ))}
-                  {viewMonths.map(m => (
-                    <th key={`total_${m}`} className={`${thCls} bg-sky-50 text-sky-700`}>
-                      {viewMonths.length > 1 ? `${m}월` : ''} 합계
-                    </th>
-                  ))}
-                  {viewMonths.length > 1 && (
-                    <th className={`${thCls} bg-sky-100 text-sky-800`}>전체 합계</th>
-                  )}
-                </tr>
-              </thead>
-              <tbody>
-                {salesRows.map((row, ri) => (
-                  <tr key={row.staffName} className="hover:bg-gray-50">
-                    <td className={`${cellCls} sticky left-0 bg-white font-medium`}>{row.staffName}</td>
-                    {viewMonths.map(m =>
-                      CASE_TYPES.map(ct => {
-                        const key = `${ct.id}_${m}`
-                        return (
-                          <td key={key} className={cellCls}>
-                            <input
-                              type="number" min={0} step={0.5}
-                              value={(row[key] as number) || ''}
-                              placeholder="0"
-                              className="w-10 text-center bg-transparent outline-none"
-                              onChange={e => {
-                                const v = [...salesRows]
-                                v[ri] = { ...v[ri], [key]: parseFloat(e.target.value) || 0 }
-                                setSalesRows(v)
-                                setSalesDirty(true)
-                              }}
-                            />
-                          </td>
-                        )
-                      })
-                    )}
-                    {viewMonths.map(m => (
-                      <td key={`t_${m}`} className={`${cellCls} text-center font-medium text-sky-700 bg-sky-50`}>
-                        {staffMonthTotal(row, m) || ''}
-                      </td>
-                    ))}
-                    {viewMonths.length > 1 && (
-                      <td className={`${cellCls} text-center font-bold text-sky-800 bg-sky-100`}>
-                        {staffTotal(row) || ''}
-                      </td>
-                    )}
-                  </tr>
-                ))}
+        <div className="space-y-4">
 
-                {/* 상병별 합계 행 */}
-                <tr className="bg-gray-50 font-medium">
-                  <td className={`${cellCls} sticky left-0 bg-gray-50 text-xs text-gray-500`}>합계</td>
-                  {viewMonths.map(m =>
-                    CASE_TYPES.map(ct => {
-                      const key = `${ct.id}_${m}`
-                      const total = salesRows.reduce((s, r) => s + ((r[key] as number) || 0), 0)
-                      return (
-                        <td key={key} className={`${cellCls} text-center text-xs`}>{total || ''}</td>
-                      )
-                    })
-                  )}
-                  {viewMonths.map(m => {
-                    const total = salesRows.reduce((s, r) => s + staffMonthTotal(r, m), 0)
-                    return (
-                      <td key={`t_${m}`} className={`${cellCls} text-center font-bold text-sky-700 bg-sky-50`}>
-                        {total || ''}
-                      </td>
-                    )
-                  })}
-                  {viewMonths.length > 1 && (
-                    <td className={`${cellCls} text-center font-bold text-sky-800 bg-sky-100`}>
-                      {salesRows.reduce((s, r) => s + staffTotal(r), 0) || ''}
-                    </td>
-                  )}
-                </tr>
-              </tbody>
-            </table>
-          </div>
-
-          {/* 직원 추가 + 저장 */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <input
-                className="border border-gray-300 rounded px-2 py-1 text-sm w-28"
-                placeholder="직원명 추가"
-                value={newStaffName}
-                onChange={e => setNewStaffName(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && addStaff()}
-              />
-              <button onClick={addStaff} className="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-50">
-                + 추가
-              </button>
-            </div>
+          {/* 직원 추가/저장 버튼 */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowAddStaff(true)}
+              className="px-3 py-1.5 text-sm border border-sky-300 text-sky-600 rounded hover:bg-sky-50"
+            >
+              + 직원 추가
+            </button>
             <button
               onClick={saveSales}
               disabled={!salesDirty || salesSaving}
-              className={`px-4 py-2 text-sm rounded font-medium transition-colors ${
+              className={`px-4 py-1.5 text-sm rounded font-medium transition-colors ${
                 salesDirty && !salesSaving
                   ? 'bg-sky-500 text-white hover:bg-sky-600'
                   : 'bg-gray-100 text-gray-400 cursor-not-allowed'
               }`}
             >
-              {salesSaving ? '저장 중...' : salesDirty ? '저장' : '저장됨'}
+              {salesSaving ? '저장 중...' : salesDirty ? '변경사항 저장' : '저장됨'}
             </button>
+          </div>
+
+          {/* 직원 추가 모달 */}
+          {showAddStaff && (
+            <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center">
+              <div className="bg-white rounded-xl p-6 w-80 space-y-4">
+                <h3 className="font-medium">직원 추가</h3>
+                <div>
+                  <label className="text-xs text-gray-500">직원명</label>
+                  <select
+                    value={addStaffName}
+                    onChange={e => setAddStaffName(e.target.value)}
+                    className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm mt-1"
+                  >
+                    <option value="">선택</option>
+                    {userNames
+                      .filter(n => !roster.find(r => r.staffName === n))
+                      .map(n => <option key={n} value={n}>{n}</option>)
+                    }
+                    <option value="__custom__">직접 입력</option>
+                  </select>
+                  {addStaffName === '__custom__' && (
+                    <input
+                      className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm mt-1"
+                      placeholder="직원명 직접 입력"
+                      onChange={e => setAddStaffName(e.target.value)}
+                    />
+                  )}
+                </div>
+                <div className="flex gap-2">
+                  <div className="flex-1">
+                    <label className="text-xs text-gray-500">입사 연도</label>
+                    <input type="number" value={addStaffFrom.y}
+                      onChange={e => setAddStaffFrom(p => ({ ...p, y: parseInt(e.target.value) }))}
+                      className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm mt-1" />
+                  </div>
+                  <div className="flex-1">
+                    <label className="text-xs text-gray-500">입사 월</label>
+                    <input type="number" min={1} max={12} value={addStaffFrom.m}
+                      onChange={e => setAddStaffFrom(p => ({ ...p, m: parseInt(e.target.value) }))}
+                      className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm mt-1" />
+                  </div>
+                </div>
+                <div className="flex justify-end gap-2">
+                  <button onClick={() => setShowAddStaff(false)} className="px-3 py-1.5 text-sm border rounded">취소</button>
+                  <button onClick={handleAddStaff} className="px-3 py-1.5 text-sm bg-sky-500 text-white rounded">추가</button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 퇴사 처리 모달 */}
+          {removingStaff && (() => {
+            const rItem = roster.find(r => r.id === removingStaff)
+            return (
+              <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center">
+                <div className="bg-white rounded-xl p-6 w-80 space-y-4">
+                  <h3 className="font-medium">퇴사 처리 — {rItem?.staffName}</h3>
+                  <p className="text-xs text-gray-500">퇴사 처리 월부터 목록에서 제외됩니다.</p>
+                  <div className="flex gap-2">
+                    <div className="flex-1">
+                      <label className="text-xs text-gray-500">퇴사 연도</label>
+                      <input type="number" value={removeFrom.y}
+                        onChange={e => setRemoveFrom(p => ({ ...p, y: parseInt(e.target.value) }))}
+                        className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm mt-1" />
+                    </div>
+                    <div className="flex-1">
+                      <label className="text-xs text-gray-500">퇴사 월</label>
+                      <input type="number" min={1} max={12} value={removeFrom.m}
+                        onChange={e => setRemoveFrom(p => ({ ...p, m: parseInt(e.target.value) }))}
+                        className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm mt-1" />
+                    </div>
+                  </div>
+                  <div className="flex justify-end gap-2">
+                    <button onClick={() => setRemovingStaff(null)} className="px-3 py-1.5 text-sm border rounded">취소</button>
+                    <button
+                      onClick={() => handleRemoveStaff(removingStaff)}
+                      className="px-3 py-1.5 text-sm bg-red-500 text-white rounded"
+                    >퇴사 처리</button>
+                  </div>
+                </div>
+              </div>
+            )
+          })()}
+
+          {/* 직원 없음 안내 */}
+          {roster.length === 0 && (
+            <div className="text-center py-8 text-sm text-gray-400">
+              직원이 없습니다. &quot;직원 추가&quot; 버튼으로 등록하세요.
+            </div>
+          )}
+
+          {/* 월별 세로 표 */}
+          <div className="space-y-6">
+            {viewMonths.map(m => {
+              const monthYM = year * 100 + m
+              const monthRoster = roster.filter(r => {
+                const start = r.startYear * 100 + r.startMonth
+                if (start > monthYM) return false
+                if (r.endYear !== null && r.endMonth !== null) {
+                  const end = r.endYear * 100 + r.endMonth
+                  if (end < monthYM) return false
+                }
+                return true
+              })
+
+              return (
+                <div key={m}>
+                  <div className="flex items-center gap-2 mb-2">
+                    <h3 className="text-sm font-semibold text-sky-700 bg-sky-50 px-3 py-1 rounded-full border border-sky-200">
+                      {year}년 {m}월
+                    </h3>
+                    <span className="text-xs text-gray-400">총 {monthRoster.reduce((s, r) => s + staffMonthTotal(r.staffName, m), 0)}건</span>
+                  </div>
+
+                  <div className="overflow-x-auto">
+                    <table className="border-collapse text-xs w-full">
+                      <thead>
+                        <tr>
+                          <th className={`${thCls} w-24 sticky left-0 z-10`}>성명</th>
+                          {CASE_TYPES.map(ct => (
+                            <th key={ct.id} className={thCls}>{ct.label}</th>
+                          ))}
+                          <th className={`${thCls} bg-sky-50 text-sky-700`}>합계</th>
+                          <th className={`${thCls} w-8`}></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {monthRoster.map(r => (
+                          <tr key={r.staffName} className="hover:bg-gray-50">
+                            <td className={`${cellCls} font-medium sticky left-0 bg-white`}>{r.staffName}</td>
+                            {CASE_TYPES.map(ct => (
+                              <td key={ct.id} className={cellCls}>
+                                <input
+                                  type="number" min={0} step={0.5}
+                                  value={getCellValue(r.staffName, ct.id, m) || ''}
+                                  placeholder="0"
+                                  className="w-10 text-center bg-transparent outline-none"
+                                  onChange={e => setCellValue(r.staffName, ct.id, m, parseFloat(e.target.value) || 0)}
+                                />
+                              </td>
+                            ))}
+                            <td className={`${cellCls} text-center font-semibold text-sky-700 bg-sky-50`}>
+                              {staffMonthTotal(r.staffName, m) || 0}
+                            </td>
+                            <td className={cellCls}>
+                              <button
+                                onClick={() => { setRemovingStaff(r.id); setRemoveFrom({ y: year, m }) }}
+                                className="text-gray-300 hover:text-red-400 text-xs"
+                                title="퇴사 처리"
+                              >✕</button>
+                            </td>
+                          </tr>
+                        ))}
+
+                        {/* 상병별 합계 행 */}
+                        <tr className="bg-gray-50">
+                          <td className={`${cellCls} text-xs text-gray-500 sticky left-0 bg-gray-50 font-medium`}>합계</td>
+                          {CASE_TYPES.map(ct => {
+                            const total = monthRoster.reduce((s, r) => s + getCellValue(r.staffName, ct.id, m), 0)
+                            return (
+                              <td key={ct.id} className={`${cellCls} text-center font-medium text-gray-700`}>
+                                {total || ''}
+                              </td>
+                            )
+                          })}
+                          <td className={`${cellCls} text-center font-bold text-sky-700 bg-sky-50`}>
+                            {monthRoster.reduce((s, r) => s + staffMonthTotal(r.staffName, m), 0)}
+                          </td>
+                          <td className={cellCls} />
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )
+            })}
           </div>
         </div>
       )}
 
-      {/* ══════════════════════════════════════════════
+      {/* ══════════════════════════════════════════════════════
           서브탭 B: 정산내역
-      ══════════════════════════════════════════════ */}
+      ══════════════════════════════════════════════════════ */}
       {subTab === 'settlement' && (
         <div className="space-y-4">
 
+          {/* 엑셀 업로드 + 직접 추가 */}
           <div className="flex items-center gap-3">
             <label className={`px-3 py-1.5 text-sm rounded border cursor-pointer transition-colors ${
               importing ? 'bg-gray-100 text-gray-400' : 'bg-white border-gray-300 hover:bg-gray-50 text-gray-600'
@@ -474,12 +653,17 @@ export default function PerformanceTab() {
             <div className="border border-amber-200 bg-amber-50 rounded-lg p-4 space-y-3">
               <div className="flex items-center justify-between">
                 <p className="text-sm font-medium text-amber-700">
-                  {importPreview.length}건 파싱 완료 — 확인 후 저장하세요
+                  {importPreview.length}건 파싱 완료
+                  {month && ` — ${month}월 필터 적용 시 ${importPreview.filter(r => r.month === month).length}건 저장`}
                 </p>
                 <div className="flex gap-2">
                   <button onClick={() => setImportPreview(null)} className="px-3 py-1 text-xs border rounded">취소</button>
-                  <button onClick={confirmImport} className="px-3 py-1 text-xs bg-amber-500 text-white rounded hover:bg-amber-600">
-                    전체 저장
+                  <button
+                    onClick={confirmImport}
+                    disabled={importSaving}
+                    className="px-3 py-1 text-xs bg-amber-500 text-white rounded hover:bg-amber-600 disabled:opacity-50"
+                  >
+                    {importSaving ? '저장 중...' : '전체 저장'}
                   </button>
                 </div>
               </div>
@@ -487,7 +671,7 @@ export default function PerformanceTab() {
                 <table className="w-full border-collapse text-xs">
                   <thead>
                     <tr className="bg-amber-100">
-                      {['입금일','재해자','사건종류','TF','영업담당','정산담당','입금액'].map(h => (
+                      {['입금일','재해자','사건종류','TF','영업담당','정산담당','입금액','배분'].map(h => (
                         <th key={h} className="border border-amber-200 px-2 py-1">{h}</th>
                       ))}
                     </tr>
@@ -502,6 +686,9 @@ export default function PerformanceTab() {
                         <td className="border border-amber-200 px-2 py-1">{r.salesStaffName}</td>
                         <td className="border border-amber-200 px-2 py-1">{r.settlementStaffName}</td>
                         <td className="border border-amber-200 px-2 py-1 text-right">{fmt(r.grossAmount)}</td>
+                        <td className="border border-amber-200 px-2 py-1">
+                          {r.allocations.map(a => `${a.staffName} ${a.ratio}%`).join(', ')}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -515,13 +702,19 @@ export default function PerformanceTab() {
             <AddSettlementForm
               branchName={branch}
               year={year}
-              month={month || new Date().getMonth() + 1}
+              defaultMonth={month || new Date().getMonth() + 1}
+              userNames={userNames}
               onSave={async (row) => {
-                await fetch('/api/branch/settlement-records', {
+                const res = await fetch('/api/branch/settlement-records', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({ ...row, branchName: branch }),
                 })
+                if (!res.ok) {
+                  const err = await res.json().catch(() => ({}))
+                  alert(`저장 실패: ${JSON.stringify(err)}`)
+                  return
+                }
                 await loadSettlements()
                 setShowAddForm(false)
               }}
@@ -534,45 +727,39 @@ export default function PerformanceTab() {
             <table className="w-full border-collapse text-xs">
               <thead>
                 <tr className="bg-gray-50">
-                  {['#','입금일','재해자','사건종류','TF','영업담당','정산담당',
-                    '입금액','부가세제외','공제','인센 대상액','배분내역',''].map(h => (
+                  {['#','입금일','재해자','사건종류','TF','영업담당','정산담당','입금액','부가세제외','인센 대상','배분내역 (인센)',''].map(h => (
                     <th key={h} className={thCls}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {filteredSettlements.map((row, i) => {
-                  const net = netAmount(row.grossAmount) - row.deduction
+                  const net = netAmount(row.grossAmount) - (row.deduction || 0)
                   return (
                     <tr key={row.id ?? i} className="hover:bg-gray-50">
                       <td className={`${cellCls} text-center text-gray-400`}>{i+1}</td>
                       <td className={cellCls}>{row.paymentDate?.slice(0,10)}</td>
-                      <td className={cellCls}>{row.victimName}</td>
+                      <td className={`${cellCls} font-medium`}>{row.victimName}</td>
                       <td className={cellCls}>{row.caseType}</td>
                       <td className={cellCls}>{row.tfName}</td>
                       <td className={cellCls}>{row.salesStaffName}</td>
                       <td className={cellCls}>{row.settlementStaffName}</td>
                       <td className={`${cellCls} text-right`}>{fmt(row.grossAmount)}</td>
-                      <td className={`${cellCls} text-right`}>{fmt(netAmount(row.grossAmount))}</td>
-                      <td className={`${cellCls} text-right text-orange-600`}>{row.deduction ? fmt(row.deduction) : ''}</td>
+                      <td className={`${cellCls} text-right text-gray-500`}>{fmt(netAmount(row.grossAmount))}</td>
                       <td className={`${cellCls} text-right font-medium text-sky-700`}>{fmt(net)}</td>
-                      <td className={`${cellCls} max-w-40`}>
-                        {row.allocations.map((a, ai) => (
-                          <div key={ai} className="text-xs text-gray-600">
+                      <td className={`${cellCls}`}>
+                        {(row.allocations || []).map((a, ai) => (
+                          <div key={ai} className="text-xs">
                             {a.staffName} {a.ratio}%
-                            {a.isExternal && <span className="ml-1 text-amber-500">(타지사)</span>}
-                            <span className="ml-1 text-green-600">
-                              +{fmt(incentiveAmount(row.grossAmount, a.ratio))}
-                            </span>
+                            {a.isExternal && <span className="text-amber-500 ml-1">(타)</span>}
+                            <span className="text-green-600 ml-1">→{fmt(incentiveAmount(row.grossAmount, a.ratio))}</span>
                           </div>
                         ))}
                       </td>
                       <td className={cellCls}>
                         {row.id && (
-                          <button
-                            onClick={() => deleteSettlement(row.id!)}
-                            className="text-gray-300 hover:text-red-400 text-xs"
-                          >✕</button>
+                          <button onClick={() => deleteSettlement(row.id!)}
+                            className="text-gray-300 hover:text-red-400">✕</button>
                         )}
                       </td>
                     </tr>
@@ -580,7 +767,7 @@ export default function PerformanceTab() {
                 })}
                 {filteredSettlements.length === 0 && (
                   <tr>
-                    <td colSpan={13} className={`${cellCls} text-center text-gray-400 py-6`}>
+                    <td colSpan={12} className={`${cellCls} text-center text-gray-400 py-6`}>
                       데이터 없음 — 엑셀 업로드 또는 직접 추가
                     </td>
                   </tr>
@@ -588,8 +775,8 @@ export default function PerformanceTab() {
               </tbody>
               {filteredSettlements.length > 0 && (
                 <tfoot>
-                  <tr className="bg-sky-50 font-medium">
-                    <td colSpan={7} className={`${cellCls} text-center text-sky-700`}>
+                  <tr className="bg-sky-50 font-medium text-xs">
+                    <td colSpan={7} className={`${cellCls} text-right text-sky-700`}>
                       합계 ({filteredSettlements.length}건)
                     </td>
                     <td className={`${cellCls} text-right text-sky-700`}>
@@ -598,7 +785,7 @@ export default function PerformanceTab() {
                     <td className={`${cellCls} text-right text-sky-700`}>
                       {fmt(filteredSettlements.reduce((s, r) => s + netAmount(r.grossAmount), 0))}
                     </td>
-                    <td colSpan={4} className={cellCls} />
+                    <td colSpan={3} className={cellCls} />
                   </tr>
                 </tfoot>
               )}
@@ -609,31 +796,27 @@ export default function PerformanceTab() {
           {Object.keys(staffSummary).length > 0 && (
             <div>
               <h4 className="text-xs font-medium text-gray-500 mb-2">담당자별 집계</h4>
-              <div className="overflow-x-auto">
-                <table className="border-collapse text-xs">
-                  <thead>
-                    <tr className="bg-gray-50">
-                      {['담당자','정산 건수','인센 대상액 합계','인센티브 합계(10%)'].map(h => (
-                        <th key={h} className={thCls}>{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {Object.entries(staffSummary)
-                      .sort((a, b) => b[1].totalIncentive - a[1].totalIncentive)
-                      .map(([name, stat]) => (
-                        <tr key={name} className="hover:bg-gray-50">
-                          <td className={`${cellCls} font-medium`}>{name}</td>
-                          <td className={`${cellCls} text-center`}>{stat.count}</td>
-                          <td className={`${cellCls} text-right`}>{fmt(stat.totalNet)}</td>
-                          <td className={`${cellCls} text-right font-medium text-green-700`}>
-                            {fmt(stat.totalIncentive)}
-                          </td>
-                        </tr>
-                      ))}
-                  </tbody>
-                </table>
-              </div>
+              <table className="border-collapse text-xs">
+                <thead>
+                  <tr className="bg-gray-50">
+                    {['담당자','건수','인센 대상액','인센티브(10%)'].map(h => (
+                      <th key={h} className={thCls}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {Object.entries(staffSummary)
+                    .sort((a,b) => b[1].totalIncentive - a[1].totalIncentive)
+                    .map(([name, stat]) => (
+                      <tr key={name} className="hover:bg-gray-50">
+                        <td className={`${cellCls} font-medium`}>{name}</td>
+                        <td className={`${cellCls} text-center`}>{stat.count}</td>
+                        <td className={`${cellCls} text-right`}>{fmt(stat.totalNet)}</td>
+                        <td className={`${cellCls} text-right font-medium text-green-700`}>{fmt(stat.totalIncentive)}</td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
             </div>
           )}
         </div>
@@ -642,20 +825,22 @@ export default function PerformanceTab() {
   )
 }
 
-// ─── 직접 추가 폼 컴포넌트 ────────────────────────────────────────
+// ─── 직접 추가 폼 ─────────────────────────────────────────────────
 function AddSettlementForm({
-  branchName, year, month,
+  branchName, year, defaultMonth, userNames,
   onSave, onCancel,
 }: {
   branchName: string
   year: number
-  month: number
-  onSave: (row: SettlementRow) => Promise<void>
+  defaultMonth: number
+  userNames: string[]
+  onSave: (row: SettlementRow & { year: number; month: number }) => Promise<void>
   onCancel: () => void
 }) {
-  const [form, setForm] = useState<SettlementRow>({
+  const [form, setForm] = useState({
     paymentDate: '',
     victimName: '',
+    victimSearch: '',
     caseType: '',
     tfName: '',
     salesStaffName: '',
@@ -663,18 +848,19 @@ function AddSettlementForm({
     grossAmount: 0,
     deduction: 0,
     memo: '',
-    allocations: [{ staffName: '', ratio: 100, isExternal: false }],
+    allocations: [{ staffName: '', ratio: 100, isExternal: false }] as AllocationRow[],
   })
   const [saving, setSaving] = useState(false)
+  const [patientResults, setPatientResults] = useState<PatientItem[]>([])
+  const [showPatientDropdown, setShowPatientDropdown] = useState(false)
 
-  function setField(k: keyof SettlementRow, v: unknown) {
-    setForm(f => ({ ...f, [k]: v }))
-  }
-
-  function setAlloc(i: number, k: keyof AllocationRow, v: unknown) {
-    const a = [...form.allocations]
-    a[i] = { ...a[i], [k]: v }
-    setForm(f => ({ ...f, allocations: a }))
+  async function searchPatient(q: string) {
+    if (q.length < 1) { setPatientResults([]); return }
+    const res = await fetch(`/api/patients?search=${encodeURIComponent(q)}&limit=10`)
+    if (res.ok) {
+      const data = await res.json()
+      setPatientResults(Array.isArray(data) ? data : (data.patients || []))
+    }
   }
 
   const totalRatio = form.allocations.reduce((s, a) => s + (a.ratio || 0), 0)
@@ -682,87 +868,182 @@ function AddSettlementForm({
   async function handleSave() {
     if (!form.victimName) return
     setSaving(true)
-    const rowMonth = form.paymentDate ? parseInt(form.paymentDate.slice(5, 7)) : month
-    const rowYear  = form.paymentDate ? parseInt(form.paymentDate.slice(0, 4)) : year
+    const payDate = form.paymentDate
+    const rowMonth = payDate ? parseInt(payDate.slice(5, 7)) : defaultMonth
+    const rowYear  = payDate ? parseInt(payDate.slice(0, 4)) : year
     try {
-      await onSave({ ...form, year: rowYear, month: rowMonth } as SettlementRow)
+      await onSave({
+        ...form,
+        year: rowYear,
+        month: rowMonth,
+        paymentDate: payDate || '',
+        deduction: form.deduction || 0,
+      })
     } finally {
       setSaving(false)
     }
   }
 
-  const inputCls = 'border border-gray-300 rounded px-2 py-1 text-sm w-full focus:outline-none focus:border-sky-400'
+  const inputCls = 'border border-gray-300 rounded px-2 py-1.5 text-sm w-full focus:outline-none focus:border-sky-400'
 
   return (
     <div className="border border-sky-200 bg-sky-50 rounded-lg p-4 space-y-3">
       <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
-        {([
-          ['입금일자', 'paymentDate', 'date'],
-          ['재해자명', 'victimName', 'text'],
-          ['사건종류', 'caseType', 'text'],
-          ['TF', 'tfName', 'text'],
-          ['영업담당자', 'salesStaffName', 'text'],
-          ['정산담당자', 'settlementStaffName', 'text'],
-          ['입금액', 'grossAmount', 'number'],
-          ['공제', 'deduction', 'number'],
-        ] as [string, keyof SettlementRow, string][]).map(([label, key, type]) => (
-          <div key={key as string}>
-            <label className="block text-xs text-gray-500 mb-0.5">{label}</label>
-            <input
-              type={type}
-              value={form[key] as string | number}
-              onChange={e => setField(key, type === 'number' ? parseInt(e.target.value) || 0 : e.target.value)}
-              className={inputCls}
-            />
-          </div>
-        ))}
+
+        {/* 입금일자 */}
+        <div>
+          <label className="text-xs text-gray-500">입금일자</label>
+          <input type="date" value={form.paymentDate}
+            onChange={e => setForm(f => ({ ...f, paymentDate: e.target.value }))}
+            className={`${inputCls} mt-0.5`} />
+        </div>
+
+        {/* 재해자명 — 환자 검색 */}
+        <div className="relative">
+          <label className="text-xs text-gray-500">재해자명</label>
+          <input
+            value={form.victimSearch || form.victimName}
+            onChange={async e => {
+              const v = e.target.value
+              setForm(f => ({ ...f, victimSearch: v, victimName: v }))
+              setShowPatientDropdown(true)
+              await searchPatient(v)
+            }}
+            onBlur={() => setTimeout(() => setShowPatientDropdown(false), 150)}
+            placeholder="이름 검색..."
+            className={`${inputCls} mt-0.5`}
+          />
+          {showPatientDropdown && patientResults.length > 0 && (
+            <div className="absolute z-10 bg-white border border-gray-200 rounded shadow-md w-full max-h-40 overflow-y-auto mt-1">
+              {patientResults.map(p => (
+                <button key={p.id} onMouseDown={() => {
+                  setForm(f => ({ ...f, victimName: p.name, victimSearch: p.name }))
+                  setShowPatientDropdown(false)
+                }}
+                  className="w-full text-left px-3 py-1.5 text-sm hover:bg-sky-50">
+                  {p.name}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* 사건종류 */}
+        <div>
+          <label className="text-xs text-gray-500">사건종류</label>
+          <input value={form.caseType}
+            onChange={e => setForm(f => ({ ...f, caseType: e.target.value }))}
+            placeholder="난청 최초, 근골 등"
+            className={`${inputCls} mt-0.5`} />
+        </div>
+
+        {/* TF */}
+        <div>
+          <label className="text-xs text-gray-500">TF</label>
+          <input value={form.tfName}
+            onChange={e => setForm(f => ({ ...f, tfName: e.target.value }))}
+            placeholder="더보상울산, 울산동부 등"
+            className={`${inputCls} mt-0.5`} />
+        </div>
+
+        {/* 영업담당자 */}
+        <div>
+          <label className="text-xs text-gray-500">영업담당자</label>
+          <select value={form.salesStaffName}
+            onChange={e => setForm(f => ({ ...f, salesStaffName: e.target.value }))}
+            className={`${inputCls} mt-0.5`}>
+            <option value="">선택</option>
+            {userNames.map(n => <option key={n} value={n}>{n}</option>)}
+          </select>
+        </div>
+
+        {/* 정산담당자 */}
+        <div>
+          <label className="text-xs text-gray-500">정산담당자</label>
+          <select value={form.settlementStaffName}
+            onChange={e => setForm(f => ({ ...f, settlementStaffName: e.target.value }))}
+            className={`${inputCls} mt-0.5`}>
+            <option value="">선택</option>
+            {userNames.map(n => <option key={n} value={n}>{n}</option>)}
+          </select>
+        </div>
+
+        {/* 입금액 */}
+        <div>
+          <label className="text-xs text-gray-500">입금액 (원)</label>
+          <input type="number" value={form.grossAmount || ''}
+            onChange={e => setForm(f => ({ ...f, grossAmount: parseInt(e.target.value) || 0 }))}
+            className={`${inputCls} mt-0.5`} />
+        </div>
+
+        {/* 공제 */}
+        <div>
+          <label className="text-xs text-gray-500">공제 (원)</label>
+          <input type="number" value={form.deduction || ''}
+            onChange={e => setForm(f => ({ ...f, deduction: parseInt(e.target.value) || 0 }))}
+            className={`${inputCls} mt-0.5`} />
+        </div>
       </div>
 
-      {/* 배분 */}
+      {/* 인센티브 배분 */}
       <div>
         <div className="flex items-center justify-between mb-1">
-          <label className="text-xs text-gray-500 font-medium">인센티브 배분 (합계: {totalRatio}%)</label>
+          <span className="text-xs text-gray-500 font-medium">
+            인센티브 배분 (합계: <span className={totalRatio !== 100 ? 'text-orange-500' : 'text-green-600'}>{totalRatio}%</span>)
+          </span>
           <button
             onClick={() => setForm(f => ({ ...f, allocations: [...f.allocations, { staffName: '', ratio: 0, isExternal: false }] }))}
             className="text-xs text-sky-600 underline"
-          >+ 배분 추가</button>
+          >+ 추가</button>
         </div>
         {form.allocations.map((a, i) => (
           <div key={i} className="flex items-center gap-2 mb-1">
-            <input
-              className="border border-gray-300 rounded px-2 py-1 text-xs w-24"
-              placeholder="담당자명"
+            <select
               value={a.staffName}
-              onChange={e => setAlloc(i, 'staffName', e.target.value)}
-            />
+              onChange={e => {
+                const v = [...form.allocations]
+                v[i] = { ...v[i], staffName: e.target.value }
+                setForm(f => ({ ...f, allocations: v }))
+              }}
+              className="border border-gray-300 rounded px-2 py-1 text-xs w-28"
+            >
+              <option value="">담당자 선택</option>
+              {userNames.map(n => <option key={n} value={n}>{n}</option>)}
+              <option value="__custom__">직접 입력</option>
+            </select>
             <input
               type="number" min={0} max={100}
-              className="border border-gray-300 rounded px-2 py-1 text-xs w-16 text-center"
               value={a.ratio}
-              onChange={e => setAlloc(i, 'ratio', parseInt(e.target.value) || 0)}
+              onChange={e => {
+                const v = [...form.allocations]
+                v[i] = { ...v[i], ratio: parseInt(e.target.value) || 0 }
+                setForm(f => ({ ...f, allocations: v }))
+              }}
+              className="border border-gray-300 rounded px-2 py-1 text-xs w-14 text-center"
             />
             <span className="text-xs text-gray-400">%</span>
             <label className="flex items-center gap-1 text-xs text-gray-500">
               <input type="checkbox" checked={a.isExternal}
-                onChange={e => setAlloc(i, 'isExternal', e.target.checked)} />
+                onChange={e => {
+                  const v = [...form.allocations]
+                  v[i] = { ...v[i], isExternal: e.target.checked }
+                  setForm(f => ({ ...f, allocations: v }))
+                }} />
               타지사
             </label>
             {i > 0 && (
               <button
-                onClick={() => setForm(f => ({ ...f, allocations: f.allocations.filter((_, j) => j !== i) }))}
+                onClick={() => setForm(f => ({ ...f, allocations: f.allocations.filter((_,j) => j !== i) }))}
                 className="text-gray-300 hover:text-red-400 text-xs"
               >✕</button>
             )}
             {form.grossAmount > 0 && a.ratio > 0 && (
-              <span className="text-xs text-green-600 ml-1">
-                인센 {fmt(incentiveAmount(form.grossAmount, a.ratio))}원
+              <span className="text-xs text-green-600">
+                → {fmt(incentiveAmount(form.grossAmount, a.ratio))}원
               </span>
             )}
           </div>
         ))}
-        {totalRatio !== 100 && (
-          <p className="text-xs text-orange-500 mt-1">⚠ 배분 합계가 100%가 아닙니다 ({totalRatio}%)</p>
-        )}
       </div>
 
       <div className="flex justify-end gap-2 pt-1">
