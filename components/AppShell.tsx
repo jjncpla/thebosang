@@ -28,6 +28,7 @@ const MENU_ITEMS: MenuItem[] = [
   },
   { id: "forms", label: "양식 관리", icon: "📋", path: "/forms", restricted: "admin" },
   { id: "inquiry", label: "사건 조회", icon: "🔍", path: "/inquiry" },
+  { id: "cases-view", label: "사건 조회", icon: "🔍", path: "/cases-view" },
   {
     id: "objection",
     label: "이의제기 관리",
@@ -228,7 +229,10 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
           {/* Navigation */}
           <nav style={{ flex: 1, padding: "8px 0" }}>
-            {MENU_ITEMS.map((item) => {
+            {(role === "이산계정"
+              ? MENU_ITEMS.filter((m) => m.path === "/cases-view")
+              : MENU_ITEMS.filter((m) => m.id !== "cases-view")
+            ).map((item) => {
               const active = isActive(item.path, item.children);
               const isOpen = openMenus.has(item.id);
               const restricted = !!item.restricted;

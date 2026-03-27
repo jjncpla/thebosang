@@ -16,6 +16,17 @@ export default auth((req) => {
       return Response.redirect(homeUrl);
     }
   }
+
+  // 이산계정: /cases-view와 /api/cases-view만 허용, 나머지 차단
+  if (req.auth.user?.role === "이산계정") {
+    const allowed = ["/cases-view", "/api/cases-view", "/login", "/api/auth"];
+    const isAllowed = allowed.some((path) =>
+      req.nextUrl.pathname.startsWith(path)
+    );
+    if (!isAllowed) {
+      return Response.redirect(new URL("/cases-view", req.nextUrl.origin));
+    }
+  }
 });
 
 export const config = {
