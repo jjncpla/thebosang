@@ -37,7 +37,6 @@ export async function GET(request: Request) {
   const contacts = await prisma.contact.findMany({
     where,
     orderBy: [{ firmType: 'asc' }, { displayOrder: 'asc' }],
-    take: 50,
   })
   const offices = firmType === 'ISAN' || !firmType
     ? await prisma.isanOffice.findMany({ orderBy: { name: 'asc' } })
