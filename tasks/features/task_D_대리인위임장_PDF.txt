@@ -1,0 +1,304 @@
+# Task D: 대리인선임신고서 + 위임장 PDF 생성 연동
+# 목표: /objection/document 페이지에서 "agent"(대리인선임신고서), "proxy"(위임장) 선택 시
+#       사건 데이터로 자동 채워진 PDF 생성 및 다운로드
+# 전제: forms/page.tsx의 FORM_FIELDS에 좌표값이 이미 확정되어 있음
+#       → 해당 좌표값을 그대로 복사해서 새 API에서 사용
+
+---
+
+## 사전 작업: forms/page.tsx에서 좌표값 읽기
+
+아래 작업 시작 전 forms/page.tsx를 열어서
+FORM_FIELDS["AGENT_APPOINTMENT"]와 FORM_FIELDS["POWER_OF_ATTORNEY"]의
+각 필드별 x, y 좌표값을 확인한다.
+이 좌표값들을 새 API에 그대로 복사해서 사용한다.
+
+---
+
+## STEP 1: 대리인선임신고서 + 위임장 PDF 생성 API
+
+파일 생성: app/api/objection/cases/[id]/generate-form/route.ts
+
+```typescript
+import { NextRequest, NextResponse } from 'next/server'
+import { auth } from '@/auth'
+import { prisma } from '@/lib/prisma'
+import { PDFDocument, rgb } from 'pdf-lib'
+import fontkit from '@pdf-lib/fontkit'
+import fs from 'fs'
+import path from 'path'
+
+export async function POST(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const session = await auth()
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const { id } = await params
+  const { formType } = await req.json()
+  // formType: 'agent'(대리인선임신고서) | 'proxy'(위임장)
+
+  // ObjectionCase + 연결된 Case + Patient 조회
+  const objCase = await prisma.objectionCase.findUnique({
+    where: { id },
+    include: {
+      manager: { select: { name: true } },
+    },
+  })
+
+  if (!objCase) {
+    return NextResponse.json({ error: '사건을 찾을 수 없습니다' }, { status: 404 })
+  }
+
+  // patientName으로 Patient 조회
+  const patient = await prisma.patient.findFirst({
+    where: { name: objCase.patientName },
+    select: { name: true, ssn: true, phone: true, address: true },
+  })
+
+  // 생년월일 파싱 (주민번호 앞 6자리 → YYMMDD)
+  const ssnRaw = patient?.ssn ?? ''
+  const ssnFront = ssnRaw.replace('-', '').slice(0, 6)
+  const birthYear = ssnFront.slice(0, 2)
+  const birthMonth = ssnFront.slice(2, 4)
+  const birthDay = ssnFront.slice(4, 6)
+  // 2000년대/1900년대 판별 (뒷자리 첫 번째 숫자)
+  const ssnBack = ssnRaw.replace('-', '').slice(6, 7)
+  const fullBirthYear = ['1', '2'].includes(ssnBack)
+    ? `19${birthYear}`
+    : `20${birthYear}`
+  const birthDate = `${fullBirthYear}년 ${birthMonth}월 ${birthDay}일`
+
+  // 오늘 날짜
+  const today = new Date()
+  const todayYear = String(today.getFullYear())
+  const todayMonth = String(today.getMonth() + 1).padStart(2, '0')
+  const todayDay = String(today.getDate()).padStart(2, '0')
+
+  // 배경 PDF 로드
+  const pdfType = formType === 'agent' ? 'AGENT_APPOINTMENT' : 'POWER_OF_ATTORNEY'
+  const bgPdfPath = path.join(process.cwd(), 'public', 'forms', `${pdfType}.pdf`)
+
+  if (!fs.existsSync(bgPdfPath)) {
+    return NextResponse.json(
+      { error: `배경 PDF 파일이 없습니다: ${pdfType}.pdf` },
+      { status: 500 }
+    )
+  }
+
+  const bgPdfBytes = fs.readFileSync(bgPdfPath)
+  const pdfDoc = await PDFDocument.load(bgPdfBytes)
+  pdfDoc.registerFontkit(fontkit)
+
+  const fontPath = path.join(process.cwd(), 'public', 'fonts', 'NotoSansKR-Regular.otf')
+  const fontBytes = fs.readFileSync(fontPath)
+  const font = await pdfDoc.embedFont(fontBytes)
+
+  const page = pdfDoc.getPages()[0]
+  const { height } = page.getSize()
+
+  // 텍스트 오버레이 헬퍼 (y축 반전: pdf-lib는 좌하단 원점)
+  const drawText = (text: string, x: number, y: number, size = 11) => {
+    page.drawText(text ?? '', {
+      x,
+      y: height - y,  // forms/page.tsx 좌표계와 동일하게 변환
+      size,
+      font,
+      color: rgb(0, 0, 0),
+    })
+  }
+
+  if (formType === 'agent') {
+    // ── 대리인선임신고서 ──
+    // 아래 좌표는 forms/page.tsx의 FORM_FIELDS["AGENT_APPOINTMENT"]에서 복사
+    // STEP 사전 작업에서 확인한 실제 좌표값으로 교체할 것
+
+    const agentFields: Record<string, { x: number; y: number }> = {}
+    // TODO: forms/page.tsx FORM_FIELDS["AGENT_APPOINTMENT"] 읽어서 아래처럼 채울 것
+    // 예시:
+    // agentFields["name"] = { x: 150, y: 210 }
+    // agentFields["birthDate"] = { x: 280, y: 210 }
+    // ... 나머지 필드
+
+    const agentData: Record<string, string> = {
+      name: patient?.name ?? '',
+      birthDate,
+      address: patient?.address ?? '',
+      phone: patient?.phone ?? '',
+      mgrName: objCase.manager?.name ?? '',
+      todayYear,
+      todayMonth,
+      todayDay,
+      ptName: patient?.name ?? '',
+      // mgrBranch, mgrLicense, mgrJobTitle, mgrAddress, mgrHP, mgrTel, mgrFax, scope, kwc, caseTitle
+      // → 법인 고정값. forms/page.tsx에서 기본값 확인 후 하드코딩 또는 빈 값 처리
+    }
+
+    for (const [key, coords] of Object.entries(agentFields)) {
+      if (agentData[key] !== undefined) {
+        drawText(agentData[key], coords.x, coords.y)
+      }
+    }
+  } else {
+    // ── 위임장 ──
+    // 아래 좌표는 forms/page.tsx의 FORM_FIELDS["POWER_OF_ATTORNEY"]에서 복사
+
+    const proxyFields: Record<string, { x: number; y: number }> = {}
+    // TODO: forms/page.tsx FORM_FIELDS["POWER_OF_ATTORNEY"] 읽어서 채울 것
+
+    const proxyData: Record<string, string> = {
+      name: patient?.name ?? '',
+      ssn: ssnRaw,
+      address: patient?.address ?? '',
+      mgrName: objCase.manager?.name ?? '',
+      todayYear,
+      todayMonth,
+      todayDay,
+      // mgrBranch, mgrAddress, mgrTel, mgrFax, mgrLicense
+      // → 법인 고정값. forms/page.tsx에서 확인 후 하드코딩
+    }
+
+    for (const [key, coords] of Object.entries(proxyFields)) {
+      if (proxyData[key] !== undefined) {
+        drawText(proxyData[key], coords.x, coords.y)
+      }
+    }
+  }
+
+  const pdfBytes = await pdfDoc.save()
+  const fileName = formType === 'agent'
+    ? `대리인선임신고서_${patient?.name ?? ''}_${todayYear}${todayMonth}${todayDay}.pdf`
+    : `위임장_${patient?.name ?? ''}_${todayYear}${todayMonth}${todayDay}.pdf`
+
+  return new NextResponse(Buffer.from(pdfBytes), {
+    status: 200,
+    headers: {
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(fileName)}`,
+    },
+  })
+}
+```
+
+---
+
+## STEP 2: forms/page.tsx에서 좌표값 추출 후 STEP 1 채우기
+
+STEP 1 파일 생성 후, forms/page.tsx를 읽어서
+FORM_FIELDS["AGENT_APPOINTMENT"]와 FORM_FIELDS["POWER_OF_ATTORNEY"]의
+실제 x, y 좌표를 확인한다.
+
+확인한 좌표를 generate-form/route.ts의
+agentFields와 proxyFields 객체에 실제 값으로 채운다.
+
+예시:
+```typescript
+const agentFields: Record<string, { x: number; y: number }> = {
+  name:         { x: [실제x], y: [실제y] },
+  birthDate:    { x: [실제x], y: [실제y] },
+  address:      { x: [실제x], y: [실제y] },
+  phone:        { x: [실제x], y: [실제y] },
+  mgrName:      { x: [실제x], y: [실제y] },
+  todayYear:    { x: [실제x], y: [실제y] },
+  todayMonth:   { x: [실제x], y: [실제y] },
+  todayDay:     { x: [실제x], y: [실제y] },
+  ptName:       { x: [실제x], y: [실제y] },
+}
+```
+
+법인 고정값 필드(mgrBranch, mgrLicense, mgrJobTitle, mgrAddress,
+mgrHP, mgrTel, mgrFax, scope, kwc, caseTitle)는
+현재 forms/page.tsx에 기본값이 있으면 그 값을 하드코딩,
+없으면 빈 문자열로 처리.
+
+---
+
+## STEP 3: /objection/document/page.tsx — handleGenerate에 agent/proxy 분기 추가
+
+파일: app/objection/document/page.tsx
+기존 handleGenerate 함수를 찾아서, 아래 분기를 추가한다.
+(기존 reason/opinion 분기는 건드리지 말 것)
+
+기존 코드에서 selectedForm이 "reason"/"opinion"이 아닌 경우
+"준비 중" 처리하는 부분을 찾아서, agent/proxy만 아래로 교체:
+
+```typescript
+// 기존: else { toast("준비 중") }
+// 변경: agent/proxy는 실제 생성, 나머지만 준비 중
+
+if (selectedForm === 'agent' || selectedForm === 'proxy') {
+  try {
+    const res = await fetch(
+      `/api/objection/cases/${selectedCase.id}/generate-form`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ formType: selectedForm }),
+      }
+    )
+    if (!res.ok) {
+      // 기존 toast 방식 사용
+      alert('PDF 생성 실패. 다시 시도해주세요.')
+      return
+    }
+    const blob = await res.blob()
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = selectedForm === 'agent'
+      ? `대리인선임신고서_${selectedCase.patientName}.pdf`
+      : `위임장_${selectedCase.patientName}.pdf`
+    a.click()
+    URL.revokeObjectURL(url)
+  } catch (e) {
+    alert('PDF 생성 중 오류가 발생했습니다.')
+  }
+}
+// cover, id, attachment는 기존 준비 중 처리 유지
+```
+
+---
+
+## STEP 4: Patient 조회 방식 보완 (동명이인 대비)
+
+STEP 1의 Patient 조회가 patientName 기반이라 동명이인 위험이 있다.
+ObjectionCase에서 Case를 통해 Patient를 조회하는 방식으로 보완.
+
+generate-form/route.ts에서 Patient 조회 부분을 아래로 교체:
+
+```typescript
+// patientName 직접 조회 대신 → ObjectionCase의 caseId를 통해 조회
+// ObjectionCase 스키마에 caseId FK가 있는지 먼저 확인 후 적용
+
+// caseId FK 있는 경우:
+const objCaseWithPatient = await prisma.objectionCase.findUnique({
+  where: { id },
+  include: {
+    manager: { select: { name: true } },
+    case: {
+      include: {
+        patient: {
+          select: { name: true, ssn: true, phone: true, address: true }
+        }
+      }
+    }
+  },
+})
+const patient = objCaseWithPatient?.case?.patient
+
+// caseId FK 없는 경우 (현재 스키마 확인 필요):
+// patientName 기반 조회 유지 (STEP 1 그대로)
+```
+
+ObjectionCase 스키마에 case 관계가 있는지 확인 후
+있으면 위 방식으로, 없으면 STEP 1 방식 유지.
+
+---
+
+## 완료 후 확인
+- [ ] /objection/document에서 사건 선택
+- [ ] "대리인선임신고서" 선택 → PDF 생성 버튼 → 파일 다운로드
+- [ ] "위임장" 선택 → PDF 생성 버튼 → 파일 다운로드
+- [ ] PDF 내 재해자 이름, 주소, 연락처, 담당 노무사명 정상 출력
+- [ ] 생년월일이 주민번호에서 올바르게 파싱됨
