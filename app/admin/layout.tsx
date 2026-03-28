@@ -26,6 +26,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           <NavTab href="/admin/accounts" label="계정 관리" />
           <NavTab href="/admin/notices" label="공지사항 관리" />
           <NavTab href="/admin/import" label="데이터 임포트" />
+          <NavTab href="/admin/contacts" label="전화번호부" />
         </div>
       </div>
 

@@ -5,9 +5,7 @@ import RegulationsTab from './_components/RegulationsTab'
 import MinutesTab from './_components/MinutesTab'
 import PerformanceTab from './_components/PerformanceTab'
 import EvaluationTab from './_components/EvaluationTab'
-import ContactsTab from './_components/ContactsTab'
-
-type Tab = "REGULATIONS" | "MINUTES" | "SETTLEMENT" | "EVALUATION" | "CONTACTS";
+type Tab = "REGULATIONS" | "MINUTES" | "SETTLEMENT" | "EVALUATION";
 
 export default function BranchManagementPage() {
   const [tab, setTab] = useState<Tab>("REGULATIONS");
@@ -19,7 +17,7 @@ export default function BranchManagementPage() {
 
       {/* 탭 */}
       <div style={s.tabRow}>
-        {([["REGULATIONS", "운영규정·취업규칙"], ["MINUTES", "회의록"], ["SETTLEMENT", "법인 실적 관리"], ["EVALUATION", "인사평가"], ["CONTACTS", "전화번호부"]] as [Tab, string][]).map(([key, label]) => (
+        {([["REGULATIONS", "운영규정·취업규칙"], ["MINUTES", "회의록"], ["SETTLEMENT", "법인 실적 관리"], ["EVALUATION", "인사평가"]] as [Tab, string][]).map(([key, label]) => (
           <button key={key} onClick={() => setTab(key)} style={{ ...s.tab, ...(tab === key ? s.tabActive : {}) }}>{label}</button>
         ))}
       </div>
@@ -28,7 +26,6 @@ export default function BranchManagementPage() {
       {tab === "MINUTES"     && <MinutesTab />}
       {tab === "SETTLEMENT"  && <PerformanceTab />}
       {tab === "EVALUATION"  && <EvaluationTab />}
-      {tab === "CONTACTS"    && <ContactsTab />}
     </div>
   );
 }

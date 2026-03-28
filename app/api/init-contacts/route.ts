@@ -1,10 +1,20 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 
+function getJobGrade(title: string): string {
+  const t = title || ''
+  if (/수석노무사|지사장|권역지사장|센터장|부센터장|부대표|대표|전무이사|이사/.test(t)) return '등기노무사'
+  if (/노무사/.test(t)) return '노무사'
+  if (/과장|선임과장|책임과장|차장|팀장/.test(t)) return '외근직'
+  if (/사원|주임|대리|선임매니저|책임매니저|파트장/.test(t)) return '내근직'
+  return '기타'
+}
+
 export async function GET() {
   try {
     // 테이블 생성
     await prisma.$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS "Contact" ("id" TEXT NOT NULL PRIMARY KEY, "firmType" TEXT NOT NULL, "firm" TEXT NOT NULL, "branch" TEXT NOT NULL, "name" TEXT NOT NULL, "title" TEXT NOT NULL DEFAULT '', "mobile" TEXT NOT NULL DEFAULT '', "officePhone" TEXT NOT NULL DEFAULT '', "email" TEXT NOT NULL DEFAULT '', "displayOrder" INTEGER NOT NULL DEFAULT 0, "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP)`)
+    await prisma.$executeRawUnsafe(`ALTER TABLE "Contact" ADD COLUMN IF NOT EXISTS "jobGrade" TEXT NOT NULL DEFAULT ''`)
     await prisma.$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS "IsanOffice" ("id" TEXT NOT NULL PRIMARY KEY, "name" TEXT NOT NULL, "tel" TEXT NOT NULL DEFAULT '', "fax" TEXT NOT NULL DEFAULT '', "address" TEXT NOT NULL DEFAULT '')`)
     await prisma.$executeRawUnsafe(`DELETE FROM "Contact"`)
     await prisma.$executeRawUnsafe(`DELETE FROM "IsanOffice"`)
@@ -50,6 +60,16 @@ export async function GET() {
     await prisma.$executeRawUnsafe(`INSERT INTO "IsanOffice" ("id","name","tel","fax","address") VALUES (gen_random_uuid()::text,'서울본사','02-6426-3108','02-6738-3108','서울특별시 송파구 송파대로 395'), (gen_random_uuid()::text,'법률센터','02-6426-3108','02-6738-3108','서울특별시 강서구 공항대로 227 마곡센트럴타워1차 201호'), (gen_random_uuid()::text,'4대보험센터','032-434-3108','032-435-3108','인천광역시 부평구 주부토로 236, 인천테크노밸리U1센터 C동 1502호'), (gen_random_uuid()::text,'노사관계연구원','02-6953-3108','02-2659-3108','서울특별시 강서구 공항대로 227 마곡센트럴타워1차 201호'), (gen_random_uuid()::text,'컨설팅센터','02-6426-3108','02-6738-3108','서울 강서구 공항대로 227 마곡센트럴 타워1차 201호'), (gen_random_uuid()::text,'산업안전보건센터','070-5180-4346','02-6341-3108','서울특별시 강서구 공항대로 227 마곡센트럴타워1차 317호'), (gen_random_uuid()::text,'산재보상센터','032-656-3108','032-657-3108','인천광역시 미추홀구 숙골로 87번길 16, 5층'), (gen_random_uuid()::text,'인천북부지사','032-561-3108','032-562-3108','인천광역시 서구 완정로 190, 으뜸빌딩 2층'), (gen_random_uuid()::text,'서울마곡지사','02-2658-3108','02-2659-3108','서울특별시 강서구 마곡중앙6로 42, 사이언스타 2층 207호'), (gen_random_uuid()::text,'김보람 과장','02-420-3108','','서울시 송파구 송파대로 395 1층'), (gen_random_uuid()::text,'서울지역본부','02-421-3108','02-422-3108','서울시 송파구 송파대로 395 2층 서울지역본부'), (gen_random_uuid()::text,'서울동부지사','02-418-3108','02-419-3108','서울시 송파구 송파대로 395 3층 서울동부지사'), (gen_random_uuid()::text,'암산재연구소','1551-5478
 02-424-3108','02-425-3108','서울시 송파구 송파대로 395 4층 암산재연구소'), (gen_random_uuid()::text,'대구달서지사','053-716-3108','053-752-3108','대구광역시 달서구 달구벌대로 1666 , 204호'), (gen_random_uuid()::text,'대구수성지사','053-792-3108','053-792-3107','대구광역시 수성구 달구벌대로 3181, 도갑빌딩 7층'), (gen_random_uuid()::text,'구미지사','054-451-3108','054-451-3107','경상북도 구미시 신시로10길 7-1, 2층'), (gen_random_uuid()::text,'경남지사','055-632-3108','055-632-3109','경상남도 거제시 계룡로5길11, 실로빌 1층'), (gen_random_uuid()::text,'김해지사','055-313-3108','055-313-3109','경상남도 김해시 분성로 208, 1층'), (gen_random_uuid()::text,'울산동부지사','052-232-3108','052-233-3109','울산광역시 동구 일산진6길 29 일산웨이브상가 1층 104, 105호'), (gen_random_uuid()::text,'울산남부지사','052-222-3108','052-222-3109','울산광역시 울주군 범서읍 울밀로 2862 인재빌딩 2층'), (gen_random_uuid()::text,'울산북부지사','052-282-3108','052-282-3109','울산광역시 북구 호계로 286, 1층 (해룡빌딩,좌측)'), (gen_random_uuid()::text,'포항지사','054-282-3108','054-282-3109','경상북도 포항시 남구 포스코대로 437 협력회관 3층'), (gen_random_uuid()::text,'동해지사','033-531-3108','033-531-3107','강원특별자치도 동해시 중앙로 208 3층'), (gen_random_uuid()::text,'강원지사','033-534-3108','033-534-3107','강원특별자치도 동해시 하평로10, 2층'), (gen_random_uuid()::text,'강릉지사','033-643-3108','033-647-3108
 033-646-3108','강원특별자치도 강릉시 경강로 2129, 1층'), (gen_random_uuid()::text,'의정부지사','031-847-3108','031-848-3108','경기도 의정부시 천보로 257, ACT빌딩 1층'), (gen_random_uuid()::text,'부산서부지사','051-231-3108','051-263-3108','부산광역시 사하구 다대로435, 2층'), (gen_random_uuid()::text,'부산북부지사','051-337-3108','051-333-3108','부산광역시 북구 만덕대로35, 성안빌딩 3층'), (gen_random_uuid()::text,'부산지역본부','051-254-3108','051-254-3109','부산광역시 중구 광복로 97번길 1, 5층'), (gen_random_uuid()::text,'전북지사','063-835-3108','063-835-3109','전라북도 익산시 무왕로 968 이산빌딩 4층'), (gen_random_uuid()::text,'전남지사','061-283-3108','061-283-3107','전라남도 목포시 영산로 626, 2층'), (gen_random_uuid()::text,'문경지사','054-554-3108','054-555-3108','경상북도 문경시 중앙로195, 2층 201호'), (gen_random_uuid()::text,'청주지사','043-271-3108','043-272-3108','충청북도 청주시 흥덕구 사직대로 29번길 4 , 3층'), (gen_random_uuid()::text,'원주지사','033-762-3108','033-763-3108','강원특별자치도 원주시 남원로656, 3층'), (gen_random_uuid()::text,'순천지사','061-726-3108','061-726-3104','전라남도 순천시 신월큰길 19, 인경빌딩 2층'), (gen_random_uuid()::text,'창원지사','055-297-3108','055-297-3109','경상남도 창원시 마산회원구 3·15대로 708, 1층'), (gen_random_uuid()::text,'평택지사','031-651-3108','031-654-3108','경기도 평택시 중앙로 66, 태현빌딩 5층'), (gen_random_uuid()::text,'양산지사','055-381-3108','055-381-3109','경상남도 양산시 강변로 442, 늘푸른빌딩 2층 203호'), (gen_random_uuid()::text,'제주지사','064-711-3108','064-712-3108','제주도 제주시 동광로 44, 1층'), (gen_random_uuid()::text,'수원지사','031-215-3108','031-216-3108','경기도 수원시 영통구 월드컵로 151, 2층'), (gen_random_uuid()::text,'광주지사','062-223-3108','062-223-3106','광주광역시 동구 백서로 137번길 1, 3층'), (gen_random_uuid()::text,'여수지사','061-681-3108','061-681-3106','전라남도 여수시 망마로 42 (학동, 장수빌딩) 401호'), (gen_random_uuid()::text,'용인지사','031-333-3108','031-334-3108','경기도 용인시 처인구 중부대로 1354, 1층'), (gen_random_uuid()::text,'부천지사','032-322-3108','032-327-3108','경기도 부천시 원미구 부일로 204, 루치올라빌딩 7층 701호'), (gen_random_uuid()::text,'진주지사','055-747-3108','055-747-3109','경상남도 진주시 진주대로 1027, 2층'), (gen_random_uuid()::text,'충주지사','043-851-3108','043-852-3108','충청북도 충주시 중앙로 50'), (gen_random_uuid()::text,'전주지사','063-278-3108','063-278-3109','전북특별자치도 전주시 덕진구 안덕원로 148 메디컬빌딩 5층'), (gen_random_uuid()::text,'성남지사','031-751-3108','031-752-3108','경기도 성남시 중원구 둔촌대로 84, 모란프라임타워 304호'), (gen_random_uuid()::text,'마케팅팀','1670-5475','','인천광역시 미추홀구 숙골로 87번길 16. 403호')`)
+    // jobGrade 자동 분류 (title 기반)
+    await prisma.$executeRawUnsafe(`
+      UPDATE "Contact" SET "jobGrade" = CASE
+        WHEN "title" ~ '수석노무사|지사장|권역지사장|센터장|부센터장|부대표|대표|전무이사|이사' THEN '등기노무사'
+        WHEN "title" ~ '노무사' THEN '노무사'
+        WHEN "title" ~ '과장|차장|팀장' THEN '외근직'
+        WHEN "title" ~ '사원|주임|대리|선임매니저|책임매니저|파트장' THEN '내근직'
+        ELSE '기타'
+      END
+    `)
     const c = await prisma.contact.count()
     const o = await prisma.isanOffice.count()
     return NextResponse.json({ ok: true, contacts: c, offices: o })

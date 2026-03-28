@@ -911,6 +911,7 @@ model Contact {
   officePhone  String   @default("")
   email        String   @default("")
   displayOrder Int      @default(0)
+  jobGrade     String   @default("")  // 직군: 외근직 | 내근직 | 노무사 | 등기노무사 | 기타
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 }

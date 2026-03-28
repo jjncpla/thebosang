@@ -13,6 +13,7 @@ interface Contact {
   mobile: string
   officePhone: string
   email: string
+  jobGrade: string
 }
 interface IsanOffice {
   id: string; name: string; tel: string; fax: string; address: string
@@ -32,6 +33,7 @@ export default function ContactsTab() {
   const [offices, setOffices] = useState<IsanOffice[]>([])
   const [search, setSearch] = useState('')
   const [branchFilter, setBranchFilter] = useState('')
+  const [gradeFilter, setGradeFilter] = useState('')
   const [showOffices, setShowOffices] = useState(false)
   const [loading, setLoading] = useState(false)
   const [modalOpen, setModalOpen] = useState(false)
@@ -43,12 +45,13 @@ export default function ContactsTab() {
     const params = new URLSearchParams({ firmType: activeTab })
     if (search) params.set('search', search)
     if (branchFilter) params.set('branch', branchFilter)
+    if (gradeFilter) params.set('jobGrade', gradeFilter)
     const res = await fetch(`/api/contacts?${params}`)
     const data = await res.json()
     setContacts(data.contacts || [])
     setOffices(data.offices || [])
     setLoading(false)
-  }, [activeTab, search, branchFilter])
+  }, [activeTab, search, branchFilter, gradeFilter])
 
   useEffect(() => { fetchContacts() }, [fetchContacts])
 
@@ -110,6 +113,15 @@ export default function ContactsTab() {
           <option value="">전체 지사</option>
           {branches.map(b => <option key={b} value={b}>{b}</option>)}
         </select>
+        <select value={gradeFilter} onChange={e => setGradeFilter(e.target.value)}
+          style={{ padding: '7px 12px', border: '1px solid #cbd5e1', borderRadius: 6, fontSize: 13, outline: 'none' }}>
+          <option value="">전체 직군</option>
+          <option value="외근직">외근직</option>
+          <option value="내근직">내근직</option>
+          <option value="노무사">노무사</option>
+          <option value="등기노무사">등기노무사</option>
+          <option value="기타">기타</option>
+        </select>
         <span style={{ marginLeft: 'auto', color: '#64748b', fontSize: 13 }}>총 {contacts.length}명</span>
         {isAdmin && (
           <button onClick={openAdd}
@@ -130,6 +142,7 @@ export default function ContactsTab() {
                 <th style={th}>지사/소속</th>
                 <th style={th}>이름</th>
                 <th style={th}>직책</th>
+                <th style={th}>직군</th>
                 <th style={th}>핸드폰</th>
                 <th style={th}>{activeTab === 'TBOSANG' ? '사무실번호' : '직통번호'}</th>
                 {activeTab === 'ISAN' && <th style={th}>이메일</th>}
@@ -148,6 +161,15 @@ export default function ContactsTab() {
                   </td>
                   <td style={{ ...td(i), fontWeight: 600 }}>{c.name}</td>
                   <td style={{ ...td(i), color: '#475569' }}>{c.title || '-'}</td>
+                  <td style={td(i)}>
+                    <span style={{
+                      display: 'inline-block', padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600,
+                      backgroundColor: c.jobGrade === '외근직' ? '#fef3c7' : c.jobGrade === '내근직' ? '#f0f9ff' : c.jobGrade === '노무사' ? '#f0fdf4' : c.jobGrade === '등기노무사' ? '#fdf4ff' : '#f1f5f9',
+                      color: c.jobGrade === '외근직' ? '#92400e' : c.jobGrade === '내근직' ? '#0369a1' : c.jobGrade === '노무사' ? '#166534' : c.jobGrade === '등기노무사' ? '#7e22ce' : '#64748b',
+                    }}>
+                      {c.jobGrade || '미분류'}
+                    </span>
+                  </td>
                   <td style={td(i)}>
                     {c.mobile
                       ? <a href={`tel:${c.mobile}`} style={{ color: '#29ABE2', textDecoration: 'none', fontFamily: 'monospace' }}>{c.mobile}</a>
@@ -186,7 +208,7 @@ export default function ContactsTab() {
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead>
                   <tr>
-                    {['지사명', '전화번호', '팩스', '주소'].map(h => (
+                    {['지사명', '전화번호'].map(h => (
                       <th key={h} style={{ ...th, backgroundColor: '#006838' }}>{h}</th>
                     ))}
                   </tr>
@@ -198,8 +220,6 @@ export default function ContactsTab() {
                       <td style={td(i)}>
                         {o.tel ? <a href={`tel:${o.tel}`} style={{ color: '#29ABE2', textDecoration: 'none', fontFamily: 'monospace' }}>{o.tel}</a> : '-'}
                       </td>
-                      <td style={{ ...td(i), fontFamily: 'monospace', color: '#475569' }}>{o.fax || '-'}</td>
-                      <td style={{ ...td(i), color: '#475569', fontSize: 12 }}>{o.address || '-'}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -222,6 +242,7 @@ export default function ContactsTab() {
               { key: 'mobile', label: '핸드폰' },
               { key: 'officePhone', label: '사무실/직통번호' },
               { key: 'email', label: '이메일' },
+              { key: 'jobGrade', label: '직군', type: 'select', opts: [['외근직','외근직'],['내근직','내근직'],['노무사','노무사'],['등기노무사','등기노무사'],['기타','기타']] },
             ].map(({ key, label, type, opts }) => (
               <div key={key} style={{ marginBottom: 12 }}>
                 <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#475569', marginBottom: 4 }}>{label}</label>

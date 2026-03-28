@@ -22,9 +22,12 @@ export async function GET(request: Request) {
     return NextResponse.json({ branches })
   }
 
+  const jobGrade = searchParams.get('jobGrade') || ''
+
   const where: any = {}
   if (firmType) where.firmType = firmType
   if (branch) where.branch = branch
+  if (jobGrade) where.jobGrade = jobGrade
   if (search) {
     where.OR = [
       { name: { contains: search } },
