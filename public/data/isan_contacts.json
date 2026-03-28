@@ -1,0 +1,22 @@
+{
+  "employees": [
+    {
+      "id": 1,
+      "firm": "노무법인 이산",
+      "branch": "본사",
+      "name": "샘플직원",
+      "title": "노무사",
+      "mobile": "010-0000-0000",
+      "directPhone": "070-0000-0000",
+      "email": "sample@isan.co.kr"
+    }
+  ],
+  "offices": [
+    {
+      "name": "본사",
+      "tel": "02-0000-0000",
+      "fax": "02-0000-0001",
+      "address": "서울특별시"
+    }
+  ]
+}

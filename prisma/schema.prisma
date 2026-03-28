@@ -898,3 +898,26 @@ model StaffRoster {
 
   @@unique([branchName, staffName, startYear, startMonth])
 }
+
+model Contact {
+  id           String   @id @default(cuid())
+  firmType     String   // "TBOSANG" | "ISAN"
+  firm         String
+  branch       String
+  name         String
+  title        String   @default("")
+  mobile       String   @default("")
+  officePhone  String   @default("")
+  email        String   @default("")
+  displayOrder Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model IsanOffice {
+  id      String @id @default(cuid())
+  name    String
+  tel     String @default("")
+  fax     String @default("")
+  address String @default("")
+}
