@@ -1,0 +1,162 @@
+## 작업 개요
+TBSS(더보상 업무지원시스템)에 전화번호부(연락처) 페이지를 추가한다.
+더보상 법인 직원 286명 + 이산 법인 직원 359명의 연락처를 검색/조회할 수 있는 내부 페이지다.
+
+---
+
+## Step 1: JSON 데이터 파일 복사
+
+아래 두 JSON 파일이 이미 생성되어 있다. `C:\Users\jjakg\thebosang\public\data\` 폴더에 저장한다.
+(public/data 폴더가 없으면 생성)
+
+- 파일 경로: 아래 내용을 직접 파일로 작성해야 한다.
+- 주의: PowerShell에서 [System.IO.File]::WriteAllText() + UTF-8 인코딩 사용 필수
+
+### tbosang_contacts.json 및 isan_contacts.json
+이 파일들은 Claude.ai에서 생성한 파일을 Claude Code가 접근할 수 없으므로,
+아래 API route에서 데이터를 hardcode 하는 방식 대신
+`/data` 폴더에 이미 있는 kwc_offices.json 처럼 import 방식으로 처리한다.
+
+실제로는 Claude.ai에서 제공한 JSON 내용을 파일로 작성하는 작업이다.
+(별도 전달 예정)
+
+---
+
+## Step 2: API Route 생성
+
+파일: `app/api/contacts/route.ts`
+
+```typescript
+import { NextResponse } from 'next/server'
+import tbosangContacts from '@/public/data/tbosang_contacts.json'
+import isanContacts from '@/public/data/isan_contacts.json'
+
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url)
+  const firm = searchParams.get('firm') // 'tbosang' | 'isan' | null(전체)
+  const search = searchParams.get('search') || ''
+  const branch = searchParams.get('branch') || ''
+
+  let tbosang = tbosangContacts as TbosangEmployee[]
+  let isan = (isanContacts as IsanData).employees
+
+  // 검색 필터
+  if (search) {
+    tbosang = tbosang.filter(e =>
+      e.name.includes(search) || e.title.includes(search) || e.branch.includes(search)
+    )
+    isan = isan.filter(e =>
+      e.name.includes(search) || e.title.includes(search) || e.branch.includes(search)
+    )
+  }
+  if (branch) {
+    tbosang = tbosang.filter(e => e.branch === branch)
+    isan = isan.filter(e => e.branch === branch)
+  }
+
+  return NextResponse.json({
+    tbosang: firm === 'isan' ? [] : tbosang,
+    isan: firm === 'tbosang' ? [] : isan,
+    isanOffices: (isanContacts as IsanData).offices,
+  })
+}
+
+// 타입 정의
+interface TbosangEmployee {
+  firm: string
+  branch: string
+  name: string
+  title: string
+  mobile: string
+  officePhone: string
+}
+
+interface IsanEmployee {
+  id: number | null
+  firm: string
+  branch: string
+  name: string
+  title: string
+  mobile: string
+  directPhone: string
+  email: string
+}
+
+interface IsanData {
+  employees: IsanEmployee[]
+  offices: { name: string; tel: string; fax: string; address: string }[]
+}
+```
+
+---
+
+## Step 3: 전화번호부 페이지 생성
+
+파일: `app/(main)/contacts/page.tsx`
+
+### UI 구성
+
+```
+[전화번호부] 제목
+
+[탭: 노무법인 더보상 | 노무법인 이산]
+
+[검색창: 이름/직책/지사 검색]    [지사 필터 드롭다운]
+
+[테이블]
+```
+
+### 더보상 탭 테이블 컬럼
+| 지사 | 이름 | 직책 | 핸드폰 | 사무실(070) |
+
+### 이산 탭 테이블 컬럼
+| 소속 | 이름 | 직책 | 핸드폰 | 직통번호 | 이메일 |
+
+### 추가 기능
+- 이산 탭: 하단에 "지사 사무실 전화번호" 토글 섹션 (offices 데이터)
+- 핸드폰 번호 클릭 시 `tel:` 링크 (모바일 호환)
+- 페이지네이션 또는 가상스크롤 (데이터 많음)
+- 지사별 색깔 배지 (branch)
+
+### 스타일
+- 브랜드 컬러: 스카이블루 #29ABE2, 라임그린 #8DC63F, 딥그린 #006838
+- 기존 TBSS 스타일 따름 (기존 페이지 참고)
+- 테이블 헤더 배경: #29ABE2, 홀수행 배경: #f8fafc
+
+---
+
+## Step 4: 사이드바 메뉴 추가
+
+파일: `components/layout/Sidebar.tsx` (또는 실제 사이드바 파일 확인 후 수정)
+
+기존 메뉴 항목들 중 적절한 위치에 추가:
+```typescript
+{
+  href: '/contacts',
+  label: '전화번호부',
+  icon: '📞',  // 또는 PhoneIcon
+}
+```
+
+---
+
+## 주의사항
+
+1. JSON import 시 TypeScript tsconfig에 `resolveJsonModule: true` 필요 (이미 있을 가능성 높음)
+2. `public/data/` 폴더 내 JSON은 Next.js에서 import 가능
+3. 더보상 JSON: 배열 형태 (TbosangEmployee[])
+4. 이산 JSON: 객체 형태 { employees: [...], offices: [...] }
+5. 수술적 수정 원칙: 기존 파일 최소한으로만 수정
+6. 새 파일만 추가하는 방식으로 최대한 처리
+7. DB 연동 없이 로컬 JSON 파일 기반으로 동작 (별도 Prisma 모델 불필요)
+
+---
+
+## 실행 순서
+
+1. public/data/tbosang_contacts.json 파일 작성 (JSON 내용은 Claude.ai에서 전달)
+2. public/data/isan_contacts.json 파일 작성
+3. app/api/contacts/route.ts 생성
+4. app/(main)/contacts/page.tsx 생성
+5. 사이드바에 메뉴 추가
+6. Railway 자동 배포 후 확인
