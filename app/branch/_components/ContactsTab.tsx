@@ -120,6 +120,7 @@ export default function ContactsTab() {
           <option value="내근직">내근직</option>
           <option value="노무사">노무사</option>
           <option value="등기노무사">등기노무사</option>
+          <option value="변호사">변호사</option>
           <option value="기타">기타</option>
         </select>
         <span style={{ marginLeft: 'auto', color: '#64748b', fontSize: 13 }}>총 {contacts.length}명</span>
@@ -162,13 +163,16 @@ export default function ContactsTab() {
                   <td style={{ ...td(i), fontWeight: 600 }}>{c.name}</td>
                   <td style={{ ...td(i), color: '#475569' }}>{c.title || '-'}</td>
                   <td style={td(i)}>
-                    <span style={{
-                      display: 'inline-block', padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600,
-                      backgroundColor: c.jobGrade === '외근직' ? '#fef3c7' : c.jobGrade === '내근직' ? '#f0f9ff' : c.jobGrade === '노무사' ? '#f0fdf4' : c.jobGrade === '등기노무사' ? '#fdf4ff' : '#f1f5f9',
-                      color: c.jobGrade === '외근직' ? '#92400e' : c.jobGrade === '내근직' ? '#0369a1' : c.jobGrade === '노무사' ? '#166534' : c.jobGrade === '등기노무사' ? '#7e22ce' : '#64748b',
-                    }}>
-                      {c.jobGrade || '미분류'}
-                    </span>
+                    {(() => {
+                      const g = c.jobGrade || '기타'
+                      const s = g === '외근직' ? { bg: '#fef3c7', c: '#92400e' }
+                        : g === '내근직' ? { bg: '#f0f9ff', c: '#0369a1' }
+                        : g === '노무사' ? { bg: '#f0fdf4', c: '#166534' }
+                        : g === '등기노무사' ? { bg: '#fdf4ff', c: '#7e22ce' }
+                        : g === '변호사' ? { bg: '#fff1f2', c: '#be123c' }
+                        : { bg: '#f1f5f9', c: '#334155' }
+                      return <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: 12, fontSize: 11, fontWeight: 600, backgroundColor: s.bg, color: s.c }}>{g}</span>
+                    })()}
                   </td>
                   <td style={td(i)}>
                     {c.mobile
@@ -242,7 +246,7 @@ export default function ContactsTab() {
               { key: 'mobile', label: '핸드폰' },
               { key: 'officePhone', label: '사무실/직통번호' },
               { key: 'email', label: '이메일' },
-              { key: 'jobGrade', label: '직군', type: 'select', opts: [['외근직','외근직'],['내근직','내근직'],['노무사','노무사'],['등기노무사','등기노무사'],['기타','기타']] },
+              { key: 'jobGrade', label: '직군', type: 'select', opts: [['외근직','외근직'],['내근직','내근직'],['노무사','노무사'],['등기노무사','등기노무사'],['변호사','변호사'],['기타','기타']] },
             ].map(({ key, label, type, opts }) => (
               <div key={key} style={{ marginBottom: 12 }}>
                 <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#475569', marginBottom: 4 }}>{label}</label>
