@@ -1,6 +1,7 @@
 generator auth_client {
-  provider = "prisma-client-js"
-  output   = "../lib/generated/auth-client"
+  provider      = "prisma-client-js"
+  output        = "../lib/generated/auth-client"
+  binaryTargets = ["native", "debian-openssl-3.0.x"]
 }
 
 datasource db_auth {
