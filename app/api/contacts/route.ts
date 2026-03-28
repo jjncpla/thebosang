@@ -7,6 +7,20 @@ export async function GET(request: Request) {
   const firmType = searchParams.get('firmType')
   const search = searchParams.get('search') || ''
   const branch = searchParams.get('branch') || ''
+  const type = searchParams.get('type')
+
+  // 지사 목록만 요청
+  if (type === 'branches') {
+    const contacts = await prisma.contact.findMany({
+      select: { branch: true, firmType: true, officePhone: true },
+      where: firmType ? { firmType } : {},
+      orderBy: { branch: 'asc' },
+    })
+    const branches = Array.from(
+      new Map(contacts.map(c => [c.branch, c])).values()
+    ).filter(c => c.branch)
+    return NextResponse.json({ branches })
+  }
 
   const where: any = {}
   if (firmType) where.firmType = firmType
@@ -23,6 +37,7 @@ export async function GET(request: Request) {
   const contacts = await prisma.contact.findMany({
     where,
     orderBy: [{ firmType: 'asc' }, { displayOrder: 'asc' }],
+    take: 50,
   })
   const offices = firmType === 'ISAN' || !firmType
     ? await prisma.isanOffice.findMany({ orderBy: { name: 'asc' } })

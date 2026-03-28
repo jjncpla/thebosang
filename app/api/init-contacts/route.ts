@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 
 export async function GET() {
   try {
+    // 테이블 생성
     await prisma.$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS "Contact" ("id" TEXT NOT NULL PRIMARY KEY, "firmType" TEXT NOT NULL, "firm" TEXT NOT NULL, "branch" TEXT NOT NULL, "name" TEXT NOT NULL, "title" TEXT NOT NULL DEFAULT '', "mobile" TEXT NOT NULL DEFAULT '', "officePhone" TEXT NOT NULL DEFAULT '', "email" TEXT NOT NULL DEFAULT '', "displayOrder" INTEGER NOT NULL DEFAULT 0, "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP, "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP)`)
     await prisma.$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS "IsanOffice" ("id" TEXT NOT NULL PRIMARY KEY, "name" TEXT NOT NULL, "tel" TEXT NOT NULL DEFAULT '', "fax" TEXT NOT NULL DEFAULT '', "address" TEXT NOT NULL DEFAULT '')`)
     await prisma.$executeRawUnsafe(`DELETE FROM "Contact"`)

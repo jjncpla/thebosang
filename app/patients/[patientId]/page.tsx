@@ -3,6 +3,8 @@
 import React, { useEffect, useState, useCallback, Suspense } from "react";
 import { useRouter, useParams, useSearchParams } from "next/navigation";
 import { CASE_TYPE_LABELS, DISPOSAL_TYPE, GRADE_TYPE, STATUS_BY_CASE_TYPE, HEARING_LOSS_STATUS, CASE_STATUS_LABELS } from "@/lib/constants/case";
+import ContactSelector from "@/components/ui/ContactSelector";
+import BranchSelector from "@/components/ui/BranchSelector";
 import { OCC_DISEASE_COMMITTEES } from "@/constants/occDiseaseCommittees";
 import firstVisitHospitalsData from "@/data/first_visit_hospitals.json";
 import specialHospitalsData from "@/data/special_hospitals.json";
@@ -1716,24 +1718,26 @@ function CaseCommonInfoSection({ caseItem, onUpdated }: { caseItem: CaseData; on
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
                 <label style={{ fontSize: 11, color: "#9ca3af" }}>영업담당자</label>
-                <select style={inputStyle} value={form.salesManager} onChange={(e) => setForm({ ...form, salesManager: e.target.value })}>
-                  <option value="">선택</option>
-                  {users.map((u) => <option key={u.id} value={u.name}>{u.name}</option>)}
-                </select>
+                <ContactSelector
+                  value={form.salesManager}
+                  onChange={(name, mobile) => setForm({ ...form, salesManager: name })}
+                  placeholder="영업담당자 이름 검색"
+                />
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
                 <label style={{ fontSize: 11, color: "#9ca3af" }}>실무담당자</label>
-                <select style={inputStyle} value={form.caseManager} onChange={(e) => setForm({ ...form, caseManager: e.target.value })}>
-                  <option value="">선택</option>
-                  {users.map((u) => <option key={u.id} value={u.name}>{u.name}</option>)}
-                </select>
+                <ContactSelector
+                  value={form.caseManager}
+                  onChange={(name, mobile) => setForm({ ...form, caseManager: name })}
+                  placeholder="실무담당자 이름 검색"
+                />
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
                 <label style={{ fontSize: 11, color: "#9ca3af" }}>지사</label>
-                <select style={inputStyle} value={form.branch} onChange={(e) => setForm({ ...form, branch: e.target.value })}>
-                  <option value="">선택</option>
-                  {["본사","울산지사","부산경남지사","서울북부지사","경기안산지사","전북익산지사","경북구미지사","경기의정부지사","강원동해지사","전남여수지사","대구지사","부산중부지사","경기수원지사"].map((b) => <option key={b} value={b}>{b}</option>)}
-                </select>
+                <BranchSelector
+                  value={form.branch}
+                  onChange={(branch, officePhone) => setForm({ ...form, branch })}
+                />
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
                 <label style={{ fontSize: 11, color: "#9ca3af" }}>영업경로(대)</label>

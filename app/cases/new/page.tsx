@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { CASE_TYPE_LABELS } from "@/lib/constants/case";
 import { TF_BY_BRANCH, TF_TO_BRANCH } from "@/lib/constants/tf";
 import { ALL_STAFF } from "@/lib/constants/staff";
+import ContactSelector from "@/components/ui/ContactSelector";
 
 const S = { fontFamily: "'Malgun Gothic', 'Apple SD Gothic Neo', 'Segoe UI', sans-serif" };
 
@@ -341,38 +342,18 @@ export default function NewCasePage() {
                 </div>
               </LabelInput>
               <LabelInput label="영업담당자">
-                <>
-                  <input
-                    type="text"
-                    list="staff-list"
-                    placeholder="이름 검색 또는 선택..."
-                    value={caseForm.salesManager}
-                    onChange={(e) => setCaseForm({ ...caseForm, salesManager: e.target.value })}
-                    style={inputStyle}
-                  />
-                  <datalist id="staff-list">
-                    {ALL_STAFF.map((name) => (
-                      <option key={name} value={name} />
-                    ))}
-                  </datalist>
-                </>
+                <ContactSelector
+                  value={caseForm.salesManager}
+                  onChange={(name, mobile) => setCaseForm({ ...caseForm, salesManager: name })}
+                  placeholder="영업담당자 이름 검색"
+                />
               </LabelInput>
               <LabelInput label="실무담당자">
-                <>
-                  <input
-                    type="text"
-                    list="staff-list-2"
-                    placeholder="이름 검색 또는 선택..."
-                    value={caseForm.caseManager}
-                    onChange={(e) => setCaseForm({ ...caseForm, caseManager: e.target.value })}
-                    style={inputStyle}
-                  />
-                  <datalist id="staff-list-2">
-                    {ALL_STAFF.map((name) => (
-                      <option key={name} value={name} />
-                    ))}
-                  </datalist>
-                </>
+                <ContactSelector
+                  value={caseForm.caseManager}
+                  onChange={(name, mobile) => setCaseForm({ ...caseForm, caseManager: name })}
+                  placeholder="실무담당자 이름 검색"
+                />
               </LabelInput>
               <LabelInput label="영업경로">
                 <select style={inputStyle} value={caseForm.salesRoute} onChange={(e) => setCaseForm({ ...caseForm, salesRoute: e.target.value })}>

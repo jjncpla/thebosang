@@ -3,6 +3,8 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { CASE_TYPE_LABELS, DISPOSAL_TYPE, GRADE_TYPE, STATUS_BY_CASE_TYPE, CASE_STATUS_LABELS } from "@/lib/constants/case";
+import ContactSelector from "@/components/ui/ContactSelector";
+import BranchSelector from "@/components/ui/BranchSelector";
 import { OCC_DISEASE_COMMITTEES } from "@/constants/occDiseaseCommittees";
 
 const S = { fontFamily: "'Malgun Gothic', 'Apple SD Gothic Neo', 'Segoe UI', sans-serif" };
@@ -1579,7 +1581,7 @@ function BasicInfoTab({ caseData, onUpdated }: { caseData: CaseData; onUpdated: 
           </select>
         </div>
         {([
-          ["사건번호", "caseNumber"], ["TF명", "tfName"], ["영업담당자", "salesManager"], ["실무담당자", "caseManager"],
+          ["사건번호", "caseNumber"], ["TF명", "tfName"],
           ["지사장", "branchManager"], ["부지사", "subAgent"],
         ] as [string, keyof typeof form][]).map(([label, key]) => (
           <div key={key} style={{ display: "flex", flexDirection: "column", gap: 3 }}>
@@ -1588,11 +1590,27 @@ function BasicInfoTab({ caseData, onUpdated }: { caseData: CaseData; onUpdated: 
           </div>
         ))}
         <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+          <label style={{ fontSize: 12, color: "#6b7280" }}>영업담당자</label>
+          <ContactSelector
+            value={form.salesManager}
+            onChange={(name, mobile) => setForm({ ...form, salesManager: name })}
+            placeholder="영업담당자 이름 검색"
+          />
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+          <label style={{ fontSize: 12, color: "#6b7280" }}>실무담당자</label>
+          <ContactSelector
+            value={form.caseManager}
+            onChange={(name, mobile) => setForm({ ...form, caseManager: name })}
+            placeholder="실무담당자 이름 검색"
+          />
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
           <label style={{ fontSize: 12, color: "#6b7280" }}>지사</label>
-          <select style={inputStyle} value={form.branch} onChange={(e) => setForm({ ...form, branch: e.target.value })}>
-            <option value="">선택</option>
-            {BRANCHES.map((b) => <option key={b} value={b}>{b}</option>)}
-          </select>
+          <BranchSelector
+            value={form.branch}
+            onChange={(branch, officePhone) => setForm({ ...form, branch })}
+          />
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
           <label style={{ fontSize: 12, color: "#6b7280" }}>영업경로</label>
