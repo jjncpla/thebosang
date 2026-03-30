@@ -59,7 +59,10 @@
       "Bash(mkdir -p \"C:/Users/jjakg/thebosang/app/api/objection/cases/[id]/generate-reason\")",
       "Bash(grep:*)",
       "Bash(git check-ignore:*)",
-      "Bash(export DATABASE_URL=\"postgresql://postgres:SRLSqrRWpIAywlMHYSmdMZANmiESHQZf@caboose.proxy.rlwy.net:18869/railway\")"
+      "Bash(export DATABASE_URL=\"postgresql://postgres:SRLSqrRWpIAywlMHYSmdMZANmiESHQZf@caboose.proxy.rlwy.net:18869/railway\")",
+      "Bash(git -C /c/Users/jjakg/thebosang add -A)",
+      "Bash(git -C:*)",
+      "Bash(git -C /c/Users/jjakg/thebosang push origin main)"
     ]
   },
   "enableAllProjectMcpServers": true,
