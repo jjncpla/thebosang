@@ -6,22 +6,26 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ ok: false, message: "nasUrl 파라미터가 필요합니다." });
   }
 
+  const account = process.env.NAS_ACCOUNT;
+  const password = process.env.NAS_PASSWORD;
+  if (!account || !password) {
+    return NextResponse.json({ ok: false, message: "NAS_ACCOUNT / NAS_PASSWORD 환경변수가 설정되지 않았습니다." });
+  }
+
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 10000);
 
-    const res = await fetch(nasUrl, {
-      method: "HEAD",
-      signal: controller.signal,
-      // Synology NAS uses self-signed certs
-      // @ts-expect-error Node.js fetch option
-      rejectUnauthorized: false,
-    });
+    const url = `${nasUrl}/webapi/auth.cgi?api=SYNO.API.Auth&version=3&method=login&account=${encodeURIComponent(account)}&passwd=${encodeURIComponent(password)}&format=json`;
+    const res = await fetch(url, { signal: controller.signal });
     clearTimeout(timeout);
 
+    const data = await res.json();
+    const ok = data?.success === true;
+
     return NextResponse.json({
-      ok: res.ok || res.status === 401 || res.status === 403,
-      message: res.ok ? "연결 성공" : `응답 코드: ${res.status}`,
+      ok,
+      message: ok ? "연결 성공" : "로그인 실패 — 계정 정보를 확인하세요.",
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "연결 실패";
