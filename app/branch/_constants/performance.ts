@@ -9,7 +9,6 @@ export const CASE_TYPES = [
   { id: 'cerebrovascular',    label: '뇌심혈관계' },
   { id: 'occupationalCancer', label: '직업성암' },
   { id: 'accident',           label: '사고/출퇴근' },
-  { id: 'project',            label: '프로젝트' },
   { id: 'other',              label: '기타' },
 ] as const
 

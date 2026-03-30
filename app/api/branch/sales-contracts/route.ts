@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
   if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await req.json()
-  const { branchName, staffName, year, month, ...counts } = body
+  const { branchName, staffName, year, month, project: _project, ...counts } = body
 
   const record = await prisma.salesContract.upsert({
     where: { staffName_year_month: { staffName, year, month } },

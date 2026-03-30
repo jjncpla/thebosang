@@ -495,6 +495,7 @@ model User {
   officeTel     String?   // 사무실 전화
   officeFax     String?   // 팩스
   branchName    String?   // 지사/상호 (예: "울산지사")
+  regionName    String?   // 담당 권역 (SENIOR_MANAGER 전용): "전라권역" | "대구경북권역" | "부울경남권역" | "수도권역"
   department    String?   // 부서
   jobTitle      String?   // 직책
 
@@ -850,7 +851,6 @@ model SalesContract {
   cerebrovascular    Float    @default(0)
   occupationalCancer Float    @default(0)
   accident           Float    @default(0)
-  project            Float    @default(0)
   other              Float    @default(0)
   memo               String?
   createdAt          DateTime @default(now())
@@ -872,6 +872,9 @@ model SettlementRecord {
   settlementStaffName String?
   grossAmount         Int
   deduction           Int                    @default(0)
+  isInstallment           Boolean  @default(false)
+  totalInstallmentAmount  Int      @default(0)
+  paidInstallmentAmount   Int      @default(0)
   memo                String?
   allocations         SettlementAllocation[]
   createdAt           DateTime               @default(now())

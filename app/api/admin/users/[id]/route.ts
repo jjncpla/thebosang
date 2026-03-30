@@ -14,7 +14,7 @@ export async function GET(_: NextRequest, { params }: { params: Promise<{ id: st
   const { id } = await params;
   const mainUser = await prisma.user.findUnique({
     where: { id },
-    select: { licenseNo: true, birthDate: true, officeAddress: true, officeTel: true, officeFax: true, branchName: true, department: true, jobTitle: true },
+    select: { licenseNo: true, birthDate: true, officeAddress: true, officeTel: true, officeFax: true, branchName: true, regionName: true, department: true, jobTitle: true },
   });
   return NextResponse.json(mainUser ?? {});
 }
@@ -23,7 +23,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (!await requireAdmin()) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const { id } = await params;
   const body = await req.json();
-  const { role, licenseNo, birthDate, officeAddress, officeTel, officeFax, branchName, department, jobTitle } = body;
+  const { role, licenseNo, birthDate, officeAddress, officeTel, officeFax, branchName, regionName, department, jobTitle } = body;
 
   // auth DB: role 업데이트
   if (role !== undefined) {
@@ -31,7 +31,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   }
 
   // main DB: 노무사 전문 정보 업데이트 (upsert — main DB에 없을 수도 있음)
-  const professionalFields = { licenseNo, birthDate, officeAddress, officeTel, officeFax, branchName, department, jobTitle };
+  const professionalFields = { licenseNo, birthDate, officeAddress, officeTel, officeFax, branchName, regionName, department, jobTitle };
   const hasProfessional = Object.values(professionalFields).some((v) => v !== undefined);
   if (hasProfessional) {
     const authUser = await authPrisma.user.findUnique({ where: { id }, select: { email: true, name: true, role: true } });

@@ -31,6 +31,9 @@ interface SettlementRow {
   settlementStaffName: string
   grossAmount: number
   deduction: number
+  isInstallment?: boolean
+  totalInstallmentAmount?: number
+  paidInstallmentAmount?: number
   memo: string
   allocations: AllocationRow[]
 }
@@ -89,6 +92,7 @@ export default function PerformanceTab() {
   // ══════════════════════════════════════════════════════════
   const [roster, setRoster]       = useState<StaffRosterItem[]>([])
   const [salesData, setSalesData] = useState<Record<string, Record<string, number>>>({})
+  const [salesIds, setSalesIds]   = useState<Record<string, string>>({})
   const [salesDirty, setSalesDirty]   = useState(false)
   const [salesSaving, setSalesSaving] = useState(false)
 
@@ -127,15 +131,18 @@ export default function PerformanceTab() {
     else if (month) qs.set('month', String(month))
     const sRes = await fetch(`/api/branch/sales-contracts?${qs}`)
     if (sRes.ok) {
-      const rows: { staffName: string; month: number; [k: string]: unknown }[] = await sRes.json()
+      const rows: { id: string; staffName: string; month: number; [k: string]: unknown }[] = await sRes.json()
       const map: Record<string, Record<string, number>> = {}
+      const idMap: Record<string, string> = {}
       for (const r of rows) {
         if (!map[r.staffName]) map[r.staffName] = {}
         for (const ct of CASE_TYPES) {
           map[r.staffName][`${ct.id}_${r.month}`] = (r[ct.id] as number) || 0
         }
+        idMap[`${r.staffName}_${r.month}`] = r.id
       }
       setSalesData(map)
+      setSalesIds(idMap)
     }
     setSalesDirty(false)
   }, [year, quarter, month, branch])
@@ -189,6 +196,22 @@ export default function PerformanceTab() {
     } finally {
       setSalesSaving(false)
     }
+  }
+
+  async function handleDeleteContract(id: string, name: string) {
+    if (!confirm(`${name} 항목을 삭제하시겠습니까?`)) return
+    await fetch(`/api/branch/sales-contracts/${id}`, { method: 'DELETE' })
+    await loadSales()
+  }
+
+  async function handleDeleteBranchContracts() {
+    if (!confirm(`${branch}의 ${year}년 전체 약정 데이터를 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.`)) return
+    await fetch('/api/branch/sales-contracts/bulk-delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ branchName: branch, year })
+    })
+    await loadSales()
   }
 
   async function handleAddStaff() {
@@ -471,7 +494,7 @@ export default function PerformanceTab() {
       {subTab === 'sales' && (
         <div className="space-y-4">
 
-          {/* 직원 추가/저장 버튼 */}
+          {/* 직원 추가/저장/삭제 버튼 */}
           <div className="flex items-center gap-2">
             <button
               onClick={() => setShowAddStaff(true)}
@@ -489,6 +512,12 @@ export default function PerformanceTab() {
               }`}
             >
               {salesSaving ? '저장 중...' : salesDirty ? '변경사항 저장' : '저장됨'}
+            </button>
+            <button
+              onClick={handleDeleteBranchContracts}
+              className="px-3 py-1.5 text-xs border border-red-200 text-red-600 rounded hover:bg-red-50"
+            >
+              지사 전체 삭제
             </button>
           </div>
 
@@ -644,11 +673,20 @@ export default function PerformanceTab() {
                               {staffMonthTotal(r.staffName, m) || 0}
                             </td>
                             <td className={cellCls}>
-                              <button
-                                onClick={() => { setRemovingStaff(r.id); setRemoveFrom({ y: year, m }) }}
-                                className="text-gray-300 hover:text-red-400 text-xs"
-                                title="퇴사 처리"
-                              >✕</button>
+                              <div className="flex items-center gap-1">
+                                {salesIds[`${r.staffName}_${m}`] && (
+                                  <button
+                                    onClick={() => handleDeleteContract(salesIds[`${r.staffName}_${m}`], r.staffName)}
+                                    className="text-gray-300 hover:text-red-400 text-[10px]"
+                                    title="이 월 약정 삭제"
+                                  >삭제</button>
+                                )}
+                                <button
+                                  onClick={() => { setRemovingStaff(r.id); setRemoveFrom({ y: year, m }) }}
+                                  className="text-gray-300 hover:text-red-400 text-xs"
+                                  title="퇴사 처리"
+                                >✕</button>
+                              </div>
                             </td>
                           </tr>
                         ))}
@@ -790,7 +828,24 @@ export default function PerformanceTab() {
                   const net = netAmount(row.grossAmount) - (row.deduction || 0)
                   return (
                     <tr key={row.id ?? i} className="hover:bg-gray-50">
-                      <td className={`${cellCls} text-center text-gray-400`}>{i+1}</td>
+                      <td className={`${cellCls} text-center text-gray-400`}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 4, justifyContent: 'center' }}>
+                          <span>{i+1}</span>
+                          {row.isInstallment && (
+                            <span
+                              title={`누적납부: ${(row.paidInstallmentAmount ?? 0).toLocaleString()}원 / 총액: ${(row.totalInstallmentAmount ?? 0).toLocaleString()}원`}
+                              style={{
+                                display: 'inline-flex', alignItems: 'center', gap: 2,
+                                padding: '1px 5px', borderRadius: 10, fontSize: 10, fontWeight: 600,
+                                backgroundColor: '#fef3c7', color: '#92400e', cursor: 'default',
+                                border: '1px solid #fde68a', whiteSpace: 'nowrap',
+                              }}
+                            >
+                              분할 {(row.paidInstallmentAmount ?? 0).toLocaleString()}/{(row.totalInstallmentAmount ?? 0).toLocaleString()}
+                            </span>
+                          )}
+                        </div>
+                      </td>
                       <td className={cellCls}>{row.paymentDate?.slice(0,10)}</td>
                       <td className={`${cellCls} font-medium`}>{row.victimName}</td>
                       <td className={cellCls}>{row.caseType}</td>
@@ -846,6 +901,59 @@ export default function PerformanceTab() {
           </div>
 
           {/* 담당자별 집계 */}
+          {/* 분할납부 모니터링 */}
+          {(() => {
+            const installmentRecords = filteredSettlements.filter(r => r.isInstallment)
+            if (installmentRecords.length === 0) return null
+            const installmentByBranch = installmentRecords.reduce((acc, r) => {
+              const br = (r as SettlementRow & { branchName?: string }).branchName || branch
+              if (!acc[br]) acc[br] = { count: 0, totalPending: 0 }
+              acc[br].count++
+              acc[br].totalPending += ((r.totalInstallmentAmount || 0) - (r.paidInstallmentAmount || 0))
+              return acc
+            }, {} as Record<string, { count: number; totalPending: number }>)
+            return (
+              <div style={{ marginTop: 24, padding: 16, background: '#fffbeb', borderRadius: 8, border: '1px solid #fde68a' }}>
+                <h4 style={{ fontSize: 13, fontWeight: 700, color: '#92400e', marginBottom: 12 }}>
+                  분할납부 모니터링 ({installmentRecords.length}건)
+                </h4>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                  {Object.entries(installmentByBranch).map(([br, info]) => (
+                    <div key={br} style={{
+                      padding: '6px 12px', background: '#fff', borderRadius: 6,
+                      border: '1px solid #fde68a', fontSize: 12,
+                    }}>
+                      <span style={{ fontWeight: 600 }}>{br}</span>
+                      <span style={{ color: '#64748b', marginLeft: 6 }}>{info.count}건</span>
+                      <span style={{ color: '#dc2626', marginLeft: 6, fontWeight: 600 }}>
+                        잔액 {info.totalPending.toLocaleString()}원
+                      </span>
+                    </div>
+                  ))}
+                </div>
+                <div style={{ marginTop: 10 }}>
+                  {installmentRecords.map(r => (
+                    <div key={r.id} style={{
+                      display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                      padding: '4px 8px', fontSize: 12, borderBottom: '1px solid #fef3c7',
+                    }}>
+                      <span style={{ color: '#374151' }}>{r.victimName}</span>
+                      <span style={{ color: '#64748b' }}>
+                        {(r.paidInstallmentAmount ?? 0).toLocaleString()} /
+                        {(r.totalInstallmentAmount ?? 0).toLocaleString()}원
+                        {(r.totalInstallmentAmount || 0) > (r.paidInstallmentAmount || 0) && (
+                          <span style={{ color: '#dc2626', marginLeft: 4 }}>
+                            (잔액 {((r.totalInstallmentAmount || 0) - (r.paidInstallmentAmount || 0)).toLocaleString()}원)
+                          </span>
+                        )}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )
+          })()}
+
           {Object.keys(staffSummary).length > 0 && (
             <div>
               <h4 className="text-xs font-medium text-gray-500 mb-2">담당자별 집계</h4>
@@ -897,6 +1005,9 @@ function AddSettlementForm({
     caseType: '',
     tfName: '',
     salesStaffName: '',
+    isInstallment: false,
+    totalInstallmentAmount: 0,
+    paidInstallmentAmount: 0,
     settlementStaffName: '',
     grossAmount: 0,
     deduction: 0,
@@ -1036,6 +1147,34 @@ function AddSettlementForm({
             onChange={e => setForm(f => ({ ...f, deduction: parseInt(e.target.value) || 0 }))}
             className={`${inputCls} mt-0.5`} />
         </div>
+      </div>
+
+      {/* 분할납부 */}
+      <div>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
+          <input
+            type="checkbox"
+            checked={form.isInstallment}
+            onChange={e => setForm(f => ({ ...f, isInstallment: e.target.checked }))}
+          />
+          분할납부
+        </label>
+        {form.isInstallment && (
+          <div className="flex gap-2 mt-2">
+            <div className="flex-1">
+              <label className="text-xs text-gray-500">총 납부 예정액</label>
+              <input type="number" value={form.totalInstallmentAmount || ''}
+                onChange={e => setForm(f => ({ ...f, totalInstallmentAmount: parseInt(e.target.value) || 0 }))}
+                className={`${inputCls} mt-0.5`} />
+            </div>
+            <div className="flex-1">
+              <label className="text-xs text-gray-500">현재 누적 납부액</label>
+              <input type="number" value={form.paidInstallmentAmount || ''}
+                onChange={e => setForm(f => ({ ...f, paidInstallmentAmount: parseInt(e.target.value) || 0 }))}
+                className={`${inputCls} mt-0.5`} />
+            </div>
+          </div>
+        )}
       </div>
 
       {/* 인센티브 배분 */}

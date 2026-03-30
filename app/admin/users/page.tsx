@@ -10,9 +10,17 @@ type EditUser = {
   id: string; role: string;
   licenseNo: string; birthDate: string; officeAddress: string;
   officeTel: string; officeFax: string; branchName: string;
-  department: string; jobTitle: string;
+  regionName: string; department: string; jobTitle: string;
 };
-const ROLES = ["ADMIN", "STAFF", "READONLY"];
+const ROLES = ["ADMIN", "SENIOR_MANAGER", "SITE_MANAGER", "STAFF", "READONLY"];
+const ROLE_LABELS: Record<string, string> = {
+  ADMIN: "관리자",
+  SENIOR_MANAGER: "권역지사장",
+  SITE_MANAGER: "지사장",
+  STAFF: "직원",
+  READONLY: "이산계정",
+};
+const REGIONS = ["전라권역", "대구경북권역", "부울경남권역", "수도권역"];
 
 export default function AdminUsersPage() {
   const { data: session, status } = useSession();
@@ -23,7 +31,7 @@ export default function AdminUsersPage() {
   const [error,   setError]   = useState("");
 
   // 추가 폼 상태
-  const [form, setForm] = useState({ email: "", password: "", name: "", role: "READONLY" });
+  const [form, setForm] = useState({ email: "", password: "", name: "", role: "READONLY", regionName: "", branchName: "" });
   const [adding, setAdding] = useState(false);
 
   // 편집 상태
@@ -53,7 +61,7 @@ export default function AdminUsersPage() {
       body: JSON.stringify(form),
     });
     if (res.ok) {
-      setForm({ email: "", password: "", name: "", role: "READONLY" });
+      setForm({ email: "", password: "", name: "", role: "READONLY", regionName: "", branchName: "" });
       await fetchUsers();
     } else {
       const d = await res.json();
@@ -79,7 +87,7 @@ export default function AdminUsersPage() {
       licenseNo: prof.licenseNo ?? "", birthDate: prof.birthDate ?? "",
       officeAddress: prof.officeAddress ?? "", officeTel: prof.officeTel ?? "",
       officeFax: prof.officeFax ?? "", branchName: prof.branchName ?? "",
-      department: prof.department ?? "", jobTitle: prof.jobTitle ?? "",
+      regionName: prof.regionName ?? "", department: prof.department ?? "", jobTitle: prof.jobTitle ?? "",
     });
   }
 
@@ -121,9 +129,18 @@ export default function AdminUsersPage() {
           <input placeholder="이름" value={form.name} onChange={e => setForm(p => ({...p, name: e.target.value}))} style={s.inp} required />
           <input placeholder="이메일" type="email" value={form.email} onChange={e => setForm(p => ({...p, email: e.target.value}))} style={s.inp} required />
           <input placeholder="비밀번호" type="password" value={form.password} onChange={e => setForm(p => ({...p, password: e.target.value}))} style={s.inp} required />
-          <select value={form.role} onChange={e => setForm(p => ({...p, role: e.target.value}))} style={s.sel}>
-            {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
+          <select value={form.role} onChange={e => setForm(p => ({...p, role: e.target.value, regionName: "", branchName: e.target.value === "SENIOR_MANAGER" ? "" : p.branchName}))} style={s.sel}>
+            {ROLES.map(r => <option key={r} value={r}>{r} ({ROLE_LABELS[r]})</option>)}
           </select>
+          {form.role === "SENIOR_MANAGER" && (
+            <select value={form.regionName} onChange={e => setForm(p => ({...p, regionName: e.target.value}))} style={s.sel}>
+              <option value="">권역 선택</option>
+              {REGIONS.map(r => <option key={r} value={r}>{r}</option>)}
+            </select>
+          )}
+          {form.role === "SITE_MANAGER" && (
+            <input placeholder="지사명" value={form.branchName} onChange={e => setForm(p => ({...p, branchName: e.target.value}))} style={{...s.inp, maxWidth: 140}} />
+          )}
           <button type="submit" disabled={adding} style={s.addBtn}>{adding ? "추가 중…" : "추가"}</button>
         </div>
       </form>
@@ -136,10 +153,19 @@ export default function AdminUsersPage() {
 
             <div style={{ marginBottom: 12 }}>
               <label style={s.lbl}>권한</label>
-              <select value={editUser.role} onChange={(e) => setEditUser({ ...editUser, role: e.target.value })} style={s.inp}>
-                {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
+              <select value={editUser.role} onChange={(e) => setEditUser({ ...editUser, role: e.target.value, regionName: e.target.value === "SENIOR_MANAGER" ? editUser.regionName : "" })} style={s.inp}>
+                {ROLES.map(r => <option key={r} value={r}>{r} ({ROLE_LABELS[r]})</option>)}
               </select>
             </div>
+            {editUser.role === "SENIOR_MANAGER" && (
+              <div style={{ marginBottom: 12 }}>
+                <label style={s.lbl}>담당 권역</label>
+                <select value={editUser.regionName} onChange={(e) => setEditUser({ ...editUser, regionName: e.target.value })} style={s.inp}>
+                  <option value="">권역 선택</option>
+                  {REGIONS.map(r => <option key={r} value={r}>{r}</option>)}
+                </select>
+              </div>
+            )}
 
             <div style={{ borderTop: "1px solid #eee", paddingTop: 12, marginTop: 12 }}>
               <div style={{ fontWeight: "bold", fontSize: 13, marginBottom: 8, color: "#006838" }}>노무사 정보 (서식 자동생성용)</div>
@@ -210,7 +236,7 @@ export default function AdminUsersPage() {
                     style={s.roleSelect}
                     disabled={u.id === session?.user?.id}
                   >
-                    {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
+                    {ROLES.map(r => <option key={r} value={r}>{ROLE_LABELS[r] || r}</option>)}
                   </select>
                 </td>
                 <td style={s.td}>{new Date(u.createdAt).toLocaleDateString("ko-KR")}</td>
