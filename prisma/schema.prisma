@@ -904,6 +904,25 @@ model StaffRoster {
   @@unique([branchName, staffName, startYear, startMonth])
 }
 
+model WeeklyActivity {
+  id                 String   @id @default(cuid())
+  branchName         String
+  staffName          String
+  year               Int
+  month              Int
+  weekNumber         Int      // 1~6 (해당 월의 주차)
+  weekLabel          String   // 예: "25.04. 1주"
+  initialVisit       Int      @default(0)  // 초진
+  specialExam        Int      @default(0)  // 특진
+  docSupplementation Int      @default(0)  // 자료보완
+  submission         Int      @default(0)  // 접수
+  sales              Int      @default(0)  // 영업
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@unique([branchName, staffName, year, month, weekNumber])
+}
+
 model Contact {
   id           String   @id @default(cuid())
   firmType     String   // "TBOSANG" | "ISAN"
