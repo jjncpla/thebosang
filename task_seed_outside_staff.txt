@@ -1,0 +1,264 @@
+## 세션 타입: 기능 개발 세션
+## 작업 목표
+Contact 테이블의 외근직(jobGrade='외근직') 255명을 대상으로:
+1. StaffRoster 테이블에 지사별 일괄 삽입 (입사일 2024-01-01)
+2. User 계정 일괄 생성 (role: STAFF, 이름 이니셜 이메일, 초기 비밀번호 1234)
+
+---
+
+## 수술적 수정 원칙
+- 기존 데이터 건드리지 않음
+- 중복 체크 후 스킵 처리
+- 새 API 파일만 추가
+
+---
+
+## Step 0: 스키마 확인 (반드시 먼저 실행)
+
+```bash
+# User 모델 확인
+grep -A 20 "^model User" prisma/schema.prisma
+
+# StaffRoster 모델 확인
+grep -A 20 "^model StaffRoster" prisma/schema.prisma
+
+# 기존 User 수 확인
+npx ts-node --compiler-options '{"module":"CommonJS"}' -e "
+const { PrismaClient } = require('@prisma/client')
+const p = new PrismaClient()
+Promise.all([p.user.count(), p.staffRoster.count()]).then(([u,s]) => {
+  console.log('기존 User:', u, '/ StaffRoster:', s)
+  p.\$disconnect()
+})
+"
+```
+
+---
+
+## Step 1: seed-outside-staff API 생성
+
+파일: `app/api/seed-outside-staff/route.ts`
+
+이 API는 다음을 수행한다:
+1. Contact에서 외근직 전체 조회
+2. 이름 → 이니셜 이메일 생성 (충돌 시 숫자 suffix)
+3. bcryptjs로 비밀번호 '1234' 해시
+4. User 생성 (중복 이메일 스킵)
+5. StaffRoster 생성 (중복 이름+지사 스킵)
+
+```typescript
+import { NextResponse } from 'next/server'
+import { prisma } from '@/lib/prisma'
+import bcrypt from 'bcryptjs'
+
+// 한글 이름 → 3자리 이니셜 변환
+function nameToInitials(name: string): string {
+  const CHOSUNG = ['g','k','n','d','t','r','m','b','p','s','s','y','j','j','c','k','t','p','h']
+  let result = ''
+  for (const ch of name) {
+    const code = ch.charCodeAt(0)
+    if (code >= 0xAC00 && code <= 0xD7A3) {
+      const idx = Math.floor((code - 0xAC00) / (21 * 28))
+      result += CHOSUNG[idx] || ''
+    } else if (/[a-zA-Z]/.test(ch)) {
+      result += ch.toLowerCase()
+    }
+  }
+  return result.slice(0, 3)
+}
+
+export async function GET() {
+  try {
+    // 외근직 전체 조회
+    const contacts = await prisma.contact.findMany({
+      where: { jobGrade: '외근직' },
+      orderBy: [{ branch: 'asc' }, { displayOrder: 'asc' }],
+    })
+
+    // 비밀번호 해시 (bcryptjs 없으면 bcrypt 사용)
+    let hashedPw: string
+    try {
+      hashedPw = await bcrypt.hash('1234', 10)
+    } catch {
+      // bcryptjs가 없으면 아래 방식으로
+      const { hash } = await import('bcrypt' as any)
+      hashedPw = await hash('1234', 10)
+    }
+
+    // 이메일 중복 처리를 위한 카운터
+    const initialsCount: Record<string, number> = {}
+
+    // 기존 User 이메일 목록
+    const existingEmails = new Set(
+      (await prisma.user.findMany({ select: { email: true } })).map(u => u.email)
+    )
+
+    const results = {
+      userInserted: 0,
+      userSkipped: 0,
+      rosterInserted: 0,
+      rosterSkipped: 0,
+      accounts: [] as { name: string; email: string; branch: string }[],
+    }
+
+    for (const c of contacts) {
+      // 이니셜 이메일 생성
+      const base = nameToInitials(c.name)
+      if (!initialsCount[base]) initialsCount[base] = 0
+      initialsCount[base]++
+      const suffix = initialsCount[base] === 1 ? '' : String(initialsCount[base])
+      const email = `${base}${suffix}@thebosang.kr`
+
+      // User 생성
+      if (existingEmails.has(email)) {
+        results.userSkipped++
+      } else {
+        try {
+          // Step 0에서 확인한 User 모델 필드에 맞게 수정
+          await prisma.user.create({
+            data: {
+              email,
+              name: c.name,
+              password: hashedPw,
+              role: 'STAFF',
+              // 아래 필드는 User 스키마 확인 후 추가/제거
+              // branch: c.branch,
+            }
+          })
+          existingEmails.add(email)
+          results.userInserted++
+          results.accounts.push({ name: c.name, email, branch: c.branch })
+        } catch(e: any) {
+          console.error(`User 생성 실패 ${c.name}:`, e.message)
+          results.userSkipped++
+        }
+      }
+
+      // StaffRoster 생성 (스키마 확인 후 필드 수정)
+      try {
+        const existingRoster = await prisma.staffRoster.findFirst({
+          where: { name: c.name, branch: c.branch }
+        })
+        if (existingRoster) {
+          results.rosterSkipped++
+        } else {
+          await prisma.staffRoster.create({
+            data: {
+              name: c.name,
+              branch: c.branch,
+              title: c.title || '',
+              hireDate: new Date('2024-01-01T00:00:00.000Z'),
+              // 실제 StaffRoster 스키마 필드에 맞게 수정
+            }
+          })
+          results.rosterInserted++
+        }
+      } catch(e: any) {
+        console.error(`StaffRoster 생성 실패 ${c.name}:`, e.message)
+        results.rosterSkipped++
+      }
+    }
+
+    return NextResponse.json({ ok: true, ...results })
+  } catch(e: any) {
+    return NextResponse.json({ ok: false, error: e.message }, { status: 500 })
+  }
+}
+```
+
+**중요 — Step 0 결과에 따라 수정할 항목들:**
+
+1. **User 모델 필드**
+   - `password` 필드명 확인 (혹은 `hashedPassword`)
+   - `role` 필드의 타입 확인 (Enum이면 `role: Role.STAFF` 또는 `role: 'STAFF'`)
+   - `branch` 등 추가 필수 필드 있는지 확인
+
+2. **StaffRoster 모델 필드**
+   - `branch` 필드명 확인
+   - `hireDate` 필드명 확인 (`joinDate`, `startDate` 등)
+   - `title` 필드명 확인
+   - 필수 필드 추가 확인
+
+3. **bcrypt import**
+   - 프로젝트에 `bcryptjs` 또는 `bcrypt` 중 어느 것이 설치됐는지 확인:
+   ```bash
+   cat package.json | grep bcrypt
+   ```
+   - 확인 후 import 방식 수정
+
+---
+
+## Step 2: middleware에서 경로 제외
+
+middleware.ts에서 `/api/seed-outside-staff` 인증 제외 처리.
+
+---
+
+## Step 3: 배포 및 실행
+
+```bash
+git add -A
+git commit -m "feat: seed-outside-staff API - 외근직 계정 및 명부 일괄 생성"
+git push origin main
+```
+
+배포 완료 후:
+```
+https://thebosang-production.up.railway.app/api/seed-outside-staff
+```
+
+예상 결과:
+```json
+{
+  "ok": true,
+  "userInserted": 255,
+  "userSkipped": 0,
+  "rosterInserted": 255,
+  "rosterSkipped": 0,
+  "accounts": [
+    { "name": "이교은", "email": "ygy@thebosang.kr", "branch": "법무법인 더보상 (5층)" },
+    { "name": "임경영", "email": "ygy2@thebosang.kr", "branch": "..." },
+    ...
+  ]
+}
+```
+
+---
+
+## Step 4: 생성된 계정 목록 확인
+
+배포 후 결과의 `accounts` 배열을 저장해두면 직원들에게 계정 안내 시 활용 가능.
+
+---
+
+## Step 5: 사용 후 API 삭제
+
+```bash
+Remove-Item app/api/seed-outside-staff/route.ts -Force
+git add -A
+git commit -m "chore: remove seed-outside-staff API"
+git push origin main
+```
+
+---
+
+## 이니셜 충돌 처리 예시
+
+동명이인 또는 이니셜 동일한 경우 숫자 suffix 부여:
+- 이교은 → ygy@thebosang.kr
+- 임경영 → ygy2@thebosang.kr
+- 임관영 → ygy3@thebosang.kr
+- 이강욱 → ygy4@thebosang.kr
+- 이경원 → ygy5@thebosang.kr
+
+총 55개 이니셜에서 충돌 발생 (264명 중).
+
+---
+
+## 주의사항
+
+- bcryptjs 없으면 설치: `npm install bcryptjs @types/bcryptjs`
+- 기존 계정과 이메일 충돌 시 자동 스킵
+- StaffRoster 필드는 반드시 Step 0으로 실제 스키마 확인 후 수정
+- Role enum 타입이면 'STAFF' 문자열 대신 enum 값 사용
+- 생성된 accounts 목록은 결과 JSON에서 확인 가능 (직원 계정 안내용)

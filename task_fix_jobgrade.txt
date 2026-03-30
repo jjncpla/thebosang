@@ -1,0 +1,213 @@
+## 세션 타입: 버그픽스 세션
+## 작업 목표
+Contact 테이블의 jobGrade 필드가 전부 미분류 상태.
+title 값 기반으로 UPDATE SQL을 실행해 직군을 올바르게 분류한다.
+
+---
+
+## Step 1: fix-job-grade API 생성
+
+`app/api/fix-job-grade/route.ts` 파일을 새로 생성한다:
+
+```typescript
+import { NextResponse } from 'next/server'
+import { prisma } from '@/lib/prisma'
+
+export async function GET() {
+  try {
+    // 외근직: 과장, 선임과장, 책임과장, 차장, 팀장
+    const r1 = await prisma.contact.updateMany({
+      where: { title: { contains: '과장' } },
+      data: { jobGrade: '외근직' }
+    })
+    const r2 = await prisma.contact.updateMany({
+      where: { title: { contains: '차장' } },
+      data: { jobGrade: '외근직' }
+    })
+    const r3 = await prisma.contact.updateMany({
+      where: { title: { contains: '팀장' } },
+      data: { jobGrade: '외근직' }
+    })
+
+    // 내근직: 사원, 주임, 대리, 파트장, 매니저, 실장, 디자이너
+    const r4 = await prisma.contact.updateMany({
+      where: { title: { contains: '사원' } },
+      data: { jobGrade: '내근직' }
+    })
+    const r5 = await prisma.contact.updateMany({
+      where: { title: { contains: '주임' } },
+      data: { jobGrade: '내근직' }
+    })
+    const r6 = await prisma.contact.updateMany({
+      where: { title: { contains: '대리' } },
+      data: { jobGrade: '내근직' }
+    })
+    const r7 = await prisma.contact.updateMany({
+      where: { title: { contains: '파트장' } },
+      data: { jobGrade: '내근직' }
+    })
+    const r8 = await prisma.contact.updateMany({
+      where: { title: { contains: '매니저' } },
+      data: { jobGrade: '내근직' }
+    })
+    const r9 = await prisma.contact.updateMany({
+      where: { title: { contains: '실장' } },
+      data: { jobGrade: '내근직' }
+    })
+    const r10 = await prisma.contact.updateMany({
+      where: { title: { contains: '디자이너' } },
+      data: { jobGrade: '내근직' }
+    })
+
+    // 등기노무사: 수석노무사, 지사장, 권역지사장, 센터장, 부센터장, 부대표, 대표, 전무이사, 이사, 부문장, 연구원
+    const r11 = await prisma.contact.updateMany({
+      where: { title: { contains: '수석노무사' } },
+      data: { jobGrade: '등기노무사' }
+    })
+    const r12 = await prisma.contact.updateMany({
+      where: { title: { contains: '지사장' } },
+      data: { jobGrade: '등기노무사' }
+    })
+    const r13 = await prisma.contact.updateMany({
+      where: { title: { contains: '센터장' } },
+      data: { jobGrade: '등기노무사' }
+    })
+    const r14 = await prisma.contact.updateMany({
+      where: { title: { contains: '부대표' } },
+      data: { jobGrade: '등기노무사' }
+    })
+    const r15 = await prisma.contact.updateMany({
+      where: { title: { contains: '대표' } },
+      data: { jobGrade: '등기노무사' }
+    })
+    const r16 = await prisma.contact.updateMany({
+      where: { title: { contains: '이사' } },
+      data: { jobGrade: '등기노무사' }
+    })
+    const r17 = await prisma.contact.updateMany({
+      where: { title: { contains: '부문장' } },
+      data: { jobGrade: '등기노무사' }
+    })
+    const r18 = await prisma.contact.updateMany({
+      where: { title: { contains: '연구원' } },
+      data: { jobGrade: '등기노무사' }
+    })
+    const r19 = await prisma.contact.updateMany({
+      where: { title: { contains: '권역장' } },
+      data: { jobGrade: '등기노무사' }
+    })
+
+    // 노무사: 노무사 포함 (단, 수석노무사는 이미 등기노무사로 처리됨 — 순서 무관, contains라 중복 덮어씀 주의)
+    // 노무사는 마지막에 처리하되, 수석노무사는 제외
+    const r20 = await prisma.contact.updateMany({
+      where: {
+        AND: [
+          { title: { contains: '노무사' } },
+          { title: { not: { contains: '수석노무사' } } },
+        ]
+      },
+      data: { jobGrade: '노무사' }
+    })
+
+    // 변호사
+    const r21 = await prisma.contact.updateMany({
+      where: { title: { contains: '변호사' } },
+      data: { jobGrade: '변호사' }
+    })
+
+    // 나머지 미분류(빈 값 또는 기타) → 기타
+    const r22 = await prisma.contact.updateMany({
+      where: {
+        OR: [
+          { jobGrade: '' },
+          { jobGrade: '미분류' },
+        ]
+      },
+      data: { jobGrade: '기타' }
+    })
+
+    // 결과 집계
+    const stats = await prisma.contact.groupBy({
+      by: ['jobGrade'],
+      _count: { id: true },
+      orderBy: { _count: { id: 'desc' } }
+    })
+
+    return NextResponse.json({
+      ok: true,
+      stats: stats.map(s => ({ grade: s.jobGrade, count: s._count.id }))
+    })
+  } catch(e: any) {
+    return NextResponse.json({ ok: false, error: e.message }, { status: 500 })
+  }
+}
+```
+
+## Step 2: middleware에서 경로 제외
+
+middleware.ts 열어서 `/api/fix-job-grade` 경로를 인증 없이 접근 가능하도록 제외한다.
+기존 `/api/health`, `/api/init-contacts` 패턴 참고.
+
+## Step 3: 배포 및 실행
+
+```bash
+git add -A
+git commit -m "fix: add fix-job-grade API for contact classification"
+git push origin main
+```
+
+배포 완료 후:
+```
+https://thebosang-production.up.railway.app/api/fix-job-grade
+```
+
+아래처럼 직군별 카운트가 나와야 함:
+```json
+{
+  "ok": true,
+  "stats": [
+    { "grade": "외근직", "count": ... },
+    { "grade": "내근직", "count": ... },
+    { "grade": "노무사", "count": ... },
+    { "grade": "등기노무사", "count": ... },
+    { "grade": "변호사", "count": ... },
+    { "grade": "기타", "count": ... }
+  ]
+}
+```
+
+## Step 4: ContactsTab 배지 색상 확인 및 수정
+
+ContactsTab.tsx에서 jobGrade 배지 색상이 아래와 일치하는지 확인하고 수정한다:
+
+```tsx
+const gradeStyle = (grade: string) => {
+  switch(grade) {
+    case '외근직':    return { bg: '#fef3c7', color: '#92400e' }  // 노란색
+    case '내근직':    return { bg: '#f0f9ff', color: '#0369a1' }  // 파란색
+    case '노무사':    return { bg: '#f0fdf4', color: '#166534' }  // 초록색
+    case '등기노무사': return { bg: '#fdf4ff', color: '#7e22ce' }  // 보라색
+    case '변호사':    return { bg: '#fff1f2', color: '#be123c' }  // 빨간색
+    default:          return { bg: '#f1f5f9', color: '#334155' }  // 검정(회색)
+  }
+}
+
+// 배지 렌더링
+const s = gradeStyle(c.jobGrade || '')
+<span style={{
+  display: 'inline-block', padding: '2px 8px', borderRadius: 12,
+  fontSize: 11, fontWeight: 600,
+  backgroundColor: s.bg, color: s.color,
+}}>
+  {c.jobGrade || '기타'}
+</span>
+```
+
+## Step 5: 사용 후 fix-job-grade API 삭제
+
+```bash
+Remove-Item app/api/fix-job-grade/route.ts -Force
+git add -A
+git commit -m "chore: remove fix-job-grade API"
+git push origin main
+```

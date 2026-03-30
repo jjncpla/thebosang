@@ -1,0 +1,93 @@
+## 세션 타입: 버그픽스 세션
+## 작업 목표
+Contact 테이블에서 잘못 삽입된 항목(사업자 등록번호, 팩스번호, 주소)을 삭제한다.
+더보상, 이산 모두 해당.
+
+---
+
+## Step 1: 해당 항목 확인
+
+```bash
+# 삭제 대상 확인
+npx ts-node --compiler-options '{"module":"CommonJS"}' -e "
+const { PrismaClient } = require('@prisma/client')
+const prisma = new PrismaClient()
+prisma.contact.findMany({
+  where: { title: { in: ['사업자 등록번호', '팩스번호', '주소', '사업자등록번호', '팩스'] } }
+}).then(r => { console.log('삭제 대상:', r.length, '건'); r.forEach(c => console.log(c.firmType, c.branch, c.title)); prisma.\$disconnect() })
+"
+```
+
+## Step 2: 삭제 실행
+
+`app/api/init-contacts/route.ts` 파일을 열어 DELETE 구문 바로 아래에 아래 줄을 추가한다:
+
+```typescript
+// 잘못된 항목 제거 (사업자등록번호, 팩스번호, 주소 등 비인물 데이터)
+await prisma.contact.deleteMany({
+  where: {
+    title: { in: ['사업자 등록번호', '팩스번호', '주소', '사업자등록번호', '팩스', '홈페이지'] }
+  }
+})
+```
+
+추가 위치: `DELETE FROM "Contact"` raw query 바로 아래
+
+## Step 3: 또는 직접 API 엔드포인트로 즉시 삭제
+
+`app/api/cleanup-contacts/route.ts` 파일을 새로 생성한다:
+
+```typescript
+import { NextResponse } from 'next/server'
+import { prisma } from '@/lib/prisma'
+
+export async function GET() {
+  try {
+    const deleted = await prisma.contact.deleteMany({
+      where: {
+        title: {
+          in: ['사업자 등록번호', '팩스번호', '주소', '사업자등록번호', '팩스', '홈페이지', '']
+        }
+      }
+    })
+    // name이 '사업자 등록번호', '팩스번호', '주소'인 경우도 삭제
+    const deleted2 = await prisma.contact.deleteMany({
+      where: {
+        name: {
+          in: ['사업자 등록번호', '팩스번호', '주소', '사업자등록번호', '팩스']
+        }
+      }
+    })
+    const remaining = await prisma.contact.count()
+    return NextResponse.json({ ok: true, deleted: deleted.count + deleted2.count, remaining })
+  } catch(e: any) {
+    return NextResponse.json({ ok: false, error: e.message }, { status: 500 })
+  }
+}
+```
+
+middleware.ts에서 `/api/cleanup-contacts` 경로도 인증 제외 처리한다.
+(기존 /api/init-contacts, /api/health 패턴 참고)
+
+## Step 4: 배포 및 실행
+
+```bash
+git add -A
+git commit -m "fix: add cleanup-contacts API to remove invalid records"
+git push origin main
+```
+
+배포 완료 후:
+```
+https://thebosang-production.up.railway.app/api/cleanup-contacts
+```
+접속 → deleted 건수 확인 후 remaining 값 확인
+
+## Step 5: 사용 후 cleanup API 삭제
+
+```bash
+Remove-Item app/api/cleanup-contacts/route.ts
+git add -A
+git commit -m "chore: remove cleanup-contacts API"
+git push origin main
+```
