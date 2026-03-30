@@ -1,0 +1,62 @@
+## 세션 타입: 버그픽스 세션
+## 작업 목표
+Minutes 모델 테이블을 Railway DB에 생성하는 1회용 API를 만든다.
+
+---
+
+## Step 1: init-minutes API 생성
+
+파일: `app/api/init-minutes/route.ts`
+
+```typescript
+import { NextResponse } from 'next/server'
+import { prisma } from '@/lib/prisma'
+
+export async function GET() {
+  try {
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "Minutes" (
+        "id" TEXT NOT NULL PRIMARY KEY,
+        "category" TEXT NOT NULL,
+        "title" TEXT NOT NULL,
+        "meetingDate" TIMESTAMP(3) NOT NULL,
+        "content" TEXT NOT NULL DEFAULT '',
+        "attachmentUrl" TEXT,
+        "authorName" TEXT NOT NULL DEFAULT '',
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+      )
+    `)
+    const count = await prisma.minutes.count()
+    return NextResponse.json({ ok: true, message: 'Minutes 테이블 생성 완료', count })
+  } catch(e: any) {
+    return NextResponse.json({ ok: false, error: e.message }, { status: 500 })
+  }
+}
+```
+
+middleware.ts에서 `/api/init-minutes` 인증 제외 처리.
+(기존 `/api/health` 패턴 참고)
+
+## Step 2: 배포 및 실행
+
+```bash
+git add -A
+git commit -m "feat: init-minutes API"
+git push origin main
+```
+
+배포 완료 후:
+```
+https://thebosang-production.up.railway.app/api/init-minutes
+```
+→ `{"ok":true,"message":"Minutes 테이블 생성 완료","count":0}` 확인
+
+## Step 3: 사용 후 삭제
+
+```bash
+Remove-Item app/api/init-minutes/route.ts -Force
+git add -A
+git commit -m "chore: remove init-minutes API"
+git push origin main
+```
