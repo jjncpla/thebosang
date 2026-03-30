@@ -93,6 +93,7 @@ model Case {
   messages  Message[]
   timelines TimelineEvent[]
   todos     Todo[]
+  files     CaseFile[]
 }
 
 model HearingLossDetail {
@@ -922,6 +923,30 @@ model IsanOffice {
   tel     String @default("")
   fax     String @default("")
   address String @default("")
+}
+
+model CaseFile {
+  id          String   @id @default(cuid())
+  caseId      String
+  case        Case     @relation(fields: [caseId], references: [id])
+  fileType    String   // NAS | GOOGLE_DRIVE
+  fileName    String?  // 파일명 또는 폴더명
+  nasPath     String?  // NAS 전체 경로 (fileType=NAS일 때)
+  driveFileId String?  // Google Drive 파일 ID (fileType=GOOGLE_DRIVE일 때)
+  driveLink   String?  // Google Drive 링크
+  uploadedAt  DateTime @default(now())
+  uploadedBy  String?  // User ID
+
+  @@map("case_files")
+}
+
+model SystemConfig {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     String
+  updatedAt DateTime @updatedAt
+
+  @@map("system_configs")
 }
 
 model Minutes {

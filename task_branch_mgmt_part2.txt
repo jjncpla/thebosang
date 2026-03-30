@@ -1,0 +1,532 @@
+## 세션 타입: 기능 개발 세션
+## 작업 개요 (Part 2 / 2)
+지사 실적 관리 탭 신규 구현
+
+---
+
+## 수술적 수정 원칙
+- 새 파일/컴포넌트 추가 방식
+- 기존 탭 건드리지 않음
+
+---
+
+## Step 0: 현황 파악
+
+```bash
+# 지사장 관리 탭 구조 파악
+find . -name "*.tsx" | xargs grep -l "영업약정건수\|정산내역\|PerformanceTab" 2>/dev/null | grep -v node_modules
+
+# 기존 탭 배열 위치 확인
+grep -r "영업 약정건수\|정산 내역\|법인 실적" app --include="*.tsx" -n | grep -v node_modules | head -20
+
+# 기존 SalesContract, SettlementRecord 데이터 조회 API
+find . -path "*/api/*" | xargs grep -l "salesContract\|settlementRecord" 2>/dev/null | grep -v node_modules
+```
+
+---
+
+## Step 1: 새 모델 추가 (WeeklyActivity)
+
+### 1-1. schema.prisma에 추가
+```prisma
+model WeeklyActivity {
+  id                String   @id @default(cuid())
+  branchName        String
+  staffName         String
+  year              Int
+  month             Int
+  weekNumber        Int      // 1~6 (해당 월의 주차)
+  weekLabel         String   // 예: "25.04. 1주"
+  initialVisit      Int      @default(0)  // 초진
+  specialExam       Int      @default(0)  // 특진
+  docSupplementation Int     @default(0)  // 자료보완
+  submission        Int      @default(0)  // 접수
+  sales             Int      @default(0)  // 영업
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@unique([branchName, staffName, year, month, weekNumber])
+}
+```
+
+---
+
+## Step 2: WeeklyActivity API 생성
+
+### 2-1. `app/api/weekly-activity/route.ts`
+```typescript
+import { NextResponse } from 'next/server'
+import { prisma } from '@/lib/prisma'
+import { auth } from '@/auth'
+
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url)
+  const branchName = searchParams.get('branchName') || ''
+  const year = parseInt(searchParams.get('year') || String(new Date().getFullYear()))
+  const month = searchParams.get('month') ? parseInt(searchParams.get('month')!) : undefined
+
+  const where: any = { year }
+  if (branchName) where.branchName = branchName
+  if (month) where.month = month
+
+  const activities = await prisma.weeklyActivity.findMany({
+    where,
+    orderBy: [{ month: 'asc' }, { weekNumber: 'asc' }, { staffName: 'asc' }],
+  })
+  return NextResponse.json({ activities })
+}
+
+export async function POST(request: Request) {
+  const session = await auth()
+  if (!session?.user) return NextResponse.json({ error: '인증 필요' }, { status: 401 })
+
+  const body = await request.json()
+  // upsert 처리
+  const activity = await prisma.weeklyActivity.upsert({
+    where: {
+      branchName_staffName_year_month_weekNumber: {
+        branchName: body.branchName,
+        staffName: body.staffName,
+        year: body.year,
+        month: body.month,
+        weekNumber: body.weekNumber,
+      }
+    },
+    update: {
+      weekLabel: body.weekLabel,
+      initialVisit: body.initialVisit ?? 0,
+      specialExam: body.specialExam ?? 0,
+      docSupplementation: body.docSupplementation ?? 0,
+      submission: body.submission ?? 0,
+      sales: body.sales ?? 0,
+    },
+    create: body,
+  })
+  return NextResponse.json(activity)
+}
+```
+
+### 2-2. `app/api/weekly-activity/[id]/route.ts`
+```typescript
+import { NextResponse } from 'next/server'
+import { prisma } from '@/lib/prisma'
+
+export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
+  await prisma.weeklyActivity.delete({ where: { id } })
+  return NextResponse.json({ ok: true })
+}
+```
+
+---
+
+## Step 3: BranchPerformanceTab 컴포넌트 생성
+
+파일: `app/branch/_components/BranchPerformanceTab.tsx`
+(또는 지사장 관리 페이지 컴포넌트 폴더에 맞게 경로 조정)
+
+이 탭은 3개 서브탭으로 구성:
+- **약정 실적** - 직원별 월별 약정건수 + 분기별 집계 + 순위
+- **정산 집계** - 직원별 정산액 합계 (개인정산 + TF정산)
+- **주간활동** - 주차별 직원별 활동 현황 입력/조회
+
+```typescript
+'use client'
+import { useState, useEffect } from 'react'
+import { useSession } from 'next-auth/react'
+
+interface SalesContract {
+  id: string
+  branchName: string
+  staffName: string
+  year: number
+  month: number
+  pneumoconiosis: number
+  copd: number
+  hearingLoss: number
+  wageCorrection: number
+  disabilityPayment: number
+  litigation: number
+  musculoskeletal: number
+  cerebrovascular: number
+  occupationalCancer: number
+  accident: number
+  other: number
+}
+
+interface SettlementSummary {
+  staffName: string
+  personalTotal: number
+  tfTotal: number
+  grandTotal: number
+}
+
+interface WeeklyActivity {
+  id: string
+  branchName: string
+  staffName: string
+  year: number
+  month: number
+  weekNumber: number
+  weekLabel: string
+  initialVisit: number
+  specialExam: number
+  docSupplementation: number
+  submission: number
+  sales: number
+}
+
+const MONTHS = ['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월']
+const CASE_TYPES = [
+  { key: 'hearingLoss', label: '난청' },
+  { key: 'copd', label: 'COPD' },
+  { key: 'pneumoconiosis', label: '진폐' },
+  { key: 'musculoskeletal', label: '근골격계' },
+  { key: 'occupationalCancer', label: '직업성암' },
+  { key: 'cerebrovascular', label: '뇌심혈관' },
+  { key: 'disabilityPayment', label: '장해급여' },
+  { key: 'wageCorrection', label: '평균임금정정' },
+  { key: 'litigation', label: '소송' },
+  { key: 'accident', label: '업무상사고' },
+  { key: 'other', label: '기타' },
+]
+
+export default function BranchPerformanceTab({
+  selectedBranch,
+  selectedYear,
+}: {
+  selectedBranch: string
+  selectedYear: number
+}) {
+  const [subTab, setSubTab] = useState<'contracts' | 'settlement' | 'weekly'>('contracts')
+  const [contracts, setContracts] = useState<SalesContract[]>([])
+  const [settlements, setSettlements] = useState<SettlementSummary[]>([])
+  const [activities, setActivities] = useState<WeeklyActivity[]>([])
+  const [loading, setLoading] = useState(false)
+
+  const th = { padding: '8px 10px', background: '#f8fafc', fontWeight: 600, fontSize: 12, borderBottom: '1px solid #e2e8f0', textAlign: 'center' as const, whiteSpace: 'nowrap' as const }
+  const td = { padding: '6px 10px', fontSize: 12, borderBottom: '1px solid #f1f5f9', textAlign: 'center' as const }
+
+  useEffect(() => {
+    fetchAll()
+  }, [selectedBranch, selectedYear, subTab])
+
+  const fetchAll = async () => {
+    setLoading(true)
+    if (subTab === 'contracts') {
+      const res = await fetch(`/api/sales-contracts?branchName=${encodeURIComponent(selectedBranch)}&year=${selectedYear}`)
+      const data = await res.json()
+      setContracts(data.contracts || [])
+    } else if (subTab === 'settlement') {
+      const res = await fetch(`/api/settlement-records?branchName=${encodeURIComponent(selectedBranch)}&year=${selectedYear}`)
+      const data = await res.json()
+      // 직원별 정산 합계 계산
+      const summaryMap: Record<string, SettlementSummary> = {}
+      ;(data.records || []).forEach((r: any) => {
+        const staffs = [r.salesStaffName, r.settlementStaffName].filter(Boolean)
+        staffs.forEach((s: string) => {
+          if (!summaryMap[s]) summaryMap[s] = { staffName: s, personalTotal: 0, tfTotal: 0, grandTotal: 0 }
+        })
+        // allocations에서 합산
+        ;(r.allocations || []).forEach((a: any) => {
+          if (!summaryMap[a.staffName]) summaryMap[a.staffName] = { staffName: a.staffName, personalTotal: 0, tfTotal: 0, grandTotal: 0 }
+          const amount = Math.round(r.grossAmount * (a.ratio / 100))
+          if (a.isExternal) {
+            summaryMap[a.staffName].tfTotal += amount
+          } else {
+            summaryMap[a.staffName].personalTotal += amount
+          }
+          summaryMap[a.staffName].grandTotal += amount
+        })
+      })
+      setSettlements(Object.values(summaryMap).sort((a, b) => b.grandTotal - a.grandTotal))
+    } else {
+      const res = await fetch(`/api/weekly-activity?branchName=${encodeURIComponent(selectedBranch)}&year=${selectedYear}`)
+      const data = await res.json()
+      setActivities(data.activities || [])
+    }
+    setLoading(false)
+  }
+
+  // 직원별 집계
+  const staffList = [...new Set(contracts.map(c => c.staffName))].sort()
+
+  const getStaffMonthTotal = (staffName: string, month: number) => {
+    const c = contracts.find(c => c.staffName === staffName && c.month === month)
+    if (!c) return 0
+    return CASE_TYPES.reduce((sum, t) => sum + ((c as any)[t.key] || 0), 0)
+  }
+
+  const getStaffAnnualTotal = (staffName: string) => {
+    return Array.from({length: 12}, (_, i) => i + 1).reduce((sum, m) => sum + getStaffMonthTotal(staffName, m), 0)
+  }
+
+  // 약정 실적 서브탭
+  const renderContracts = () => (
+    <div style={{ overflowX: 'auto' }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+        <thead>
+          <tr>
+            <th style={{...th, textAlign: 'left'}}>직원</th>
+            {MONTHS.map(m => <th key={m} style={th}>{m}</th>)}
+            <th style={{...th, background: '#e0f2fe'}}>합계</th>
+            <th style={{...th, background: '#e0f2fe'}}>순위</th>
+          </tr>
+        </thead>
+        <tbody>
+          {staffList.map(staff => {
+            const annualTotal = getStaffAnnualTotal(staff)
+            return (
+              <tr key={staff}>
+                <td style={{...td, textAlign: 'left', fontWeight: 600}}>{staff}</td>
+                {Array.from({length: 12}, (_, i) => i + 1).map(m => {
+                  const total = getStaffMonthTotal(staff, m)
+                  return <td key={m} style={{...td, color: total > 0 ? '#1e40af' : '#94a3b8'}}>{total || '-'}</td>
+                })}
+                <td style={{...td, background: '#f0f9ff', fontWeight: 700, color: '#0369a1'}}>{annualTotal}</td>
+                <td style={td}></td>
+              </tr>
+            )
+          })}
+          {/* 집계 행 */}
+          <tr style={{ background: '#f8fafc' }}>
+            <td style={{...td, textAlign: 'left', fontWeight: 700}}>합계</td>
+            {Array.from({length: 12}, (_, i) => i + 1).map(m => {
+              const monthTotal = staffList.reduce((sum, s) => sum + getStaffMonthTotal(s, m), 0)
+              return <td key={m} style={{...td, fontWeight: 600}}>{monthTotal || '-'}</td>
+            })}
+            <td style={{...td, background: '#e0f2fe', fontWeight: 700}}>
+              {staffList.reduce((sum, s) => sum + getStaffAnnualTotal(s), 0)}
+            </td>
+            <td style={td}></td>
+          </tr>
+        </tbody>
+      </table>
+
+      {/* 순위표 */}
+      <div style={{ marginTop: 20 }}>
+        <h4 style={{ fontSize: 13, fontWeight: 700, color: '#374151', marginBottom: 10 }}>📊 연간 약정건수 순위</h4>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {staffList
+            .map(s => ({ name: s, total: getStaffAnnualTotal(s) }))
+            .sort((a, b) => b.total - a.total)
+            .map((item, idx) => (
+              <div key={item.name} style={{
+                padding: '6px 14px', borderRadius: 20, fontSize: 12, fontWeight: 600,
+                background: idx === 0 ? '#fef3c7' : idx === 1 ? '#f1f5f9' : idx === 2 ? '#fff7ed' : '#f8fafc',
+                border: '1px solid #e2e8f0',
+              }}>
+                {idx + 1}위 {item.name} <span style={{ color: '#2563eb' }}>{item.total}건</span>
+              </div>
+            ))
+          }
+        </div>
+      </div>
+    </div>
+  )
+
+  // 정산 집계 서브탭
+  const renderSettlement = () => (
+    <div style={{ overflowX: 'auto' }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+        <thead>
+          <tr>
+            <th style={{...th, textAlign: 'left'}}>직원</th>
+            <th style={th}>개인 정산 합계</th>
+            <th style={th}>TF 정산 합계</th>
+            <th style={{...th, background: '#e0f2fe'}}>총 합계</th>
+          </tr>
+        </thead>
+        <tbody>
+          {settlements.map(s => (
+            <tr key={s.staffName}>
+              <td style={{...td, textAlign: 'left', fontWeight: 600}}>{s.staffName}</td>
+              <td style={td}>{s.personalTotal.toLocaleString()}원</td>
+              <td style={td}>{s.tfTotal.toLocaleString()}원</td>
+              <td style={{...td, background: '#f0f9ff', fontWeight: 700, color: '#0369a1'}}>
+                {s.grandTotal.toLocaleString()}원
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+
+  // 주간활동 서브탭
+  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1)
+  const [newActivity, setNewActivity] = useState({
+    staffName: '', weekNumber: 1, weekLabel: '', initialVisit: 0,
+    specialExam: 0, docSupplementation: 0, submission: 0, sales: 0
+  })
+
+  const monthActivities = activities.filter(a => a.month === selectedMonth)
+  const weeklyStaffs = [...new Set(monthActivities.map(a => a.staffName))].sort()
+  const weeks = [...new Set(monthActivities.map(a => a.weekNumber))].sort()
+
+  const getActivity = (staff: string, week: number) =>
+    monthActivities.find(a => a.staffName === staff && a.weekNumber === week)
+
+  const getStaffMonthSum = (staff: string, field: keyof WeeklyActivity) =>
+    monthActivities.filter(a => a.staffName === staff)
+      .reduce((sum, a) => sum + ((a[field] as number) || 0), 0)
+
+  const renderWeekly = () => (
+    <div>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 12 }}>
+        <select value={selectedMonth} onChange={e => setSelectedMonth(Number(e.target.value))}
+          style={{ padding: '6px 10px', border: '1px solid #cbd5e1', borderRadius: 6, fontSize: 13 }}>
+          {MONTHS.map((m, i) => <option key={i+1} value={i+1}>{m}</option>)}
+        </select>
+        <span style={{ fontSize: 13, color: '#64748b' }}>주간 활동 현황</span>
+      </div>
+
+      {weeklyStaffs.length > 0 ? (
+        <div style={{ overflowX: 'auto' }}>
+          {['초진', '특진', '자료보완', '접수', '영업', '합계'].map(actType => (
+            <div key={actType} style={{ marginBottom: 16 }}>
+              <h5 style={{ fontSize: 12, fontWeight: 700, color: '#475569', marginBottom: 6 }}>{actType}</h5>
+              <table style={{ borderCollapse: 'collapse', fontSize: 12 }}>
+                <thead>
+                  <tr>
+                    <th style={th}>구분</th>
+                    {weeklyStaffs.map(s => <th key={s} style={th}>{s}</th>)}
+                    <th style={{...th, background: '#e0f2fe'}}>합계</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {weeks.map(w => {
+                    const weekLabel = monthActivities.find(a => a.weekNumber === w)?.weekLabel || `${selectedMonth}월 ${w}주`
+                    return (
+                      <tr key={w}>
+                        <td style={{...td, textAlign: 'left'}}>{weekLabel}</td>
+                        {weeklyStaffs.map(s => {
+                          const act = getActivity(s, w)
+                          const fieldMap: Record<string, keyof WeeklyActivity> = {
+                            '초진': 'initialVisit', '특진': 'specialExam',
+                            '자료보완': 'docSupplementation', '접수': 'submission', '영업': 'sales'
+                          }
+                          const field = fieldMap[actType]
+                          const total = field ? ((act?.[field] as number) || 0) :
+                            ((act?.initialVisit || 0) + (act?.specialExam || 0) + (act?.docSupplementation || 0) + (act?.submission || 0) + (act?.sales || 0))
+                          return <td key={s} style={td}>{total || '-'}</td>
+                        })}
+                        <td style={{...td, background: '#f0f9ff', fontWeight: 600}}>
+                          {weeklyStaffs.reduce((sum, s) => {
+                            const act = getActivity(s, w)
+                            const fieldMap: Record<string, keyof WeeklyActivity> = {
+                              '초진': 'initialVisit', '특진': 'specialExam',
+                              '자료보완': 'docSupplementation', '접수': 'submission', '영업': 'sales'
+                            }
+                            const field = fieldMap[actType]
+                            return sum + (field ? ((act?.[field] as number) || 0) :
+                              ((act?.initialVisit || 0) + (act?.specialExam || 0) + (act?.docSupplementation || 0) + (act?.submission || 0) + (act?.sales || 0)))
+                          }, 0) || '-'}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                  {/* 월 합계 행 */}
+                  <tr style={{ background: '#f8fafc', fontWeight: 700 }}>
+                    <td style={{...td, textAlign: 'left'}}>{selectedMonth}월 합계</td>
+                    {weeklyStaffs.map(s => {
+                      const fieldMap: Record<string, keyof WeeklyActivity> = {
+                        '초진': 'initialVisit', '특진': 'specialExam',
+                        '자료보완': 'docSupplementation', '접수': 'submission', '영업': 'sales'
+                      }
+                      const field = fieldMap[actType]
+                      const total = field ? getStaffMonthSum(s, field) :
+                        getStaffMonthSum(s, 'initialVisit') + getStaffMonthSum(s, 'specialExam') +
+                        getStaffMonthSum(s, 'docSupplementation') + getStaffMonthSum(s, 'submission') + getStaffMonthSum(s, 'sales')
+                      return <td key={s} style={{...td, background: '#f8fafc'}}>{total || '-'}</td>
+                    })}
+                    <td style={{...td, background: '#e0f2fe'}}></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p style={{ color: '#94a3b8', fontSize: 13 }}>이 달의 주간활동 데이터가 없습니다.</p>
+      )}
+    </div>
+  )
+
+  const subTabStyle = (active: boolean) => ({
+    padding: '6px 14px', fontSize: 13, fontWeight: active ? 600 : 400,
+    borderBottom: active ? '2px solid #29ABE2' : '2px solid transparent',
+    color: active ? '#29ABE2' : '#64748b', cursor: 'pointer', background: 'none', border: 'none',
+    borderBottomWidth: 2, borderBottomStyle: 'solid' as const,
+    borderBottomColor: active ? '#29ABE2' : 'transparent',
+  })
+
+  return (
+    <div>
+      <div style={{ display: 'flex', borderBottom: '1px solid #e2e8f0', marginBottom: 16 }}>
+        <button style={subTabStyle(subTab === 'contracts')} onClick={() => setSubTab('contracts')}>약정 실적</button>
+        <button style={subTabStyle(subTab === 'settlement')} onClick={() => setSubTab('settlement')}>정산 집계</button>
+        <button style={subTabStyle(subTab === 'weekly')} onClick={() => setSubTab('weekly')}>주간활동</button>
+      </div>
+      {loading ? <p style={{ color: '#94a3b8', fontSize: 13 }}>로딩 중...</p> : (
+        <>
+          {subTab === 'contracts' && renderContracts()}
+          {subTab === 'settlement' && renderSettlement()}
+          {subTab === 'weekly' && renderWeekly()}
+        </>
+      )}
+    </div>
+  )
+}
+```
+
+---
+
+## Step 4: 기존 탭에 '지사 실적 관리' 탭 추가
+
+Step 0에서 찾은 지사장 관리 페이지 파일을 열어:
+
+1. 기존 탭 배열에 추가:
+```tsx
+{ id: 'branch-performance', label: '지사 실적 관리' }
+```
+
+2. 렌더링 부분에 추가:
+```tsx
+{activeTab === 'branch-performance' && (
+  <BranchPerformanceTab
+    selectedBranch={selectedBranch}
+    selectedYear={selectedYear}
+  />
+)}
+```
+
+3. BranchPerformanceTab import 추가
+
+**위치**: '영업 약정건수', '정산내역'과 동일한 레벨의 탭으로 추가
+
+---
+
+## Step 5: 배포 (prisma db push 포함)
+
+WeeklyActivity 모델 추가로 인해 db push 필요:
+```json
+"build": "prisma generate && prisma generate --schema=prisma/auth.prisma && prisma db push && next build"
+```
+
+```bash
+git add -A
+git commit -m "feat: 지사 실적 관리 탭 추가 (약정실적/정산집계/주간활동)"
+git push origin main
+```
+
+배포 완료 후 원복:
+```json
+"build": "prisma generate && prisma generate --schema=prisma/auth.prisma && next build"
+```
+
+배포 완료 후 확인:
+1. 지사장 관리 → '지사 실적 관리' 탭 표시
+2. 약정 실적 → 직원별 월별 건수 + 순위
+3. 정산 집계 → 직원별 개인/TF/총합
+4. 주간활동 → 월 선택 후 주별 활동 표시

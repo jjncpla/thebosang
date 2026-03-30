@@ -1,0 +1,419 @@
+## 세션 타입: 기능 개발 세션
+## 작업 개요 (Part 1 / 2)
+4가지 작업: 분할납부, 권한등급 추가, 약정건수 삭제, project 필드 제거
+
+---
+
+## 수술적 수정 원칙
+- 전체 재작성 금지, 타깃 변경만
+- 기존 기능 보존
+- 스키마 변경 후 반드시 prisma db push
+
+---
+
+## Step 0: 파일 위치 파악
+
+```bash
+# 법인 실적관리 관련 파일
+find . -name "*.tsx" | xargs grep -l "SettlementRecord\|정산내역\|PerformanceTab\|SettlementTab" 2>/dev/null | grep -v node_modules
+
+# 영업약정건수 관련 파일
+find . -name "*.tsx" | xargs grep -l "SalesContract\|영업약정\|ContractTab" 2>/dev/null | grep -v node_modules
+
+# 지사장 관리 페이지 메인 파일
+find . -name "*.tsx" | xargs grep -l "운영규정\|RegulationsTab\|MinutesTab\|PerformanceTab" 2>/dev/null | grep -v node_modules | head -5
+
+# API 경로
+find . -path "*/api/*settlement*" -o -path "*/api/*performance*" -o -path "*/api/*contract*" | grep -v node_modules
+```
+
+---
+
+## 작업 1: 분할납부 스키마 추가 및 UI 반영
+
+### 1-1. schema.prisma 수정
+SettlementRecord 모델에 아래 필드 추가:
+```prisma
+model SettlementRecord {
+  // 기존 필드 유지...
+  isInstallment           Boolean  @default(false)   // 분할납부 여부
+  totalInstallmentAmount  Int      @default(0)        // 총 납부 예정액
+  paidInstallmentAmount   Int      @default(0)        // 현재 누적 납부액
+}
+```
+
+### 1-2. prisma db push (빌드 스크립트에 임시 추가 방식)
+package.json build 스크립트:
+```json
+"build": "prisma generate && prisma generate --schema=prisma/auth.prisma && prisma db push && next build"
+```
+배포 후 원복:
+```json
+"build": "prisma generate && prisma generate --schema=prisma/auth.prisma && next build"
+```
+
+### 1-3. 정산 내역 API 수정
+Step 0에서 찾은 settlement API route.ts 파일 열어서:
+GET: 기존 필드에 isInstallment, totalInstallmentAmount, paidInstallmentAmount 포함되도록 확인
+PUT/PATCH: 해당 필드 업데이트 가능하도록 처리
+
+### 1-4. 정산 내역 UI 수정
+Step 0에서 찾은 정산 관련 탭 파일을 열어서:
+
+**테이블 행에 분할 배지 추가:**
+정산 건 순번(번호) 바로 옆에 분할 배지 표시:
+```tsx
+<td style={{ padding: '8px 12px', fontSize: 13 }}>
+  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+    <span>{index + 1}</span>
+    {record.isInstallment && (
+      <span
+        title={`누적납부: ${record.paidInstallmentAmount?.toLocaleString()}원 / 총액: ${record.totalInstallmentAmount?.toLocaleString()}원`}
+        style={{
+          display: 'inline-flex', alignItems: 'center', gap: 3,
+          padding: '2px 7px', borderRadius: 12, fontSize: 11, fontWeight: 600,
+          backgroundColor: '#fef3c7', color: '#92400e', cursor: 'default',
+          border: '1px solid #fde68a',
+        }}
+      >
+        분할 {record.paidInstallmentAmount?.toLocaleString() ?? 0}/{record.totalInstallmentAmount?.toLocaleString() ?? 0}
+      </span>
+    )}
+  </div>
+</td>
+```
+
+**수정 모달에 분할납부 필드 추가:**
+기존 수정 모달 폼에:
+```tsx
+// 분할납부 여부 체크박스
+<label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
+  <input
+    type="checkbox"
+    checked={editForm.isInstallment || false}
+    onChange={e => setEditForm(p => ({ ...p, isInstallment: e.target.checked }))}
+  />
+  분할납부
+</label>
+
+// 분할납부 체크 시 금액 입력 표시
+{editForm.isInstallment && (
+  <div style={{ display: 'flex', gap: 8 }}>
+    <div>
+      <label style={{ fontSize: 12, color: '#64748b' }}>총 납부 예정액</label>
+      <input type="number" value={editForm.totalInstallmentAmount || 0}
+        onChange={e => setEditForm(p => ({ ...p, totalInstallmentAmount: Number(e.target.value) }))}
+        style={{ width: '100%', padding: '6px 10px', border: '1px solid #cbd5e1', borderRadius: 6, fontSize: 13 }}
+      />
+    </div>
+    <div>
+      <label style={{ fontSize: 12, color: '#64748b' }}>현재 누적 납부액</label>
+      <input type="number" value={editForm.paidInstallmentAmount || 0}
+        onChange={e => setEditForm(p => ({ ...p, paidInstallmentAmount: Number(e.target.value) }))}
+        style={{ width: '100%', padding: '6px 10px', border: '1px solid #cbd5e1', borderRadius: 6, fontSize: 13 }}
+      />
+    </div>
+  </div>
+)}
+```
+
+### 1-5. 분할납부 모니터링 섹션 추가
+정산 탭 하단에 작은 모니터링 카드 추가:
+
+```tsx
+// 분할납부 건 필터
+const installmentRecords = records.filter(r => r.isInstallment)
+const installmentByBranch = installmentRecords.reduce((acc, r) => {
+  if (!acc[r.branchName]) acc[r.branchName] = { count: 0, totalPending: 0 }
+  acc[r.branchName].count++
+  acc[r.branchName].totalPending += (r.totalInstallmentAmount - r.paidInstallmentAmount)
+  return acc
+}, {} as Record<string, { count: number, totalPending: number }>)
+
+// 모니터링 카드 렌더링
+{installmentRecords.length > 0 && (
+  <div style={{ marginTop: 24, padding: 16, background: '#fffbeb', borderRadius: 8, border: '1px solid #fde68a' }}>
+    <h4 style={{ fontSize: 13, fontWeight: 700, color: '#92400e', marginBottom: 12 }}>
+      📋 분할납부 모니터링 ({installmentRecords.length}건)
+    </h4>
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+      {Object.entries(installmentByBranch).map(([branch, info]) => (
+        <div key={branch} style={{
+          padding: '6px 12px', background: '#fff', borderRadius: 6,
+          border: '1px solid #fde68a', fontSize: 12,
+        }}>
+          <span style={{ fontWeight: 600 }}>{branch}</span>
+          <span style={{ color: '#64748b', marginLeft: 6 }}>{info.count}건</span>
+          <span style={{ color: '#dc2626', marginLeft: 6, fontWeight: 600 }}>
+            잔액 {info.totalPending.toLocaleString()}원
+          </span>
+        </div>
+      ))}
+    </div>
+    <div style={{ marginTop: 10 }}>
+      {installmentRecords.map(r => (
+        <div key={r.id} style={{
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+          padding: '4px 8px', fontSize: 12, borderBottom: '1px solid #fef3c7',
+        }}>
+          <span style={{ color: '#374151' }}>{r.branchName} / {r.victimName}</span>
+          <span style={{ color: '#64748b' }}>
+            {r.paidInstallmentAmount?.toLocaleString() ?? 0} /
+            {r.totalInstallmentAmount?.toLocaleString() ?? 0}원
+            {r.totalInstallmentAmount > r.paidInstallmentAmount && (
+              <span style={{ color: '#dc2626', marginLeft: 4 }}>
+                (잔액 {(r.totalInstallmentAmount - r.paidInstallmentAmount).toLocaleString()}원)
+              </span>
+            )}
+          </span>
+        </div>
+      ))}
+    </div>
+  </div>
+)}
+```
+
+---
+
+## 작업 2: 권한 등급 추가 (SENIOR_MANAGER / SITE_MANAGER)
+
+### 2-1. User 모델에 regionName 필드 추가
+schema.prisma User 모델에:
+```prisma
+model User {
+  // 기존 필드 유지...
+  regionName  String?  // 담당 권역 (SENIOR_MANAGER 전용): "전라권역" | "대구경북권역" | "부울경남권역" | "수도권역"
+}
+```
+
+### 2-2. 권역-지사 매핑 상수 추가
+`lib/constants/regions.ts` 파일 생성:
+```typescript
+export const REGION_BRANCHES: Record<string, string[]> = {
+  '전라권역': ['전남순천지사', '전남여수지사', '전북익산지사', '순천지사', '여수지사', '익산지사',
+               '노무법인 더보상 전남순천지사', '노무법인 더보상 전남여수지사', '노무법인 더보상 전북익산지사'],
+  '대구경북권역': ['대구지사', '구미지사', '포항지사', '대구달서지사', '대구수성지사',
+                   '노무법인 더보상 대구지사', '노무법인 더보상 경북구미지사', '노무법인 더보상 경북포항지사'],
+  '부울경남권역': ['부산경남지사', '부산중부지사', '울산지사', '울산동부지사', '경남창원지사',
+                   '부산북부지사', '부산서부지사', '양산지사', '김해지사', '창원지사',
+                   '노무법인 더보상 부산경남지사', '노무법인 더보상 부산중부지사',
+                   '노무법인 더보상 울산지사', '노무법인 더보상 울산동부지사', '노무법인 더보상 경남창원지사'],
+}
+// 수도권역: 위에 포함되지 않은 나머지 지사
+
+export function getRegionBranches(regionName: string, allBranches?: string[]): string[] | 'ALL' {
+  if (regionName === '수도권역' && allBranches) {
+    const assignedBranches = Object.values(REGION_BRANCHES).flat()
+    return allBranches.filter(b => !assignedBranches.includes(b))
+  }
+  return REGION_BRANCHES[regionName] || []
+}
+
+export function canAccessBranch(userRole: string, userBranch: string | null, userRegion: string | null, targetBranch: string): boolean {
+  if (userRole === 'ADMIN') return true
+  if (userRole === 'SENIOR_MANAGER' && userRegion) {
+    if (userRegion === '수도권역') {
+      const assignedBranches = Object.values(REGION_BRANCHES).flat()
+      return !assignedBranches.includes(targetBranch)
+    }
+    return (REGION_BRANCHES[userRegion] || []).includes(targetBranch)
+  }
+  if (userRole === 'SITE_MANAGER' && userBranch) {
+    return targetBranch === userBranch || targetBranch.includes(userBranch) || userBranch.includes(targetBranch)
+  }
+  return false
+}
+```
+
+### 2-3. 관리자 페이지 계정 생성/수정 드롭다운 업데이트
+Step 0에서 찾은 admin 계정 관리 파일:
+- role 선택 드롭다운에 SENIOR_MANAGER, SITE_MANAGER 추가
+- SENIOR_MANAGER 선택 시 regionName 드롭다운 표시 (전라권역/대구경북권역/부울경남권역/수도권역)
+- SITE_MANAGER 선택 시 branchName 드롭다운 표시 (Contact DB에서 지사 목록)
+
+```tsx
+// role 드롭다운 옵션
+const ROLE_OPTIONS = [
+  { value: 'ADMIN', label: '관리자 (ADMIN)' },
+  { value: 'SENIOR_MANAGER', label: '권역지사장 (SENIOR_MANAGER)' },
+  { value: 'SITE_MANAGER', label: '지사장 (SITE_MANAGER)' },
+  { value: 'STAFF', label: '직원 (STAFF)' },
+  { value: 'READONLY', label: '이산계정 (READONLY)' },
+]
+
+// SENIOR_MANAGER 선택 시 권역 드롭다운
+{formData.role === 'SENIOR_MANAGER' && (
+  <select value={formData.regionName || ''} onChange={e => setFormData(p => ({ ...p, regionName: e.target.value }))}>
+    <option value="">권역 선택</option>
+    <option value="전라권역">전라권역</option>
+    <option value="대구경북권역">대구경북권역</option>
+    <option value="부울경남권역">부울경남권역</option>
+    <option value="수도권역">수도권역</option>
+  </select>
+)}
+```
+
+### 2-4. 지사장 관리 운영 페이지 접근 제어
+
+Step 0에서 찾은 지사장 관리 메인 페이지/레이아웃 파일:
+
+**접근 가능 권한:** ADMIN, SENIOR_MANAGER, SITE_MANAGER
+**기존 MANAGER 권한 → SITE_MANAGER로 교체 (또는 병행 지원)**
+
+페이지 진입 시 권한 체크:
+```tsx
+// useSession으로 현재 사용자 정보 가져오기
+const { data: session } = useSession()
+const userRole = (session?.user as any)?.role
+const userBranch = (session?.user as any)?.branchName
+const userRegion = (session?.user as any)?.regionName
+
+const canViewBranchPage = ['ADMIN', 'SENIOR_MANAGER', 'SITE_MANAGER'].includes(userRole)
+if (!canViewBranchPage) redirect('/') // 또는 접근 불가 메시지
+```
+
+**탭별 접근 제어:**
+- 운영규정·취업규칙, 회의록: 위 3가지 권한 모두 접근 가능 (필터링 없음)
+- 법인 실적관리, 인사평가: branchName/regionName 기반 데이터 필터링 적용
+
+**API 레벨 필터링** (법인 실적 관련 API):
+각 API route에서 session 확인 후:
+```typescript
+const session = await auth()
+const userRole = (session?.user as any)?.role
+const userBranch = (session?.user as any)?.branchName
+const userRegion = (session?.user as any)?.regionName
+
+// 브랜치 접근 필터 생성
+function getBranchFilter(role: string, branch: string | null, region: string | null) {
+  if (role === 'ADMIN') return undefined // 전체
+  if (role === 'SITE_MANAGER') return { branchName: branch }
+  if (role === 'SENIOR_MANAGER') {
+    const branches = getRegionBranches(region || '', []) // 전체 지사 목록 필요 시 DB 조회
+    if (region === '수도권역') {
+      // 수도권역은 포함 목록이 아닌 제외 목록으로 처리
+      const assignedBranches = Object.values(REGION_BRANCHES).flat()
+      return { branchName: { notIn: assignedBranches } }
+    }
+    return { branchName: { in: branches } }
+  }
+  return { branchName: '__none__' } // STAFF는 접근 불가
+}
+```
+
+**SalesContract, SettlementRecord API에 브랜치 필터 적용:**
+기존 where 조건에 getBranchFilter 결과를 merge
+
+**지사 선택 드롭다운 필터링:**
+법인 실적 탭의 지사 선택 드롭다운도 권한에 따라 선택 가능 목록 제한
+
+---
+
+## 작업 3: 영업약정건수 삭제 기능 추가
+
+### 3-1. SalesContract 삭제 API 추가
+`app/api/sales-contracts/[id]/route.ts` 에 DELETE 핸들러 추가 (없으면 생성):
+```typescript
+export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const session = await auth()
+  const { id } = await params
+  await prisma.salesContract.delete({ where: { id } })
+  return NextResponse.json({ ok: true })
+}
+```
+
+지사별 전체 삭제 API (`app/api/sales-contracts/bulk-delete/route.ts`):
+```typescript
+export async function POST(request: Request) {
+  const session = await auth()
+  const { branchName, year } = await request.json()
+  const where: any = {}
+  if (branchName) where.branchName = branchName
+  if (year) where.year = year
+  const result = await prisma.salesContract.deleteMany({ where })
+  return NextResponse.json({ ok: true, deleted: result.count })
+}
+```
+
+### 3-2. 영업약정건수 탭 UI에 삭제 버튼 추가
+
+Step 0에서 찾은 ContractTab 또는 영업약정건수 관련 파일:
+
+**개별 삭제 버튼** (각 행 오른쪽에):
+```tsx
+<button
+  onClick={() => handleDeleteContract(record.id, record.staffName)}
+  style={{
+    padding: '3px 8px', fontSize: 11, border: '1px solid #fca5a5',
+    borderRadius: 4, background: '#fff', color: '#dc2626', cursor: 'pointer',
+  }}
+>
+  삭제
+</button>
+```
+
+**지사별 전체 삭제 버튼** (지사 섹션 헤더 옆에):
+```tsx
+<button
+  onClick={() => handleDeleteBranchContracts(branchName)}
+  style={{
+    padding: '3px 10px', fontSize: 11, border: '1px solid #fca5a5',
+    borderRadius: 4, background: '#fee2e2', color: '#dc2626', cursor: 'pointer',
+  }}
+>
+  지사 전체 삭제
+</button>
+```
+
+**삭제 핸들러:**
+```tsx
+const handleDeleteContract = async (id: string, name: string) => {
+  if (!confirm(`${name} 항목을 삭제하시겠습니까?`)) return
+  await fetch(`/api/sales-contracts/${id}`, { method: 'DELETE' })
+  fetchData() // 목록 갱신
+}
+
+const handleDeleteBranchContracts = async (branchName: string) => {
+  if (!confirm(`${branchName}의 전체 약정 데이터를 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.`)) return
+  await fetch('/api/sales-contracts/bulk-delete', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ branchName, year: selectedYear })
+  })
+  fetchData()
+}
+```
+
+---
+
+## 작업 4: SalesContract에서 project 필드 제거
+
+### 4-1. schema.prisma 수정
+SalesContract 모델에서 `project Float @default(0)` 줄 삭제
+
+### 4-2. UI에서 project 관련 제거
+Step 0에서 찾은 ContractTab/영업약정 파일에서:
+- `project` 컬럼 헤더 제거
+- `project` 입력 필드 제거
+- `project` 합계 계산에서 제거
+- `totalContracts` 등 합산 로직에서 `project` 항목 제거
+
+### 4-3. API에서 project 필드 제거
+영업약정 관련 API route에서 project 필드 참조 모두 제거
+
+---
+
+## 최종 배포
+
+```bash
+git add -A
+git commit -m "feat: 분할납부, 권한등급 추가, 약정건수 삭제, project 필드 제거"
+git push origin main
+```
+
+배포 완료 후 확인:
+1. prisma db push 완료 (빌드 로그에서 확인)
+2. 정산 내역 → 분할납부 배지 표시
+3. 관리자 → 계정 생성 → SENIOR_MANAGER/SITE_MANAGER 선택 가능
+4. 영업약정건수 → 개별/지사별 삭제 버튼
+5. 영업약정건수 → project 컬럼 없음

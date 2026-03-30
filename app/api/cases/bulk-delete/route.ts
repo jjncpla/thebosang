@@ -34,6 +34,7 @@ export async function DELETE(req: NextRequest) {
     await prisma.message.deleteMany({ where: { caseId: { in: caseIds } } });
     await prisma.timelineEvent.deleteMany({ where: { caseId: { in: caseIds } } });
     await prisma.todo.deleteMany({ where: { caseId: { in: caseIds } } });
+    await prisma.caseFile.deleteMany({ where: { caseId: { in: caseIds } } });
 
     await prisma.case.deleteMany({ where: { id: { in: caseIds } } });
 
