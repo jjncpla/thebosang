@@ -879,14 +879,16 @@ function SectionAccordion({
   isAdmin,
   onSave,
   onDelete,
+  searchText,
 }: {
   sec: Section
   color: string
   isAdmin: boolean
   onSave: (updated: Partial<Section>) => Promise<void>
   onDelete: () => Promise<void>
+  searchText?: string
 }) {
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useState(!!searchText)
   const [editing, setEditing] = useState(false)
   const [editTitle, setEditTitle] = useState(sec.title)
   const [editBody, setEditBody] = useState(sec.body)
@@ -911,7 +913,7 @@ function SectionAccordion({
           className="flex items-center gap-2 flex-1 text-left"
         >
           <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${c.badge}`}>{sec.num}</span>
-          <span className="text-sm font-medium text-gray-800">{sec.title}</span>
+          <span className="text-sm font-medium text-gray-800">{searchText ? highlightText(sec.title, searchText) : sec.title}</span>
           {sec.isFromDb && (
             <span className="text-xs text-amber-500 ml-1">(수정됨)</span>
           )}
@@ -977,7 +979,7 @@ function SectionAccordion({
             </div>
           ) : (
             <>
-              <p className="text-sm text-gray-700 whitespace-pre-line leading-relaxed">{sec.body}</p>
+              <p className="text-sm text-gray-700 whitespace-pre-line leading-relaxed">{searchText ? highlightText(sec.body, searchText) : sec.body}</p>
               {sec.attaches && sec.attaches.length > 0 && (
                 <div className="mt-3 space-y-1">
                   {sec.attaches.map(a => <AttachViewer key={a.id} item={a} />)}
@@ -999,6 +1001,7 @@ function ChapterView({
   onSaveSection,
   onDeleteSection,
   onAddSection,
+  searchText,
 }: {
   chapter: Chapter
   isAdmin: boolean
@@ -1006,6 +1009,7 @@ function ChapterView({
   onSaveSection: (chapterId: string, secId: string, data: Partial<Section>) => Promise<void>
   onDeleteSection: (chapterId: string, secId: string, dbId: string) => Promise<void>
   onAddSection: (chapterId: string) => void
+  searchText?: string
 }) {
   const [prevOpen, setPrevOpen] = useState(false)
   const c = COLOR_MAP[chapter.color]
@@ -1059,6 +1063,7 @@ function ChapterView({
             isAdmin={isAdmin}
             onSave={async (updated) => onSaveSection(chapter.id, sec.id, updated)}
             onDelete={async () => sec.dbId ? onDeleteSection(chapter.id, sec.id, sec.dbId) : Promise.resolve()}
+            searchText={searchText}
           />
         ))}
       </div>
@@ -1146,6 +1151,18 @@ function AddSectionModal({
   )
 }
 
+// ─── 검색어 하이라이트 헬퍼 ──────────────────────────────────────
+function highlightText(text: string, query: string): React.ReactNode {
+  if (!query || !text) return text
+  const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const parts = text.split(new RegExp(`(${escaped})`, 'gi'))
+  return parts.map((p, i) =>
+    p.toLowerCase() === query.toLowerCase()
+      ? <mark key={i} style={{ backgroundColor: '#fef08a', padding: '0 1px' }}>{p}</mark>
+      : p
+  )
+}
+
 // ─── 메인 컴포넌트 ────────────────────────────────────────────────
 export default function RegulationsTab() {
   const { data: session } = useSession()
@@ -1154,6 +1171,7 @@ export default function RegulationsTab() {
   const [subTab, setSubTab] = useState<'cost' | 'welfare' | 'hr' | 'rules'>('cost')
   const [dbData, setDbData] = useState<Record<string, Record<string, { id: string; title: string; body: string }>>>({})
   const [addingChapter, setAddingChapter] = useState<string | null>(null)
+  const [searchText, setSearchText] = useState('')
 
   const loadDb = useCallback(async () => {
     try {
@@ -1216,6 +1234,23 @@ export default function RegulationsTab() {
 
   const activeChapter = chapters.find(c => c.id === subTab)
 
+  // 검색 필터링 로직
+  const getFilteredChapter = (chapter: Chapter | undefined) => {
+    if (!chapter || !searchText) return chapter
+    const filtered = {
+      ...chapter,
+      sections: chapter.sections.filter(s =>
+        s.title.includes(searchText) || s.body.includes(searchText)
+      )
+    }
+    return filtered
+  }
+
+  const filteredChapter = getFilteredChapter(activeChapter)
+  const searchMatchCount = searchText && activeChapter
+    ? activeChapter.sections.filter(s => s.title.includes(searchText) || s.body.includes(searchText)).length
+    : 0
+
   return (
     <div className="p-4 space-y-4">
       {/* 서브 탭 */}
@@ -1233,15 +1268,41 @@ export default function RegulationsTab() {
         ))}
       </div>
 
+      {/* 검색창 */}
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <input
+          type="text"
+          placeholder="규정 내용 검색..."
+          value={searchText}
+          onChange={e => setSearchText(e.target.value)}
+          style={{
+            padding: '7px 12px', border: '1px solid #29ABE2', borderRadius: 6,
+            fontSize: 13, width: 300, outline: 'none',
+          }}
+        />
+        {searchText && (
+          <span style={{ color: '#64748b', fontSize: 13 }}>
+            {searchMatchCount > 0 ? `${searchMatchCount}개 항목에서 발견` : '검색 결과 없음'}
+          </span>
+        )}
+        {searchText && (
+          <button onClick={() => setSearchText('')}
+            style={{ padding: '5px 12px', border: '1px solid #cbd5e1', borderRadius: 6, background: '#fff', cursor: 'pointer', fontSize: 12 }}>
+            초기화
+          </button>
+        )}
+      </div>
+
       {/* 챕터 콘텐츠 */}
-      {activeChapter && (
+      {filteredChapter && (
         <ChapterView
-          chapter={activeChapter}
+          chapter={filteredChapter}
           isAdmin={isAdmin}
-          dbOverrides={dbData[activeChapter.id] ?? {}}
+          dbOverrides={dbData[filteredChapter.id] ?? {}}
           onSaveSection={handleSaveSection}
           onDeleteSection={handleDeleteSection}
           onAddSection={(chapterId) => setAddingChapter(chapterId)}
+          searchText={searchText}
         />
       )}
 
@@ -1253,7 +1314,7 @@ export default function RegulationsTab() {
             취업규칙 — 현행 (2021.09.01. 시행)
           </div>
           <div className="bg-white border border-gray-200 rounded-lg p-5 text-sm text-gray-700 whitespace-pre-line leading-relaxed max-h-[70vh] overflow-y-auto">
-            {EMPLOYMENT_RULES_FULL}
+            {searchText ? highlightText(EMPLOYMENT_RULES_FULL, searchText) : EMPLOYMENT_RULES_FULL}
           </div>
         </div>
       )}

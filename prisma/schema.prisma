@@ -923,3 +923,14 @@ model IsanOffice {
   fax     String @default("")
   address String @default("")
 }
+
+model Minutes {
+  id          String   @id @default(cuid())
+  category    String
+  title       String
+  meetingDate DateTime
+  content     String   @default("")
+  authorName  String   @default("")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}

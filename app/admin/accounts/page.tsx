@@ -23,6 +23,7 @@ export default function AccountsPage() {
   const [reqLoading, setReqLoading] = useState(true);
   const [usersLoading, setUsersLoading] = useState(true);
   const [error, setError] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
 
   // 계정 직접 생성 폼
   const [form, setForm] = useState({ name: "", email: "", password: "", role: "STAFF" });
@@ -198,7 +199,27 @@ export default function AccountsPage() {
 
       {/* 섹션 3: 전체 계정 목록 */}
       <div style={s.section}>
-        <h2 style={s.sectionTitle}>전체 계정 목록 ({users.length}명)</h2>
+        <h2 style={s.sectionTitle}>전체 계정 목록</h2>
+        <div style={{ marginBottom: 12, display: "flex", gap: 8, alignItems: "center" }}>
+          <input
+            type="text"
+            placeholder="이름 또는 이메일 검색"
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            style={{ padding: "7px 12px", border: "1px solid #cbd5e1", borderRadius: 6, fontSize: 13, width: 240, outline: "none" }}
+          />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery("")}
+              style={{ padding: "7px 12px", border: "1px solid #cbd5e1", borderRadius: 6, background: "#fff", cursor: "pointer", fontSize: 13 }}
+            >
+              초기화
+            </button>
+          )}
+          <span style={{ color: "#64748b", fontSize: 13 }}>
+            총 {users.filter(u => !searchQuery || u.name?.includes(searchQuery) || u.email?.includes(searchQuery)).length}명
+          </span>
+        </div>
         {usersLoading ? <p style={s.dim}>불러오는 중…</p> : (
           <div style={s.tableWrap}>
             <table style={s.table}>
@@ -206,7 +227,7 @@ export default function AccountsPage() {
                 <tr>{["이름", "이메일", "권한", "가입일", ""].map(h => <th key={h} style={s.th}>{h}</th>)}</tr>
               </thead>
               <tbody>
-                {users.map(u => (
+                {users.filter(u => !searchQuery || u.name?.includes(searchQuery) || u.email?.includes(searchQuery)).map(u => (
                   <tr key={u.id}>
                     <td style={s.td}>{u.name}</td>
                     <td style={s.td}>{u.email}</td>
