@@ -628,6 +628,7 @@ export default function PerformanceTab() {
                     <button
                       key={s.name}
                       onClick={async () => {
+                        const startM = month || (quarter ? (quarter - 1) * 3 + 1 : new Date().getMonth() + 1)
                         try {
                           const res = await fetch('/api/branch/staff-roster', {
                             method: 'POST',
@@ -636,7 +637,7 @@ export default function PerformanceTab() {
                               branchName: branch,
                               staffName: s.name,
                               startYear: year,
-                              startMonth: month || (quarter ? (quarter - 1) * 3 + 1 : new Date().getMonth() + 1),
+                              startMonth: startM,
                             }),
                           })
                           if (!res.ok) {
@@ -644,7 +645,21 @@ export default function PerformanceTab() {
                             alert(`직원 추가 실패: ${JSON.stringify(err)}`)
                             return
                           }
-                          await loadSales()
+                          const newRoster = await res.json()
+                          // 즉시 로컬 roster에 반영
+                          setRoster(prev => {
+                            if (prev.find(r => r.staffName === s.name)) return prev
+                            return [...prev, {
+                              id: newRoster.id || `temp_${s.name}`,
+                              staffName: s.name,
+                              startYear: year,
+                              startMonth: startM,
+                              endYear: null,
+                              endMonth: null,
+                            }]
+                          })
+                          // activeStaff에서 제거
+                          setActiveStaff(prev => prev.filter(a => a.name !== s.name))
                         } catch (e) {
                           alert(`네트워크 오류: ${(e as Error).message}`)
                         }
