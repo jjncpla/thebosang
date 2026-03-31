@@ -9,6 +9,12 @@ export async function GET(request: Request) {
   const minutes = await prisma.minutes.findMany({
     where,
     orderBy: { meetingDate: 'desc' },
+    select: {
+      id: true, category: true, title: true, meetingDate: true,
+      content: true, authorName: true,
+      attachmentName: true, attachmentType: true, attachmentSize: true,
+      createdAt: true, updatedAt: true,
+    },
   })
   return NextResponse.json({ minutes })
 }
@@ -27,9 +33,13 @@ export async function POST(request: Request) {
     data: {
       category: body.category,
       title: body.title,
-      meetingDate: new Date(body.meetingDate),
+      meetingDate: new Date(body.meetingDate + 'T12:00:00.000Z'),
       content: body.content || '',
       authorName: (session.user as { name?: string }).name || '',
+      attachmentData: body.attachmentData || null,
+      attachmentName: body.attachmentName || null,
+      attachmentType: body.attachmentType || null,
+      attachmentSize: body.attachmentSize || null,
     }
   })
   return NextResponse.json(minutes)

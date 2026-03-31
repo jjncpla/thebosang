@@ -18,6 +18,9 @@ type MinutesRecord = {
   meetingDate: string
   content: string
   authorName: string
+  attachmentName?: string | null
+  attachmentType?: string | null
+  attachmentSize?: number | null
   createdAt: string
 }
 
@@ -46,6 +49,8 @@ export default function MinutesTab() {
   const [formDate, setFormDate] = useState('')
   const [formContent, setFormContent] = useState('')
   const [saving, setSaving] = useState(false)
+  const [attachmentFile, setAttachmentFile] = useState<File | null>(null)
+  const [attachmentPreview, setAttachmentPreview] = useState('')
 
   const fetchMinutes = useCallback(async () => {
     setLoading(true)
@@ -63,10 +68,62 @@ export default function MinutesTab() {
 
   useEffect(() => { fetchMinutes() }, [fetchMinutes])
 
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (file.size > 5 * 1024 * 1024) {
+      alert('파일 크기는 5MB 이하만 가능합니다.')
+      e.target.value = ''
+      return
+    }
+    const allowed = ['application/pdf', 'image/jpeg', 'image/png', 'image/gif',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet']
+    if (!allowed.includes(file.type)) {
+      alert('PDF, 이미지(JPG/PNG), Word, Excel 파일만 첨부 가능합니다.')
+      e.target.value = ''
+      return
+    }
+    setAttachmentFile(file)
+    setAttachmentPreview(file.name)
+  }
+
+  async function handleDownload(id: string, fileName: string) {
+    const res = await fetch(`/api/minutes/${id}`)
+    const data = await res.json()
+    if (!data.attachmentData) return
+    const byteCharacters = atob(data.attachmentData)
+    const byteArray = new Uint8Array(byteCharacters.length)
+    for (let i = 0; i < byteCharacters.length; i++) {
+      byteArray[i] = byteCharacters.charCodeAt(i)
+    }
+    const blob = new Blob([byteArray], { type: data.attachmentType || 'application/octet-stream' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = fileName
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
   async function handleAdd() {
     if (!formTitle.trim() || !formDate) return
     setSaving(true)
     try {
+      let attachmentData: string | null = null
+      let attachmentName: string | null = null
+      let attachmentType: string | null = null
+      let attachmentSize: number | null = null
+      if (attachmentFile) {
+        attachmentData = await new Promise<string>((resolve) => {
+          const reader = new FileReader()
+          reader.onload = () => resolve((reader.result as string).split(',')[1])
+          reader.readAsDataURL(attachmentFile)
+        })
+        attachmentName = attachmentFile.name
+        attachmentType = attachmentFile.type
+        attachmentSize = attachmentFile.size
+      }
       const res = await fetch('/api/minutes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -75,6 +132,7 @@ export default function MinutesTab() {
           title: formTitle.trim(),
           meetingDate: formDate,
           content: formContent.trim(),
+          attachmentData, attachmentName, attachmentType, attachmentSize,
         }),
       })
       if (res.ok) {
@@ -82,6 +140,8 @@ export default function MinutesTab() {
         setFormTitle('')
         setFormDate('')
         setFormContent('')
+        setAttachmentFile(null)
+        setAttachmentPreview('')
         await fetchMinutes()
       } else {
         const d = await res.json()
@@ -153,6 +213,14 @@ export default function MinutesTab() {
                   <span className="text-sm font-medium text-gray-800">{m.title}</span>
                 </div>
                 <div className="flex items-center gap-2">
+                  {m.attachmentName && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleDownload(m.id, m.attachmentName!) }}
+                      className="px-2 py-0.5 text-[11px] rounded border border-sky-200 bg-sky-50 text-sky-700 hover:bg-sky-100"
+                    >
+                      {m.attachmentName}
+                    </button>
+                  )}
                   <span className="text-xs text-gray-400">{m.authorName}</span>
                   <span className="text-gray-400 text-xs">{expandedId === m.id ? '▲' : '▼'}</span>
                 </div>
@@ -202,6 +270,26 @@ export default function MinutesTab() {
                   value={formContent}
                   onChange={e => setFormContent(e.target.value)}
                 />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">
+                  첨부파일 <span className="text-gray-400 font-normal">(PDF, 이미지, Word, Excel / 5MB 이하)</span>
+                </label>
+                <input
+                  type="file"
+                  accept=".pdf,.jpg,.jpeg,.png,.gif,.docx,.xlsx"
+                  onChange={handleFileChange}
+                  className="text-sm w-full"
+                />
+                {attachmentPreview && (
+                  <div className="mt-1.5 px-2.5 py-1.5 bg-sky-50 rounded text-xs text-sky-700 flex justify-between items-center">
+                    <span>{attachmentPreview}</span>
+                    <button
+                      onClick={() => { setAttachmentFile(null); setAttachmentPreview('') }}
+                      className="text-gray-400 hover:text-gray-600 text-base leading-none"
+                    >x</button>
+                  </div>
+                )}
               </div>
             </div>
             <div className="flex justify-end gap-2 pt-2">

@@ -978,8 +978,12 @@ model Minutes {
   category    String
   title       String
   meetingDate DateTime
-  content     String   @default("")
-  authorName  String   @default("")
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  content         String   @default("")
+  authorName      String   @default("")
+  attachmentData  String?  // base64 인코딩된 파일 데이터
+  attachmentName  String?  // 원본 파일명
+  attachmentType  String?  // MIME 타입
+  attachmentSize  Int?     // 파일 크기 (bytes)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 }
