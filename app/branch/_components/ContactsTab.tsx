@@ -24,6 +24,7 @@ interface IsanOffice {
 const EMPTY_FORM = {
   firmType: 'TBOSANG', firm: '', branch: '', name: '',
   title: '', mobile: '', officePhone: '', email: '',
+  jobGrade: '외근직', hireDate: null as string | null, leaveDate: null as string | null,
 }
 
 export default function ContactsTab() {
