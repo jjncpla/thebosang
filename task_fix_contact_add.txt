@@ -1,0 +1,96 @@
+## 세션 타입: 버그픽스 세션
+## 작업 목표
+임직원 인사카드 '추가' 버튼으로 저장한 데이터가 목록에 표시 안 되는 문제 수정
+
+---
+
+## Step 1: 문제 파악
+
+```bash
+# ContactsTab 추가 버튼 관련 코드 확인
+find . -name "ContactsTab*" | grep -v node_modules
+grep -n "추가\|handleAdd\|POST\|setContacts\|fetchContacts\|fetch(" app/admin/_components/ContactsTab.tsx 2>/dev/null | head -40
+# 또는
+grep -n "추가\|handleAdd\|POST\|setContacts\|fetchContacts\|fetch(" app/branch/_components/ContactsTab.tsx 2>/dev/null | head -40
+
+# contacts POST API 확인
+cat app/api/contacts/route.ts
+```
+
+## Step 2: 가능한 원인들 진단 및 수정
+
+### 원인 A: POST 후 목록 갱신(refetch) 안 함
+추가 버튼 �핸들러에서 저장 후 fetchContacts() 미호출:
+```typescript
+// 문제 패턴
+const handleAdd = async () => {
+  await fetch('/api/contacts', { method: 'POST', body: JSON.stringify(form) })
+  setShowModal(false) // fetch 갱신 없음
+}
+
+// 수정
+const handleAdd = async () => {
+  await fetch('/api/contacts', { method: 'POST', body: JSON.stringify(form) })
+  setShowModal(false)
+  await fetchContacts() // 목록 갱신 추가
+}
+```
+
+### 원인 B: POST API에서 firmType 기본값 미설정
+새로 추가된 Contact의 firmType이 없거나 다른 값이어서
+현재 탭(더보상/이산) 필터에 걸리지 않는 경우:
+```typescript
+// POST API (app/api/contacts/route.ts) 확인
+// firmType이 body에 없으면 기본값 'TBOSANG' 설정 필요
+const contact = await prisma.contact.create({
+  data: {
+    firmType: body.firmType || 'TBOSANG',
+    ...body,
+  }
+})
+```
+
+### 원인 C: 추가 모달에 firmType 입력 필드 없음
+추가 모달 폼에 firmType 필드가 없어서 POST 시 누락:
+ContactsTab의 추가 모달 폼에 firmType 선택 드롭다운 추가:
+```tsx
+<select
+  value={addForm.firmType || 'TBOSANG'}
+  onChange={e => setAddForm(p => ({ ...p, firmType: e.target.value }))}
+  style={{ width: '100%', padding: '6px 10px', border: '1px solid #cbd5e1', borderRadius: 6, fontSize: 13 }}
+>
+  <option value="TBOSANG">노무법인 더보상</option>
+  <option value="ISAN">노무법인 이산</option>
+</select>
+```
+
+### 원인 D: id 필드 누락
+POST 시 id를 서버에서 생성하지 않고 클라이언트에서 전달해야 하는 구조인 경우:
+```typescript
+// POST API에서 id 자동 생성 확인
+const contact = await prisma.contact.create({
+  data: {
+    id: body.id || crypto.randomUUID(), // id 없으면 자동 생성
+    ...body,
+  }
+})
+```
+
+## Step 3: 전체 수정 적용
+
+Step 1에서 파악된 실제 원인에 따라 수술적 수정.
+여러 원인이 복합적으로 있을 수 있으므로 모두 점검.
+
+수정 후:
+```bash
+git add -A
+git commit -m "fix: 임직원 인사카드 추가 후 목록 갱신 안 되는 문제 수정"
+git push origin main
+```
+
+## 확인
+배포 후:
+1. 임직원 인사카드 → 추가 버튼 클릭
+2. 정보 입력 후 저장
+3. 저장 직후 목록에 표시되는지 확인
+4. 페이지 새로고침 후에도 유지되는지 확인
