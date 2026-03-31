@@ -52,6 +52,12 @@ export default function MinutesTab() {
   const [attachmentFile, setAttachmentFile] = useState<File | null>(null)
   const [attachmentPreview, setAttachmentPreview] = useState('')
 
+  // 수정 상태
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editForm, setEditForm] = useState<{ category: string; title: string; meetingDate: string; content: string } | null>(null)
+  const [editAttachmentFile, setEditAttachmentFile] = useState<File | null>(null)
+  const [editSaving, setEditSaving] = useState(false)
+
   const fetchMinutes = useCallback(async () => {
     setLoading(true)
     try {
@@ -68,22 +74,26 @@ export default function MinutesTab() {
 
   useEffect(() => { fetchMinutes() }, [fetchMinutes])
 
-  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file) return
+  function validateFile(file: File, e: React.ChangeEvent<HTMLInputElement>): boolean {
     if (file.size > 5 * 1024 * 1024) {
       alert('파일 크기는 5MB 이하만 가능합니다.')
       e.target.value = ''
-      return
+      return false
     }
-    const allowed = ['application/pdf', 'image/jpeg', 'image/png', 'image/gif',
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet']
-    if (!allowed.includes(file.type)) {
+    const ext = file.name.split('.').pop()?.toLowerCase()
+    const allowedExts = ['pdf', 'jpg', 'jpeg', 'png', 'gif', 'doc', 'docx', 'xls', 'xlsx']
+    if (!allowedExts.includes(ext || '')) {
       alert('PDF, 이미지(JPG/PNG), Word, Excel 파일만 첨부 가능합니다.')
       e.target.value = ''
-      return
+      return false
     }
+    return true
+  }
+
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (!validateFile(file, e)) return
     setAttachmentFile(file)
     setAttachmentPreview(file.name)
   }
@@ -93,6 +103,52 @@ export default function MinutesTab() {
     const res = await fetch(`/api/minutes/${id}`, { method: 'DELETE' })
     if (!res.ok) { alert('삭제 실패'); return }
     await fetchMinutes()
+  }
+
+  function openEdit(m: MinutesRecord) {
+    setEditingId(m.id)
+    setEditForm({
+      category: m.category,
+      title: m.title,
+      meetingDate: new Date(m.meetingDate).toISOString().split('T')[0],
+      content: m.content,
+    })
+    setEditAttachmentFile(null)
+  }
+
+  async function handleUpdate() {
+    if (!editingId || !editForm) return
+    setEditSaving(true)
+    try {
+      const body: Record<string, unknown> = { ...editForm }
+      if (editAttachmentFile) {
+        body.attachmentData = await new Promise<string>((resolve) => {
+          const reader = new FileReader()
+          reader.onload = () => resolve((reader.result as string).split(',')[1])
+          reader.readAsDataURL(editAttachmentFile)
+        })
+        body.attachmentName = editAttachmentFile.name
+        body.attachmentType = editAttachmentFile.type
+        body.attachmentSize = editAttachmentFile.size
+      }
+      const res = await fetch(`/api/minutes/${editingId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      if (res.ok) {
+        setEditingId(null)
+        setEditForm(null)
+        setEditAttachmentFile(null)
+        await fetchMinutes()
+      } else {
+        const d = await res.json()
+        alert(d.error || '수정 실패')
+      }
+    } catch {
+      alert('수정 중 오류 발생')
+    }
+    setEditSaving(false)
   }
 
   async function handleDownload(id: string, fileName: string) {
@@ -230,10 +286,16 @@ export default function MinutesTab() {
                   )}
                   <span className="text-xs text-gray-400">{m.authorName}</span>
                   {canWrite && (
-                    <button
-                      onClick={(e) => { e.stopPropagation(); handleDeleteMinute(m.id, m.title) }}
-                      className="px-2 py-0.5 text-[11px] rounded border border-red-200 bg-red-50 text-red-600 hover:bg-red-100"
-                    >삭제</button>
+                    <>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); openEdit(m) }}
+                        className="px-2 py-0.5 text-[11px] rounded border border-sky-200 bg-sky-50 text-sky-700 hover:bg-sky-100"
+                      >수정</button>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleDeleteMinute(m.id, m.title) }}
+                        className="px-2 py-0.5 text-[11px] rounded border border-red-200 bg-red-50 text-red-600 hover:bg-red-100"
+                      >삭제</button>
+                    </>
                   )}
                   <span className="text-gray-400 text-xs">{expandedId === m.id ? '▲' : '▼'}</span>
                 </div>
@@ -290,7 +352,7 @@ export default function MinutesTab() {
                 </label>
                 <input
                   type="file"
-                  accept=".pdf,.jpg,.jpeg,.png,.gif,.docx,.xlsx"
+                  accept=".pdf,.jpg,.jpeg,.png,.gif,.doc,.docx,.xls,.xlsx"
                   onChange={handleFileChange}
                   className="text-sm w-full"
                 />
@@ -313,6 +375,93 @@ export default function MinutesTab() {
                 className="px-4 py-2 text-sm bg-sky-500 text-white rounded hover:bg-sky-600 disabled:opacity-50"
               >
                 {saving ? '저장 중...' : '저장'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 회의록 수정 모달 */}
+      {editingId && editForm && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-base font-medium">회의록 수정</h3>
+              <button onClick={() => { setEditingId(null); setEditForm(null) }} className="text-gray-400 hover:text-gray-600 text-lg leading-none">✕</button>
+            </div>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">카테고리</label>
+                <select
+                  className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-sky-400"
+                  value={editForm.category}
+                  onChange={e => setEditForm({ ...editForm, category: e.target.value })}
+                >
+                  {CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">회의 제목 *</label>
+                <input
+                  className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-sky-400"
+                  value={editForm.title}
+                  onChange={e => setEditForm({ ...editForm, title: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">회의 일자 *</label>
+                <input
+                  type="date"
+                  className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-sky-400"
+                  value={editForm.meetingDate}
+                  onChange={e => setEditForm({ ...editForm, meetingDate: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">회의 내용</label>
+                <textarea
+                  className="w-full border border-gray-300 rounded px-3 py-2 text-sm h-48 resize-y focus:outline-none focus:border-sky-400"
+                  value={editForm.content}
+                  onChange={e => setEditForm({ ...editForm, content: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">
+                  첨부파일 변경 <span className="text-gray-400 font-normal">(새 파일 선택 시 교체됨)</span>
+                </label>
+                {(() => {
+                  const existing = minutes.find(m => m.id === editingId)
+                  return existing?.attachmentName && !editAttachmentFile ? (
+                    <div className="text-xs text-sky-700 mb-1">현재: {existing.attachmentName}</div>
+                  ) : null
+                })()}
+                <input
+                  type="file"
+                  accept=".pdf,.jpg,.jpeg,.png,.gif,.doc,.docx,.xls,.xlsx"
+                  onChange={e => {
+                    const file = e.target.files?.[0]
+                    if (!file) return
+                    if (!validateFile(file, e)) return
+                    setEditAttachmentFile(file)
+                  }}
+                  className="text-sm w-full"
+                />
+                {editAttachmentFile && (
+                  <div className="mt-1.5 px-2.5 py-1.5 bg-sky-50 rounded text-xs text-sky-700 flex justify-between items-center">
+                    <span>{editAttachmentFile.name}</span>
+                    <button onClick={() => setEditAttachmentFile(null)} className="text-gray-400 hover:text-gray-600 text-base leading-none">x</button>
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <button onClick={() => { setEditingId(null); setEditForm(null) }} className="px-4 py-2 text-sm border rounded hover:bg-gray-50">취소</button>
+              <button
+                onClick={handleUpdate}
+                disabled={editSaving || !editForm.title.trim() || !editForm.meetingDate}
+                className="px-4 py-2 text-sm bg-sky-500 text-white rounded hover:bg-sky-600 disabled:opacity-50"
+              >
+                {editSaving ? '저장 중...' : '수정 저장'}
               </button>
             </div>
           </div>

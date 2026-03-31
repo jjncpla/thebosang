@@ -12,6 +12,33 @@ export async function GET(
   return NextResponse.json(minutes)
 }
 
+export async function PUT(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const session = await auth()
+  if (!session?.user) return NextResponse.json({ error: '인증 필요' }, { status: 401 })
+
+  const { id } = await params
+  const body = await req.json()
+  const updated = await prisma.minutes.update({
+    where: { id },
+    data: {
+      category: body.category,
+      title: body.title,
+      meetingDate: new Date(body.meetingDate + 'T12:00:00.000Z'),
+      content: body.content || '',
+      ...(body.attachmentData !== undefined && {
+        attachmentData: body.attachmentData,
+        attachmentName: body.attachmentName,
+        attachmentType: body.attachmentType,
+        attachmentSize: body.attachmentSize,
+      }),
+    },
+  })
+  return NextResponse.json(updated)
+}
+
 export async function DELETE(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
