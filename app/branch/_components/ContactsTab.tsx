@@ -14,6 +14,8 @@ interface Contact {
   officePhone: string
   email: string
   jobGrade: string
+  hireDate: string | null
+  leaveDate: string | null
 }
 interface IsanOffice {
   id: string; name: string; tel: string; fax: string; address: string
@@ -146,6 +148,8 @@ export default function ContactsTab() {
                 <th style={th}>직군</th>
                 <th style={th}>핸드폰</th>
                 <th style={th}>{activeTab === 'TBOSANG' ? '사무실번호' : '직통번호'}</th>
+                <th style={th}>입사일</th>
+                <th style={th}>퇴사일</th>
                 {activeTab === 'ISAN' && <th style={th}>이메일</th>}
                 {isAdmin && <th style={{ ...th, textAlign: 'center' }}>관리</th>}
               </tr>
@@ -180,6 +184,12 @@ export default function ContactsTab() {
                       : '-'}
                   </td>
                   <td style={{ ...td(i), fontFamily: 'monospace', color: '#475569' }}>{c.officePhone || '-'}</td>
+                  <td style={{ ...td(i), fontSize: 12, color: '#475569' }}>
+                    {c.hireDate ? new Date(c.hireDate).toLocaleDateString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit' }) : '-'}
+                  </td>
+                  <td style={{ ...td(i), fontSize: 12, color: '#475569' }}>
+                    {c.leaveDate ? new Date(c.leaveDate).toLocaleDateString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit' }) : '-'}
+                  </td>
                   {activeTab === 'ISAN' && <td style={{ ...td(i), fontSize: 12, color: '#475569' }}>{c.email || '-'}</td>}
                   {isAdmin && (
                     <td style={{ ...td(i), textAlign: 'center', whiteSpace: 'nowrap' }}>
@@ -261,6 +271,22 @@ export default function ContactsTab() {
                 )}
               </div>
             ))}
+            <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+              <div style={{ flex: 1 }}>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#475569', marginBottom: 4 }}>입사일</label>
+                <input type="date"
+                  value={formData.hireDate ? new Date(formData.hireDate).toISOString().split('T')[0] : ''}
+                  onChange={e => setFormData((p: any) => ({ ...p, hireDate: e.target.value || null }))}
+                  style={{ width: '100%', padding: '8px 10px', border: '1px solid #cbd5e1', borderRadius: 6, fontSize: 13, boxSizing: 'border-box' }} />
+              </div>
+              <div style={{ flex: 1 }}>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#475569', marginBottom: 4 }}>퇴사일</label>
+                <input type="date"
+                  value={formData.leaveDate ? new Date(formData.leaveDate).toISOString().split('T')[0] : ''}
+                  onChange={e => setFormData((p: any) => ({ ...p, leaveDate: e.target.value || null }))}
+                  style={{ width: '100%', padding: '8px 10px', border: '1px solid #cbd5e1', borderRadius: 6, fontSize: 13, boxSizing: 'border-box' }} />
+              </div>
+            </div>
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 20 }}>
               <button onClick={() => setModalOpen(false)}
                 style={{ padding: '8px 20px', border: '1px solid #cbd5e1', borderRadius: 6, background: '#fff', cursor: 'pointer', fontSize: 13 }}>

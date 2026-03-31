@@ -935,6 +935,8 @@ model Contact {
   email        String   @default("")
   displayOrder Int      @default(0)
   jobGrade     String   @default("")  // 직군: 외근직 | 내근직 | 노무사 | 등기노무사 | 기타
+  hireDate     DateTime?  // 입사일
+  leaveDate    DateTime?  // 퇴사일
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 }

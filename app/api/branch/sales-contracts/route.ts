@@ -30,6 +30,33 @@ export async function GET(req: NextRequest) {
     },
     orderBy: [{ staffName: 'asc' }, { month: 'asc' }],
   })
+
+  // activeStaff 조회 (includeStaff=true 시)
+  if (searchParams.get('includeStaff') === 'true' && branchName) {
+    const refMonth = month ? parseInt(month) : (quarter ? parseInt(quarter) * 3 : new Date().getMonth() + 1)
+    const targetDate = new Date(year, refMonth - 1, 1)
+    const targetDateEnd = new Date(year, refMonth, 0)
+    const activeStaff = await prisma.contact.findMany({
+      where: {
+        jobGrade: '외근직',
+        branch: branchName,
+        OR: [
+          { hireDate: null },
+          { hireDate: { lte: targetDateEnd } },
+        ],
+        AND: [{
+          OR: [
+            { leaveDate: null },
+            { leaveDate: { gte: targetDate } },
+          ]
+        }]
+      },
+      select: { name: true, branch: true, hireDate: true, leaveDate: true },
+      orderBy: { displayOrder: 'asc' },
+    })
+    return NextResponse.json({ contracts: data, activeStaff })
+  }
+
   return NextResponse.json(data)
 }
 

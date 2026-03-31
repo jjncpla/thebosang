@@ -95,6 +95,7 @@ export default function PerformanceTab() {
   const [salesIds, setSalesIds]   = useState<Record<string, string>>({})
   const [salesDirty, setSalesDirty]   = useState(false)
   const [salesSaving, setSalesSaving] = useState(false)
+  const [activeStaff, setActiveStaff] = useState<{ name: string; branch: string }[]>([])
 
   // 직원 추가 모달
   const [showAddStaff, setShowAddStaff] = useState(false)
@@ -126,12 +127,14 @@ export default function PerformanceTab() {
     }
 
     // 2. 약정 건수 데이터
-    const qs = new URLSearchParams({ year: String(year), branchName: branch })
+    const qs = new URLSearchParams({ year: String(year), branchName: branch, includeStaff: 'true' })
     if (quarter) qs.set('quarter', String(quarter))
     else if (month) qs.set('month', String(month))
     const sRes = await fetch(`/api/branch/sales-contracts?${qs}`)
     if (sRes.ok) {
-      const rows: { id: string; staffName: string; month: number; [k: string]: unknown }[] = await sRes.json()
+      const sData = await sRes.json()
+      const rows: { id: string; staffName: string; month: number; [k: string]: unknown }[] = Array.isArray(sData) ? sData : (sData.contracts || [])
+      setActiveStaff(sData.activeStaff || [])
       const map: Record<string, Record<string, number>> = {}
       const idMap: Record<string, string> = {}
       for (const r of rows) {
@@ -517,7 +520,7 @@ export default function PerformanceTab() {
               onClick={handleDeleteBranchContracts}
               className="px-3 py-1.5 text-xs border border-red-200 text-red-600 rounded hover:bg-red-50"
             >
-              지사 전체 삭제
+              지사 데이터 전체 삭제
             </button>
           </div>
 
@@ -607,6 +610,45 @@ export default function PerformanceTab() {
                       className="px-3 py-1.5 text-sm bg-red-500 text-white rounded"
                     >퇴사 처리</button>
                   </div>
+                </div>
+              </div>
+            )
+          })()}
+
+          {/* 재직 중 직원 자동 감지 */}
+          {(() => {
+            const existingNames = new Set(roster.map(r => r.staffName))
+            const autoStaff = activeStaff.filter(s => !existingNames.has(s.name))
+            if (autoStaff.length === 0) return null
+            return (
+              <div style={{ padding: 8, background: '#f0fdf4', borderRadius: 6, border: '1px solid #bbf7d0' }}>
+                <span style={{ fontSize: 12, color: '#16a34a', fontWeight: 600 }}>재직 중 직원 자동 감지:</span>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
+                  {autoStaff.map(s => (
+                    <button
+                      key={s.name}
+                      onClick={async () => {
+                        await fetch('/api/branch/staff-roster', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            branchName: branch,
+                            staffName: s.name,
+                            startYear: year,
+                            startMonth: month || (quarter ? (quarter - 1) * 3 + 1 : new Date().getMonth() + 1),
+                          }),
+                        })
+                        await loadSales()
+                      }}
+                      style={{
+                        padding: '3px 10px', fontSize: 12, borderRadius: 12,
+                        border: '1px solid #86efac', background: '#fff', color: '#16a34a',
+                        cursor: 'pointer', fontWeight: 600,
+                      }}
+                    >
+                      + {s.name}
+                    </button>
+                  ))}
                 </div>
               </div>
             )

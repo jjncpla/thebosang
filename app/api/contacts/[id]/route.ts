@@ -12,7 +12,15 @@ export async function PUT(
   }
   const { id } = await params
   const body = await request.json()
-  const contact = await prisma.contact.update({ where: { id }, data: body })
+  const { hireDate, leaveDate, ...rest } = body
+  const contact = await prisma.contact.update({
+    where: { id },
+    data: {
+      ...rest,
+      hireDate: hireDate ? new Date(hireDate) : null,
+      leaveDate: leaveDate ? new Date(leaveDate) : null,
+    },
+  })
   return NextResponse.json(contact)
 }
 
