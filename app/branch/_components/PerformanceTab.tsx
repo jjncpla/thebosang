@@ -123,6 +123,10 @@ export default function PerformanceTab() {
     const rRes = await fetch(`/api/branch/staff-roster?branchName=${encodeURIComponent(branch)}&year=${year}&month=${refMonth}`)
     if (rRes.ok) {
       const rData: StaffRosterItem[] = await rRes.json()
+      // 지사 고정 행: roster에 지사명이 없으면 추가
+      if (!rData.find(r => r.staffName === branch)) {
+        rData.unshift({ id: `branch_${branch}`, staffName: branch, startYear: 2020, startMonth: 1, endYear: null, endMonth: null })
+      }
       setRoster(rData)
     }
 
@@ -171,6 +175,15 @@ export default function PerformanceTab() {
 
   function staffMonthTotal(staffName: string, m: number) {
     return CASE_TYPES.reduce((s, ct) => s + getCellValue(staffName, ct.id, m), 0)
+  }
+
+  // 분기/연간 집계 유틸
+  const QUARTER_MAP: Record<number, number[]> = { 1: [1,2,3], 2: [4,5,6], 3: [7,8,9], 4: [10,11,12] }
+  function staffQuarterTotal(staffName: string, months: number[]) {
+    return months.reduce((s, m) => s + staffMonthTotal(staffName, m), 0)
+  }
+  function staffCaseTypeSum(staffName: string, months: number[], caseTypeId: string) {
+    return months.reduce((s, m) => s + getCellValue(staffName, caseTypeId, m), 0)
   }
 
   async function saveSales() {
@@ -704,7 +717,19 @@ export default function PerformanceTab() {
                   if (end < monthYM) return false
                 }
                 return true
+              }).sort((a, b) => {
+                if (a.staffName === branch) return -1
+                if (b.staffName === branch) return 1
+                return a.staffName.localeCompare(b.staffName)
               })
+
+              // 분기 마지막 월인지 확인
+              const quarterEnd = [3, 6, 9, 12].includes(m)
+              const quarterNum = Math.ceil(m / 3)
+              const quarterMonths = QUARTER_MAP[quarterNum]
+              // 모든 직원 이름 (지사 행 포함)
+              const allStaffNames = [...new Set(roster.map(r => r.staffName))]
+                .sort((a, b) => a === branch ? -1 : b === branch ? 1 : a.localeCompare(b))
 
               return (
                 <div key={m}>
@@ -728,9 +753,11 @@ export default function PerformanceTab() {
                         </tr>
                       </thead>
                       <tbody>
-                        {monthRoster.map(r => (
-                          <tr key={r.staffName} className="hover:bg-gray-50">
-                            <td className={`${cellCls} font-medium sticky left-0 bg-white`}>{r.staffName}</td>
+                        {monthRoster.map(r => {
+                          const isBranchRow = r.staffName === branch
+                          return (
+                          <tr key={r.staffName} className={isBranchRow ? '' : 'hover:bg-gray-50'} style={isBranchRow ? { background: '#f0fdf4' } : undefined}>
+                            <td className={`${cellCls} font-medium sticky left-0`} style={isBranchRow ? { background: '#f0fdf4', fontWeight: 700 } : { background: 'white' }}>{r.staffName}</td>
                             {CASE_TYPES.map(ct => (
                               <td key={ct.id} className={cellCls}>
                                 <input
@@ -746,23 +773,26 @@ export default function PerformanceTab() {
                               {staffMonthTotal(r.staffName, m) || 0}
                             </td>
                             <td className={cellCls}>
-                              <div className="flex items-center gap-1">
-                                {salesIds[`${r.staffName}_${m}`] && (
+                              {!isBranchRow && (
+                                <div className="flex items-center gap-1">
+                                  {salesIds[`${r.staffName}_${m}`] && (
+                                    <button
+                                      onClick={() => handleDeleteContract(salesIds[`${r.staffName}_${m}`], r.staffName)}
+                                      className="text-gray-300 hover:text-red-400 text-[10px]"
+                                      title="이 월 약정 삭제"
+                                    >삭제</button>
+                                  )}
                                   <button
-                                    onClick={() => handleDeleteContract(salesIds[`${r.staffName}_${m}`], r.staffName)}
-                                    className="text-gray-300 hover:text-red-400 text-[10px]"
-                                    title="이 월 약정 삭제"
-                                  >삭제</button>
-                                )}
-                                <button
-                                  onClick={() => { setRemovingStaff(r.id); setRemoveFrom({ y: year, m }) }}
-                                  className="text-gray-300 hover:text-red-400 text-xs"
-                                  title="퇴사 처리"
-                                >✕</button>
-                              </div>
+                                    onClick={() => { setRemovingStaff(r.id); setRemoveFrom({ y: year, m }) }}
+                                    className="text-gray-300 hover:text-red-400 text-xs"
+                                    title="퇴사 처리"
+                                  >✕</button>
+                                </div>
+                              )}
                             </td>
                           </tr>
-                        ))}
+                          )
+                        })}
 
                         {/* 상병별 합계 행 */}
                         <tr className="bg-gray-50">
@@ -783,6 +813,137 @@ export default function PerformanceTab() {
                       </tbody>
                     </table>
                   </div>
+
+                  {/* 분기 집계 */}
+                  {quarterEnd && viewMonths.length > 1 && (
+                    <div style={{ margin: '8px 0 16px', padding: '10px 14px', background: '#eff6ff', borderRadius: 8, border: '1px solid #bfdbfe' }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: '#1d4ed8', marginBottom: 8 }}>
+                        {quarterNum}분기 집계 ({quarterMonths[0]}~{quarterMonths[2]}월)
+                      </div>
+                      <div className="overflow-x-auto">
+                        <table className="border-collapse text-xs w-full min-w-max">
+                          <thead>
+                            <tr>
+                              <th style={{ padding: '5px 8px', background: '#dbeafe', textAlign: 'left', fontSize: 11 }}>성명</th>
+                              {CASE_TYPES.map(ct => (
+                                <th key={ct.id} style={{ padding: '5px 8px', background: '#dbeafe', textAlign: 'center', fontSize: 11 }}>{ct.label}</th>
+                              ))}
+                              <th style={{ padding: '5px 8px', background: '#93c5fd', textAlign: 'center', fontWeight: 700, fontSize: 11 }}>합계</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {allStaffNames.map(sn => {
+                              const isBr = sn === branch
+                              return (
+                                <tr key={sn} style={{ background: isBr ? '#f0fdf4' : 'white' }}>
+                                  <td style={{ padding: '4px 8px', fontWeight: isBr ? 700 : 400, fontSize: 11 }}>{sn}</td>
+                                  {CASE_TYPES.map(ct => (
+                                    <td key={ct.id} style={{ padding: '4px 8px', textAlign: 'center', fontSize: 11 }}>
+                                      {staffCaseTypeSum(sn, quarterMonths, ct.id) || '-'}
+                                    </td>
+                                  ))}
+                                  <td style={{ padding: '4px 8px', textAlign: 'center', fontWeight: 700, color: '#1d4ed8', fontSize: 11 }}>
+                                    {staffQuarterTotal(sn, quarterMonths) || '-'}
+                                  </td>
+                                </tr>
+                              )
+                            })}
+                            <tr style={{ background: '#dbeafe', fontWeight: 700 }}>
+                              <td style={{ padding: '4px 8px', fontSize: 11 }}>전체 합계</td>
+                              {CASE_TYPES.map(ct => (
+                                <td key={ct.id} style={{ padding: '4px 8px', textAlign: 'center', fontSize: 11 }}>
+                                  {allStaffNames.reduce((s, sn) => s + staffCaseTypeSum(sn, quarterMonths, ct.id), 0) || '-'}
+                                </td>
+                              ))}
+                              <td style={{ padding: '4px 8px', textAlign: 'center', fontSize: 11 }}>
+                                {allStaffNames.reduce((s, sn) => s + staffQuarterTotal(sn, quarterMonths), 0)}
+                              </td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 연간 집계 (12월 뒤) */}
+                  {m === 12 && viewMonths.length > 1 && (
+                    <div style={{ marginTop: 16, padding: '14px 16px', background: '#fefce8', borderRadius: 8, border: '2px solid #fde047' }}>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: '#92400e', marginBottom: 12 }}>
+                        {year}년 연간 영업약정건수 집계
+                      </div>
+                      <div className="overflow-x-auto">
+                        <table className="border-collapse text-xs w-full min-w-max" style={{ marginBottom: 16 }}>
+                          <thead>
+                            <tr>
+                              <th style={{ padding: '6px 10px', background: '#fef08a', textAlign: 'left' }}>직원</th>
+                              {CASE_TYPES.map(ct => (
+                                <th key={ct.id} style={{ padding: '6px 10px', background: '#fef08a', textAlign: 'center' }}>{ct.label}</th>
+                              ))}
+                              <th style={{ padding: '6px 10px', background: '#facc15', textAlign: 'center', fontWeight: 700 }}>연간 합계</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {allStaffNames
+                              .map(sn => ({ sn, total: staffQuarterTotal(sn, [...ALL_MONTHS]), isBr: sn === branch }))
+                              .sort((a, b) => { if (a.isBr) return 1; if (b.isBr) return -1; return b.total - a.total })
+                              .map(({ sn, total, isBr }, idx, arr) => {
+                                const rank = isBr ? null : arr.filter(x => !x.isBr).findIndex(x => x.sn === sn) + 1
+                                return (
+                                  <tr key={sn} style={{ background: isBr ? '#f0fdf4' : idx % 2 === 0 ? 'white' : '#fffbeb' }}>
+                                    <td style={{ padding: '5px 10px', fontWeight: isBr ? 700 : 400 }}>
+                                      {!isBr && rank && (
+                                        <span style={{
+                                          display: 'inline-block', marginRight: 6, width: 18, height: 18, lineHeight: '18px',
+                                          textAlign: 'center', borderRadius: '50%', fontSize: 10, fontWeight: 700,
+                                          background: rank === 1 ? '#fbbf24' : rank === 2 ? '#d1d5db' : rank === 3 ? '#f97316' : '#e2e8f0',
+                                          color: rank <= 3 ? 'white' : '#374151',
+                                        }}>{rank}</span>
+                                      )}
+                                      {sn}
+                                    </td>
+                                    {CASE_TYPES.map(ct => (
+                                      <td key={ct.id} style={{ padding: '5px 10px', textAlign: 'center' }}>
+                                        {staffCaseTypeSum(sn, [...ALL_MONTHS], ct.id) || '-'}
+                                      </td>
+                                    ))}
+                                    <td style={{ padding: '5px 10px', textAlign: 'center', fontWeight: 700, color: '#92400e', fontSize: 13 }}>
+                                      {total || '-'}
+                                    </td>
+                                  </tr>
+                                )
+                              })}
+                            <tr style={{ background: '#fde047', fontWeight: 700 }}>
+                              <td style={{ padding: '5px 10px' }}>지사 전체</td>
+                              {CASE_TYPES.map(ct => (
+                                <td key={ct.id} style={{ padding: '5px 10px', textAlign: 'center' }}>
+                                  {allStaffNames.reduce((s, sn) => s + staffCaseTypeSum(sn, [...ALL_MONTHS], ct.id), 0) || '-'}
+                                </td>
+                              ))}
+                              <td style={{ padding: '5px 10px', textAlign: 'center', fontSize: 14 }}>
+                                {allStaffNames.reduce((s, sn) => s + staffQuarterTotal(sn, [...ALL_MONTHS]), 0)}
+                              </td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: '#92400e', marginBottom: 8 }}>연간 순위</div>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                        {allStaffNames
+                          .filter(sn => sn !== branch)
+                          .map(sn => ({ name: sn, total: staffQuarterTotal(sn, [...ALL_MONTHS]) }))
+                          .sort((a, b) => b.total - a.total)
+                          .map((item, idx) => (
+                            <div key={item.name} style={{
+                              padding: '6px 14px', borderRadius: 20, fontSize: 12, fontWeight: 600,
+                              background: idx === 0 ? '#fef3c7' : idx === 1 ? '#f1f5f9' : idx === 2 ? '#fff7ed' : '#f8fafc',
+                              border: '1px solid #e2e8f0',
+                            }}>
+                              {idx + 1}위 {item.name} <span style={{ color: '#2563eb', marginLeft: 6 }}>{item.total}건</span>
+                            </div>
+                          ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )
             })}
