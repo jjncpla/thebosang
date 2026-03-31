@@ -36,7 +36,7 @@ const CATEGORIES: { id: MinuteCategory; label: string; sub?: boolean }[] = [
 export default function MinutesTab() {
   const { data: session } = useSession()
   const role = (session?.user as { role?: string })?.role
-  const canWrite = ['ADMIN', 'MANAGER'].includes(role || '')
+  const canWrite = ['ADMIN', 'MANAGER', 'SITE_MANAGER', 'SENIOR_MANAGER'].includes(role || '')
 
   const [active, setActive] = useState<MinuteCategory>('executive')
   const [minutes, setMinutes] = useState<MinutesRecord[]>([])
@@ -86,6 +86,13 @@ export default function MinutesTab() {
     }
     setAttachmentFile(file)
     setAttachmentPreview(file.name)
+  }
+
+  async function handleDeleteMinute(id: string, title: string) {
+    if (!confirm(`"${title}" 회의록을 삭제하시겠습니까?`)) return
+    const res = await fetch(`/api/minutes/${id}`, { method: 'DELETE' })
+    if (!res.ok) { alert('삭제 실패'); return }
+    await fetchMinutes()
   }
 
   async function handleDownload(id: string, fileName: string) {
@@ -222,6 +229,12 @@ export default function MinutesTab() {
                     </button>
                   )}
                   <span className="text-xs text-gray-400">{m.authorName}</span>
+                  {canWrite && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleDeleteMinute(m.id, m.title) }}
+                      className="px-2 py-0.5 text-[11px] rounded border border-red-200 bg-red-50 text-red-600 hover:bg-red-100"
+                    >삭제</button>
+                  )}
                   <span className="text-gray-400 text-xs">{expandedId === m.id ? '▲' : '▼'}</span>
                 </div>
               </button>
