@@ -58,8 +58,8 @@ export async function POST(request: Request) {
   const contact = await prisma.contact.create({
     data: {
       ...rest,
-      hireDate: hireDate ? new Date(hireDate + 'T12:00:00.000Z') : null,
-      leaveDate: leaveDate ? new Date(leaveDate + 'T12:00:00.000Z') : null,
+      hireDate: hireDate && hireDate !== '' ? new Date(hireDate.slice(0, 10) + 'T12:00:00.000Z') : null,
+      leaveDate: leaveDate && leaveDate !== '' ? new Date(leaveDate.slice(0, 10) + 'T12:00:00.000Z') : null,
     },
   })
   return NextResponse.json(contact)
