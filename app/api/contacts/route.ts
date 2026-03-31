@@ -54,6 +54,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: '권한 없음' }, { status: 403 })
   }
   const body = await request.json()
-  const contact = await prisma.contact.create({ data: body })
+  const { hireDate, leaveDate, ...rest } = body
+  const contact = await prisma.contact.create({
+    data: {
+      ...rest,
+      hireDate: hireDate ? new Date(hireDate + 'T12:00:00.000Z') : null,
+      leaveDate: leaveDate ? new Date(leaveDate + 'T12:00:00.000Z') : null,
+    },
+  })
   return NextResponse.json(contact)
 }

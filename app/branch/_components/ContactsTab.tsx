@@ -73,11 +73,16 @@ export default function ContactsTab() {
     if (!formData.name?.trim()) { alert('이름을 입력해주세요.'); return }
     const url = editingId ? `/api/contacts/${editingId}` : '/api/contacts'
     const method = editingId ? 'PUT' : 'POST'
-    await fetch(url, {
+    const res = await fetch(url, {
       method,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(formData),
     })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      alert(`저장 실패: ${JSON.stringify(err)}`)
+      return
+    }
     setModalOpen(false)
     fetchContacts()
   }
