@@ -3,8 +3,20 @@ import { prisma } from "@/lib/prisma";
 
 // ─── Synology File Station API helpers ───
 async function synoLogin(nasUrl: string): Promise<string | null> {
-  const account = process.env.NAS_ACCOUNT;
-  const password = process.env.NAS_PASSWORD;
+  process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
+
+  // SystemConfig에서 계정 정보 조회, 없으면 env vars fallback
+  let account = process.env.NAS_ACCOUNT;
+  let password = process.env.NAS_PASSWORD;
+  try {
+    const configs = await prisma.systemConfig.findMany({ where: { key: { in: ["NAS_ACCOUNT", "NAS_PASSWORD"] } } });
+    const map: Record<string, string> = {};
+    configs.forEach((c) => (map[c.key] = c.value));
+    if (map.NAS_ACCOUNT) account = map.NAS_ACCOUNT;
+    if (map.NAS_PASSWORD) password = map.NAS_PASSWORD;
+  } catch {
+    // fallback to env vars
+  }
   if (!account || !password) return null;
 
   try {
@@ -72,7 +84,7 @@ export async function POST(req: NextRequest) {
     // Login to Synology
     const sid = await synoLogin(nasUrl);
     if (!sid) {
-      return NextResponse.json({ error: "NAS 로그인 실패. 환경변수(NAS_ACCOUNT, NAS_PASSWORD)를 확인하세요." }, { status: 500 });
+      return NextResponse.json({ error: "NAS 로그인 실패. NAS 설정 탭에서 계정 정보를 확인하세요." }, { status: 500 });
     }
 
     try {

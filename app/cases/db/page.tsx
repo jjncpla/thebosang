@@ -149,14 +149,17 @@ function NasSettingsTab() {
         return;
       }
 
-      // 2) 브라우저에서 NAS API 직접 호출
-      const url = `${config.nasUrl}/webapi/auth.cgi?api=SYNO.API.Auth&version=3&method=login&account=${encodeURIComponent(account)}&passwd=${encodeURIComponent(password)}&format=json`;
-      const nasRes = await fetch(url);
-      const nasData = await nasRes.json();
-      const ok = nasData?.success === true;
+      // 2) 프록시를 통해 NAS API 호출 (CORS 우회)
+      const proxyRes = await fetch("/api/nas/proxy", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ nasUrl: config.nasUrl, account, password, action: "test" }),
+      });
+      const proxyData = await proxyRes.json();
+      const ok = proxyData?.success === true;
 
       setConnectionStatus(ok ? "connected" : "failed");
-      setMessage(ok ? "연결 성공" : "로그인 실패 — 계정 정보를 확인하세요.");
+      setMessage(ok ? "연결 성공" : proxyData?.error || "로그인 실패 — 계정 정보를 확인하세요.");
     } catch {
       setConnectionStatus("failed");
       setMessage("연결 테스트 실패 — NAS에 접근할 수 없습니다.");
