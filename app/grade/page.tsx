@@ -1460,7 +1460,85 @@ export default function GradePage() {
 
           {/* 장해보상일수 */}
           {activePage === "장해보상일수" && (
-            <div style={pdfBox}><DisabilityTable /></div>
+            <div style={{ padding: '24px 0' }}>
+              <div style={{ maxWidth: '560px', margin: '0 auto' }}>
+                <table style={{
+                  width: '100%',
+                  borderCollapse: 'collapse',
+                  fontSize: '14px',
+                  boxShadow: '0 1px 4px rgba(0,0,0,0.08)',
+                  borderRadius: '8px',
+                  overflow: 'hidden',
+                }}>
+                  <thead>
+                    <tr style={{ backgroundColor: '#29ABE2', color: '#fff' }}>
+                      <th style={{ padding: '10px 14px', textAlign: 'center', fontWeight: 600, width: '80px' }}>장해등급</th>
+                      <th style={{ padding: '10px 14px', textAlign: 'center', fontWeight: 600, width: '100px' }}>장해연금(일)</th>
+                      <th style={{ padding: '10px 14px', textAlign: 'center', fontWeight: 600, width: '110px' }}>장해일시금(일)</th>
+                      <th style={{ padding: '10px 14px', textAlign: 'center', fontWeight: 600, width: '110px' }}>비고</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {[
+                      { grade: '제1급',  pension: 329,  lump: 1474, note: '연금',          noteSpan: 3  },
+                      { grade: '제2급',  pension: 291,  lump: 1309, note: null,            noteSpan: 0  },
+                      { grade: '제3급',  pension: 257,  lump: 1155, note: null,            noteSpan: 0  },
+                      { grade: '제4급',  pension: 224,  lump: 1012, note: '연금/일시금 선택', noteSpan: 4  },
+                      { grade: '제5급',  pension: 193,  lump: 869,  note: null,            noteSpan: 0  },
+                      { grade: '제6급',  pension: 164,  lump: 737,  note: null,            noteSpan: 0  },
+                      { grade: '제7급',  pension: 138,  lump: 616,  note: null,            noteSpan: 0  },
+                      { grade: '제8급',  pension: null, lump: 495,  note: '일시금',         noteSpan: 7  },
+                      { grade: '제9급',  pension: null, lump: 385,  note: null,            noteSpan: 0  },
+                      { grade: '제10급', pension: null, lump: 297,  note: null,            noteSpan: 0  },
+                      { grade: '제11급', pension: null, lump: 220,  note: null,            noteSpan: 0  },
+                      { grade: '제12급', pension: null, lump: 154,  note: null,            noteSpan: 0  },
+                      { grade: '제13급', pension: null, lump: 99,   note: null,            noteSpan: 0  },
+                      { grade: '제14급', pension: null, lump: 55,   note: null,            noteSpan: 0  },
+                    ].map((row, idx) => (
+                      <tr
+                        key={row.grade}
+                        style={{
+                          backgroundColor: idx % 2 === 0 ? '#fff' : '#f8fbff',
+                          borderBottom: '1px solid #e8f0f5',
+                        }}
+                      >
+                        <td style={{ padding: '8px 14px', textAlign: 'center', fontWeight: 500, color: '#333' }}>
+                          {row.grade}
+                        </td>
+                        <td style={{ padding: '8px 14px', textAlign: 'center', color: row.pension ? '#1a7ab5' : '#bbb' }}>
+                          {row.pension ? row.pension.toLocaleString() : '\u2014'}
+                        </td>
+                        <td style={{ padding: '8px 14px', textAlign: 'center', color: '#222' }}>
+                          {row.lump.toLocaleString()}
+                        </td>
+                        {row.noteSpan > 0 && (
+                          <td
+                            rowSpan={row.noteSpan}
+                            style={{
+                              padding: '8px 10px',
+                              textAlign: 'center',
+                              fontWeight: 500,
+                              fontSize: '13px',
+                              color: '#fff',
+                              backgroundColor:
+                                row.note === '연금' ? '#29ABE2' :
+                                row.note === '연금/일시금 선택' ? '#8DC63F' :
+                                '#006838',
+                              verticalAlign: 'middle',
+                            }}
+                          >
+                            {row.note}
+                          </td>
+                        )}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <p style={{ marginTop: '10px', fontSize: '12px', color: '#888', textAlign: 'right' }}>
+                  ※ 산업재해보상보험법 별표 2 기준 (일수 단위)
+                </p>
+              </div>
+            </div>
           )}
 
           {/* 소음성 난청 등급표 */}
