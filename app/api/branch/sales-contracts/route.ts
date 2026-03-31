@@ -36,20 +36,30 @@ export async function GET(req: NextRequest) {
     const refMonth = month ? parseInt(month) : (quarter ? parseInt(quarter) * 3 : new Date().getMonth() + 1)
     const targetDate = new Date(year, refMonth - 1, 1)
     const targetDateEnd = new Date(year, refMonth, 0)
+    // Contact.branch는 "노무법인 더보상 울산지사" 형태, branchName은 "울산지사" 형태
+    // 양쪽 모두 매칭되도록 OR 조건 사용
     const activeStaff = await prisma.contact.findMany({
       where: {
         jobGrade: '외근직',
-        branch: branchName,
         OR: [
-          { hireDate: null },
-          { hireDate: { lte: targetDateEnd } },
+          { branch: branchName },
+          { branch: `노무법인 더보상 ${branchName}` },
+          { branch: { contains: branchName } },
         ],
-        AND: [{
-          OR: [
-            { leaveDate: null },
-            { leaveDate: { gte: targetDate } },
-          ]
-        }]
+        AND: [
+          {
+            OR: [
+              { hireDate: null },
+              { hireDate: { lte: targetDateEnd } },
+            ],
+          },
+          {
+            OR: [
+              { leaveDate: null },
+              { leaveDate: { gte: targetDate } },
+            ],
+          },
+        ],
       },
       select: { name: true, branch: true, hireDate: true, leaveDate: true },
       orderBy: { displayOrder: 'asc' },

@@ -1,0 +1,142 @@
+## 세션 타입: 버그픽스 세션
+## 작업 목표
+영업약정건수 탭에서 activeStaff(재직 중 직원 자동 감지) 표시 안 되는 문제 수정
+
+---
+
+## Step 1: 실제 코드 확인
+
+```bash
+# API 코드 확인 (34~57줄)
+sed -n '1,80p' app/api/branch/sales-contracts/route.ts
+
+# UI 코드 확인 (fetch 호출부)
+grep -n "includeStaff\|sales-contracts\|activeStaff\|autoStaff" app/branch/_components/PerformanceTab.tsx | head -40
+
+# 90~650줄 범위 확인
+sed -n '90,160p' app/branch/_components/PerformanceTab.tsx
+sed -n '610,640p' app/branch/_components/PerformanceTab.tsx
+```
+
+## Step 2: 문제 진단 및 수정
+
+### 가능한 문제 1: UI fetch에 includeStaff=true 파라미터 누락
+PerformanceTab.tsx의 fetch 호출부를 찾아서:
+```typescript
+// 기존 (문제)
+fetch(`/api/branch/sales-contracts?branchName=...&year=...&month=...`)
+
+// 수정
+fetch(`/api/branch/sales-contracts?branchName=...&year=...&month=...&includeStaff=true`)
+```
+
+### 가능한 문제 2: Contact.branch vs branchName 불일치
+API에서 Contact 조회 시 branch 필드 조건 확인:
+```typescript
+// Contact 모델의 실제 지사 필드명 확인
+// Contact.branch (지사명) vs SalesContract.branchName 값이 같아야 함
+```
+
+API 코드에서 Contact 조회 조건이 아래처럼 되어 있는지 확인:
+```typescript
+where: {
+  jobGrade: '외근직',
+  branch: branchName,  // 또는 firm: branchName 등 실제 필드명 확인
+  ...
+}
+```
+
+만약 Contact의 지사 필드명이 `branch`가 아닌 다른 이름이라면 수정.
+
+### 가능한 문제 3: activeStaff 상태 set 타이밍 문제
+PerformanceTab.tsx 137줄 근처에서 setActiveStaff가 올바르게 호출되는지 확인:
+```typescript
+const data = await res.json()
+setContracts(data.contracts || [])
+setActiveStaff(data.activeStaff || [])  // 이 줄이 있어야 함
+```
+
+### 가능한 문제 4: autoStaff 필터 로직
+621~627줄 근처:
+```typescript
+const existingStaffNames = new Set(contracts.map((c: any) => c.staffName))
+const autoStaff = (activeStaff || []).filter((s: any) => !existingStaffNames.has(s.name))
+```
+여기서 `s.name` vs `s.staffName` 필드명 불일치 가능성 확인.
+Contact 모델의 이름 필드는 `name`이므로 `s.name`이 맞음.
+
+## Step 3: API 디버그 엔드포인트로 실제 데이터 확인
+
+`app/api/debug-active-staff/route.ts` 임시 생성:
+```typescript
+import { NextResponse } from 'next/server'
+import { prisma } from '@/lib/prisma'
+
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url)
+  const branchName = searchParams.get('branchName') || ''
+  const year = parseInt(searchParams.get('year') || '2026')
+  const month = parseInt(searchParams.get('month') || '6')
+
+  const targetDate = new Date(year, month - 1, 1)
+  const targetDateEnd = new Date(year, month, 0)
+
+  // 해당 지사 외근직 전체 확인
+  const allOutside = await prisma.contact.findMany({
+    where: {
+      jobGrade: '외근직',
+      ...(branchName ? { branch: branchName } : {}),
+    },
+    select: { name: true, branch: true, hireDate: true, leaveDate: true },
+    take: 10,
+  })
+
+  // 재직 중 필터 적용
+  const active = allOutside.filter(c => {
+    const hired = !c.hireDate || new Date(c.hireDate) <= targetDateEnd
+    const notLeft = !c.leaveDate || new Date(c.leaveDate) >= targetDate
+    return hired && notLeft
+  })
+
+  return NextResponse.json({
+    params: { branchName, year, month },
+    targetDate: targetDate.toISOString(),
+    targetDateEnd: targetDateEnd.toISOString(),
+    allOutsideCount: allOutside.length,
+    allOutsideSample: allOutside,
+    activeCount: active.length,
+    active,
+  })
+}
+```
+
+middleware.ts에서 `/api/debug-active-staff` 인증 제외 처리.
+
+## Step 4: 발견된 문제 수정
+
+Step 1~3을 통해 실제 문제를 파악한 뒤 수정한다.
+수정 원칙: 수술적 수정, 해당 줄만 변경.
+
+## Step 5: 배포
+
+```bash
+git add -A
+git commit -m "fix: activeStaff 자동 감지 동작 수정"
+git push origin main
+```
+
+배포 후 디버그 API 확인:
+```
+https://thebosang-production.up.railway.app/api/debug-active-staff?branchName=노무법인+더보상+울산지사&year=2026&month=6
+```
+(branchName은 실제 지사명으로 조정)
+
+active 배열에 데이터가 있으면 UI 문제, 없으면 API/DB 문제.
+
+결과 확인 후 debug API 삭제:
+```bash
+Remove-Item app/api/debug-active-staff/route.ts -Force
+git add -A
+git commit -m "chore: remove debug-active-staff API"
+git push origin main
+```
