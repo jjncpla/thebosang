@@ -1,0 +1,124 @@
+## 세션 타입: 버그픽스 세션
+## 작업 목표
+임직원 인사카드 입사일이 DB에 정확히 저장되지 않는 문제 수정
+
+---
+
+## Step 1: 실제 저장된 hireDate 확인
+
+```bash
+# debug API 임시 생성
+cat > app/api/debug-hire-date/route.ts << 'EOF'
+import { NextResponse } from 'next/server'
+import { prisma } from '@/lib/prisma'
+
+export async function GET() {
+  const contacts = await prisma.contact.findMany({
+    where: { hireDate: { not: null } },
+    select: { name: true, branch: true, hireDate: true, leaveDate: true },
+  })
+  return NextResponse.json({ contacts })
+}
+EOF
+```
+
+middleware.ts에서 `/api/debug-hire-date` 인증 제외 처리.
+
+```bash
+git add -A
+git commit -m "debug: check hireDate values"
+git push origin main
+```
+
+배포 후 접속:
+https://thebosang-production.up.railway.app/api/debug-hire-date
+
+결과를 보고:
+- hireDate가 "2020-06-xx" → DB는 정상, 필터 로직 문제
+- hireDate가 "2026-03-xx" → 저장 로직 문제
+
+---
+
+## Step 2-A: DB 값이 2026-03인 경우 (저장 로직 문제)
+
+ContactsTab.tsx의 수정 모달에서 hireDate 저장 방식 확인:
+
+문제 패턴 - input type="date"의 value가 ISO string으로 변환될 때 timezone 문제:
+```typescript
+// 문제: 한국 시간 2020-06-01을 UTC로 변환하면 2020-05-31이 될 수 있음
+hireDate: new Date(editForm.hireDate)  // timezone 문제 발생 가능
+
+// 수정: 날짜 문자열 그대로 저장하거나 noon으로 처리
+hireDate: editForm.hireDate ? new Date(editForm.hireDate + 'T12:00:00') : null
+```
+
+또는 API에서 저장 시:
+```typescript
+// contacts/[id]/route.ts PUT 핸들러
+hireDate: hireDate ? new Date(hireDate + 'T12:00:00') : null  // timezone 보정
+```
+
+---
+
+## Step 2-B: DB 값이 2020-06인 경우 (필터 로직 문제)
+
+app/api/branch/sales-contracts/route.ts에서 activeStaff 필터 확인:
+
+현재 코드 패턴:
+```typescript
+const targetDate = new Date(year, month - 1, 1)
+const targetDateEnd = new Date(year, month, 0)
+```
+
+문제: new Date(year, month-1, 1)은 로컬 timezone 기준으로 생성됨
+Railway(UTC)에서 year=2026, month=3이면 targetDate = 2026-03-01T00:00:00Z
+
+hireDate가 2020-06-01T00:00:00Z로 저장되어 있고
+targetDateEnd가 2026-03-31T00:00:00Z라면
+2020-06-01 <= 2026-03-31 → true → 표시되어야 정상
+
+만약 2020년이나 2021년 데이터를 조회할 때 안 나온다면
+→ 연도별로 SalesContract 필터가 year 조건으로 걸려있어서 해당 연도 데이터만 보는 것
+
+**실제 문제 가능성**: UI에서 selectedYear=2026 기준으로만 activeStaff를 조회하기 때문에
+2026년 탭에서만 보이는 것이 정상. 2020년 6월 선택해도 2026년 뷰에선 표시됨.
+
+만약 2026년 1월, 2월 선택 시에도 안 보인다면:
+→ includeStaff=true 파라미터와 함께 month도 올바르게 전달되는지 확인
+
+---
+
+## Step 3: 디버그 결과에 따라 수정 적용
+
+확인된 문제에 따라 수술적 수정:
+
+**저장 시 timezone 문제라면**:
+app/api/contacts/[id]/route.ts:
+```typescript
+hireDate: hireDate ? new Date(hireDate + 'T12:00:00.000Z') : null,
+leaveDate: leaveDate ? new Date(leaveDate + 'T12:00:00.000Z') : null,
+```
+
+**UI input 읽을 때 문제라면**:
+ContactsTab.tsx에서 hireDate 표시:
+```typescript
+// 기존
+new Date(c.hireDate).toLocaleDateString(...)
+
+// 수정 (UTC 기준으로 읽기)
+const d = new Date(c.hireDate)
+const dateStr = `${d.getUTCFullYear()}년 ${d.getUTCMonth()+1}월 ${d.getUTCDate()}일`
+```
+
+---
+
+## Step 4: 정리
+
+```bash
+# debug API 삭제
+Remove-Item app/api/debug-hire-date/route.ts -Force
+rmdir app/api/debug-hire-date 2>/dev/null
+git add -A
+git commit -m "fix: hireDate timezone 문제 수정"
+git push origin main
+```

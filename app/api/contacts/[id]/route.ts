@@ -17,8 +17,8 @@ export async function PUT(
     where: { id },
     data: {
       ...rest,
-      hireDate: hireDate ? new Date(hireDate) : null,
-      leaveDate: leaveDate ? new Date(leaveDate) : null,
+      hireDate: hireDate ? new Date(hireDate + 'T12:00:00.000Z') : null,
+      leaveDate: leaveDate ? new Date(leaveDate + 'T12:00:00.000Z') : null,
     },
   })
   return NextResponse.json(contact)
