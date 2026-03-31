@@ -95,7 +95,7 @@ export default function PerformanceTab() {
   const [salesIds, setSalesIds]   = useState<Record<string, string>>({})
   const [salesDirty, setSalesDirty]   = useState(false)
   const [salesSaving, setSalesSaving] = useState(false)
-  const [activeStaff, setActiveStaff] = useState<{ name: string; branch: string }[]>([])
+  const [activeStaff, setActiveStaff] = useState<{ name: string; branch: string; hireDate: string | null }[]>([])
 
   // 직원 추가 모달
   const [showAddStaff, setShowAddStaff] = useState(false)
@@ -628,7 +628,14 @@ export default function PerformanceTab() {
                     <button
                       key={s.name}
                       onClick={async () => {
-                        const startM = month || (quarter ? (quarter - 1) * 3 + 1 : new Date().getMonth() + 1)
+                        // Contact 입사일 기반으로 시작 연월 결정
+                        let startY = year
+                        let startM = month || (quarter ? (quarter - 1) * 3 + 1 : new Date().getMonth() + 1)
+                        if (s.hireDate) {
+                          const hd = new Date(s.hireDate)
+                          startY = hd.getUTCFullYear()
+                          startM = hd.getUTCMonth() + 1
+                        }
                         try {
                           const res = await fetch('/api/branch/staff-roster', {
                             method: 'POST',
@@ -636,7 +643,7 @@ export default function PerformanceTab() {
                             body: JSON.stringify({
                               branchName: branch,
                               staffName: s.name,
-                              startYear: year,
+                              startYear: startY,
                               startMonth: startM,
                             }),
                           })
@@ -652,7 +659,7 @@ export default function PerformanceTab() {
                             return [...prev, {
                               id: newRoster.id || `temp_${s.name}`,
                               staffName: s.name,
-                              startYear: year,
+                              startYear: startY,
                               startMonth: startM,
                               endYear: null,
                               endMonth: null,
