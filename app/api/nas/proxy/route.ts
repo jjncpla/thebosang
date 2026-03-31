@@ -17,7 +17,19 @@ export async function POST(req: NextRequest) {
     // ─── 로그인 ───
     const loginUrl = `${nasUrl}/webapi/auth.cgi?api=SYNO.API.Auth&version=3&method=login&account=${encodeURIComponent(account)}&passwd=${encodeURIComponent(password)}&session=FileStation&format=sid`;
     const loginRes = await fetch(loginUrl);
-    const loginData = await loginRes.json();
+    const loginText = await loginRes.text();
+    console.log("[NAS 로그인 응답 raw]:", loginText.slice(0, 500));
+
+    let loginData;
+    try {
+      loginData = JSON.parse(loginText);
+    } catch {
+      return NextResponse.json({
+        success: false,
+        error: "NAS가 JSON이 아닌 응답을 반환했습니다.",
+        raw: loginText.slice(0, 500),
+      });
+    }
 
     if (!loginData?.success) {
       return NextResponse.json({
@@ -39,7 +51,19 @@ export async function POST(req: NextRequest) {
       if (action === "list" && folderPath) {
         const listUrl = `${nasUrl}/webapi/entry.cgi?api=SYNO.FileStation.List&version=2&method=list&folder_path=${encodeURIComponent(folderPath)}&_sid=${sid}`;
         const listRes = await fetch(listUrl);
-        const listData = await listRes.json();
+        const listText = await listRes.text();
+        console.log("[NAS list 응답 raw]:", listText.slice(0, 500));
+
+        let listData;
+        try {
+          listData = JSON.parse(listText);
+        } catch {
+          return NextResponse.json({
+            success: false,
+            error: "NAS가 JSON이 아닌 응답을 반환했습니다.",
+            raw: listText.slice(0, 500),
+          });
+        }
         return NextResponse.json(listData);
       }
 
