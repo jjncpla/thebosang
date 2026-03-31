@@ -628,17 +628,26 @@ export default function PerformanceTab() {
                     <button
                       key={s.name}
                       onClick={async () => {
-                        await fetch('/api/branch/staff-roster', {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({
-                            branchName: branch,
-                            staffName: s.name,
-                            startYear: year,
-                            startMonth: month || (quarter ? (quarter - 1) * 3 + 1 : new Date().getMonth() + 1),
-                          }),
-                        })
-                        await loadSales()
+                        try {
+                          const res = await fetch('/api/branch/staff-roster', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                              branchName: branch,
+                              staffName: s.name,
+                              startYear: year,
+                              startMonth: month || (quarter ? (quarter - 1) * 3 + 1 : new Date().getMonth() + 1),
+                            }),
+                          })
+                          if (!res.ok) {
+                            const err = await res.json().catch(() => ({}))
+                            alert(`직원 추가 실패: ${JSON.stringify(err)}`)
+                            return
+                          }
+                          await loadSales()
+                        } catch (e) {
+                          alert(`네트워크 오류: ${(e as Error).message}`)
+                        }
                       }}
                       style={{
                         padding: '3px 10px', fontSize: 12, borderRadius: 12,
