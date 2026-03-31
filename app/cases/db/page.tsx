@@ -108,19 +108,19 @@ export default function CaseDbPage() {
 // NAS 설정 탭
 // ──────────────────────────────────────────────
 function NasSettingsTab() {
-  const [config, setConfig] = useState<NasConfig>({ nasUrl: "", nasRootPath: "" });
+  const [config, setConfig] = useState<NasConfig & { nasAccount: string; nasPassword: string }>({ nasUrl: "", nasRootPath: "", nasAccount: "", nasPassword: "" });
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>("idle");
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
 
   useEffect(() => {
-    fetch("/api/system-config?keys=NAS_URL,NAS_ROOT_PATH")
+    fetch("/api/system-config?keys=NAS_URL,NAS_ROOT_PATH,NAS_ACCOUNT")
       .then((r) => r.json())
       .then((data) => {
         if (data.configs) {
           const map: Record<string, string> = {};
           data.configs.forEach((c: { key: string; value: string }) => (map[c.key] = c.value));
-          setConfig({ nasUrl: map.NAS_URL || "", nasRootPath: map.NAS_ROOT_PATH || "" });
+          setConfig({ nasUrl: map.NAS_URL || "", nasRootPath: map.NAS_ROOT_PATH || "", nasAccount: map.NAS_ACCOUNT || "", nasPassword: "" });
         }
       })
       .catch(() => {});
@@ -130,13 +130,36 @@ function NasSettingsTab() {
     if (!config.nasUrl) return;
     setConnectionStatus("testing");
     try {
-      const res = await fetch(`/api/nas/test?nasUrl=${encodeURIComponent(config.nasUrl)}`);
-      const data = await res.json();
-      setConnectionStatus(data.ok ? "connected" : "failed");
-      setMessage(data.message || "");
+      // 1) 현재 입력값 사용, 비밀번호 미입력 시 서버에서 조회
+      let account = config.nasAccount;
+      let password = config.nasPassword;
+
+      if (!account || !password) {
+        const credRes = await fetch("/api/system-config?keys=NAS_ACCOUNT,NAS_PASSWORD");
+        const credData = await credRes.json();
+        const credMap: Record<string, string> = {};
+        (credData.configs || []).forEach((c: { key: string; value: string }) => (credMap[c.key] = c.value));
+        if (!account) account = credMap.NAS_ACCOUNT || "";
+        if (!password) password = credMap.NAS_PASSWORD || "";
+      }
+
+      if (!account || !password) {
+        setConnectionStatus("failed");
+        setMessage("NAS 계정 정보를 입력하거나 저장해주세요.");
+        return;
+      }
+
+      // 2) 브라우저에서 NAS API 직접 호출
+      const url = `${config.nasUrl}/webapi/auth.cgi?api=SYNO.API.Auth&version=3&method=login&account=${encodeURIComponent(account)}&passwd=${encodeURIComponent(password)}&format=json`;
+      const nasRes = await fetch(url);
+      const nasData = await nasRes.json();
+      const ok = nasData?.success === true;
+
+      setConnectionStatus(ok ? "connected" : "failed");
+      setMessage(ok ? "연결 성공" : "로그인 실패 — 계정 정보를 확인하세요.");
     } catch {
       setConnectionStatus("failed");
-      setMessage("연결 테스트 실패");
+      setMessage("연결 테스트 실패 — NAS에 접근할 수 없습니다.");
     }
   };
 
@@ -150,6 +173,8 @@ function NasSettingsTab() {
           configs: [
             { key: "NAS_URL", value: config.nasUrl },
             { key: "NAS_ROOT_PATH", value: config.nasRootPath },
+            { key: "NAS_ACCOUNT", value: config.nasAccount },
+            ...(config.nasPassword ? [{ key: "NAS_PASSWORD", value: config.nasPassword }] : []),
           ],
         }),
       });
@@ -210,6 +235,47 @@ function NasSettingsTab() {
             ❌ 연결 실패 {message && `— ${message}`}
           </span>
         )}
+      </div>
+
+      {/* NAS Account */}
+      <div style={{ marginBottom: 20 }}>
+        <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#334155", marginBottom: 6 }}>
+          NAS 계정
+        </label>
+        <input
+          value={config.nasAccount}
+          onChange={(e) => setConfig((c) => ({ ...c, nasAccount: e.target.value }))}
+          placeholder="시놀로지 로그인 계정"
+          style={{
+            width: "100%",
+            padding: "8px 12px",
+            border: "1px solid #d1d5db",
+            borderRadius: 6,
+            fontSize: 13,
+            boxSizing: "border-box",
+          }}
+        />
+      </div>
+
+      {/* NAS Password */}
+      <div style={{ marginBottom: 20 }}>
+        <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#334155", marginBottom: 6 }}>
+          NAS 비밀번호
+        </label>
+        <input
+          type="password"
+          value={config.nasPassword}
+          onChange={(e) => setConfig((c) => ({ ...c, nasPassword: e.target.value }))}
+          placeholder="시놀로지 로그인 비밀번호"
+          style={{
+            width: "100%",
+            padding: "8px 12px",
+            border: "1px solid #d1d5db",
+            borderRadius: 6,
+            fontSize: 13,
+            boxSizing: "border-box",
+          }}
+        />
       </div>
 
       {/* NAS Root Path */}
