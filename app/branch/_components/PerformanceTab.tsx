@@ -474,15 +474,22 @@ export default function PerformanceTab() {
   const isanTotal = filteredSettlements.filter(s => s.tfName && !s.tfName.startsWith('더보상')).reduce((sum, s) => sum + s.grossAmount, 0)
 
   // ③ 상병별 집계
-  const caseTypeSummary: Record<string, { count: number; totalGross: number; tfSet: Set<string>; salesSet: Set<string>; settleSet: Set<string> }> = {}
+  const caseTypeSummary: Record<string, { count: number; totalGross: number }> = {}
   for (const s of filteredSettlements) {
-    const ct = s.caseType || '(미지정)'
-    if (!caseTypeSummary[ct]) caseTypeSummary[ct] = { count: 0, totalGross: 0, tfSet: new Set(), salesSet: new Set(), settleSet: new Set() }
+    const ct = s.caseType || '(기타)'
+    if (!caseTypeSummary[ct]) caseTypeSummary[ct] = { count: 0, totalGross: 0 }
     caseTypeSummary[ct].count += 1
     caseTypeSummary[ct].totalGross += s.grossAmount
-    if (s.tfName) caseTypeSummary[ct].tfSet.add(s.tfName)
-    if (s.salesStaffName) caseTypeSummary[ct].salesSet.add(s.salesStaffName)
-    if (s.settlementStaffName) caseTypeSummary[ct].settleSet.add(s.settlementStaffName)
+  }
+
+  // 이산 TF × 정산담당자 교차 집계
+  const isanBySettleStaff: Record<string, { count: number; totalGross: number }> = {}
+  for (const s of filteredSettlements) {
+    if (!s.tfName || s.tfName.startsWith('더보상')) continue
+    const name = s.settlementStaffName || '(미상)'
+    if (!isanBySettleStaff[name]) isanBySettleStaff[name] = { count: 0, totalGross: 0 }
+    isanBySettleStaff[name].count      += 1
+    isanBySettleStaff[name].totalGross += s.grossAmount
   }
 
   // ④ 월별 시계열
@@ -1155,12 +1162,15 @@ export default function PerformanceTab() {
 
     {/* ── 집계 섹션 (4종) */}
     {filteredSettlements.length > 0 && (
-      <div className="space-y-5 border-t pt-4">
+      <div className="border-t pt-5 mt-2">
+        {/* 집계 타이틀 */}
+        <p className="text-sm font-semibold text-gray-700 mb-4">집계</p>
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
 
-        {/* (1) 담당자별 집계 — 영업 / 정산 병렬 */}
-        <div>
-          <h4 className="text-xs font-semibold text-gray-600 mb-2">① 담당자별 집계</h4>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        {/* (1) 담당자별 집계 — 영업 / 정산 병렬 (2열 전체) */}
+        <div className="xl:col-span-2 bg-gray-50 rounded-lg p-4">
+          <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">① 담당자별 집계</h4>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* 영업담당자 기준 */}
             <div>
               <p className="text-xs text-gray-500 mb-1 font-medium">영업담당자 기준</p>
@@ -1238,88 +1248,123 @@ export default function PerformanceTab() {
           </div>
         </div>
 
-        {/* (2) TF별 집계 */}
-        <div>
-          <h4 className="text-xs font-semibold text-gray-600 mb-2">② TF별 집계</h4>
+        {/* (2) TF별 집계 (2열 전체) */}
+        <div className="xl:col-span-2 bg-gray-50 rounded-lg p-4">
+          <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">② TF별 집계</h4>
+          <div className="flex flex-wrap gap-4">
+            {/* 좌: TF별 입금액 */}
+            <div className="flex-1 min-w-[260px]">
+              <p className="text-xs text-gray-400 mb-1">TF별 입금액</p>
+              <table className="w-full border-collapse text-xs">
+                <thead>
+                  <tr className="bg-gray-50">
+                    {['TF','건수','입금액 합계','비중'].map(h => (
+                      <th key={h} className={`${thCls} whitespace-nowrap`}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {Object.entries(tfDetail)
+                    .filter(([tf]) => tf.startsWith('더보상'))
+                    .sort((a,b) => b[1] - a[1])
+                    .map(([tf, amt]) => (
+                      <tr key={tf} className="hover:bg-sky-50">
+                        <td className={`${cellCls} text-sky-700 font-medium`}>{tf}</td>
+                        <td className={`${cellCls} text-center`}>
+                          {filteredSettlements.filter(s => s.tfName === tf).length}
+                        </td>
+                        <td className={`${cellCls} text-right`}>{fmt(amt)}</td>
+                        <td className={`${cellCls} text-right text-gray-500`}>
+                          {totalGrossAll > 0 ? (amt / totalGrossAll * 100).toFixed(1) + '%' : '-'}
+                        </td>
+                      </tr>
+                    ))}
+                  <tr className="bg-sky-50 font-semibold">
+                    <td className={`${cellCls} text-sky-800`}>더보상 소계</td>
+                    <td className={`${cellCls} text-center text-sky-800`}>
+                      {filteredSettlements.filter(s => s.tfName?.startsWith('더보상')).length}
+                    </td>
+                    <td className={`${cellCls} text-right text-sky-800`}>{fmt(theboTotal)}</td>
+                    <td className={`${cellCls} text-right text-sky-700`}>
+                      {totalGrossAll > 0 ? (theboTotal / totalGrossAll * 100).toFixed(1) + '%' : '-'}
+                    </td>
+                  </tr>
+                  {Object.entries(tfDetail)
+                    .filter(([tf]) => !tf.startsWith('더보상'))
+                    .sort((a,b) => b[1] - a[1])
+                    .map(([tf, amt]) => (
+                      <tr key={tf} className="hover:bg-orange-50">
+                        <td className={`${cellCls} text-orange-600 font-medium`}>{tf}</td>
+                        <td className={`${cellCls} text-center`}>
+                          {filteredSettlements.filter(s => s.tfName === tf).length}
+                        </td>
+                        <td className={`${cellCls} text-right`}>{fmt(amt)}</td>
+                        <td className={`${cellCls} text-right text-gray-500`}>
+                          {totalGrossAll > 0 ? (amt / totalGrossAll * 100).toFixed(1) + '%' : '-'}
+                        </td>
+                      </tr>
+                    ))}
+                  <tr className="bg-orange-50 font-semibold">
+                    <td className={`${cellCls} text-orange-700`}>이산 소계</td>
+                    <td className={`${cellCls} text-center text-orange-700`}>
+                      {filteredSettlements.filter(s => s.tfName && !s.tfName.startsWith('더보상')).length}
+                    </td>
+                    <td className={`${cellCls} text-right text-orange-700`}>{fmt(isanTotal)}</td>
+                    <td className={`${cellCls} text-right text-orange-600`}>
+                      {totalGrossAll > 0 ? (isanTotal / totalGrossAll * 100).toFixed(1) + '%' : '-'}
+                    </td>
+                  </tr>
+                  <tr className="bg-gray-100 font-bold">
+                    <td className={cellCls}>전체 합계</td>
+                    <td className={`${cellCls} text-center`}>{filteredSettlements.length}</td>
+                    <td className={`${cellCls} text-right text-sky-800`}>{fmt(totalGrossAll)}</td>
+                    <td className={`${cellCls} text-right`}>100%</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            {/* 우: 이산 TF × 정산담당자 */}
+            <div className="flex-1 min-w-[220px]">
+              <p className="text-xs text-gray-400 mb-1">이산 TF — 정산담당자별</p>
+              <table className="w-full border-collapse text-xs">
+                <thead>
+                  <tr className="bg-gray-50">
+                    {['정산담당자','건수','입금액'].map(h => (
+                      <th key={h} className={`${thCls} whitespace-nowrap`}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {Object.entries(isanBySettleStaff)
+                    .sort((a,b) => b[1].totalGross - a[1].totalGross)
+                    .map(([name, s]) => (
+                      <tr key={name} className="hover:bg-orange-50">
+                        <td className={`${cellCls} font-medium text-orange-700`}>{name}</td>
+                        <td className={`${cellCls} text-center`}>{s.count}</td>
+                        <td className={`${cellCls} text-right`}>{fmt(s.totalGross)}</td>
+                      </tr>
+                    ))}
+                  <tr className="bg-orange-50 font-semibold">
+                    <td className={`${cellCls} text-orange-700`}>합계</td>
+                    <td className={`${cellCls} text-center text-orange-700`}>
+                      {Object.values(isanBySettleStaff).reduce((s,v) => s + v.count, 0)}
+                    </td>
+                    <td className={`${cellCls} text-right text-orange-700`}>{fmt(isanTotal)}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        {/* (3) 상병별 집계 (1열) */}
+        <div className="bg-gray-50 rounded-lg p-4">
+          <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">③ 상병별 집계</h4>
           <table className="border-collapse text-xs">
             <thead>
               <tr className="bg-gray-50">
-                {['TF','건수','입금액 합계','비중'].map(h => (
-                  <th key={h} className={`${thCls} whitespace-nowrap`}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {/* 더보상 TF 소계 */}
-              {Object.entries(tfDetail)
-                .filter(([tf]) => tf.startsWith('더보상'))
-                .sort((a,b) => b[1] - a[1])
-                .map(([tf, amt]) => (
-                  <tr key={tf} className="hover:bg-sky-50">
-                    <td className={`${cellCls} text-sky-700 font-medium`}>{tf}</td>
-                    <td className={`${cellCls} text-center`}>
-                      {filteredSettlements.filter(s => s.tfName === tf).length}
-                    </td>
-                    <td className={`${cellCls} text-right`}>{fmt(amt)}</td>
-                    <td className={`${cellCls} text-right text-gray-500`}>
-                      {totalGrossAll > 0 ? (amt / totalGrossAll * 100).toFixed(1) + '%' : '-'}
-                    </td>
-                  </tr>
-                ))}
-              <tr className="bg-sky-50 font-semibold">
-                <td className={`${cellCls} text-sky-800`}>더보상 소계</td>
-                <td className={`${cellCls} text-center text-sky-800`}>
-                  {filteredSettlements.filter(s => s.tfName?.startsWith('더보상')).length}
-                </td>
-                <td className={`${cellCls} text-right text-sky-800`}>{fmt(theboTotal)}</td>
-                <td className={`${cellCls} text-right text-sky-700`}>
-                  {totalGrossAll > 0 ? (theboTotal / totalGrossAll * 100).toFixed(1) + '%' : '-'}
-                </td>
-              </tr>
-              {/* 이산 TF 소계 */}
-              {Object.entries(tfDetail)
-                .filter(([tf]) => !tf.startsWith('더보상'))
-                .sort((a,b) => b[1] - a[1])
-                .map(([tf, amt]) => (
-                  <tr key={tf} className="hover:bg-orange-50">
-                    <td className={`${cellCls} text-orange-600 font-medium`}>{tf}</td>
-                    <td className={`${cellCls} text-center`}>
-                      {filteredSettlements.filter(s => s.tfName === tf).length}
-                    </td>
-                    <td className={`${cellCls} text-right`}>{fmt(amt)}</td>
-                    <td className={`${cellCls} text-right text-gray-500`}>
-                      {totalGrossAll > 0 ? (amt / totalGrossAll * 100).toFixed(1) + '%' : '-'}
-                    </td>
-                  </tr>
-                ))}
-              <tr className="bg-orange-50 font-semibold">
-                <td className={`${cellCls} text-orange-700`}>이산 소계</td>
-                <td className={`${cellCls} text-center text-orange-700`}>
-                  {filteredSettlements.filter(s => s.tfName && !s.tfName.startsWith('더보상')).length}
-                </td>
-                <td className={`${cellCls} text-right text-orange-700`}>{fmt(isanTotal)}</td>
-                <td className={`${cellCls} text-right text-orange-600`}>
-                  {totalGrossAll > 0 ? (isanTotal / totalGrossAll * 100).toFixed(1) + '%' : '-'}
-                </td>
-              </tr>
-              {/* 전체 합계 */}
-              <tr className="bg-gray-100 font-bold">
-                <td className={`${cellCls}`}>전체 합계</td>
-                <td className={`${cellCls} text-center`}>{filteredSettlements.length}</td>
-                <td className={`${cellCls} text-right text-sky-800`}>{fmt(totalGrossAll)}</td>
-                <td className={`${cellCls} text-right`}>100%</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-
-        {/* (3) 상병별 집계 */}
-        <div>
-          <h4 className="text-xs font-semibold text-gray-600 mb-2">③ 상병별 집계</h4>
-          <table className="w-full border-collapse text-xs min-w-max">
-            <thead>
-              <tr className="bg-gray-50">
-                {['사건종류','건수','입금액','비중','관련TF','영업담당','정산담당'].map(h => (
+                {['사건종류','건수','입금액','비중'].map(h => (
                   <th key={h} className={`${thCls} whitespace-nowrap`}>{h}</th>
                 ))}
               </tr>
@@ -1335,24 +1380,21 @@ export default function PerformanceTab() {
                     <td className={`${cellCls} text-right`}>
                       {totalGrossAll > 0 ? (s.totalGross / totalGrossAll * 100).toFixed(1) + '%' : '-'}
                     </td>
-                    <td className={`${cellCls} text-xs text-gray-500`}>{[...s.tfSet].join(', ')}</td>
-                    <td className={`${cellCls} text-xs text-gray-500`}>{[...s.salesSet].join(', ')}</td>
-                    <td className={`${cellCls} text-xs text-gray-500`}>{[...s.settleSet].join(', ')}</td>
                   </tr>
                 ))}
               <tr className="bg-gray-100 font-semibold">
                 <td className={cellCls}>합계</td>
                 <td className={`${cellCls} text-center`}>{filteredSettlements.length}</td>
                 <td className={`${cellCls} text-right text-sky-700`}>{fmt(totalGrossAll)}</td>
-                <td colSpan={4} className={cellCls} />
+                <td className={`${cellCls} text-right`}>100%</td>
               </tr>
             </tbody>
           </table>
         </div>
 
-        {/* (4) 총집계 — 월별 시계열 */}
-        <div>
-          <h4 className="text-xs font-semibold text-gray-600 mb-2">④ 총집계 (월별 추이)</h4>
+        {/* (4) 총집계 — 월별 시계열 (1열) */}
+        <div className="bg-gray-50 rounded-lg p-4">
+          <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">④ 총집계 (월별 추이)</h4>
           <table className="border-collapse text-xs">
             <thead>
               <tr className="bg-gray-50">
@@ -1394,7 +1436,7 @@ export default function PerformanceTab() {
           </table>
         </div>
 
-      </div>
+      </div></div>
     )}
   </div>
 )}
