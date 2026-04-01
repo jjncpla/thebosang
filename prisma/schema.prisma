@@ -987,3 +987,28 @@ model Minutes {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 }
+
+model SpecialClinicSchedule {
+  id              String    @id @default(cuid())
+  patientName     String
+  tfName          String
+  hospitalName    String
+  clinicType      String    // "특진" | "재특진"
+  examRound       Int
+  scheduledDate   DateTime?
+  isAllDay        Boolean   @default(true)
+  scheduledHour   Int?
+  scheduledMinute Int?      @default(0)
+  status          String    @default("scheduled") // "scheduled" | "done" | "cancelled" | "unknown"
+  sender          String?
+  sourceDate      DateTime?
+  rawMessage      String?   @db.Text
+  telegramMsgId   String?
+  memo            String?   @db.Text
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([tfName])
+  @@index([scheduledDate])
+  @@index([patientName, tfName, clinicType, examRound])
+}

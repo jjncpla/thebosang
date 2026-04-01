@@ -46,6 +46,7 @@ const MENU_ITEMS: MenuItem[] = [
     icon: "📡",
     children: [
       { id: "tf-monitor", label: "담당TF 모니터링", path: "/tf-monitor" },
+      { id: "tf-special-clinic", label: "특진 일정", path: "/tf/special-clinic" },
       { id: "tf-notice", label: "TF 공지", path: "/tf-notice" },
       { id: "tf-stats", label: "TF 통계", path: "/tf-stats" },
     ],
