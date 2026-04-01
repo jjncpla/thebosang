@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { Suspense, useCallback, useEffect, useState } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { getTFColor } from '@/lib/tf-colors'
 
@@ -39,6 +39,14 @@ const STATUS_COLORS: Record<string, string> = { scheduled: '#3B82F6', done: '#22
 
 // ─── 메인 컴포넌트 ────────────────────────────────────────────────
 export default function SpecialClinicPage() {
+  return (
+    <Suspense fallback={<div className="p-4 text-sm text-gray-400">로딩 중...</div>}>
+      <SpecialClinicCalendar />
+    </Suspense>
+  )
+}
+
+function SpecialClinicCalendar() {
   const router = useRouter()
   const searchParams = useSearchParams()
 
