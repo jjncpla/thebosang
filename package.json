@@ -18,7 +18,7 @@
     "bcryptjs": "^3.0.3",
     "handlebars": "^4.7.8",
     "lodash.get": "^4.4.2",
-    "next": "16.1.6",
+    "next": "~15.5.14",
     "next-auth": "^5.0.0-beta.30",
     "pdf-lib": "^1.17.1",
     "prisma": "^5.22.0",
@@ -35,7 +35,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
-    "eslint-config-next": "16.1.6",
+    "eslint-config-next": "~15.5.14",
     "tailwindcss": "^4",
     "typescript": "^5"
   }
