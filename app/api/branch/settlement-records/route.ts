@@ -42,3 +42,25 @@ export async function POST(req: NextRequest) {
   })
   return NextResponse.json(record)
 }
+
+export async function DELETE(req: NextRequest) {
+  const session = await auth()
+  if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const { searchParams } = new URL(req.url)
+  const branchName = searchParams.get('branchName')
+  const year = searchParams.get('year')
+
+  if (!branchName || !year) {
+    return NextResponse.json({ error: 'branchName, year 필수' }, { status: 400 })
+  }
+
+  const result = await prisma.settlementRecord.deleteMany({
+    where: {
+      branchName,
+      year: parseInt(year),
+    },
+  })
+
+  return NextResponse.json({ deleted: result.count })
+}

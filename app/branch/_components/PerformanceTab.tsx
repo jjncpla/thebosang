@@ -278,6 +278,7 @@ export default function PerformanceTab() {
   const [importing, setImporting]         = useState(false)
   const [importPreview, setImportPreview] = useState<SettlementRow[] | null>(null)
   const [importSaving, setImportSaving]   = useState(false)
+  const [deleting, setDeleting]           = useState(false)
 
   const loadSettlements = useCallback(async () => {
     const qs = new URLSearchParams({ year: String(year), branchName: branch })
@@ -418,6 +419,17 @@ export default function PerformanceTab() {
     await loadSettlements()
   }
 
+  async function handleDeleteAll() {
+    if (!confirm(`${branch} ${year}년 정산내역 전체를 삭제하시겠습니까?`)) return
+    setDeleting(true)
+    try {
+      await fetch(`/api/branch/settlement-records?branchName=${encodeURIComponent(branch)}&year=${year}`, { method: 'DELETE' })
+      await loadSettlements()
+    } finally {
+      setDeleting(false)
+    }
+  }
+
   // 필터된 정산 목록
   const filteredSettlements = settlements.filter(s => {
     const m = s.paymentDate ? parseInt(s.paymentDate.slice(5, 7)) : null
@@ -429,16 +441,59 @@ export default function PerformanceTab() {
     return true
   })
 
-  // 담당자별 집계
-  const staffSummary: Record<string, { count: number; totalNet: number; totalIncentive: number }> = {}
+  // 집계용 변수들
+  const totalGrossAll = filteredSettlements.reduce((s, r) => s + r.grossAmount, 0)
+
+  // ① 영업담당자별 집계
+  const salesStaffSummary: Record<string, { count: number; totalGross: number; incentive: number }> = {}
   for (const s of filteredSettlements) {
-    const net = netAmount(s.grossAmount) - (s.deduction || 0)
-    for (const a of (s.allocations || [])) {
-      if (!staffSummary[a.staffName]) staffSummary[a.staffName] = { count: 0, totalNet: 0, totalIncentive: 0 }
-      staffSummary[a.staffName].count      += 1
-      staffSummary[a.staffName].totalNet   += Math.floor(net * a.ratio / 100)
-      staffSummary[a.staffName].totalIncentive += incentiveAmount(s.grossAmount, a.ratio)
-    }
+    const name = s.salesStaffName || '(미지정)'
+    if (!salesStaffSummary[name]) salesStaffSummary[name] = { count: 0, totalGross: 0, incentive: 0 }
+    salesStaffSummary[name].count += 1
+    salesStaffSummary[name].totalGross += s.grossAmount
+    salesStaffSummary[name].incentive += Math.floor(Math.floor(s.grossAmount / 1.1) * 0.1)
+  }
+
+  // ① 정산담당자별 집계
+  const settleStaffSummary: Record<string, { count: number; totalGross: number; incentive: number }> = {}
+  for (const s of filteredSettlements) {
+    const name = s.settlementStaffName || '(미지정)'
+    if (!settleStaffSummary[name]) settleStaffSummary[name] = { count: 0, totalGross: 0, incentive: 0 }
+    settleStaffSummary[name].count += 1
+    settleStaffSummary[name].totalGross += s.grossAmount
+    settleStaffSummary[name].incentive += Math.floor(Math.floor(s.grossAmount / 1.1) * 0.1)
+  }
+
+  // ② TF별 집계
+  const tfDetail: Record<string, number> = {}
+  for (const s of filteredSettlements) {
+    const tf = s.tfName || '(미지정)'
+    tfDetail[tf] = (tfDetail[tf] || 0) + s.grossAmount
+  }
+  const theboTotal = filteredSettlements.filter(s => s.tfName?.startsWith('더보상')).reduce((sum, s) => sum + s.grossAmount, 0)
+  const isanTotal = filteredSettlements.filter(s => s.tfName && !s.tfName.startsWith('더보상')).reduce((sum, s) => sum + s.grossAmount, 0)
+
+  // ③ 상병별 집계
+  const caseTypeSummary: Record<string, { count: number; totalGross: number; tfSet: Set<string>; salesSet: Set<string>; settleSet: Set<string> }> = {}
+  for (const s of filteredSettlements) {
+    const ct = s.caseType || '(미지정)'
+    if (!caseTypeSummary[ct]) caseTypeSummary[ct] = { count: 0, totalGross: 0, tfSet: new Set(), salesSet: new Set(), settleSet: new Set() }
+    caseTypeSummary[ct].count += 1
+    caseTypeSummary[ct].totalGross += s.grossAmount
+    if (s.tfName) caseTypeSummary[ct].tfSet.add(s.tfName)
+    if (s.salesStaffName) caseTypeSummary[ct].salesSet.add(s.salesStaffName)
+    if (s.settlementStaffName) caseTypeSummary[ct].settleSet.add(s.settlementStaffName)
+  }
+
+  // ④ 월별 시계열
+  const monthlyMap: Record<string, { count: number; gross: number }> = {}
+  for (const s of filteredSettlements) {
+    const m = s.paymentDate ? parseInt(s.paymentDate.slice(5, 7)) : (s.month || 0)
+    if (!m) continue
+    const key = String(m)
+    if (!monthlyMap[key]) monthlyMap[key] = { count: 0, gross: 0 }
+    monthlyMap[key].count += 1
+    monthlyMap[key].gross += s.grossAmount
   }
 
   // ─── 스타일 ────────────────────────────────────────────────
@@ -957,265 +1012,392 @@ export default function PerformanceTab() {
       {subTab === 'settlement' && (
         <div className="space-y-4">
 
-          {/* 엑셀 업로드 + 직접 추가 */}
-          <div className="flex items-center gap-3">
-            <label className={`px-3 py-1.5 text-sm rounded border cursor-pointer transition-colors ${
-              importing ? 'bg-gray-100 text-gray-400' : 'bg-white border-gray-300 hover:bg-gray-50 text-gray-600'
-            }`}>
-              {importing ? '파싱 중...' : '📂 성공보수 파일 업로드 (xlsx)'}
-              <input type="file" accept=".xlsx" className="hidden" onChange={handleImport} disabled={importing} />
-            </label>
+    {/* 상단 액션 바 */}
+    <div className="flex items-center gap-3 flex-wrap">
+      <label className={`px-3 py-1.5 text-sm rounded border cursor-pointer transition-colors ${
+        importing ? 'bg-gray-100 text-gray-400' : 'bg-white border-gray-300 hover:bg-gray-50 text-gray-600'
+      }`}>
+        {importing ? '파싱 중...' : '📂 성공보수 파일 업로드 (xlsx)'}
+        <input type="file" accept=".xlsx" className="hidden" onChange={handleImport} disabled={importing} />
+      </label>
+      <button
+        onClick={() => setShowAddForm(f => !f)}
+        className="px-3 py-1.5 text-sm border border-sky-300 text-sky-600 rounded hover:bg-sky-50"
+      >
+        + 직접 추가
+      </button>
+      <div className="flex-1" />
+      <button
+        onClick={handleDeleteAll}
+        disabled={deleting || filteredSettlements.length === 0}
+        className="px-3 py-1.5 text-sm border border-red-300 text-red-500 rounded hover:bg-red-50 disabled:opacity-40 disabled:cursor-not-allowed"
+      >
+        {deleting ? '삭제 중...' : `🗑 전체 삭제 (${filteredSettlements.length}건)`}
+      </button>
+    </div>
+
+    {/* 임포트 미리보기 */}
+    {importPreview && (
+      <div className="border border-amber-200 bg-amber-50 rounded-lg p-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <p className="text-sm font-medium text-amber-700">
+            {importPreview.length}건 파싱 완료
+            {month && ` — ${month}월 해당 ${importPreview.filter(r => r.month === month).length}건`}
+          </p>
+          <div className="flex gap-2">
+            <button onClick={() => setImportPreview(null)} className="px-3 py-1 text-xs border rounded">취소</button>
             <button
-              onClick={() => setShowAddForm(f => !f)}
-              className="px-3 py-1.5 text-sm border border-sky-300 text-sky-600 rounded hover:bg-sky-50"
+              onClick={confirmImport}
+              disabled={importSaving}
+              className="px-3 py-1 text-xs bg-amber-500 text-white rounded hover:bg-amber-600 disabled:opacity-50"
             >
-              + 직접 추가
+              {importSaving ? '저장 중...' : '전체 저장'}
             </button>
           </div>
-
-          {/* 임포트 미리보기 */}
-          {importPreview && (
-            <div className="border border-amber-200 bg-amber-50 rounded-lg p-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <p className="text-sm font-medium text-amber-700">
-                  {importPreview.length}건 파싱 완료
-                  {month && ` — ${month}월 필터 적용 시 ${importPreview.filter(r => r.month === month).length}건 저장`}
-                </p>
-                <div className="flex gap-2">
-                  <button onClick={() => setImportPreview(null)} className="px-3 py-1 text-xs border rounded">취소</button>
-                  <button
-                    onClick={confirmImport}
-                    disabled={importSaving}
-                    className="px-3 py-1 text-xs bg-amber-500 text-white rounded hover:bg-amber-600 disabled:opacity-50"
-                  >
-                    {importSaving ? '저장 중...' : '전체 저장'}
-                  </button>
-                </div>
-              </div>
-              <div className="overflow-x-auto max-h-48">
-                <table className="w-full border-collapse text-xs">
-                  <thead>
-                    <tr className="bg-amber-100">
-                      {['입금일','재해자','사건종류','TF','영업담당','정산담당','입금액','배분'].map(h => (
-                        <th key={h} className="border border-amber-200 px-2 py-1">{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {importPreview.map((r, i) => (
-                      <tr key={i} className="bg-white">
-                        <td className="border border-amber-200 px-2 py-1">{r.paymentDate}</td>
-                        <td className="border border-amber-200 px-2 py-1">{r.victimName}</td>
-                        <td className="border border-amber-200 px-2 py-1">{r.caseType}</td>
-                        <td className="border border-amber-200 px-2 py-1">{r.tfName}</td>
-                        <td className="border border-amber-200 px-2 py-1">{r.salesStaffName}</td>
-                        <td className="border border-amber-200 px-2 py-1">{r.settlementStaffName}</td>
-                        <td className="border border-amber-200 px-2 py-1 text-right">{fmt(r.grossAmount)}</td>
-                        <td className="border border-amber-200 px-2 py-1">
-                          {r.allocations.map(a => `${a.staffName} ${a.ratio}%`).join(', ')}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-
-          {/* 직접 추가 폼 */}
-          {showAddForm && (
-            <AddSettlementForm
-              branchName={branch}
-              year={year}
-              defaultMonth={month || new Date().getMonth() + 1}
-              userNames={userNames}
-              onSave={async (row) => {
-                const res = await fetch('/api/branch/settlement-records', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ ...row, branchName: branch }),
-                })
-                if (!res.ok) {
-                  const err = await res.json().catch(() => ({}))
-                  alert(`저장 실패: ${JSON.stringify(err)}`)
-                  return
-                }
-                await loadSettlements()
-                setShowAddForm(false)
-              }}
-              onCancel={() => setShowAddForm(false)}
-            />
-          )}
-
-          {/* 정산내역 테이블 */}
-          <div className="overflow-x-auto">
-            <table className="w-full border-collapse text-xs">
-              <thead>
-                <tr className="bg-gray-50">
-                  {['#','입금일','재해자','사건종류','TF','영업담당','정산담당','입금액','부가세제외','인센 대상','배분내역 (인센)',''].map(h => (
-                    <th key={h} className={thCls}>{h}</th>
-                  ))}
+        </div>
+        <div className="overflow-x-auto max-h-48">
+          <table className="w-full border-collapse text-xs">
+            <thead>
+              <tr className="bg-amber-100">
+                {['입금일','재해자','사건종류','TF','영업담당','정산담당','입금액'].map(h => (
+                  <th key={h} className="border border-amber-200 px-2 py-1 whitespace-nowrap">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {importPreview.map((r, i) => (
+                <tr key={i} className="bg-white">
+                  <td className="border border-amber-200 px-2 py-1">{r.paymentDate}</td>
+                  <td className="border border-amber-200 px-2 py-1">{r.victimName}</td>
+                  <td className="border border-amber-200 px-2 py-1">{r.caseType}</td>
+                  <td className="border border-amber-200 px-2 py-1">{r.tfName}</td>
+                  <td className="border border-amber-200 px-2 py-1">{r.salesStaffName}</td>
+                  <td className="border border-amber-200 px-2 py-1">{r.settlementStaffName}</td>
+                  <td className="border border-amber-200 px-2 py-1 text-right">{fmt(r.grossAmount)}</td>
                 </tr>
-              </thead>
-              <tbody>
-                {filteredSettlements.map((row, i) => {
-                  const net = netAmount(row.grossAmount) - (row.deduction || 0)
-                  return (
-                    <tr key={row.id ?? i} className="hover:bg-gray-50">
-                      <td className={`${cellCls} text-center text-gray-400`}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 4, justifyContent: 'center' }}>
-                          <span>{i+1}</span>
-                          {row.isInstallment && (
-                            <span
-                              title={`누적납부: ${(row.paidInstallmentAmount ?? 0).toLocaleString()}원 / 총액: ${(row.totalInstallmentAmount ?? 0).toLocaleString()}원`}
-                              style={{
-                                display: 'inline-flex', alignItems: 'center', gap: 2,
-                                padding: '1px 5px', borderRadius: 10, fontSize: 10, fontWeight: 600,
-                                backgroundColor: '#fef3c7', color: '#92400e', cursor: 'default',
-                                border: '1px solid #fde68a', whiteSpace: 'nowrap',
-                              }}
-                            >
-                              분할 {(row.paidInstallmentAmount ?? 0).toLocaleString()}/{(row.totalInstallmentAmount ?? 0).toLocaleString()}
-                            </span>
-                          )}
-                        </div>
-                      </td>
-                      <td className={cellCls}>{row.paymentDate?.slice(0,10)}</td>
-                      <td className={`${cellCls} font-medium`}>{row.victimName}</td>
-                      <td className={cellCls}>{row.caseType}</td>
-                      <td className={cellCls}>{row.tfName}</td>
-                      <td className={cellCls}>{row.salesStaffName}</td>
-                      <td className={cellCls}>{row.settlementStaffName}</td>
-                      <td className={`${cellCls} text-right`}>{fmt(row.grossAmount)}</td>
-                      <td className={`${cellCls} text-right text-gray-500`}>{fmt(netAmount(row.grossAmount))}</td>
-                      <td className={`${cellCls} text-right font-medium text-sky-700`}>{fmt(net)}</td>
-                      <td className={`${cellCls}`}>
-                        {(row.allocations || []).map((a, ai) => (
-                          <div key={ai} className="text-xs">
-                            {a.staffName} {a.ratio}%
-                            {a.isExternal && <span className="text-amber-500 ml-1">(타)</span>}
-                            <span className="text-green-600 ml-1">→{fmt(incentiveAmount(row.grossAmount, a.ratio))}</span>
-                          </div>
-                        ))}
-                      </td>
-                      <td className={cellCls}>
-                        {row.id && (
-                          <button onClick={() => deleteSettlement(row.id!)}
-                            className="text-gray-300 hover:text-red-400">✕</button>
-                        )}
-                      </td>
-                    </tr>
-                  )
-                })}
-                {filteredSettlements.length === 0 && (
-                  <tr>
-                    <td colSpan={12} className={`${cellCls} text-center text-gray-400 py-6`}>
-                      데이터 없음 — 엑셀 업로드 또는 직접 추가
-                    </td>
-                  </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    )}
+
+    {/* 직접 추가 폼 */}
+    {showAddForm && (
+      <AddSettlementForm
+        branchName={branch} year={year} defaultMonth={month || new Date().getMonth() + 1}
+        userNames={userNames}
+        onSave={async (row) => {
+          const res = await fetch('/api/branch/settlement-records', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ...row, branchName: branch }),
+          })
+          if (!res.ok) { alert('저장 실패'); return }
+          await loadSettlements()
+          setShowAddForm(false)
+        }}
+        onCancel={() => setShowAddForm(false)}
+      />
+    )}
+
+    {/* ── 정산내역 목록 테이블 (배분내역 컬럼 제거) */}
+    <div className="overflow-x-auto">
+      <table className="w-full border-collapse text-xs min-w-max">
+        <thead>
+          <tr className="bg-gray-50">
+            {['#','입금일','재해자','사건종류','TF','영업담당','정산담당','입금액','부가세제외',''].map(h => (
+              <th key={h} className={thCls}>{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {filteredSettlements.map((row, i) => (
+            <tr key={row.id ?? i} className="hover:bg-gray-50">
+              <td className={`${cellCls} text-center text-gray-400`}>{i+1}</td>
+              <td className={cellCls}>{row.paymentDate?.slice(0,10)}</td>
+              <td className={`${cellCls} font-medium`}>{row.victimName}</td>
+              <td className={cellCls}>{row.caseType}</td>
+              <td className={`${cellCls} ${row.tfName?.startsWith('더보상') ? 'text-sky-700 font-medium' : 'text-orange-600'}`}>
+                {row.tfName}
+              </td>
+              <td className={cellCls}>{row.salesStaffName}</td>
+              <td className={cellCls}>{row.settlementStaffName}</td>
+              <td className={`${cellCls} text-right`}>{fmt(row.grossAmount)}</td>
+              <td className={`${cellCls} text-right text-gray-500`}>{fmt(Math.floor(row.grossAmount / 1.1))}</td>
+              <td className={cellCls}>
+                {row.id && (
+                  <button onClick={() => deleteSettlement(row.id!)} className="text-gray-300 hover:text-red-400">✕</button>
                 )}
-              </tbody>
-              {filteredSettlements.length > 0 && (
-                <tfoot>
-                  <tr className="bg-sky-50 font-medium text-xs">
-                    <td colSpan={7} className={`${cellCls} text-right text-sky-700`}>
-                      합계 ({filteredSettlements.length}건)
-                    </td>
-                    <td className={`${cellCls} text-right text-sky-700`}>
-                      {fmt(filteredSettlements.reduce((s, r) => s + r.grossAmount, 0))}
-                    </td>
-                    <td className={`${cellCls} text-right text-sky-700`}>
-                      {fmt(filteredSettlements.reduce((s, r) => s + netAmount(r.grossAmount), 0))}
-                    </td>
-                    <td colSpan={3} className={cellCls} />
-                  </tr>
-                </tfoot>
-              )}
-            </table>
-          </div>
+              </td>
+            </tr>
+          ))}
+          {filteredSettlements.length === 0 && (
+            <tr>
+              <td colSpan={10} className={`${cellCls} text-center text-gray-400 py-6`}>
+                데이터 없음 — 엑셀 업로드 또는 직접 추가
+              </td>
+            </tr>
+          )}
+        </tbody>
+        {filteredSettlements.length > 0 && (
+          <tfoot>
+            <tr className="bg-sky-50 font-medium text-xs">
+              <td colSpan={7} className={`${cellCls} text-right text-sky-700`}>합계 ({filteredSettlements.length}건)</td>
+              <td className={`${cellCls} text-right text-sky-700`}>{fmt(totalGrossAll)}</td>
+              <td className={`${cellCls} text-right text-sky-700`}>{fmt(Math.floor(totalGrossAll / 1.1))}</td>
+              <td className={cellCls} />
+            </tr>
+          </tfoot>
+        )}
+      </table>
+    </div>
 
-          {/* 담당자별 집계 */}
-          {/* 분할납부 모니터링 */}
-          {(() => {
-            const installmentRecords = filteredSettlements.filter(r => r.isInstallment)
-            if (installmentRecords.length === 0) return null
-            const installmentByBranch = installmentRecords.reduce((acc, r) => {
-              const br = (r as SettlementRow & { branchName?: string }).branchName || branch
-              if (!acc[br]) acc[br] = { count: 0, totalPending: 0 }
-              acc[br].count++
-              acc[br].totalPending += ((r.totalInstallmentAmount || 0) - (r.paidInstallmentAmount || 0))
-              return acc
-            }, {} as Record<string, { count: number; totalPending: number }>)
-            return (
-              <div style={{ marginTop: 24, padding: 16, background: '#fffbeb', borderRadius: 8, border: '1px solid #fde68a' }}>
-                <h4 style={{ fontSize: 13, fontWeight: 700, color: '#92400e', marginBottom: 12 }}>
-                  분할납부 모니터링 ({installmentRecords.length}건)
-                </h4>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                  {Object.entries(installmentByBranch).map(([br, info]) => (
-                    <div key={br} style={{
-                      padding: '6px 12px', background: '#fff', borderRadius: 6,
-                      border: '1px solid #fde68a', fontSize: 12,
-                    }}>
-                      <span style={{ fontWeight: 600 }}>{br}</span>
-                      <span style={{ color: '#64748b', marginLeft: 6 }}>{info.count}건</span>
-                      <span style={{ color: '#dc2626', marginLeft: 6, fontWeight: 600 }}>
-                        잔액 {info.totalPending.toLocaleString()}원
-                      </span>
-                    </div>
-                  ))}
-                </div>
-                <div style={{ marginTop: 10 }}>
-                  {installmentRecords.map(r => (
-                    <div key={r.id} style={{
-                      display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                      padding: '4px 8px', fontSize: 12, borderBottom: '1px solid #fef3c7',
-                    }}>
-                      <span style={{ color: '#374151' }}>{r.victimName}</span>
-                      <span style={{ color: '#64748b' }}>
-                        {(r.paidInstallmentAmount ?? 0).toLocaleString()} /
-                        {(r.totalInstallmentAmount ?? 0).toLocaleString()}원
-                        {(r.totalInstallmentAmount || 0) > (r.paidInstallmentAmount || 0) && (
-                          <span style={{ color: '#dc2626', marginLeft: 4 }}>
-                            (잔액 {((r.totalInstallmentAmount || 0) - (r.paidInstallmentAmount || 0)).toLocaleString()}원)
-                          </span>
-                        )}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )
-          })()}
+    {/* ── 집계 섹션 (4종) */}
+    {filteredSettlements.length > 0 && (
+      <div className="space-y-5 border-t pt-4">
 
-          {Object.keys(staffSummary).length > 0 && (
+        {/* (1) 담당자별 집계 — 영업 / 정산 병렬 */}
+        <div>
+          <h4 className="text-xs font-semibold text-gray-600 mb-2">① 담당자별 집계</h4>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {/* 영업담당자 기준 */}
             <div>
-              <h4 className="text-xs font-medium text-gray-500 mb-2">담당자별 집계</h4>
-              <table className="border-collapse text-xs">
+              <p className="text-xs text-gray-500 mb-1 font-medium">영업담당자 기준</p>
+              <table className="w-full border-collapse text-xs">
                 <thead>
                   <tr className="bg-gray-50">
-                    {['담당자','건수','인센 대상액','인센티브(10%)'].map(h => (
-                      <th key={h} className={thCls}>{h}</th>
+                    {['영업담당자','건수','입금액','인센(10%)'].map(h => (
+                      <th key={h} className={`${thCls} whitespace-nowrap`}>{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {Object.entries(staffSummary)
-                    .sort((a,b) => b[1].totalIncentive - a[1].totalIncentive)
-                    .map(([name, stat]) => (
+                  {Object.entries(salesStaffSummary)
+                    .sort((a,b) => b[1].totalGross - a[1].totalGross)
+                    .map(([name, s]) => (
                       <tr key={name} className="hover:bg-gray-50">
                         <td className={`${cellCls} font-medium`}>{name}</td>
-                        <td className={`${cellCls} text-center`}>{stat.count}</td>
-                        <td className={`${cellCls} text-right`}>{fmt(stat.totalNet)}</td>
-                        <td className={`${cellCls} text-right font-medium text-green-700`}>{fmt(stat.totalIncentive)}</td>
+                        <td className={`${cellCls} text-center`}>{s.count}</td>
+                        <td className={`${cellCls} text-right`}>{fmt(s.totalGross)}</td>
+                        <td className={`${cellCls} text-right text-green-700 font-medium`}>{fmt(s.incentive)}</td>
                       </tr>
                     ))}
+                  <tr className="bg-sky-50 font-semibold">
+                    <td className={`${cellCls} text-sky-700`}>합계</td>
+                    <td className={`${cellCls} text-center text-sky-700`}>
+                      {Object.values(salesStaffSummary).reduce((s,v) => s + v.count, 0)}
+                    </td>
+                    <td className={`${cellCls} text-right text-sky-700`}>
+                      {fmt(Object.values(salesStaffSummary).reduce((s,v) => s + v.totalGross, 0))}
+                    </td>
+                    <td className={`${cellCls} text-right text-green-700`}>
+                      {fmt(Object.values(salesStaffSummary).reduce((s,v) => s + v.incentive, 0))}
+                    </td>
+                  </tr>
                 </tbody>
               </table>
             </div>
-          )}
+            {/* 정산담당자 기준 */}
+            <div>
+              <p className="text-xs text-gray-500 mb-1 font-medium">정산담당자 기준</p>
+              <table className="w-full border-collapse text-xs">
+                <thead>
+                  <tr className="bg-gray-50">
+                    {['정산담당자','건수','배분액','인센(10%)'].map(h => (
+                      <th key={h} className={`${thCls} whitespace-nowrap`}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {Object.entries(settleStaffSummary)
+                    .sort((a,b) => b[1].incentive - a[1].incentive)
+                    .map(([name, s]) => (
+                      <tr key={name} className="hover:bg-gray-50">
+                        <td className={`${cellCls} font-medium`}>{name}</td>
+                        <td className={`${cellCls} text-center`}>{s.count}</td>
+                        <td className={`${cellCls} text-right`}>{fmt(s.totalGross)}</td>
+                        <td className={`${cellCls} text-right text-green-700 font-medium`}>{fmt(s.incentive)}</td>
+                      </tr>
+                    ))}
+                  <tr className="bg-sky-50 font-semibold">
+                    <td className={`${cellCls} text-sky-700`}>합계</td>
+                    <td className={`${cellCls} text-center text-sky-700`}>
+                      {Object.values(settleStaffSummary).reduce((s,v) => s + v.count, 0)}
+                    </td>
+                    <td className={`${cellCls} text-right text-sky-700`}>
+                      {fmt(Object.values(settleStaffSummary).reduce((s,v) => s + v.totalGross, 0))}
+                    </td>
+                    <td className={`${cellCls} text-right text-green-700`}>
+                      {fmt(Object.values(settleStaffSummary).reduce((s,v) => s + v.incentive, 0))}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
-      )}
+
+        {/* (2) TF별 집계 */}
+        <div>
+          <h4 className="text-xs font-semibold text-gray-600 mb-2">② TF별 집계</h4>
+          <table className="border-collapse text-xs">
+            <thead>
+              <tr className="bg-gray-50">
+                {['TF','건수','입금액 합계','비중'].map(h => (
+                  <th key={h} className={`${thCls} whitespace-nowrap`}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {/* 더보상 TF 소계 */}
+              {Object.entries(tfDetail)
+                .filter(([tf]) => tf.startsWith('더보상'))
+                .sort((a,b) => b[1] - a[1])
+                .map(([tf, amt]) => (
+                  <tr key={tf} className="hover:bg-sky-50">
+                    <td className={`${cellCls} text-sky-700 font-medium`}>{tf}</td>
+                    <td className={`${cellCls} text-center`}>
+                      {filteredSettlements.filter(s => s.tfName === tf).length}
+                    </td>
+                    <td className={`${cellCls} text-right`}>{fmt(amt)}</td>
+                    <td className={`${cellCls} text-right text-gray-500`}>
+                      {totalGrossAll > 0 ? (amt / totalGrossAll * 100).toFixed(1) + '%' : '-'}
+                    </td>
+                  </tr>
+                ))}
+              <tr className="bg-sky-50 font-semibold">
+                <td className={`${cellCls} text-sky-800`}>더보상 소계</td>
+                <td className={`${cellCls} text-center text-sky-800`}>
+                  {filteredSettlements.filter(s => s.tfName?.startsWith('더보상')).length}
+                </td>
+                <td className={`${cellCls} text-right text-sky-800`}>{fmt(theboTotal)}</td>
+                <td className={`${cellCls} text-right text-sky-700`}>
+                  {totalGrossAll > 0 ? (theboTotal / totalGrossAll * 100).toFixed(1) + '%' : '-'}
+                </td>
+              </tr>
+              {/* 이산 TF 소계 */}
+              {Object.entries(tfDetail)
+                .filter(([tf]) => !tf.startsWith('더보상'))
+                .sort((a,b) => b[1] - a[1])
+                .map(([tf, amt]) => (
+                  <tr key={tf} className="hover:bg-orange-50">
+                    <td className={`${cellCls} text-orange-600 font-medium`}>{tf}</td>
+                    <td className={`${cellCls} text-center`}>
+                      {filteredSettlements.filter(s => s.tfName === tf).length}
+                    </td>
+                    <td className={`${cellCls} text-right`}>{fmt(amt)}</td>
+                    <td className={`${cellCls} text-right text-gray-500`}>
+                      {totalGrossAll > 0 ? (amt / totalGrossAll * 100).toFixed(1) + '%' : '-'}
+                    </td>
+                  </tr>
+                ))}
+              <tr className="bg-orange-50 font-semibold">
+                <td className={`${cellCls} text-orange-700`}>이산 소계</td>
+                <td className={`${cellCls} text-center text-orange-700`}>
+                  {filteredSettlements.filter(s => s.tfName && !s.tfName.startsWith('더보상')).length}
+                </td>
+                <td className={`${cellCls} text-right text-orange-700`}>{fmt(isanTotal)}</td>
+                <td className={`${cellCls} text-right text-orange-600`}>
+                  {totalGrossAll > 0 ? (isanTotal / totalGrossAll * 100).toFixed(1) + '%' : '-'}
+                </td>
+              </tr>
+              {/* 전체 합계 */}
+              <tr className="bg-gray-100 font-bold">
+                <td className={`${cellCls}`}>전체 합계</td>
+                <td className={`${cellCls} text-center`}>{filteredSettlements.length}</td>
+                <td className={`${cellCls} text-right text-sky-800`}>{fmt(totalGrossAll)}</td>
+                <td className={`${cellCls} text-right`}>100%</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        {/* (3) 상병별 집계 */}
+        <div>
+          <h4 className="text-xs font-semibold text-gray-600 mb-2">③ 상병별 집계</h4>
+          <table className="w-full border-collapse text-xs min-w-max">
+            <thead>
+              <tr className="bg-gray-50">
+                {['사건종류','건수','입금액','비중','관련TF','영업담당','정산담당'].map(h => (
+                  <th key={h} className={`${thCls} whitespace-nowrap`}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {Object.entries(caseTypeSummary)
+                .sort((a,b) => b[1].totalGross - a[1].totalGross)
+                .map(([ct, s]) => (
+                  <tr key={ct} className="hover:bg-gray-50">
+                    <td className={`${cellCls} font-medium`}>{ct}</td>
+                    <td className={`${cellCls} text-center`}>{s.count}</td>
+                    <td className={`${cellCls} text-right`}>{fmt(s.totalGross)}</td>
+                    <td className={`${cellCls} text-right`}>
+                      {totalGrossAll > 0 ? (s.totalGross / totalGrossAll * 100).toFixed(1) + '%' : '-'}
+                    </td>
+                    <td className={`${cellCls} text-xs text-gray-500`}>{[...s.tfSet].join(', ')}</td>
+                    <td className={`${cellCls} text-xs text-gray-500`}>{[...s.salesSet].join(', ')}</td>
+                    <td className={`${cellCls} text-xs text-gray-500`}>{[...s.settleSet].join(', ')}</td>
+                  </tr>
+                ))}
+              <tr className="bg-gray-100 font-semibold">
+                <td className={cellCls}>합계</td>
+                <td className={`${cellCls} text-center`}>{filteredSettlements.length}</td>
+                <td className={`${cellCls} text-right text-sky-700`}>{fmt(totalGrossAll)}</td>
+                <td colSpan={4} className={cellCls} />
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        {/* (4) 총집계 — 월별 시계열 */}
+        <div>
+          <h4 className="text-xs font-semibold text-gray-600 mb-2">④ 총집계 (월별 추이)</h4>
+          <table className="border-collapse text-xs">
+            <thead>
+              <tr className="bg-gray-50">
+                {['월','건수','입금액','부가세제외','인센(10%)','누적 입금액'].map(h => (
+                  <th key={h} className={`${thCls} whitespace-nowrap`}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {(() => {
+                let cumulative = 0
+                return Object.entries(monthlyMap)
+                  .sort((a,b) => parseInt(a[0]) - parseInt(b[0]))
+                  .map(([m, s]) => {
+                    cumulative += s.gross
+                    const net = Math.floor(s.gross / 1.1)
+                    const incentive = Math.floor(net * 0.1)
+                    return (
+                      <tr key={m} className="hover:bg-gray-50">
+                        <td className={`${cellCls} font-medium text-center`}>{m}월</td>
+                        <td className={`${cellCls} text-center`}>{s.count}</td>
+                        <td className={`${cellCls} text-right`}>{fmt(s.gross)}</td>
+                        <td className={`${cellCls} text-right text-gray-500`}>{fmt(net)}</td>
+                        <td className={`${cellCls} text-right text-green-700`}>{fmt(incentive)}</td>
+                        <td className={`${cellCls} text-right text-sky-700`}>{fmt(cumulative)}</td>
+                      </tr>
+                    )
+                  })
+              })()}
+              <tr className="bg-sky-50 font-bold">
+                <td className={`${cellCls} text-sky-700`}>합계</td>
+                <td className={`${cellCls} text-center text-sky-700`}>{filteredSettlements.length}</td>
+                <td className={`${cellCls} text-right text-sky-700`}>{fmt(totalGrossAll)}</td>
+                <td className={`${cellCls} text-right text-sky-700`}>{fmt(Math.floor(totalGrossAll / 1.1))}</td>
+                <td className={`${cellCls} text-right text-green-700`}>{fmt(Math.floor(totalGrossAll / 1.1 * 0.1))}</td>
+                <td className={cellCls} />
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+      </div>
+    )}
+  </div>
+)}
     </div>
   )
 }
