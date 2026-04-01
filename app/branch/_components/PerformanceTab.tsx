@@ -1,7 +1,8 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { CASE_TYPES, QUARTER_MONTHS } from '../_constants/performance'
+import { REGION_BRANCHES } from '@/lib/constants/regions'
 
 // ─── 타입 ────────────────────────────────────────────────────────
 interface StaffRosterItem {
@@ -69,6 +70,9 @@ export default function PerformanceTab() {
   const [quarter, setQuarter]   = useState<number | null>(null)
   const [month, setMonth]       = useState<number | null>(null)
   const [branch, setBranch]     = useState('울산지사')
+  const [aggMode, setAggMode]   = useState<'branch' | 'region' | 'all'>('branch')
+  const [aggAllSettlements, setAggAllSettlements] = useState<SettlementRow[]>([])
+  const [aggLoading, setAggLoading] = useState(false)
 
   // 공통 — 사용자 목록 (DB)
   const [users, setUsers] = useState<UserItem[]>([])
@@ -292,6 +296,72 @@ export default function PerformanceTab() {
     if (subTab === 'settlement') loadSettlements()
   }, [subTab, loadSettlements])
 
+  // 현재 지사가 속한 권역 찾기
+  const ALL_BRANCHES = ['울산지사','부산경남지사','서울북부지사','경기안산지사','전북익산지사',
+    '경북구미지사','경기의정부지사','강원동해지사','전남여수지사','대구지사',
+    '부산중부지사','경기수원지사']
+
+  const currentRegion = useMemo(() => {
+    for (const [region, branches] of Object.entries(REGION_BRANCHES)) {
+      if (branches.some(b => b === branch || b.includes(branch) || branch.includes(b.replace('노무법인 더보상 ', '')))) {
+        return region
+      }
+    }
+    return '수도권역'
+  }, [branch])
+
+  const regionBranches = useMemo(() => {
+    if (currentRegion === '수도권역') {
+      const assigned = Object.values(REGION_BRANCHES).flat()
+      return ALL_BRANCHES.filter(b => !assigned.some(rb => rb === b || rb.includes(b) || b.includes(rb.replace('노무법인 더보상 ', ''))))
+    }
+    const rbs = REGION_BRANCHES[currentRegion] || []
+    return ALL_BRANCHES.filter(b => rbs.some(rb => rb === b || rb.includes(b) || b.includes(rb.replace('노무법인 더보상 ', ''))))
+  }, [currentRegion])
+
+  // 권역별/전체 집계용 데이터 로딩
+  useEffect(() => {
+    if (aggMode === 'branch' || subTab !== 'settlement') {
+      setAggAllSettlements([])
+      return
+    }
+    let cancelled = false
+    async function load() {
+      setAggLoading(true)
+      const targetBranches = aggMode === 'all' ? ALL_BRANCHES : regionBranches
+      const results: SettlementRow[] = []
+      await Promise.all(targetBranches.map(async (b) => {
+        const qs = new URLSearchParams({ year: String(year), branchName: b })
+        const res = await fetch(`/api/branch/settlement-records?${qs}`)
+        if (!res.ok) return
+        const data = await res.json()
+        if (!cancelled) results.push(...data)
+      }))
+      if (!cancelled) {
+        setAggAllSettlements(results)
+        setAggLoading(false)
+      }
+    }
+    load()
+    return () => { cancelled = true }
+  }, [aggMode, subTab, year, regionBranches])
+
+  // 집계용 데이터: 모드에 따라 다른 소스 사용
+  const aggBaseSettlements = aggMode === 'branch' ? settlements : aggAllSettlements
+  const aggFilteredSettlements = aggBaseSettlements.filter(s => {
+    const m = s.paymentDate ? parseInt(s.paymentDate.slice(5, 7)) : null
+    if (month && m !== month) return false
+    if (quarter && m) {
+      const qm = QUARTER_MONTHS[quarter]
+      if (!qm.includes(m as 1|2|3|4|5|6|7|8|9|10|11|12)) return false
+    }
+    return true
+  })
+
+  const aggModeLabel = aggMode === 'branch' ? branch
+    : aggMode === 'region' ? `${currentRegion} (${regionBranches.length}개 지사)`
+    : `전체 (${ALL_BRANCHES.length}개 지사)`
+
   async function handleImport(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
@@ -441,12 +511,13 @@ export default function PerformanceTab() {
     return true
   })
 
-  // 집계용 변수들
-  const totalGrossAll = filteredSettlements.reduce((s, r) => s + r.grossAmount, 0)
+  // 집계용 변수들 — aggFilteredSettlements 기반 (지사/권역/전체 모드에 따라 다른 데이터)
+  const afs = aggFilteredSettlements  // 축약
+  const totalGrossAll = afs.reduce((s, r) => s + r.grossAmount, 0)
 
   // ① 영업담당자별 집계
   const salesStaffSummary: Record<string, { count: number; totalGross: number; incentive: number }> = {}
-  for (const s of filteredSettlements) {
+  for (const s of afs) {
     const name = s.salesStaffName || '(미지정)'
     if (!salesStaffSummary[name]) salesStaffSummary[name] = { count: 0, totalGross: 0, incentive: 0 }
     salesStaffSummary[name].count += 1
@@ -454,9 +525,10 @@ export default function PerformanceTab() {
     salesStaffSummary[name].incentive += Math.floor(Math.floor(s.grossAmount / 1.1) * 0.1)
   }
 
-  // ① 정산담당자별 집계
+  // ① 정산담당자별 집계 — 더보상 TF 소속 건만 대상
   const settleStaffSummary: Record<string, { count: number; totalGross: number; incentive: number }> = {}
-  for (const s of filteredSettlements) {
+  for (const s of afs) {
+    if (!s.tfName?.startsWith('더보상')) continue  // 이산 TF 제외
     const name = s.settlementStaffName || '(미지정)'
     if (!settleStaffSummary[name]) settleStaffSummary[name] = { count: 0, totalGross: 0, incentive: 0 }
     settleStaffSummary[name].count += 1
@@ -466,16 +538,16 @@ export default function PerformanceTab() {
 
   // ② TF별 집계
   const tfDetail: Record<string, number> = {}
-  for (const s of filteredSettlements) {
+  for (const s of afs) {
     const tf = s.tfName || '(미지정)'
     tfDetail[tf] = (tfDetail[tf] || 0) + s.grossAmount
   }
-  const theboTotal = filteredSettlements.filter(s => s.tfName?.startsWith('더보상')).reduce((sum, s) => sum + s.grossAmount, 0)
-  const isanTotal = filteredSettlements.filter(s => s.tfName && !s.tfName.startsWith('더보상')).reduce((sum, s) => sum + s.grossAmount, 0)
+  const theboTotal = afs.filter(s => s.tfName?.startsWith('더보상')).reduce((sum, s) => sum + s.grossAmount, 0)
+  const isanTotal = afs.filter(s => s.tfName && !s.tfName.startsWith('더보상')).reduce((sum, s) => sum + s.grossAmount, 0)
 
   // ③ 상병별 집계
   const caseTypeSummary: Record<string, { count: number; totalGross: number }> = {}
-  for (const s of filteredSettlements) {
+  for (const s of afs) {
     const ct = s.caseType || '(기타)'
     if (!caseTypeSummary[ct]) caseTypeSummary[ct] = { count: 0, totalGross: 0 }
     caseTypeSummary[ct].count += 1
@@ -484,7 +556,7 @@ export default function PerformanceTab() {
 
   // 이산 TF × 정산담당자 교차 집계
   const isanBySettleStaff: Record<string, { count: number; totalGross: number }> = {}
-  for (const s of filteredSettlements) {
+  for (const s of afs) {
     if (!s.tfName || s.tfName.startsWith('더보상')) continue
     const name = s.settlementStaffName || '(미상)'
     if (!isanBySettleStaff[name]) isanBySettleStaff[name] = { count: 0, totalGross: 0 }
@@ -494,7 +566,7 @@ export default function PerformanceTab() {
 
   // ④ 월별 시계열
   const monthlyMap: Record<string, { count: number; gross: number }> = {}
-  for (const s of filteredSettlements) {
+  for (const s of afs) {
     const m = s.paymentDate ? parseInt(s.paymentDate.slice(5, 7)) : (s.month || 0)
     if (!m) continue
     const key = String(m)
@@ -544,14 +616,28 @@ export default function PerformanceTab() {
           </button>
         ))}
         <span className="text-gray-300">|</span>
-        <select value={branch} onChange={e => setBranch(e.target.value)}
+        <select value={branch} onChange={e => { setBranch(e.target.value); setAggMode('branch') }}
           className="border border-gray-300 rounded px-2 py-1 text-sm">
-          {['울산지사','부산경남지사','서울북부지사','경기안산지사','전북익산지사',
-            '경북구미지사','경기의정부지사','강원동해지사','전남여수지사','대구지사',
-            '부산중부지사','경기수원지사'].map(b => (
+          {ALL_BRANCHES.map(b => (
             <option key={b} value={b}>{b}</option>
           ))}
         </select>
+        <button
+          onClick={() => setAggMode(aggMode === 'region' ? 'branch' : 'region')}
+          className={`px-2 py-1 text-xs rounded border transition-colors ${
+            aggMode === 'region' ? 'bg-indigo-500 text-white border-indigo-500' : 'border-gray-300 text-gray-600 hover:border-indigo-400'
+          }`}
+        >
+          권역 집계
+        </button>
+        <button
+          onClick={() => setAggMode(aggMode === 'all' ? 'branch' : 'all')}
+          className={`px-2 py-1 text-xs rounded border transition-colors ${
+            aggMode === 'all' ? 'bg-purple-500 text-white border-purple-500' : 'border-gray-300 text-gray-600 hover:border-purple-400'
+          }`}
+        >
+          전체 집계
+        </button>
       </div>
 
       {/* ── 서브탭 */}
@@ -1151,8 +1237,8 @@ export default function PerformanceTab() {
           <tfoot>
             <tr className="bg-sky-50 font-medium text-xs">
               <td colSpan={7} className={`${cellCls} text-right text-sky-700`}>합계 ({filteredSettlements.length}건)</td>
-              <td className={`${cellCls} text-right text-sky-700`}>{fmt(totalGrossAll)}</td>
-              <td className={`${cellCls} text-right text-sky-700`}>{fmt(Math.floor(totalGrossAll / 1.1))}</td>
+              <td className={`${cellCls} text-right text-sky-700`}>{fmt(filteredSettlements.reduce((s, r) => s + r.grossAmount, 0))}</td>
+              <td className={`${cellCls} text-right text-sky-700`}>{fmt(Math.floor(filteredSettlements.reduce((s, r) => s + r.grossAmount, 0) / 1.1))}</td>
               <td className={cellCls} />
             </tr>
           </tfoot>
@@ -1161,10 +1247,20 @@ export default function PerformanceTab() {
     </div>
 
     {/* ── 집계 섹션 (4종) */}
-    {filteredSettlements.length > 0 && (
+    {(afs.length > 0 || aggLoading) && (
       <div className="border-t pt-5 mt-2">
         {/* 집계 타이틀 */}
-        <p className="text-sm font-semibold text-gray-700 mb-4">집계</p>
+        <div className="flex items-center gap-3 mb-4">
+          <p className="text-sm font-semibold text-gray-700">집계</p>
+          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+            aggMode === 'branch' ? 'bg-gray-100 text-gray-600'
+            : aggMode === 'region' ? 'bg-indigo-100 text-indigo-700'
+            : 'bg-purple-100 text-purple-700'
+          }`}>
+            {aggModeLabel}
+          </span>
+          {aggLoading && <span className="text-xs text-gray-400 animate-pulse">불러오는 중...</span>}
+        </div>
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
 
         {/* (1) 담당자별 집계 — 영업 / 정산 병렬 (2열 전체) */}
@@ -1210,7 +1306,10 @@ export default function PerformanceTab() {
             </div>
             {/* 정산담당자 기준 */}
             <div>
-              <p className="text-xs text-gray-500 mb-1 font-medium">정산담당자 기준</p>
+              <p className="text-xs text-gray-500 mb-1 font-medium">
+                정산담당자 기준
+                <span className="ml-1 text-sky-500 font-normal">(더보상 TF 한정)</span>
+              </p>
               <table className="w-full border-collapse text-xs">
                 <thead>
                   <tr className="bg-gray-50">
@@ -1271,7 +1370,7 @@ export default function PerformanceTab() {
                       <tr key={tf} className="hover:bg-sky-50">
                         <td className={`${cellCls} text-sky-700 font-medium`}>{tf}</td>
                         <td className={`${cellCls} text-center`}>
-                          {filteredSettlements.filter(s => s.tfName === tf).length}
+                          {afs.filter(s => s.tfName === tf).length}
                         </td>
                         <td className={`${cellCls} text-right`}>{fmt(amt)}</td>
                         <td className={`${cellCls} text-right text-gray-500`}>
@@ -1282,7 +1381,7 @@ export default function PerformanceTab() {
                   <tr className="bg-sky-50 font-semibold">
                     <td className={`${cellCls} text-sky-800`}>더보상 소계</td>
                     <td className={`${cellCls} text-center text-sky-800`}>
-                      {filteredSettlements.filter(s => s.tfName?.startsWith('더보상')).length}
+                      {afs.filter(s => s.tfName?.startsWith('더보상')).length}
                     </td>
                     <td className={`${cellCls} text-right text-sky-800`}>{fmt(theboTotal)}</td>
                     <td className={`${cellCls} text-right text-sky-700`}>
@@ -1296,7 +1395,7 @@ export default function PerformanceTab() {
                       <tr key={tf} className="hover:bg-orange-50">
                         <td className={`${cellCls} text-orange-600 font-medium`}>{tf}</td>
                         <td className={`${cellCls} text-center`}>
-                          {filteredSettlements.filter(s => s.tfName === tf).length}
+                          {afs.filter(s => s.tfName === tf).length}
                         </td>
                         <td className={`${cellCls} text-right`}>{fmt(amt)}</td>
                         <td className={`${cellCls} text-right text-gray-500`}>
@@ -1307,7 +1406,7 @@ export default function PerformanceTab() {
                   <tr className="bg-orange-50 font-semibold">
                     <td className={`${cellCls} text-orange-700`}>이산 소계</td>
                     <td className={`${cellCls} text-center text-orange-700`}>
-                      {filteredSettlements.filter(s => s.tfName && !s.tfName.startsWith('더보상')).length}
+                      {afs.filter(s => s.tfName && !s.tfName.startsWith('더보상')).length}
                     </td>
                     <td className={`${cellCls} text-right text-orange-700`}>{fmt(isanTotal)}</td>
                     <td className={`${cellCls} text-right text-orange-600`}>
@@ -1316,7 +1415,7 @@ export default function PerformanceTab() {
                   </tr>
                   <tr className="bg-gray-100 font-bold">
                     <td className={cellCls}>전체 합계</td>
-                    <td className={`${cellCls} text-center`}>{filteredSettlements.length}</td>
+                    <td className={`${cellCls} text-center`}>{afs.length}</td>
                     <td className={`${cellCls} text-right text-sky-800`}>{fmt(totalGrossAll)}</td>
                     <td className={`${cellCls} text-right`}>100%</td>
                   </tr>
@@ -1384,7 +1483,7 @@ export default function PerformanceTab() {
                 ))}
               <tr className="bg-gray-100 font-semibold">
                 <td className={cellCls}>합계</td>
-                <td className={`${cellCls} text-center`}>{filteredSettlements.length}</td>
+                <td className={`${cellCls} text-center`}>{afs.length}</td>
                 <td className={`${cellCls} text-right text-sky-700`}>{fmt(totalGrossAll)}</td>
                 <td className={`${cellCls} text-right`}>100%</td>
               </tr>
@@ -1426,7 +1525,7 @@ export default function PerformanceTab() {
               })()}
               <tr className="bg-sky-50 font-bold">
                 <td className={`${cellCls} text-sky-700`}>합계</td>
-                <td className={`${cellCls} text-center text-sky-700`}>{filteredSettlements.length}</td>
+                <td className={`${cellCls} text-center text-sky-700`}>{afs.length}</td>
                 <td className={`${cellCls} text-right text-sky-700`}>{fmt(totalGrossAll)}</td>
                 <td className={`${cellCls} text-right text-sky-700`}>{fmt(Math.floor(totalGrossAll / 1.1))}</td>
                 <td className={`${cellCls} text-right text-green-700`}>{fmt(Math.floor(totalGrossAll / 1.1 * 0.1))}</td>
