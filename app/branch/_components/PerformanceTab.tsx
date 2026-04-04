@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { CASE_TYPES, QUARTER_MONTHS } from '../_constants/performance'
 import { REGION_BRANCHES } from '@/lib/constants/regions'
+import EvaluationSubTab from './EvaluationSubTab'
 
 // ─── 타입 ────────────────────────────────────────────────────────
 interface StaffRosterItem {
@@ -65,7 +66,7 @@ const ALL_MONTHS = [1,2,3,4,5,6,7,8,9,10,11,12] as const
 // ─── 메인 컴포넌트 ────────────────────────────────────────────────
 export default function PerformanceTab() {
   const currentYear = new Date().getFullYear()
-  const [subTab, setSubTab]     = useState<'sales' | 'settlement'>('sales')
+  const [subTab, setSubTab]     = useState<'sales' | 'settlement' | 'evaluation'>('sales')
   const [year, setYear]         = useState(currentYear)
   const [quarter, setQuarter]   = useState<number | null>(null)
   const [month, setMonth]       = useState<number | null>(null)
@@ -659,9 +660,9 @@ export default function PerformanceTab() {
 
       {/* ── 서브탭 */}
       <div className="flex gap-1 bg-gray-100 p-1 rounded-lg">
-        {[['sales','영업 약정건수'],['settlement','정산내역']].map(([id, label]) => (
+        {[['sales','영업 약정건수'],['settlement','정산내역'],['evaluation','인사평가']].map(([id, label]) => (
           <button key={id}
-            onClick={() => setSubTab(id as 'sales' | 'settlement')}
+            onClick={() => setSubTab(id as 'sales' | 'settlement' | 'evaluation')}
             className={`flex-1 py-1.5 text-sm rounded-md font-medium transition-colors ${
               subTab === id ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
             }`}
@@ -1554,8 +1555,23 @@ export default function PerformanceTab() {
 
       </div></div>
     )}
+
   </div>
 )}
+
+      {/* ══════════════════════════════════════════════════════
+          서브탭 C: 인사평가
+      ══════════════════════════════════════════════════════ */}
+      {subTab === 'evaluation' && (
+        <EvaluationSubTab
+          year={year}
+          quarter={quarter}
+          month={month}
+          branch={branch}
+          viewMonths={viewMonths}
+        />
+      )}
+
     </div>
   )
 }

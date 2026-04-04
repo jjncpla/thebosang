@@ -742,18 +742,24 @@ model StaffEvaluation {
   id               String   @id @default(cuid())
   userId           String
   evaluatorId      String?
-  period           String
+  period           String   // "2026-Q1", "2026-H1", "2026-YEAR" 등
+  evalType         String   @default("OUTDOOR") // OUTDOOR | INDOOR | YEAREND
   score            Int?
   performanceScore Int?
   attendanceScore  Int?
   attitudeScore    Int?
   isPromotionTarget Boolean @default(false)
   promotionGrade   String?
+  grade            String?  // 내근직 평가 등급: S | A | B | C
+  gradeReason      String?  @db.Text // 내근직 평가 사유
   memo             String?  @db.Text
+  branchName       String?  // 평가 대상 지사
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
   user      User @relation("EvaluationTarget", fields: [userId], references: [id])
+
+  @@unique([userId, period, evalType])
 }
 
 // ─────────────────────────────────────────────
