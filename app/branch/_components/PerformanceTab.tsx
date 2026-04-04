@@ -1331,7 +1331,7 @@ export default function PerformanceTab() {
               <table className="w-full border-collapse text-xs">
                 <thead>
                   <tr className="bg-gray-50">
-                    {['정산담당자','건수','배분액','인센(10%)'].map(h => (
+                    {['정산담당자','건수','정산액','인센(10%)'].map(h => (
                       <th key={h} className={`${thCls} whitespace-nowrap`}>{h}</th>
                     ))}
                   </tr>
