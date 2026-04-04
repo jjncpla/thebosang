@@ -283,6 +283,21 @@ export default function PerformanceTab() {
   const [importPreview, setImportPreview] = useState<SettlementRow[] | null>(null)
   const [importSaving, setImportSaving]   = useState(false)
   const [deleting, setDeleting]           = useState(false)
+  const [settlementRoster, setSettlementRoster] = useState<string[]>([])
+
+  // 정산내역 탭에서도 해당 지사의 직원 명단(roster) 로드 — 정산담당자 집계 필터용
+  useEffect(() => {
+    if (subTab !== 'settlement') return
+    async function loadRoster() {
+      const refMonth = month || (quarter ? QUARTER_MONTHS[quarter][2] : new Date().getMonth() + 1)
+      const res = await fetch(`/api/branch/staff-roster?branchName=${encodeURIComponent(branch)}&year=${year}&month=${refMonth}`)
+      if (!res.ok) return
+      const data: StaffRosterItem[] = await res.json()
+      // 지사명 제외, 직원명만 추출
+      setSettlementRoster(data.filter(r => r.staffName !== branch).map(r => r.staffName))
+    }
+    loadRoster()
+  }, [subTab, branch, year, month, quarter])
 
   const loadSettlements = useCallback(async () => {
     const qs = new URLSearchParams({ year: String(year), branchName: branch })
@@ -525,11 +540,13 @@ export default function PerformanceTab() {
     salesStaffSummary[name].incentive += Math.floor(Math.floor(s.grossAmount / 1.1) * 0.1)
   }
 
-  // ① 정산담당자별 집계 — 더보상 TF 소속 건만 대상
+  // ① 정산담당자별 집계 — 더보상 TF 소속 건 + 선택 지사 roster 직원만
   const settleStaffSummary: Record<string, { count: number; totalGross: number; incentive: number }> = {}
   for (const s of afs) {
     if (!s.tfName?.startsWith('더보상')) continue  // 이산 TF 제외
     const name = s.settlementStaffName || '(미지정)'
+    // 지사 모드일 때: 해당 지사 영업약정건수에 등록된 직원만 집계
+    if (aggMode === 'branch' && settlementRoster.length > 0 && !settlementRoster.includes(name)) continue
     if (!settleStaffSummary[name]) settleStaffSummary[name] = { count: 0, totalGross: 0, incentive: 0 }
     settleStaffSummary[name].count += 1
     settleStaffSummary[name].totalGross += s.grossAmount
