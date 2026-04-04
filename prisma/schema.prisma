@@ -1018,3 +1018,15 @@ model SpecialClinicSchedule {
   @@index([scheduledDate])
   @@index([patientName, tfName, clinicType, examRound])
 }
+
+model BranchIncentiveUsage {
+  id          String   @id @default(cuid())
+  branchName  String
+  year        Int
+  quarter     Int
+  usageDate   DateTime
+  description String
+  amount      Int
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
