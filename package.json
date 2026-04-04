@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "prisma generate && prisma generate --schema=prisma/auth.prisma && next build",
-    "start": "prisma db push --skip-generate && next start -p ${PORT:-3000}",
+    "start": "next start -p ${PORT:-3000}",
     "lint": "eslint",
     "db:auth:generate": "prisma generate --schema=prisma/auth.prisma",
     "db:auth:push": "prisma db push --schema=prisma/auth.prisma",
