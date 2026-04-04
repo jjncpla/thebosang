@@ -48,6 +48,12 @@ const EVAL_VIEWS = [
 
 type EvalView = typeof EVAL_VIEWS[number]['id']
 
+// Contact 테이블의 branch는 "노무법인 더보상 울산지사" 형식,
+// PerformanceTab의 ALL_BRANCHES는 "울산지사" 형식 → 변환 필요
+function toContactBranch(shortBranch: string) {
+  return `노무법인 더보상 ${shortBranch}`
+}
+
 function fmt(n: number) {
   return n ? n.toLocaleString('ko-KR') : '0'
 }
@@ -121,7 +127,7 @@ function OutdoorEval({ year, quarter, month, branch, viewMonths }: Props) {
     setLoading(true)
     try {
       // 1. 해당 지사 외근직 직원 목록
-      const cRes = await fetch(`/api/contacts?branch=${encodeURIComponent(branch)}&jobGrade=외근직`)
+      const cRes = await fetch(`/api/contacts?branch=${encodeURIComponent(toContactBranch(branch))}&jobGrade=외근직`)
       if (cRes.ok) {
         const data = await cRes.json()
         setContacts(Array.isArray(data) ? data : data.contacts || [])
@@ -294,7 +300,7 @@ function IndoorEval({ year, quarter, month, branch }: IndoorEvalProps) {
     setLoading(true)
     try {
       // 1. 해당 지사 내근직 직원 (Contact)
-      const cRes = await fetch(`/api/contacts?branch=${encodeURIComponent(branch)}&jobGrade=내근직`)
+      const cRes = await fetch(`/api/contacts?branch=${encodeURIComponent(toContactBranch(branch))}&jobGrade=내근직`)
       if (cRes.ok) {
         const data = await cRes.json()
         setContacts(Array.isArray(data) ? data : data.contacts || [])
