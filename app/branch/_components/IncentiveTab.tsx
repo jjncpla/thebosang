@@ -394,10 +394,11 @@ export default function IncentiveTab() {
                                   if (available.length === 0) return null
                                   return (
                                     <select
+                                      key={`add-staff-${editAllocations.length}`}
                                       onChange={e => {
-                                        if (!e.target.value) return
-                                        setEditAllocations(prev => [...prev, { staffName: e.target.value, ratio: 0 }])
-                                        e.target.value = ''
+                                        const name = e.target.value
+                                        if (!name) return
+                                        setEditAllocations(prev => [...prev, { staffName: name, ratio: 0 }])
                                       }}
                                       defaultValue=""
                                       style={{ fontSize: 11, padding: '2px 4px', border: '1px solid #e2e8f0', borderRadius: 4, color: '#64748b' }}
