@@ -69,9 +69,9 @@ export default function IncentiveTab() {
   const [usages, setUsages] = useState<UsageRecord[]>([])
   const [loading, setLoading] = useState(false)
 
-  // 인라인 편집 상태: { recordId: { staffName: ratio } }
-  const [editingCell, setEditingCell] = useState<{ recordId: string; staffName: string } | null>(null)
-  const [editValue, setEditValue] = useState('')
+  // 인라인 편집 상태
+  const [editingRecordId, setEditingRecordId] = useState<string | null>(null)
+  const [editAllocations, setEditAllocations] = useState<{ staffName: string; ratio: number }[]>([])
 
   // 사용 내역 추가 폼
   const [showAddUsage, setShowAddUsage] = useState(false)
@@ -131,32 +131,27 @@ export default function IncentiveTab() {
     return Math.floor(grossAmount / 11 * ratio / 100)
   }
 
-  // ── 비율 편집 저장
-  const saveAllocation = async (recordId: string, staffName: string, newRatio: number) => {
-    const record = records.find(r => r.id === recordId)
-    if (!record) return
+  // ── 편집 시작
+  const startEditing = (record: SettlementWithAlloc) => {
+    setEditingRecordId(record.id)
+    setEditAllocations(
+      record.allocations
+        .filter(a => a.ratio > 0)
+        .map(a => ({ staffName: a.staffName, ratio: a.ratio }))
+    )
+  }
 
-    // 기존 allocations 복사 후 해당 직원 비율 업데이트
-    const existingAllocations = record.allocations.map(a => ({
-      staffName: a.staffName,
-      ratio: a.ratio,
-      isExternal: a.isExternal,
-    }))
+  // ── 편집 취소
+  const cancelEditing = () => {
+    setEditingRecordId(null)
+    setEditAllocations([])
+  }
 
-    const existingIdx = existingAllocations.findIndex(a => a.staffName === staffName)
-    if (newRatio === 0) {
-      // 0이면 해당 직원 allocation 제거
-      if (existingIdx >= 0) existingAllocations.splice(existingIdx, 1)
-    } else if (existingIdx >= 0) {
-      existingAllocations[existingIdx].ratio = newRatio
-    } else {
-      existingAllocations.push({ staffName, ratio: newRatio, isExternal: false })
-    }
-
-    // 비율합계 검증
-    const totalRatio = existingAllocations.reduce((sum, a) => sum + a.ratio, 0)
+  // ── 편집 저장
+  const saveAllocations = async (recordId: string) => {
+    const totalRatio = editAllocations.reduce((sum, a) => sum + a.ratio, 0)
     if (totalRatio > 100) {
-      alert(`비율 합계가 100%를 초과합니다 (${totalRatio}%). 저장할 수 없습니다.`)
+      alert(`비율 합계가 100%를 초과합니다(${totalRatio}%). 저장할 수 없습니다.`)
       return
     }
 
@@ -164,17 +159,25 @@ export default function IncentiveTab() {
       const res = await fetch(`/api/branch/settlement-records/${recordId}/allocations`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ allocations: existingAllocations }),
+        body: JSON.stringify({
+          allocations: editAllocations.filter(a => a.ratio > 0).map(a => ({
+            staffName: a.staffName,
+            ratio: a.ratio,
+            isExternal: false,
+          })),
+        }),
       })
       if (res.ok) {
         const updated = await res.json()
         setRecords(prev => prev.map(r => r.id === recordId ? { ...r, allocations: updated.allocations } : r))
+      } else {
+        alert('저장 실패')
       }
     } catch (e) {
       console.error('배분 저장 실패:', e)
     }
-
-    setEditingCell(null)
+    setEditingRecordId(null)
+    setEditAllocations([])
   }
 
   // ── 사용 내역 추가
@@ -313,33 +316,19 @@ export default function IncentiveTab() {
                 해당 기간 더보상 TF 정산 데이터가 없습니다.
               </div>
             ) : (
-              <div className="overflow-x-auto">
+              <div>
                 <table className="w-full border-collapse text-xs">
                   <thead>
                     <tr>
-                      <th className={thCls} rowSpan={2}>연번</th>
-                      <th className={thCls} rowSpan={2}>정산월</th>
-                      <th className={thCls} rowSpan={2}>재해자</th>
-                      <th className={thCls} rowSpan={2}>사건종류</th>
-                      <th className={thCls} rowSpan={2}>담당자</th>
-                      <th className={thCls} rowSpan={2}>정산액<br/>(부가세포함)</th>
-                      <th className={thCls} rowSpan={2}>정산액<br/>(부가세제외)</th>
-                      <th className={thCls} rowSpan={2}>인센대상액<br/>(10%)</th>
-                      <th className={thCls} rowSpan={2}>비율<br/>합계</th>
-                      {staffList.map(s => (
-                        <th key={s} className={thCls} colSpan={2}>{s}</th>
-                      ))}
-                      <th className={thCls} rowSpan={2}>비고</th>
-                    </tr>
-                    <tr>
-                      {staffList.map(s => ([
-                        <th key={`${s}-pct-h`} className={thCls} style={{ minWidth: 30 }}>
-                          <span className="block text-[10px]">%</span>
-                        </th>,
-                        <th key={`${s}-amt-h`} className={thCls} style={{ minWidth: 60 }}>
-                          <span className="block text-[10px]">금액</span>
-                        </th>
-                      ]))}
+                      <th className={thCls}>연번</th>
+                      <th className={thCls}>정산월</th>
+                      <th className={thCls}>재해자</th>
+                      <th className={thCls}>사건종류</th>
+                      <th className={thCls}>담당자</th>
+                      <th className={thCls}>정산액<br/>(VAT제외)</th>
+                      <th className={thCls}>인센대상액<br/>(10%)</th>
+                      <th className={thCls} style={{ minWidth: 220 }}>배분 내역</th>
+                      <th className={thCls}>비고</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -349,6 +338,8 @@ export default function IncentiveTab() {
                       const netAmt = Math.floor(r.grossAmount / 1.1)
                       const isBranchCase = (r.salesStaffName && r.salesStaffName.startsWith('더보상')) ||
                         (r.settlementStaffName && r.settlementStaffName.startsWith('더보상'))
+                      const isEditing = editingRecordId === r.id
+                      const activeAllocs = r.allocations.filter(a => a.ratio > 0)
 
                       return (
                         <tr key={r.id} className="hover:bg-gray-50">
@@ -359,61 +350,145 @@ export default function IncentiveTab() {
                           <td className={`${cellCls} text-center whitespace-nowrap`}>
                             {r.settlementStaffName || r.salesStaffName || ''}
                           </td>
-                          <td className={`${cellCls} text-right`}>{fmt(r.grossAmount)}</td>
                           <td className={`${cellCls} text-right`}>{fmt(netAmt)}</td>
-                          <td className={`${cellCls} text-right font-medium`}>{fmt(base)}</td>
-                          <td className={`${cellCls} text-center font-medium ${
-                            ratioSum !== 100 ? 'text-red-500' : 'text-green-600'
-                          }`}>
-                            {ratioSum}%
-                          </td>
-                          {staffList.map(s => {
-                            const ratio = getStaffRatio(r, s)
-                            const isEditing = editingCell?.recordId === r.id && editingCell?.staffName === s
-                            return [
-                              <td key={`${r.id}-${s}-pct`}
-                                className={`${cellCls} text-center cursor-pointer hover:bg-sky-50`}
-                                onClick={() => {
-                                  setEditingCell({ recordId: r.id, staffName: s })
-                                  setEditValue(String(ratio))
-                                }}
+                          <td className={`${cellCls} text-right font-medium`} style={{ color: '#059669' }}>{fmt(base)}</td>
+
+                          {/* 배분 내역 셀 */}
+                          <td className={`${cellCls} text-left`} style={{ padding: '6px 8px' }}>
+                            {isEditing ? (
+                              /* === 편집 모드 === */
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: 5, minWidth: 200 }}>
+                                {editAllocations.map(a => (
+                                  <div key={a.staffName} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                                    <span style={{ fontSize: 12, fontWeight: 500, minWidth: 45 }}>{a.staffName}</span>
+                                    <input
+                                      type="number"
+                                      value={a.ratio}
+                                      onChange={e => {
+                                        const val = parseInt(e.target.value) || 0
+                                        setEditAllocations(prev => prev.map(x =>
+                                          x.staffName === a.staffName ? { ...x, ratio: val } : x
+                                        ))
+                                      }}
+                                      min={0} max={100}
+                                      style={{
+                                        width: 48, padding: '1px 4px', border: '1px solid #93c5fd',
+                                        borderRadius: 4, fontSize: 12, textAlign: 'right',
+                                      }}
+                                    />
+                                    <span style={{ fontSize: 11, color: '#64748b' }}>%</span>
+                                    <span style={{ fontSize: 11, color: '#059669', minWidth: 55, textAlign: 'right' }}>
+                                      {fmt(Math.floor(base * (a.ratio || 0) / 100))}원
+                                    </span>
+                                    <button
+                                      onClick={() => setEditAllocations(prev => prev.filter(x => x.staffName !== a.staffName))}
+                                      style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: 13, padding: '0 2px' }}
+                                    >✕</button>
+                                  </div>
+                                ))}
+
+                                {/* 직원 추가 드롭다운 */}
+                                {(() => {
+                                  const assignedNames = editAllocations.map(a => a.staffName)
+                                  const available = staffList.filter(s => !assignedNames.includes(s))
+                                  if (available.length === 0) return null
+                                  return (
+                                    <select
+                                      onChange={e => {
+                                        if (!e.target.value) return
+                                        setEditAllocations(prev => [...prev, { staffName: e.target.value, ratio: 0 }])
+                                        e.target.value = ''
+                                      }}
+                                      defaultValue=""
+                                      style={{ fontSize: 11, padding: '2px 4px', border: '1px solid #e2e8f0', borderRadius: 4, color: '#64748b' }}
+                                    >
+                                      <option value="" disabled>+ 직원 추가</option>
+                                      {available.map(s => <option key={s} value={s}>{s}</option>)}
+                                    </select>
+                                  )
+                                })()}
+
+                                {/* 합계 + 버튼 */}
+                                {(() => {
+                                  const editSum = editAllocations.reduce((s, a) => s + a.ratio, 0)
+                                  return (
+                                    <div style={{
+                                      borderTop: '1px solid #e2e8f0', paddingTop: 4, marginTop: 2,
+                                      display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                                    }}>
+                                      <span style={{
+                                        fontSize: 11, fontWeight: 600,
+                                        color: editSum > 100 ? '#ef4444' : editSum === 100 ? '#059669' : '#f59e0b',
+                                      }}>
+                                        합계 {editSum}% {editSum === 100 ? '✅' : editSum > 100 ? '⚠️' : ''}
+                                      </span>
+                                      <div style={{ display: 'flex', gap: 4 }}>
+                                        <button
+                                          onClick={() => saveAllocations(r.id)}
+                                          disabled={editSum > 100}
+                                          style={{
+                                            padding: '2px 10px', fontSize: 11, borderRadius: 4, border: 'none',
+                                            background: editSum > 100 ? '#e2e8f0' : '#29ABE2', color: '#fff',
+                                            cursor: editSum > 100 ? 'not-allowed' : 'pointer',
+                                          }}
+                                        >저장</button>
+                                        <button
+                                          onClick={cancelEditing}
+                                          style={{
+                                            padding: '2px 10px', fontSize: 11, borderRadius: 4,
+                                            border: '1px solid #e2e8f0', background: '#fff', color: '#64748b', cursor: 'pointer',
+                                          }}
+                                        >취소</button>
+                                      </div>
+                                    </div>
+                                  )
+                                })()}
+                              </div>
+                            ) : (
+                              /* === 표시 모드 === */
+                              <div
+                                onClick={() => startEditing(r)}
+                                style={{ cursor: 'pointer' }}
+                                title="클릭하여 배분 편집"
                               >
-                                {isEditing ? (
-                                  <input
-                                    type="number"
-                                    min={0} max={100}
-                                    value={editValue}
-                                    onChange={e => setEditValue(e.target.value)}
-                                    onBlur={() => saveAllocation(r.id, s, parseInt(editValue) || 0)}
-                                    onKeyDown={e => {
-                                      if (e.key === 'Enter') saveAllocation(r.id, s, parseInt(editValue) || 0)
-                                      if (e.key === 'Escape') setEditingCell(null)
-                                    }}
-                                    autoFocus
-                                    className="w-12 text-center border border-sky-400 rounded text-xs py-0"
-                                  />
+                                {activeAllocs.length > 0 ? (
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
+                                      {activeAllocs.map(a => (
+                                        <span key={a.id} style={{
+                                          display: 'inline-flex', alignItems: 'center', gap: 3,
+                                          padding: '1px 7px', borderRadius: 10,
+                                          background: '#f0f9ff', border: '1px solid #bae6fd',
+                                          fontSize: 11, whiteSpace: 'nowrap',
+                                        }}>
+                                          <span style={{ fontWeight: 600, color: '#0369a1' }}>{a.staffName}</span>
+                                          <span style={{ color: '#64748b' }}>{a.ratio}%</span>
+                                          <span style={{ color: '#059669', fontWeight: 500 }}>
+                                            {fmt(getStaffIncentive(r.grossAmount, a.ratio))}
+                                          </span>
+                                        </span>
+                                      ))}
+                                    </div>
+                                    <div style={{
+                                      fontSize: 10,
+                                      color: ratioSum === 100 ? '#64748b' : '#ef4444',
+                                      fontWeight: ratioSum !== 100 ? 600 : 400,
+                                    }}>
+                                      합계 {ratioSum}%
+                                      {ratioSum < 100 && isBranchCase && ` (지사인센 ${100 - ratioSum}%)`}
+                                      {ratioSum < 100 && !isBranchCase && ` (미배분 ${100 - ratioSum}%)`}
+                                      {ratioSum > 100 && ' ⚠️ 초과'}
+                                    </div>
+                                  </div>
                                 ) : (
-                                  <span className={ratio > 0 ? 'text-sky-600' : 'text-gray-300'}>
-                                    {ratio > 0 ? `${ratio}` : '-'}
-                                  </span>
+                                  <span style={{ color: '#94a3b8', fontSize: 11 }}>미배정</span>
                                 )}
-                              </td>,
-                              <td key={`${r.id}-${s}-amt`} className={`${cellCls} text-right`}>
-                                {ratio > 0 ? (
-                                  <span className="text-green-700">{fmt(getStaffIncentive(r.grossAmount, ratio))}</span>
-                                ) : (
-                                  <span className="text-gray-300">-</span>
-                                )}
-                              </td>
-                            ]
-                          })}
+                              </div>
+                            )}
+                          </td>
+
                           <td className={`${cellCls} text-xs text-gray-500`}>
                             {r.memo || ''}
-                            {isBranchCase && ratioSum < 100 && (
-                              <span className="text-orange-500 ml-1">
-                                (지사인센 {100 - ratioSum}%)
-                              </span>
-                            )}
                           </td>
                         </tr>
                       )
@@ -422,21 +497,26 @@ export default function IncentiveTab() {
                     <tr className="bg-gray-100 font-medium">
                       <td className={`${cellCls} text-center`} colSpan={5}>합계</td>
                       <td className={`${cellCls} text-right`}>
-                        {fmt(records.reduce((s, r) => s + r.grossAmount, 0))}
-                      </td>
-                      <td className={`${cellCls} text-right`}>
                         {fmt(records.reduce((s, r) => s + Math.floor(r.grossAmount / 1.1), 0))}
                       </td>
                       <td className={`${cellCls} text-right`}>
                         {fmt(records.reduce((s, r) => s + incentiveBase(r.grossAmount), 0))}
                       </td>
-                      <td className={cellCls}></td>
-                      {staffList.map(s => [
-                        <td key={`total-${s}-pct`} className={cellCls}></td>,
-                        <td key={`total-${s}-amt`} className={`${cellCls} text-right text-green-700 font-bold`}>
-                          {fmt(staffIncentiveTotals[s] || 0)}
-                        </td>
-                      ])}
+                      <td className={`${cellCls} text-left`}>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                          {staffList.filter(s => (staffIncentiveTotals[s] || 0) > 0).map(s => (
+                            <span key={s} style={{
+                              display: 'inline-flex', alignItems: 'center', gap: 3,
+                              padding: '1px 7px', borderRadius: 10,
+                              background: '#ecfdf5', border: '1px solid #a7f3d0',
+                              fontSize: 11, fontWeight: 600,
+                            }}>
+                              <span style={{ color: '#065f46' }}>{s}</span>
+                              <span style={{ color: '#059669' }}>{fmt(staffIncentiveTotals[s])}</span>
+                            </span>
+                          ))}
+                        </div>
+                      </td>
                       <td className={cellCls}></td>
                     </tr>
                   </tbody>
