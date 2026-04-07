@@ -1,0 +1,381 @@
+## 세션 타입: 기능 개발 세션
+## 작업 개요
+영업약정건수 탭 2가지 개선:
+1. 지사 고정 행 추가
+2. 분기 집계 + 연간 집계/순위 표시
+
+---
+
+## 수술적 수정 원칙
+- 기존 직원 행 유지
+- 기존 직원 추가 버튼 유지
+- 새 행/섹션만 추가
+
+---
+
+## Step 0: 파일 위치 파악
+
+```bash
+# 영업약정건수 탭 컴포넌트
+grep -rn "영업 약정건수\|영업약정건수\|SalesContract\|salesContract" app --include="*.tsx" -l | grep -v node_modules
+
+# 영업약정건수 API
+find . -path "*/api/*sales-contract*" | grep -v node_modules
+cat app/api/branch/sales-contracts/route.ts
+```
+
+---
+
+## 작업 1: 지사 고정 행 추가
+
+### 1-1. 개념
+- 어떤 지사를 선택하든 해당 지사명 자체를 staffName으로 하는 SalesContract 행이 항상 존재해야 함
+- 예: 울산지사 선택 시 staffName = "울산지사" 인 행이 항상 표시
+- 입사일 기준과 무관하게 고정
+
+### 1-2. API 수정 (GET)
+Step 0에서 찾은 sales-contracts GET API에서:
+데이터 조회 후 지사명과 동일한 staffName의 레코드가 없으면 자동 upsert:
+
+```typescript
+// GET 핸들러 내부, contracts 조회 후
+const branchRecord = contracts.find(c => c.staffName === branchName)
+if (!branchRecord && branchName) {
+  // 지사 고정 행이 없으면 생성 (모든 값 0)
+  await prisma.salesContract.upsert({
+    where: {
+      staffName_year_month: {
+        staffName: branchName,
+        year,
+        month,
+      }
+    },
+    update: {},
+    create: {
+      branchName,
+      staffName: branchName,
+      year,
+      month,
+      pneumoconiosis: 0, copd: 0, hearingLoss: 0, wageCorrection: 0,
+      disabilityPayment: 0, litigation: 0, musculoskeletal: 0,
+      cerebrovascular: 0, occupationalCancer: 0, accident: 0, other: 0,
+      memo: '',
+    }
+  })
+  // 재조회
+  const updated = await prisma.salesContract.findMany({ where: { branchName, year, month } })
+  return NextResponse.json({ contracts: updated, activeStaff: ... })
+}
+```
+
+### 1-3. UI 수정
+Step 0에서 찾은 영업약정건수 탭 컴포넌트:
+
+직원 행 렌더링 부분에서 지사명과 동일한 staffName 행을 **최상단에 고정**:
+
+```tsx
+// 정렬: 지사명과 동일한 행 맨 위, 나머지는 이름순
+const sortedContracts = [...contracts].sort((a, b) => {
+  if (a.staffName === selectedBranch) return -1
+  if (b.staffName === selectedBranch) return 1
+  return a.staffName.localeCompare(b.staffName)
+})
+```
+
+지사 행은 시각적으로 구분:
+```tsx
+const isBranchRow = record.staffName === selectedBranch
+// 행 스타일에 조건 적용
+style={{
+  background: isBranchRow ? '#f0fdf4' : 'white',
+  fontWeight: isBranchRow ? 700 : 400,
+}}
+// 지사 행에는 삭제 버튼 표시 안 함
+{!isBranchRow && <button onClick={() => handleDelete(record.id)}>삭제</button>}
+```
+
+---
+
+## 작업 2: 분기 집계 + 연간 집계/순위
+
+### 2-1. 개념
+월별 실적 표 사이에 분기 집계 행 삽입:
+- 1분기 집계: 3월 아래 (1~3월 합산)
+- 2분기 집계: 6월 아래 (4~6월 합산)
+- 3분기 집계: 9월 아래 (7~9월 합산)
+- 4분기 집계: 12월 아래 (10~12월 합산)
+- 연간 집계: 12월 집계 아래 (1~12월 합산 + 직원별 순위)
+
+### 2-2. 현재 렌더링 구조 파악
+Step 0에서 찾은 파일에서 월별 렌더링 루프 확인.
+보통 아래 패턴:
+```tsx
+{months.map(month => (
+  <div key={month}>
+    <h4>{month}월</h4>
+    <table>...</table>
+  </div>
+))}
+```
+
+### 2-3. 분기 집계 계산 함수 추가
+컴포넌트 내부에 추가:
+```tsx
+const QUARTER_MONTHS = {
+  1: [1, 2, 3],   // 1분기
+  2: [4, 5, 6],   // 2분기
+  3: [7, 8, 9],   // 3분기
+  4: [10, 11, 12], // 4분기
+}
+
+const CASE_TYPE_KEYS = [
+  'pneumoconiosis', 'copd', 'hearingLoss', 'wageCorrection',
+  'disabilityPayment', 'litigation', 'musculoskeletal',
+  'cerebrovascular', 'occupationalCancer', 'accident', 'other'
+]
+
+// 특정 직원의 특정 월들 합산
+const getSum = (staffName: string, months: number[]) => {
+  return CASE_TYPE_KEYS.reduce((acc, key) => {
+    acc[key] = months.reduce((sum, m) => {
+      const record = allContracts.find(c => c.staffName === staffName && c.month === m)
+      return sum + ((record as any)?.[key] || 0)
+    }, 0)
+    return acc
+  }, {} as Record<string, number>)
+}
+
+// 총합
+const getTotal = (sums: Record<string, number>) =>
+  CASE_TYPE_KEYS.reduce((sum, key) => sum + (sums[key] || 0), 0)
+
+// 모든 직원 목록 (지사 행 포함)
+const allStaffNames = [...new Set(allContracts.map(c => c.staffName))]
+  .sort((a, b) => a === selectedBranch ? -1 : b === selectedBranch ? 1 : a.localeCompare(b))
+```
+
+**참고**: `allContracts`는 해당 지사+연도의 전체 월 데이터. 현재 월별로 fetch하는 구조라면
+연간 집계를 위해 **전체 연도 데이터를 한 번에 fetch**하도록 API 호출 수정:
+```typescript
+// year만 파라미터로, month 없이 조회
+fetch(`/api/branch/sales-contracts?branchName=${branchName}&year=${year}`)
+// API에서 month 파라미터 없으면 전체 월 반환
+```
+
+### 2-4. 분기 집계 행 UI
+
+월별 테이블 렌더링 후 해당 분기 마지막 월(3, 6, 9, 12월)이면 분기 집계 섹션 추가:
+
+```tsx
+{[1, 2, 3, 4].map(quarter => {
+  const quarterMonths = QUARTER_MONTHS[quarter as keyof typeof QUARTER_MONTHS]
+  const isLastMonth = (month: number) => quarterMonths[2] === month
+
+  return months.map(month => (
+    <React.Fragment key={month}>
+      {/* 월별 테이블 */}
+      <div>
+        <h4>{month}월</h4>
+        <table>...</table>
+      </div>
+
+      {/* 분기 마지막 월이면 분기 집계 표시 */}
+      {isLastMonth(month) && (
+        <div style={{
+          margin: '8px 0 16px',
+          padding: '10px 14px',
+          background: '#eff6ff',
+          borderRadius: 8,
+          border: '1px solid #bfdbfe',
+        }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: '#1d4ed8', marginBottom: 8 }}>
+            📊 {quarter}분기 집계 ({quarterMonths[0]}~{quarterMonths[2]}월)
+          </div>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+            <thead>
+              <tr>
+                <th style={{ padding: '5px 8px', background: '#dbeafe', textAlign: 'left' }}>직원</th>
+                {CASE_TYPE_LABELS.map(l => (
+                  <th key={l.key} style={{ padding: '5px 8px', background: '#dbeafe', textAlign: 'center' }}>{l.label}</th>
+                ))}
+                <th style={{ padding: '5px 8px', background: '#93c5fd', textAlign: 'center', fontWeight: 700 }}>합계</th>
+              </tr>
+            </thead>
+            <tbody>
+              {allStaffNames.map(staffName => {
+                const sums = getSum(staffName, quarterMonths)
+                const total = getTotal(sums)
+                const isBranch = staffName === selectedBranch
+                return (
+                  <tr key={staffName} style={{ background: isBranch ? '#f0fdf4' : 'white' }}>
+                    <td style={{ padding: '4px 8px', fontWeight: isBranch ? 700 : 400 }}>{staffName}</td>
+                    {CASE_TYPE_KEYS.map(key => (
+                      <td key={key} style={{ padding: '4px 8px', textAlign: 'center' }}>
+                        {sums[key] || '-'}
+                      </td>
+                    ))}
+                    <td style={{ padding: '4px 8px', textAlign: 'center', fontWeight: 700, color: '#1d4ed8' }}>
+                      {total || '-'}
+                    </td>
+                  </tr>
+                )
+              })}
+              {/* 지사 전체 합계 행 */}
+              <tr style={{ background: '#dbeafe', fontWeight: 700 }}>
+                <td style={{ padding: '4px 8px' }}>전체 합계</td>
+                {CASE_TYPE_KEYS.map(key => {
+                  const total = allStaffNames.reduce((sum, s) => sum + (getSum(s, quarterMonths)[key] || 0), 0)
+                  return <td key={key} style={{ padding: '4px 8px', textAlign: 'center' }}>{total || '-'}</td>
+                })}
+                <td style={{ padding: '4px 8px', textAlign: 'center' }}>
+                  {allStaffNames.reduce((sum, s) => sum + getTotal(getSum(s, quarterMonths)), 0)}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      )}
+    </React.Fragment>
+  ))
+})}
+```
+
+### 2-5. 연간 집계 + 순위 섹션 (12월 분기 집계 아래)
+
+```tsx
+{/* 연간 집계 */}
+<div style={{
+  marginTop: 16,
+  padding: '14px 16px',
+  background: '#fefce8',
+  borderRadius: 8,
+  border: '2px solid #fde047',
+}}>
+  <div style={{ fontSize: 14, fontWeight: 700, color: '#92400e', marginBottom: 12 }}>
+    🏆 {selectedYear}년 연간 영업약정건수 집계
+  </div>
+
+  {/* 직원별 연간 합계 테이블 */}
+  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, marginBottom: 16 }}>
+    <thead>
+      <tr>
+        <th style={{ padding: '6px 10px', background: '#fef08a', textAlign: 'left' }}>직원</th>
+        {CASE_TYPE_LABELS.map(l => (
+          <th key={l.key} style={{ padding: '6px 10px', background: '#fef08a', textAlign: 'center' }}>{l.label}</th>
+        ))}
+        <th style={{ padding: '6px 10px', background: '#facc15', textAlign: 'center', fontWeight: 700 }}>연간 합계</th>
+      </tr>
+    </thead>
+    <tbody>
+      {allStaffNames
+        .map(staffName => ({
+          staffName,
+          sums: getSum(staffName, [1,2,3,4,5,6,7,8,9,10,11,12]),
+          total: getTotal(getSum(staffName, [1,2,3,4,5,6,7,8,9,10,11,12])),
+          isBranch: staffName === selectedBranch,
+        }))
+        .sort((a, b) => {
+          if (a.isBranch) return 1  // 지사 행은 맨 아래
+          if (b.isBranch) return -1
+          return b.total - a.total  // 나머지는 합계 내림차순
+        })
+        .map(({ staffName, sums, total, isBranch }, idx, arr) => {
+          // 순위 계산 (지사 행 제외)
+          const rank = isBranch ? null : arr.filter(x => !x.isBranch).findIndex(x => x.staffName === staffName) + 1
+          return (
+            <tr key={staffName} style={{ background: isBranch ? '#f0fdf4' : idx % 2 === 0 ? 'white' : '#fffbeb' }}>
+              <td style={{ padding: '5px 10px', fontWeight: isBranch ? 700 : 400 }}>
+                {!isBranch && rank && (
+                  <span style={{
+                    display: 'inline-block', marginRight: 6,
+                    width: 20, height: 20, lineHeight: '20px',
+                    textAlign: 'center', borderRadius: '50%', fontSize: 11, fontWeight: 700,
+                    background: rank === 1 ? '#fbbf24' : rank === 2 ? '#d1d5db' : rank === 3 ? '#f97316' : '#e2e8f0',
+                    color: rank <= 3 ? 'white' : '#374151',
+                  }}>
+                    {rank}
+                  </span>
+                )}
+                {staffName}
+              </td>
+              {CASE_TYPE_KEYS.map(key => (
+                <td key={key} style={{ padding: '5px 10px', textAlign: 'center' }}>
+                  {sums[key] || '-'}
+                </td>
+              ))}
+              <td style={{ padding: '5px 10px', textAlign: 'center', fontWeight: 700, color: '#92400e', fontSize: 13 }}>
+                {total || '-'}
+              </td>
+            </tr>
+          )
+        })
+      }
+      {/* 지사 전체 합계 */}
+      <tr style={{ background: '#fde047', fontWeight: 700 }}>
+        <td style={{ padding: '5px 10px' }}>지사 전체</td>
+        {CASE_TYPE_KEYS.map(key => {
+          const t = allStaffNames.reduce((sum, s) => sum + (getSum(s, [1,2,3,4,5,6,7,8,9,10,11,12])[key] || 0), 0)
+          return <td key={key} style={{ padding: '5px 10px', textAlign: 'center' }}>{t || '-'}</td>
+        })}
+        <td style={{ padding: '5px 10px', textAlign: 'center', fontSize: 14 }}>
+          {allStaffNames.reduce((sum, s) => sum + getTotal(getSum(s, [1,2,3,4,5,6,7,8,9,10,11,12])), 0)}
+        </td>
+      </tr>
+    </tbody>
+  </table>
+
+  {/* 순위 배지 */}
+  <div style={{ fontSize: 13, fontWeight: 700, color: '#92400e', marginBottom: 8 }}>📋 연간 순위</div>
+  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+    {allStaffNames
+      .filter(s => s !== selectedBranch)
+      .map(s => ({ name: s, total: getTotal(getSum(s, [1,2,3,4,5,6,7,8,9,10,11,12])) }))
+      .sort((a, b) => b.total - a.total)
+      .map((item, idx) => (
+        <div key={item.name} style={{
+          padding: '6px 14px', borderRadius: 20, fontSize: 12, fontWeight: 600,
+          background: idx === 0 ? '#fef3c7' : idx === 1 ? '#f1f5f9' : idx === 2 ? '#fff7ed' : '#f8fafc',
+          border: '1px solid #e2e8f0',
+        }}>
+          {idx + 1}위 {item.name}
+          <span style={{ color: '#2563eb', marginLeft: 6 }}>{item.total}건</span>
+        </div>
+      ))
+    }
+  </div>
+</div>
+```
+
+---
+
+## Step 1: API 수정 (전체 연도 데이터 반환)
+
+Step 0에서 찾은 sales-contracts GET API:
+month 파라미터 없으면 해당 연도 전체 반환하도록 수정:
+
+```typescript
+const month = searchParams.get('month') ? parseInt(searchParams.get('month')!) : null
+const where: any = { year }
+if (branchName) where.branchName = { ... } // 기존 OR 조건 유지
+if (month) where.month = month
+```
+
+---
+
+## Step 2: 배포
+
+```bash
+git add -A
+git commit -m "feat: 영업약정건수 지사 고정행 + 분기/연간 집계 + 순위"
+git push origin main
+```
+
+---
+
+## 완료 후 확인
+1. 울산지사 선택 → '울산지사' 행 상단 고정 표시 (초록 배경)
+2. 3월 아래 1분기 집계 파란 섹션 표시
+3. 6월 아래 2분기 집계 표시
+4. 9월 아래 3분기 집계 표시
+5. 12월 아래 4분기 + 연간 집계 + 순위 배지 표시
+6. 연간 순위에서 지사 행 제외하고 직원별만 순위

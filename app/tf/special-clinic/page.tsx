@@ -58,6 +58,7 @@ function SpecialClinicCalendar() {
   const [statusFilter, setStatusFilter] = useState(searchParams?.get('status') || 'all')
 
   const [schedules, setSchedules] = useState<Schedule[]>([])
+  const [allTfNames, setAllTfNames] = useState<string[]>([])
   const [loading, setLoading] = useState(false)
   const [selected, setSelected] = useState<Schedule | null>(null)
   const [showModal, setShowModal] = useState(false)
@@ -122,8 +123,15 @@ function SpecialClinicCalendar() {
     return () => document.removeEventListener('mousedown', handleClick)
   }, [selected])
 
-  // TF 목록 (현재 데이터에서)
-  const tfList = [...new Set(schedules.map(s => s.tfName))].sort()
+  // TF 목록 (전체 데이터에서 — 필터와 무관하게 모든 TF 표시)
+  useEffect(() => {
+    const qs = new URLSearchParams({ month: `${year}-${pad(month)}` })
+    fetch(`/api/tf/special-clinic?${qs}`)
+      .then(r => r.ok ? r.json() : [])
+      .then((data: Schedule[]) => setAllTfNames([...new Set(data.map(s => s.tfName))].sort()))
+      .catch(() => {})
+  }, [year, month])
+  const tfList = allTfNames
 
   // 달력 그리드 생성
   const firstDay = new Date(year, month - 1, 1)

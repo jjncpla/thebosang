@@ -1,0 +1,295 @@
+## 작업 목표
+PerformanceTab 정산내역 탭의 집계 4종 UI 3가지 수정
+
+---
+
+## 수정 1: ③ 상병별 집계 — 관련TF·영업담당·정산담당 컬럼 제거
+
+파일: app/branch/_components/PerformanceTab.tsx
+
+### 1-1. caseTypeSummary 집계 로직에서 Set 제거
+
+기존:
+```typescript
+const caseTypeSummary: Record<string, {
+  count: number; totalGross: number
+  tfSet: Set<string>; salesSet: Set<string>; settleSet: Set<string>
+}> = {}
+for (const s of filteredSettlements) {
+  const ct = s.caseType || '(기타)'
+  if (!caseTypeSummary[ct]) caseTypeSummary[ct] = { count: 0, totalGross: 0, tfSet: new Set(), salesSet: new Set(), settleSet: new Set() }
+  caseTypeSummary[ct].count      += 1
+  caseTypeSummary[ct].totalGross += s.grossAmount
+  if (s.tfName) caseTypeSummary[ct].tfSet.add(s.tfName)
+  if (s.salesStaffName) caseTypeSummary[ct].salesSet.add(s.salesStaffName)
+  if (s.settlementStaffName) caseTypeSummary[ct].settleSet.add(s.settlementStaffName)
+}
+```
+
+교체:
+```typescript
+const caseTypeSummary: Record<string, { count: number; totalGross: number }> = {}
+for (const s of filteredSettlements) {
+  const ct = s.caseType || '(기타)'
+  if (!caseTypeSummary[ct]) caseTypeSummary[ct] = { count: 0, totalGross: 0 }
+  caseTypeSummary[ct].count      += 1
+  caseTypeSummary[ct].totalGross += s.grossAmount
+}
+```
+
+### 1-2. ③ 상병별 집계 렌더링 교체
+
+기존 `{/* (3) 상병별 집계 */}` 블록 전체를 아래로 교체:
+
+```tsx
+{/* (3) 상병별 집계 */}
+<div>
+  <h4 className="text-xs font-semibold text-gray-600 mb-2">③ 상병별 집계</h4>
+  <table className="border-collapse text-xs">
+    <thead>
+      <tr className="bg-gray-50">
+        {['사건종류','건수','입금액','비중'].map(h => (
+          <th key={h} className={`${thCls} whitespace-nowrap`}>{h}</th>
+        ))}
+      </tr>
+    </thead>
+    <tbody>
+      {Object.entries(caseTypeSummary)
+        .sort((a,b) => b[1].totalGross - a[1].totalGross)
+        .map(([ct, s]) => (
+          <tr key={ct} className="hover:bg-gray-50">
+            <td className={`${cellCls} font-medium`}>{ct}</td>
+            <td className={`${cellCls} text-center`}>{s.count}</td>
+            <td className={`${cellCls} text-right`}>{fmt(s.totalGross)}</td>
+            <td className={`${cellCls} text-right`}>
+              {totalGrossAll > 0 ? (s.totalGross / totalGrossAll * 100).toFixed(1) + '%' : '-'}
+            </td>
+          </tr>
+        ))}
+      <tr className="bg-gray-100 font-semibold">
+        <td className={cellCls}>합계</td>
+        <td className={`${cellCls} text-center`}>{filteredSettlements.length}</td>
+        <td className={`${cellCls} text-right text-sky-700`}>{fmt(totalGrossAll)}</td>
+        <td className={`${cellCls} text-right`}>100%</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+```
+
+---
+
+## 수정 2: ② TF별 집계 — 이산 TF × 정산담당자 교차 표 추가
+
+### 2-1. 집계 로직 추가
+
+기존 TF별 집계 계산 코드 (`const tfDetail`) 바로 아래에 추가:
+
+```typescript
+// 이산 TF × 정산담당자 교차 집계
+const isanBySettleStaff: Record<string, { count: number; totalGross: number }> = {}
+for (const s of filteredSettlements) {
+  if (!s.tfName || s.tfName.startsWith('더보상')) continue
+  const name = s.settlementStaffName || '(미상)'
+  if (!isanBySettleStaff[name]) isanBySettleStaff[name] = { count: 0, totalGross: 0 }
+  isanBySettleStaff[name].count      += 1
+  isanBySettleStaff[name].totalGross += s.grossAmount
+}
+```
+
+### 2-2. ② TF별 집계 렌더링 교체
+
+기존 `{/* (2) TF별 집계 */}` 블록 전체를 아래로 교체:
+
+```tsx
+{/* (2) TF별 집계 */}
+<div>
+  <h4 className="text-xs font-semibold text-gray-600 mb-2">② TF별 집계</h4>
+  <div className="flex flex-wrap gap-4">
+    {/* 좌: TF별 입금액 */}
+    <div className="flex-1 min-w-[260px]">
+      <p className="text-xs text-gray-400 mb-1">TF별 입금액</p>
+      <table className="w-full border-collapse text-xs">
+        <thead>
+          <tr className="bg-gray-50">
+            {['TF','건수','입금액 합계','비중'].map(h => (
+              <th key={h} className={`${thCls} whitespace-nowrap`}>{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {Object.entries(tfDetail)
+            .filter(([tf]) => tf.startsWith('더보상'))
+            .sort((a,b) => b[1] - a[1])
+            .map(([tf, amt]) => (
+              <tr key={tf} className="hover:bg-sky-50">
+                <td className={`${cellCls} text-sky-700 font-medium`}>{tf}</td>
+                <td className={`${cellCls} text-center`}>
+                  {filteredSettlements.filter(s => s.tfName === tf).length}
+                </td>
+                <td className={`${cellCls} text-right`}>{fmt(amt)}</td>
+                <td className={`${cellCls} text-right text-gray-500`}>
+                  {totalGrossAll > 0 ? (amt / totalGrossAll * 100).toFixed(1) + '%' : '-'}
+                </td>
+              </tr>
+            ))}
+          <tr className="bg-sky-50 font-semibold">
+            <td className={`${cellCls} text-sky-800`}>더보상 소계</td>
+            <td className={`${cellCls} text-center text-sky-800`}>
+              {filteredSettlements.filter(s => s.tfName?.startsWith('더보상')).length}
+            </td>
+            <td className={`${cellCls} text-right text-sky-800`}>{fmt(theboTotal)}</td>
+            <td className={`${cellCls} text-right text-sky-700`}>
+              {totalGrossAll > 0 ? (theboTotal / totalGrossAll * 100).toFixed(1) + '%' : '-'}
+            </td>
+          </tr>
+          {Object.entries(tfDetail)
+            .filter(([tf]) => !tf.startsWith('더보상'))
+            .sort((a,b) => b[1] - a[1])
+            .map(([tf, amt]) => (
+              <tr key={tf} className="hover:bg-orange-50">
+                <td className={`${cellCls} text-orange-600 font-medium`}>{tf}</td>
+                <td className={`${cellCls} text-center`}>
+                  {filteredSettlements.filter(s => s.tfName === tf).length}
+                </td>
+                <td className={`${cellCls} text-right`}>{fmt(amt)}</td>
+                <td className={`${cellCls} text-right text-gray-500`}>
+                  {totalGrossAll > 0 ? (amt / totalGrossAll * 100).toFixed(1) + '%' : '-'}
+                </td>
+              </tr>
+            ))}
+          <tr className="bg-orange-50 font-semibold">
+            <td className={`${cellCls} text-orange-700`}>이산 소계</td>
+            <td className={`${cellCls} text-center text-orange-700`}>
+              {filteredSettlements.filter(s => s.tfName && !s.tfName.startsWith('더보상')).length}
+            </td>
+            <td className={`${cellCls} text-right text-orange-700`}>{fmt(isanTotal)}</td>
+            <td className={`${cellCls} text-right text-orange-600`}>
+              {totalGrossAll > 0 ? (isanTotal / totalGrossAll * 100).toFixed(1) + '%' : '-'}
+            </td>
+          </tr>
+          <tr className="bg-gray-100 font-bold">
+            <td className={cellCls}>전체 합계</td>
+            <td className={`${cellCls} text-center`}>{filteredSettlements.length}</td>
+            <td className={`${cellCls} text-right text-sky-800`}>{fmt(totalGrossAll)}</td>
+            <td className={`${cellCls} text-right`}>100%</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    {/* 우: 이산 TF × 정산담당자 */}
+    <div className="flex-1 min-w-[220px]">
+      <p className="text-xs text-gray-400 mb-1">이산 TF — 정산담당자별</p>
+      <table className="w-full border-collapse text-xs">
+        <thead>
+          <tr className="bg-gray-50">
+            {['정산담당자','건수','입금액'].map(h => (
+              <th key={h} className={`${thCls} whitespace-nowrap`}>{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {Object.entries(isanBySettleStaff)
+            .sort((a,b) => b[1].totalGross - a[1].totalGross)
+            .map(([name, s]) => (
+              <tr key={name} className="hover:bg-orange-50">
+                <td className={`${cellCls} font-medium text-orange-700`}>{name}</td>
+                <td className={`${cellCls} text-center`}>{s.count}</td>
+                <td className={`${cellCls} text-right`}>{fmt(s.totalGross)}</td>
+              </tr>
+            ))}
+          <tr className="bg-orange-50 font-semibold">
+            <td className={`${cellCls} text-orange-700`}>합계</td>
+            <td className={`${cellCls} text-center text-orange-700`}>
+              {Object.values(isanBySettleStaff).reduce((s,v) => s + v.count, 0)}
+            </td>
+            <td className={`${cellCls} text-right text-orange-700`}>{fmt(isanTotal)}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+```
+
+---
+
+## 수정 3: 집계 4종 레이아웃 통일
+
+### 3-1. 집계 섹션 전체 래퍼 교체
+
+기존:
+```tsx
+{filteredSettlements.length > 0 && (
+  <div className="space-y-5 border-t pt-4">
+```
+
+교체:
+```tsx
+{filteredSettlements.length > 0 && (
+  <div className="border-t pt-5 mt-2">
+    {/* 집계 타이틀 */}
+    <p className="text-sm font-semibold text-gray-700 mb-4">집계</p>
+    <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+```
+
+### 3-2. 각 집계 블록을 카드 형태로 감싸기
+
+4개 집계 블록 각각을:
+```tsx
+<div>
+  <h4 className="text-xs font-semibold text-gray-600 mb-2">① ...</h4>
+  ...
+</div>
+```
+
+아래 패턴으로 교체 (① 담당자별은 col-span-2):
+
+#### ① 담당자별 (2열 전체 차지)
+```tsx
+<div className="xl:col-span-2 bg-gray-50 rounded-lg p-4">
+  <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">① 담당자별 집계</h4>
+  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+    {/* 기존 영업/정산 병렬 테이블 그대로 */}
+  </div>
+</div>
+```
+
+#### ② TF별 (2열 전체 차지)
+```tsx
+<div className="xl:col-span-2 bg-gray-50 rounded-lg p-4">
+  <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">② TF별 집계</h4>
+  {/* 기존 flex 2분할 테이블 그대로 */}
+</div>
+```
+
+#### ③ 상병별 (1열)
+```tsx
+<div className="bg-gray-50 rounded-lg p-4">
+  <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">③ 상병별 집계</h4>
+  {/* 테이블 */}
+</div>
+```
+
+#### ④ 총집계 (1열)
+```tsx
+<div className="bg-gray-50 rounded-lg p-4">
+  <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">④ 총집계 (월별 추이)</h4>
+  {/* 테이블 */}
+</div>
+```
+
+### 3-3. 집계 섹션 닫는 태그 수정
+
+기존 `</div>` 1개 → `</div></div>` 2개로 (grid + 래퍼 div 닫기)
+
+---
+
+## 완료 기준
+
+- [ ] ③ 상병별: 사건종류/건수/입금액/비중 4개 컬럼만 표시
+- [ ] ② TF별: 우측에 이산 TF × 정산담당자 표 추가
+- [ ] ①②는 회색 카드 배경, 2열 전체 너비
+- [ ] ③④는 나란히 2열로 배치 (xl 이상)
+- [ ] 모든 집계 카드 배경 bg-gray-50, 라운드, 패딩 통일

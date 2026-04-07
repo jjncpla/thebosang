@@ -1,0 +1,64 @@
+## 수정 목표
+① 담당자별 집계의 "정산담당자 기준" 집계를
+더보상 TF 소속 건(tfName.startsWith('더보상'))으로만 필터링
+
+---
+
+## 수정 파일
+app/branch/_components/PerformanceTab.tsx
+
+## 수정 내용
+
+기존 settleStaffSummary 집계 로직을 찾아서:
+
+### 기존:
+```typescript
+const settleStaffSummary: Record<string, { count: number; totalGross: number; incentive: number }> = {}
+for (const s of filteredSettlements) {
+  for (const a of (s.allocations || [])) {
+    const name = a.staffName || '(미상)'
+    if (!settleStaffSummary[name]) settleStaffSummary[name] = { count: 0, totalGross: 0, incentive: 0 }
+    settleStaffSummary[name].count      += 1
+    settleStaffSummary[name].totalGross += Math.floor(s.grossAmount * a.ratio / 100)
+    settleStaffSummary[name].incentive  += Math.floor(s.grossAmount / 1.1 * (a.ratio / 100) * 0.1)
+  }
+}
+```
+
+### 교체:
+```typescript
+// 정산담당자 기준 집계 — 더보상 TF 소속 건만 대상
+const settleStaffSummary: Record<string, { count: number; totalGross: number; incentive: number }> = {}
+for (const s of filteredSettlements) {
+  if (!s.tfName?.startsWith('더보상')) continue  // 이산 TF 제외
+  for (const a of (s.allocations || [])) {
+    const name = a.staffName || '(미상)'
+    if (!settleStaffSummary[name]) settleStaffSummary[name] = { count: 0, totalGross: 0, incentive: 0 }
+    settleStaffSummary[name].count      += 1
+    settleStaffSummary[name].totalGross += Math.floor(s.grossAmount * a.ratio / 100)
+    settleStaffSummary[name].incentive  += Math.floor(s.grossAmount / 1.1 * (a.ratio / 100) * 0.1)
+  }
+}
+```
+
+## 추가: 정산담당자 테이블 헤더에 범위 명시
+
+정산담당자 기준 테이블의 소제목 p 태그를 찾아서:
+
+### 기존:
+```tsx
+<p className="text-xs text-gray-500 mb-1 font-medium">정산담당자 기준</p>
+```
+
+### 교체:
+```tsx
+<p className="text-xs text-gray-500 mb-1 font-medium">
+  정산담당자 기준
+  <span className="ml-1 text-sky-500 font-normal">(더보상 TF 한정)</span>
+</p>
+```
+
+## 완료 기준
+- [ ] 정산담당자 집계에 이현진·우지윤·김수현 등 이산 TF 담당자 미표시
+- [ ] 더보상울산·더보상울동 TF 건만 집계됨
+- [ ] 헤더에 "(더보상 TF 한정)" 표시

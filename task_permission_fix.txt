@@ -1,0 +1,214 @@
+## 세션 타입: 버그픽스 세션
+## 작업 목표: 권한 체계 수정 — 사이드바 메뉴 숨김 + 페이지 서버 사이드 보호
+
+아래 3가지를 순서대로 처리해줘. 파일 전체 재작성 금지. 기존 기능 보존.
+
+---
+
+## Step 0: 파일 위치 파악
+
+```bash
+# 사이드바 파일 찾기
+grep -r "managerOnly\|adminOnly\|SITE_MANAGER\|branch.*지사\|지사장" app --include="*.tsx" -l 2>/dev/null | head -10
+find app -name "Sidebar*" -o -name "sidebar*" 2>/dev/null | grep -v node_modules
+find components -name "Sidebar*" -o -name "sidebar*" 2>/dev/null | grep -v node_modules
+
+# branch 페이지/레이아웃 찾기
+find app/branch -name "*.tsx" 2>/dev/null
+find app -path "*/branch*" -name "*.tsx" 2>/dev/null | head -5
+
+# admin 페이지/레이아웃 찾기
+find app/admin -name "layout.tsx" 2>/dev/null
+find app -path "*/admin*" -name "layout.tsx" 2>/dev/null | head -5
+
+# middleware 확인
+cat middleware.ts 2>/dev/null || cat src/middleware.ts 2>/dev/null
+
+# auth 유틸 확인
+find . -name "auth.ts" -not -path "*/node_modules/*" | head -5
+```
+
+---
+
+## Step 1: 사이드바 메뉴 — 권한 없는 항목 완전 숨김
+
+Step 0에서 찾은 사이드바 파일을 수정한다.
+
+### 현재 동작 (문제)
+- `managerOnly: true` 또는 `adminOnly: true` 항목이 `opacity: 0.5` 로만 처리됨
+- STAFF 등 권한 없는 계정에도 메뉴가 보임
+
+### 목표 동작
+- STAFF, READONLY에게 `/branch` (지사장 관리·운영) 메뉴 완전 숨김
+- READONLY에게 `/admin` (관리자 페이지) 메뉴 완전 숨김
+- SENIOR_MANAGER, SITE_MANAGER에게 `/admin` 메뉴 완전 숨김
+- ADMIN에게는 모든 메뉴 표시
+
+### 권한 정의
+```
+/branch 접근 가능: ADMIN, SENIOR_MANAGER, SITE_MANAGER
+/admin  접근 가능: ADMIN만
+```
+
+### 수정 방법
+
+사이드바에서 현재 session/role을 가져오는 방식 확인 후, 아래 로직 적용:
+
+```tsx
+// 메뉴 필터링 함수 추가 (사이드바 컴포넌트 상단)
+function canAccessMenuItem(item: MenuItem, userRole: string | undefined): boolean {
+  if (!userRole) return false
+  if (item.adminOnly) return userRole === 'ADMIN'
+  if (item.managerOnly) return ['ADMIN', 'SENIOR_MANAGER', 'SITE_MANAGER'].includes(userRole)
+  // READONLY는 cases-view만 접근 가능
+  if (userRole === 'READONLY') {
+    return item.id === 'cases-view' || item.id === 'cases'
+  }
+  return true
+}
+```
+
+메뉴 렌더링 부분에서:
+```tsx
+// 변경 전 (opacity 처리)
+<div style={{ opacity: (item.managerOnly || item.adminOnly) ? 0.5 : 1, ... }}>
+
+// 변경 후 (완전 숨김)
+{canAccessMenuItem(item, userRole) && (
+  <div style={{ ... }}> {/* opacity 관련 코드 제거 */}
+    ...
+  </div>
+)}
+```
+
+사이드바가 서버 컴포넌트라면 `auth()`로, 클라이언트 컴포넌트라면 `useSession()`으로 role을 가져옴.
+현재 코드 방식에 맞춰서 적용할 것.
+
+---
+
+## Step 2: /branch 페이지 서버 사이드 권한 체크
+
+Step 0에서 찾은 `app/branch/layout.tsx` 또는 `app/branch/page.tsx` 수정.
+
+layout.tsx가 있으면 layout에, 없으면 page.tsx 최상단에 추가.
+
+### layout.tsx에 추가하는 경우:
+```tsx
+import { auth } from '@/lib/auth'  // 또는 실제 auth import 경로
+import { redirect } from 'next/navigation'
+
+export default async function BranchLayout({ children }: { children: React.ReactNode }) {
+  const session = await auth()
+  const userRole = (session?.user as any)?.role
+  
+  const allowedRoles = ['ADMIN', 'SENIOR_MANAGER', 'SITE_MANAGER']
+  if (!session || !allowedRoles.includes(userRole)) {
+    redirect('/')
+  }
+  
+  return <>{children}</>
+}
+```
+
+### page.tsx에 추가하는 경우 (서버 컴포넌트면):
+```tsx
+import { auth } from '@/lib/auth'
+import { redirect } from 'next/navigation'
+
+export default async function BranchPage() {
+  const session = await auth()
+  const userRole = (session?.user as any)?.role
+  
+  const allowedRoles = ['ADMIN', 'SENIOR_MANAGER', 'SITE_MANAGER']
+  if (!session || !allowedRoles.includes(userRole)) {
+    redirect('/')
+  }
+  
+  // 기존 코드 유지...
+}
+```
+
+### page.tsx가 클라이언트 컴포넌트('use client')인 경우:
+layout.tsx를 새로 생성해서 서버 컴포넌트로 보호층 추가:
+```tsx
+// app/branch/layout.tsx (새 파일)
+import { auth } from '@/lib/auth'
+import { redirect } from 'next/navigation'
+
+export default async function BranchLayout({ children }: { children: React.ReactNode }) {
+  const session = await auth()
+  const userRole = (session?.user as any)?.role
+  
+  const allowedRoles = ['ADMIN', 'SENIOR_MANAGER', 'SITE_MANAGER']
+  if (!session || !allowedRoles.includes(userRole)) {
+    redirect('/')
+  }
+  
+  return <>{children}</>
+}
+```
+
+---
+
+## Step 3: /admin 페이지 ADMIN 전용 보호 확인 및 강화
+
+### middleware.ts 확인
+현재 middleware.ts에 `/admin` 경로 보호가 있는지 확인.
+
+없거나 불완전하면 `/admin` 경로에 ADMIN 체크 추가:
+```typescript
+// middleware.ts에서 admin 경로 처리 부분 찾아서 확인
+// 이미 ADMIN 체크가 있으면 패스
+// 없으면 아래 패턴으로 추가
+
+// 예시 (기존 패턴에 맞게 적용):
+if (pathname.startsWith('/admin')) {
+  const role = token?.role as string
+  if (role !== 'ADMIN') {
+    return NextResponse.redirect(new URL('/', request.url))
+  }
+}
+```
+
+### app/admin/layout.tsx 확인 및 보강
+admin layout에 이중 보호 추가 (middleware + 페이지 레벨):
+```tsx
+import { auth } from '@/lib/auth'
+import { redirect } from 'next/navigation'
+
+export default async function AdminLayout({ children }: { children: React.ReactNode }) {
+  const session = await auth()
+  const userRole = (session?.user as any)?.role
+  
+  if (!session || userRole !== 'ADMIN') {
+    redirect('/')
+  }
+  
+  return <>{children}</>
+}
+```
+
+기존 layout.tsx가 있으면 권한 체크 부분만 수정/추가. 전체 재작성 금지.
+
+---
+
+## Step 4: 확인 및 배포
+
+```bash
+# 타입 에러 확인
+npx tsc --noEmit 2>&1 | head -30
+
+# 빌드 확인
+npm run build 2>&1 | tail -20
+
+# 이상 없으면 배포
+git add -A
+git commit -m "fix: 권한 체계 수정 - 사이드바 메뉴 숨김 + 서버사이드 페이지 보호"
+git push origin main
+```
+
+## 주의사항
+- auth import 경로는 기존 코드에서 사용 중인 경로 그대로 사용
+- redirect 경로는 '/'로 (To Do List 홈)
+- READONLY 계정(이산)은 /cases-view만 접근 가능하도록 사이드바도 처리
+- 기존 사이드바 스타일(색상, 크기, 애니메이션) 절대 건드리지 말 것

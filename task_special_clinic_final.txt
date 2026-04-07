@@ -1,0 +1,533 @@
+TBSS - TF업무 > 특진 일정 페이지 구현
+세션 타입: 기능 개발 (신규 페이지 추가)
+수술적 수정 원칙 준수 - 기존 파일 전체 재작성 금지
+
+===================================================
+사전 확인 사항
+===================================================
+시작 전 반드시 아래 파일 구조 파악:
+1. 사이드바/네비게이션 컴포넌트 파일 경로 확인
+2. 기존 /tf 관련 페이지 있는지 확인 (app/tf/ 디렉토리)
+3. 기존 app/api/webhooks/telegram/ 구조 확인
+4. package.json에 date-fns 있는지 확인
+
+===================================================
+STEP 1: Prisma 스키마 추가
+===================================================
+schema.prisma 파일에 아래 모델 추가 (기존 내용 건드리지 않고 맨 뒤에 추가):
+
+model SpecialClinicSchedule {
+  id              String    @id @default(cuid())
+  patientName     String
+  tfName          String
+  hospitalName    String
+  clinicType      String    // "특진" | "재특진"
+  examRound       Int
+  scheduledDate   DateTime
+  isAllDay        Boolean   @default(true)
+  scheduledHour   Int?
+  scheduledMinute Int?      @default(0)
+  status          String    @default("scheduled") // "scheduled" | "done" | "cancelled" | "unknown"
+  sender          String?
+  sourceDate      DateTime?
+  rawMessage      String?   @db.Text
+  telegramMsgId   String?
+  memo            String?   @db.Text
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([tfName])
+  @@index([scheduledDate])
+  @@index([patientName, tfName, clinicType, examRound])
+}
+
+추가 후 실행:
+npx prisma db push
+
+===================================================
+STEP 2: TF 색상 상수 파일 생성
+===================================================
+파일: app/lib/tf-colors.ts
+
+export const TF_COLORS: Record<string, string> = {
+  "울산TF": "#006838",
+  "울산동부TF": "#29ABE2",
+  "울동TF": "#29ABE2",
+  "울산남부TF": "#8DC63F",
+  "울산북부TF": "#005F99",
+  "부산TF": "#E74C3C",
+  "부산북부TF": "#C0392B",
+  "부산서부TF": "#E67E22",
+  "부중TF": "#F39C12",
+  "부경TF": "#D35400",
+  "창원TF": "#9B59B6",
+  "더보상창원TF": "#8E44AD",
+  "양산TF": "#1ABC9C",
+  "김해TF": "#16A085",
+  "거제TF": "#2ECC71",
+  "진주TF": "#27AE60",
+  "포항TF": "#3498DB",
+  "경주TF": "#2980B9",
+  "대구TF": "#E91E63",
+  "대구달서TF": "#AD1457",
+  "대구수성TF": "#880E4F",
+  "대구북부TF": "#6A1B9A",
+  "여수TF": "#FF9800",
+  "더보상여수TF": "#F57C00",
+  "순천TF": "#795548",
+  "더보상익산TF": "#607D8B",
+  "문경TF": "#455A64",
+  "영동TF": "#00BCD4",
+  "영서TF": "#0097A7",
+  "안동TF": "#4CAF50",
+  "구미TF": "#FF5722",
+  "이산구미TF": "#BF360C",
+};
+
+export function getTFColor(tfName: string): string {
+  if (TF_COLORS[tfName]) return TF_COLORS[tfName];
+  for (const [key, color] of Object.entries(TF_COLORS)) {
+    if (tfName.includes(key) || key.includes(tfName)) return color;
+  }
+  return "#95A5A6";
+}
+
+===================================================
+STEP 3: 메시지 파서 생성
+===================================================
+파일: app/lib/parse-special-clinic-message.ts
+
+아래 인터페이스와 함수를 구현:
+
+export interface ParsedSchedule {
+  patientName: string;
+  tfName: string;
+  hospitalName: string;
+  clinicType: string;
+  examRound: number;
+  scheduledDate: Date | null;
+  isAllDay: boolean;
+  scheduledHour?: number;
+  scheduledMinute?: number;
+  status: "scheduled" | "done" | "cancelled" | "unknown";
+  memo: string;
+}
+
+export function parseSpecialClinicMessage(
+  text: string,
+  sender: string,
+  msgDate: Date
+): ParsedSchedule[] {
+
+  /* ---- STEP A: 헤더 파싱 ---- */
+  // 첫 줄에서 병원명, 특진/재특진 추출
+  // 헤더 예시: <근로복지공단 부산의원 난청 재특진 일정>
+  //            < 계명대학교동산병원 난청 특진 일정 변경 >
+  // 정규식으로 <...난청 (재특진|특진)...> 구조 파악
+  // 병원명: 첫 < 이후 ~ "난청" 이전 텍스트 trim
+  // clinicType: "재특진" 우선, 없으면 "특진"
+  // 헤더에 "결과" 또는 헤더에 "종료"만 있고 "일정"이 없으면: 종료/결과 메시지이나 계속 파싱 (종료 라인은 status=done으로 처리)
+
+  /* ---- STEP B: 줄별 파싱 ---- */
+  // currentPatient, currentTF를 상태로 유지하며 줄 순회
+  //
+  // [환자 라인 감지 조건]
+  // - '*'로 시작하지 않음
+  // - '<'로 시작하지 않음  
+  // - '('와 'TF'를 모두 포함
+  // - 한글/영문으로 시작
+  //
+  // [환자 라인에서 TF 추출]
+  // 괄호 내용들 중 'TF'가 포함된 첫 번째 괄호 찾기
+  // 예: "김철수 (울산동부TF / 안세봄 과장님)" → "울산동부TF"
+  // 예: "이순오 (울산남부TF/이해청/이정준)" → "울산남부TF"
+  // TF명 = 해당 괄호 내용에서 첫 '/' 이전 텍스트 trim
+  //
+  // [일정 라인 감지 조건]
+  // - '*'로 시작 (공백 허용: "* 1차", "*1차")
+  // - '차'를 포함
+  // - ':'를 포함
+  //
+  // [회차 추출]
+  // /\*\s*(\d+)\s*차/ → 그룹1이 회차 숫자
+  //
+  // [종료/완료 여부]
+  // 줄에 "종료" 또는 "완료" 포함 → status = "done", 날짜는 그대로 파싱
+  //
+  // [화살표 처리 - 변경/취소]
+  // 화살표: "->" 또는 "→" 또는 ">>" 중 하나 포함 시
+  // 화살표 이후 텍스트를 newPart로 추출
+  // newPart에 "취소" 포함 → status = "cancelled", 날짜 null
+  // newPart에 "미정" 포함 → status = "unknown", 날짜 null
+  // 그 외 → newPart에서 날짜/시간 파싱 (변경 후 일정 사용)
+  // 화살표 없으면 → 줄 전체에서 날짜/시간 파싱
+
+  /* ---- STEP C: 날짜 파싱 ---- */
+  // 아래 우선순위로 매칭:
+  // 1) 4자리 연도: /(\d{4})\.(\d{1,2})\.(\d{1,2})/
+  // 2) 2자리 연도(점3개): /(\d{2})\.(\d{1,2})\.(\d{1,2})\./
+  //    → year = "20" + 그룹1
+  // 3) MM.DD (괄호 앞): /(\d{1,2})\.(\d{1,2})\.\s*[（(]/
+  //    → year는 msgDate 기준 추론 (아래 참고)
+  // 4) MM.DD (줄 끝 또는 공백): /(\d{1,2})\.(\d{1,2})\s*(?:$|\s)/
+  //    → year는 msgDate 기준 추론
+  //
+  // 연도 추론: 파싱된 월/일 기준으로 msgDate와 비교
+  //   - msgDate보다 3개월 이상 과거면 → 다음 연도
+  //   - 그 외 → msgDate의 연도
+  //
+  // 시간 파싱:
+  // /(\d{1,2})\s*[:\uc2dc]\s*(\d{0,2})(?:\s*\ubd84)?/g  (시:분 또는 시시 형식)
+  // "10 : 15" 같이 공백 있는 경우도 매칭
+  // 시간 없으면 isAllDay = true
+  // 시간 있으면 isAllDay = false, scheduledHour/Minute 저장
+
+  /* ---- STEP D: 스킵 조건 ---- */
+  // 아래 줄은 파싱 skip:
+  // - 빈 줄
+  // - "일정안내완료", "재해자 안내 완료", "안내완료" 등 마무리 문구
+  // - "진정제", "보호자" 등 메모성 줄 → memo에 누적 (환자 라인이나 일정 라인 아닌 경우)
+
+  /* ---- STEP E: 결과 반환 ---- */
+  // ParsedSchedule[] 반환
+  // scheduledDate가 null인 경우도 포함 (취소/미정 기록용)
+
+  return []; // TODO: 위 로직 구현
+}
+
+/* 구현 참고 - 실제 테스트 샘플:
+
+샘플1 (다수 환자):
+`<진주경상대학교병원 난청 특진 일정>
+
+김판세 (창원TF)
+* 1차 일정 : 07. 09. (화) 10 : 15
+
+김병수6 (울산동부TF)
+* 1차 일정 : 07. 02. (화) 10 : 15
+
+이순오 (울산동부TF)
+* 1차 일정 : 07. 02. (화) 10 : 30
+
+재해자 일정안내 완료`
+
+기댓값:
+[
+  { patientName: "김판세", tfName: "창원TF", hospitalName: "진주경상대학교병원", clinicType: "특진", examRound: 1, scheduledHour: 10, scheduledMinute: 15 },
+  { patientName: "김병수6", tfName: "울산동부TF", ..., examRound: 1, scheduledHour: 10, scheduledMinute: 15 },
+  { patientName: "이순오", tfName: "울산동부TF", ..., examRound: 1, scheduledHour: 10, scheduledMinute: 30 },
+]
+
+샘플2 (일정 변경):
+`<창원파티마병원 난청 특진 일정 변경>
+
+허남식2 (창원TF)
+
+* 1차 일정 종료 : 01. 08. (월) 09:30
+* 2차 일정 : 06. 07. (금) 13:40 -> 06. 07. (금) 12:00 PTA, 13:40 ABR
+* 3차 일정 : 06. 14. (금) 09:00`
+
+기댓값:
+[
+  { patientName: "허남식2", examRound: 1, status: "done", scheduledHour: 9, scheduledMinute: 30 },
+  { patientName: "허남식2", examRound: 2, status: "scheduled", scheduledHour: 12, scheduledMinute: 0 },
+  { patientName: "허남식2", examRound: 3, status: "scheduled", scheduledHour: 9, scheduledMinute: 0 },
+]
+
+샘플3 (TF/담당자 포함):
+`<근로복지공단 부산의원 난청 재특진 일정>
+
+정병수 (거제TF / 이창우 차장님)
+
+*1차 일정 : 06. 14. (금) 16:00`
+
+기댓값:
+[{ patientName: "정병수", tfName: "거제TF", clinicType: "재특진", examRound: 1, scheduledHour: 16, scheduledMinute: 0 }]
+
+샘플4 (2자리 연도):
+`<계명대학교동산병원 난청 특진 일정>
+
+김영호 (대구TF)
+* 1차 일정  : 25.01.15. (수) 10:00`
+
+기댓값:
+[{ patientName: "김영호", tfName: "대구TF", scheduledDate: new Date(2025, 0, 15), scheduledHour: 10 }]
+
+샘플5 (취소):
+`<근로복지공단 부산의원 난청 특진 일정 변경>
+
+최영수 (울산동부TF)
+
+* 1차 일정 : 09. 22. (월) 09:00 -> 일정 취소`
+
+기댓값:
+[{ patientName: "최영수", examRound: 1, status: "cancelled", scheduledDate: null }]
+*/
+
+===================================================
+STEP 4: API 엔드포인트 구현
+===================================================
+
+--- 4-1. GET /api/tf/special-clinic ---
+파일: app/api/tf/special-clinic/route.ts
+
+import { auth } from "@/auth";
+import { prisma } from "@/lib/prisma";
+import { NextRequest, NextResponse } from "next/server";
+
+export async function GET(req: NextRequest) {
+  const session = await auth();
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const { searchParams } = new URL(req.url);
+  const month = searchParams.get("month"); // "2026-04"
+  const tfName = searchParams.get("tfName");
+  const clinicType = searchParams.get("clinicType");
+  const status = searchParams.get("status") ?? "scheduled";
+
+  // month 파라미터로 해당 월의 시작/끝 계산
+  let dateFrom: Date, dateTo: Date;
+  if (month) {
+    const [y, m] = month.split("-").map(Number);
+    dateFrom = new Date(y, m - 1, 1);
+    dateTo = new Date(y, m, 0, 23, 59, 59);
+  } else {
+    const now = new Date();
+    dateFrom = new Date(now.getFullYear(), now.getMonth(), 1);
+    dateTo = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+  }
+
+  const where: any = {
+    scheduledDate: { gte: dateFrom, lte: dateTo },
+  };
+  if (tfName) where.tfName = { contains: tfName };
+  if (clinicType) where.clinicType = clinicType;
+  if (status !== "all") where.status = status;
+
+  const schedules = await prisma.specialClinicSchedule.findMany({
+    where,
+    orderBy: [{ scheduledDate: "asc" }, { scheduledHour: "asc" }],
+  });
+
+  return NextResponse.json(schedules);
+}
+
+--- 4-2. POST /api/tf/special-clinic (수동 생성) ---
+같은 파일에 POST 메서드 추가:
+
+export async function POST(req: NextRequest) {
+  const session = await auth();
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const body = await req.json();
+  // body에서 필드 추출 후 create
+  const schedule = await prisma.specialClinicSchedule.create({ data: body });
+  return NextResponse.json(schedule);
+}
+
+--- 4-3. PUT/DELETE /api/tf/special-clinic/[id] ---
+파일: app/api/tf/special-clinic/[id]/route.ts
+
+import { auth } from "@/auth";
+import { prisma } from "@/lib/prisma";
+import { NextRequest, NextResponse } from "next/server";
+
+export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const session = await auth();
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const { id } = await params;
+  const body = await req.json();
+  const updated = await prisma.specialClinicSchedule.update({ where: { id }, data: body });
+  return NextResponse.json(updated);
+}
+
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const session = await auth();
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const { id } = await params;
+  await prisma.specialClinicSchedule.delete({ where: { id } });
+  return NextResponse.json({ success: true });
+}
+
+--- 4-4. POST /api/tf/special-clinic/parse (텍스트 수동 파싱) ---
+파일: app/api/tf/special-clinic/parse/route.ts
+
+텍스트를 받아서 parseSpecialClinicMessage 실행 후 DB upsert.
+upsert 키: patientName + tfName + clinicType + examRound 조합
+(동일 조합 있으면 update, 없으면 create)
+저장 후 저장된 레코드 배열 반환.
+
+--- 4-5. POST /api/webhooks/telegram/special-clinic (webhook 수신) ---
+파일: app/api/webhooks/telegram/special-clinic/route.ts
+
+import { parseSpecialClinicMessage } from "@/lib/parse-special-clinic-message";
+import { prisma } from "@/lib/prisma";
+import { NextRequest, NextResponse } from "next/server";
+
+export async function POST(req: NextRequest) {
+  // 1. 시크릿 검증
+  const secret = req.headers.get("x-telegram-bot-api-secret-token");
+  if (secret !== process.env.TELEGRAM_SPECIAL_CLINIC_WEBHOOK_SECRET) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const body = await req.json();
+
+  // 2. message 또는 edited_message 추출
+  const msg = body.message ?? body.edited_message;
+  if (!msg?.text) return NextResponse.json({ ok: true });
+
+  // 3. 채팅방 ID 필터 (환경변수에 설정된 방만 처리)
+  const allowedChatId = process.env.TELEGRAM_SPECIAL_CLINIC_CHAT_ID;
+  if (allowedChatId && String(msg.chat.id) !== allowedChatId) {
+    return NextResponse.json({ ok: true });
+  }
+
+  // 4. 난청 특진/재특진 일정 메시지 필터
+  const text: string = msg.text;
+  if (!text.includes("난청") || (!text.includes("특진") && !text.includes("재특진")) || !text.includes("일정")) {
+    return NextResponse.json({ ok: true });
+  }
+
+  // 5. 파싱
+  const sender = msg.from?.first_name ?? msg.from?.username ?? "unknown";
+  const msgDate = new Date(msg.date * 1000);
+  const telegramMsgId = String(msg.message_id);
+  const parsed = parseSpecialClinicMessage(text, sender, msgDate);
+
+  // 6. DB upsert
+  for (const p of parsed) {
+    if (!p.patientName || !p.tfName) continue;
+    await prisma.specialClinicSchedule.upsert({
+      where: {
+        // @@unique 없으므로 findFirst + update 패턴 사용
+        id: (await prisma.specialClinicSchedule.findFirst({
+          where: {
+            patientName: p.patientName,
+            tfName: p.tfName,
+            clinicType: p.clinicType,
+            examRound: p.examRound,
+          },
+          select: { id: true },
+        }))?.id ?? "nonexistent",
+      },
+      create: {
+        ...p,
+        sender,
+        sourceDate: msgDate,
+        telegramMsgId,
+        rawMessage: text,
+      },
+      update: {
+        ...p,
+        sender,
+        sourceDate: msgDate,
+        rawMessage: text,
+      },
+    });
+  }
+
+  return NextResponse.json({ ok: true });
+}
+
+// webhook 엔드포인트는 인증 미들웨어에서 제외 필요
+// middleware.ts의 matcher에서 /api/webhooks/* 제외 확인
+
+===================================================
+STEP 5: 특진 일정 페이지 구현
+===================================================
+파일: app/tf/special-clinic/page.tsx
+
+전체 구조:
+- 서버 컴포넌트로 초기 데이터 fetch
+- 클라이언트 컴포넌트(SpecialClinicCalendar)로 캘린더 렌더링
+
+캘린더 UI 요구사항:
+
+[헤더 영역]
+- 제목: "TF업무 > 특진 일정"
+- 이전달/다음달 버튼
+- 현재 연월 표시 (예: 2026년 4월)
+- 우측: "+ 수동 입력" 버튼
+
+[필터 영역]  
+- TF 선택 (select): "전체" + 실제 존재하는 TF 목록 (API에서 distinct 조회)
+- 유형 선택: 전체 / 특진 / 재특진
+- 상태 선택: 예정 / 완료 / 취소 / 전체
+
+[캘린더 그리드]
+- 7열 (일~토)
+- 각 셀: 날짜 숫자 + 해당일 일정 카드 목록
+- 일정 카드:
+  ● [TF색 원형] 환자명  특진/재특진 N차
+                병원명  HH:MM (시간 있으면)
+- 카드 클릭 → 상세 슬라이드 패널 (우측에서 열림)
+- 일정 많을 때: "외 N건" 접기 처리
+
+[상세 슬라이드 패널]
+- 환자명, TF명, 병원명
+- 특진/재특진, N차
+- 날짜, 시간
+- 상태 (예정/완료/취소)
+- 발신자, 메시지 발송일
+- 메모
+- [수정] [삭제] 버튼
+
+[수동 입력 모달]
+탭1 - 직접 입력:
+  - 환자명 (text)
+  - TF명 (select)
+  - 병원명 (text)
+  - 특진/재특진 (radio)
+  - 회차 (select: 1~5)
+  - 날짜 (date)
+  - 시간 (time, optional)
+  - 메모 (textarea)
+  - [저장] 버튼
+
+탭2 - 텍스트 붙여넣기:
+  - textarea (텔레그램 메시지 복사 붙여넣기)
+  - [파싱 후 저장] 버튼 → /api/tf/special-clinic/parse POST
+
+[하단 TF 범례]
+- 실제 데이터에 있는 TF들만 색상 뱃지로 표시
+
+[URL 상태 관리]
+- ?year=2026&month=4&tf=울산동부TF 형태로 필터 상태 URL에 반영
+- useSearchParams + router.push 사용
+
+[스타일 참고]
+- 기존 페이지들의 스타일 패턴(인라인/Tailwind 혼재) 그대로 따르기
+- 브랜드 컬러: 스카이블루 #29ABE2, 라임그린 #8DC63F, 딥그린 #006838
+
+===================================================
+STEP 6: 미들웨어에서 webhook 경로 제외 확인
+===================================================
+middleware.ts 파일 확인:
+- /api/webhooks/* 경로가 matcher에서 제외되어 있는지 확인
+- 없으면 추가:
+  matcher: ['/((?!api/webhooks|api/health|_next/static|_next/image|favicon.ico).*)']
+
+===================================================
+STEP 7: 사이드바 네비게이션 업데이트
+===================================================
+사이드바 컴포넌트 파일 찾아서 TF업무 섹션에 아래 항목 추가:
+- label: "특진 일정"
+- href: "/tf/special-clinic"
+- icon: CalendarDays (lucide-react)
+- 기존 "담당TF 모니터링" 아래에 삽입
+- 기존 항목/스타일 변경 금지, 새 항목만 추가
+
+===================================================
+완료 후 확인 사항
+===================================================
+1. npx prisma db push 완료 확인
+2. /tf/special-clinic 페이지 접속 확인
+3. /api/tf/special-clinic?month=2026-04 응답 확인
+4. 파서 테스트: /api/tf/special-clinic/parse 에 샘플 메시지 POST
+   샘플:
+   {
+     "text": "<근로복지공단 부산의원 난청 특진 일정>\n\n최상학 (울산동부TF)\n\n* 1차 일정 종료 : 05. 23. (목)\n* 2차 일정 : 06. 04. (화) 15:30\n* 3차 일정 : 06. 17. (월) 12:00"
+   }
+   → DB에 3개 레코드 생성 확인
+5. Railway 배포 후 텔레그램 "고독한 일정방"에 샘플 일정 메시지 보내서 DB 반영 확인

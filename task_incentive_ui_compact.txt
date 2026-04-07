@@ -1,0 +1,352 @@
+## 세션 타입: 버그픽스 세션 (UI 개선)
+## 작업 개요
+지사장 관리 페이지 '정산 인센티브 분배' 탭의 메인 테이블 레이아웃을 변경한다.
+현재: 직원 수만큼 컬럼이 우측으로 늘어나는 방식 (가로 스크롤 불편)
+변경: 배정된 직원+비율만 하나의 '배분 내역' 셀 안에 뱃지/태그 형태로 압축 표시
+
+## 수술적 수정 원칙
+- IncentiveTab.tsx만 수정한다
+- 다른 탭, API, 스키마 변경 없음
+- 기존 계산 로직(인센대상액, 지사인센 적립, 합계 등)은 그대로 유지
+
+---
+
+## STEP 0: 파일 위치 확인
+
+```bash
+find app -path "*branch*" -name "IncentiveTab*" | grep -v node_modules
+```
+
+---
+
+## STEP 1: 메인 테이블 컬럼 구조 변경
+
+### 변경 전 (현재)
+| 연번 | 정산월 | 재해자 | 사건종류 | 담당자 | 정산액 | 인센대상액 | 비율합계 | 이정준% | 이정준₩ | 김경록% | 김경록₩ | 허흔% | ... | 비고 |
+
+### 변경 후
+| 연번 | 정산월 | 재해자 | 사건종류 | 담당자 | 정산액(VAT제외) | 인센대상액(10%) | 배분 내역 | 비고 |
+
+- '배분 내역' 컬럼 하나에 배정된 직원+비율+금액을 뱃지 형태로 표시
+- 비율이 0이거나 배정되지 않은 직원은 표시하지 않음
+- 비율합계도 배분 내역 셀 하단에 소계로 표시
+
+### '배분 내역' 셀 렌더링
+
+각 정산 건의 allocations 배열에서 ratio > 0인 것만 필터해서 뱃지로 표시.
+
+```tsx
+// 배분 내역 셀 렌더링 예시
+const renderAllocations = (record: SettlementWithAlloc) => {
+  const activeAllocs = record.allocations.filter(a => a.ratio > 0)
+  const ratioSum = activeAllocs.reduce((sum, a) => sum + a.ratio, 0)
+  const incentiveBase = Math.floor(record.grossAmount / 11)
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+      {/* 배정된 직원 뱃지 */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+        {activeAllocs.map(a => (
+          <span key={a.id} style={{
+            display: 'inline-flex', alignItems: 'center', gap: 4,
+            padding: '2px 8px', borderRadius: 12,
+            background: '#f0f9ff', border: '1px solid #bae6fd',
+            fontSize: 11, whiteSpace: 'nowrap',
+          }}>
+            <span style={{ fontWeight: 600, color: '#0369a1' }}>{a.staffName}</span>
+            <span style={{ color: '#64748b' }}>{a.ratio}%</span>
+            <span style={{ color: '#059669', fontWeight: 500 }}>
+              {Math.floor(incentiveBase * a.ratio / 100).toLocaleString()}원
+            </span>
+          </span>
+        ))}
+        {activeAllocs.length === 0 && (
+          <span style={{ color: '#94a3b8', fontSize: 11 }}>미배정</span>
+        )}
+      </div>
+      {/* 비율 합계 */}
+      <div style={{
+        fontSize: 10, color: ratioSum === 100 ? '#64748b' : '#ef4444',
+        fontWeight: ratioSum !== 100 ? 600 : 400,
+      }}>
+        합계 {ratioSum}%
+        {ratioSum < 100 && ` (미배분 ${100 - ratioSum}%)`}
+        {ratioSum > 100 && ' ⚠️ 초과'}
+      </div>
+    </div>
+  )
+}
+```
+
+---
+
+## STEP 2: 배분 비율 편집 UI 변경
+
+### 변경 전
+각 직원 컬럼의 % 셀을 클릭해서 개별 인라인 편집
+
+### 변경 후
+'배분 내역' 셀 클릭 또는 편집 아이콘 클릭 시 → 인라인 편집 모드 전환
+
+편집 모드 UI:
+```
+[배분 내역 셀 - 편집 모드]
+┌─────────────────────────────────────────────────┐
+│  김경록  [50 ]%  ✕                              │
+│  조홍래  [50 ]%  ✕                              │
+│  + 직원 추가 (드롭다운)                          │
+│  ─────────────────                               │
+│  합계: 100%  ✅                                  │
+│  [저장]  [취소]                                   │
+└─────────────────────────────────────────────────┘
+```
+
+- 이미 배정된 직원: 이름 + 비율 input + ✕(제거) 버튼
+- '+직원 추가': 해당 지사 소속 직원 중 아직 배정되지 않은 직원 드롭다운
+- 합계 실시간 계산, 100 초과 시 저장 버튼 비활성화
+- [저장] 클릭 시 기존 allocation PUT API 호출
+- [취소] 클릭 시 편집 모드 해제, 원래 값 복원
+
+```tsx
+// 편집 모드 상태
+const [editingRecordId, setEditingRecordId] = useState<string | null>(null)
+const [editAllocations, setEditAllocations] = useState<{ staffName: string; ratio: number }[]>([])
+
+const startEditing = (record: SettlementWithAlloc) => {
+  setEditingRecordId(record.id)
+  setEditAllocations(
+    record.allocations
+      .filter(a => a.ratio > 0)
+      .map(a => ({ staffName: a.staffName, ratio: a.ratio }))
+  )
+}
+
+const addStaff = (name: string) => {
+  if (editAllocations.find(a => a.staffName === name)) return
+  setEditAllocations([...editAllocations, { staffName: name, ratio: 0 }])
+}
+
+const removeStaff = (name: string) => {
+  setEditAllocations(editAllocations.filter(a => a.staffName !== name))
+}
+
+const updateRatio = (name: string, ratio: number) => {
+  setEditAllocations(editAllocations.map(a => 
+    a.staffName === name ? { ...a, ratio } : a
+  ))
+}
+
+const saveAllocations = async (recordId: string) => {
+  const ratioSum = editAllocations.reduce((s, a) => s + a.ratio, 0)
+  if (ratioSum > 100) {
+    alert('비율 합계가 100%를 초과할 수 없습니다.')
+    return
+  }
+
+  // 기존 allocation API 호출 (PUT)
+  const res = await fetch(`/api/branch/settlement-records/${recordId}/allocations`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      allocations: editAllocations.filter(a => a.ratio > 0).map(a => ({
+        staffName: a.staffName,
+        ratio: a.ratio,
+        isExternal: false,
+      })),
+    }),
+  })
+
+  if (res.ok) {
+    setEditingRecordId(null)
+    // 데이터 새로고침
+    fetchData()
+  } else {
+    alert('저장 실패')
+  }
+}
+
+// 편집 모드 렌더링
+const renderEditAllocations = (record: SettlementWithAlloc) => {
+  const ratioSum = editAllocations.reduce((s, a) => s + a.ratio, 0)
+  const assignedNames = editAllocations.map(a => a.staffName)
+  const availableStaff = staffMembers.filter(s => !assignedNames.includes(s.name))
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 240 }}>
+      {editAllocations.map(a => (
+        <div key={a.staffName} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ fontSize: 12, fontWeight: 500, minWidth: 48 }}>{a.staffName}</span>
+          <input
+            type="number"
+            value={a.ratio}
+            onChange={e => updateRatio(a.staffName, parseInt(e.target.value) || 0)}
+            style={{
+              width: 50, padding: '2px 4px', border: '1px solid #cbd5e1',
+              borderRadius: 4, fontSize: 12, textAlign: 'right',
+            }}
+            min={0} max={100}
+          />
+          <span style={{ fontSize: 11, color: '#64748b' }}>%</span>
+          <button
+            onClick={() => removeStaff(a.staffName)}
+            style={{
+              background: 'none', border: 'none', color: '#ef4444',
+              cursor: 'pointer', fontSize: 14, padding: '0 2px',
+            }}
+          >✕</button>
+        </div>
+      ))}
+
+      {/* 직원 추가 드롭다운 */}
+      {availableStaff.length > 0 && (
+        <select
+          onChange={e => { if (e.target.value) addStaff(e.target.value); e.target.value = '' }}
+          style={{ fontSize: 11, padding: '2px 4px', border: '1px solid #e2e8f0', borderRadius: 4, color: '#64748b' }}
+          defaultValue=""
+        >
+          <option value="" disabled>+ 직원 추가</option>
+          {availableStaff.map(s => (
+            <option key={s.id} value={s.name}>{s.name}</option>
+          ))}
+        </select>
+      )}
+
+      {/* 합계 + 버튼 */}
+      <div style={{
+        borderTop: '1px solid #e2e8f0', paddingTop: 4, marginTop: 2,
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+      }}>
+        <span style={{
+          fontSize: 11,
+          color: ratioSum > 100 ? '#ef4444' : ratioSum === 100 ? '#059669' : '#f59e0b',
+          fontWeight: 600,
+        }}>
+          합계 {ratioSum}% {ratioSum === 100 ? '✅' : ratioSum > 100 ? '⚠️' : ''}
+        </span>
+        <div style={{ display: 'flex', gap: 4 }}>
+          <button
+            onClick={() => saveAllocations(record.id)}
+            disabled={ratioSum > 100}
+            style={{
+              padding: '2px 10px', fontSize: 11, borderRadius: 4, border: 'none',
+              background: ratioSum > 100 ? '#e2e8f0' : '#29ABE2', color: '#fff',
+              cursor: ratioSum > 100 ? 'not-allowed' : 'pointer',
+            }}
+          >저장</button>
+          <button
+            onClick={() => setEditingRecordId(null)}
+            style={{
+              padding: '2px 10px', fontSize: 11, borderRadius: 4,
+              border: '1px solid #e2e8f0', background: '#fff', color: '#64748b',
+              cursor: 'pointer',
+            }}
+          >취소</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+```
+
+---
+
+## STEP 3: 메인 테이블 thead/tbody 수정
+
+기존 직원별 컬럼 헤더 + 데이터 셀 전부 제거하고, 아래 컬럼으로 교체:
+
+```tsx
+<thead>
+  <tr>
+    <th style={th}>연번</th>
+    <th style={th}>정산월</th>
+    <th style={th}>재해자</th>
+    <th style={th}>사건종류</th>
+    <th style={th}>담당자</th>
+    <th style={{...th, textAlign: 'right'}}>정산액(VAT제외)</th>
+    <th style={{...th, textAlign: 'right'}}>인센대상액(10%)</th>
+    <th style={{...th, minWidth: 200}}>배분 내역</th>
+    <th style={th}>비고</th>
+  </tr>
+</thead>
+<tbody>
+  {records.map((r, i) => {
+    const netAmount = Math.floor(r.grossAmount / 1.1)
+    const incentiveBase = Math.floor(r.grossAmount / 11)
+    const isEditing = editingRecordId === r.id
+
+    return (
+      <tr key={r.id}>
+        <td style={td}>{i + 1}</td>
+        <td style={td}>{r.month}월</td>
+        <td style={td}>{r.victimName}</td>
+        <td style={{...td, fontSize: 11}}>{r.caseType}</td>
+        <td style={td}>{r.settlementStaffName || r.salesStaffName}</td>
+        <td style={{...td, textAlign: 'right'}}>{netAmount.toLocaleString()}</td>
+        <td style={{...td, textAlign: 'right', color: '#059669', fontWeight: 500}}>
+          {incentiveBase.toLocaleString()}
+        </td>
+        <td style={{...td, textAlign: 'left', padding: '6px 10px'}}>
+          {isEditing ? renderEditAllocations(r) : (
+            <div
+              onClick={() => startEditing(r)}
+              style={{ cursor: 'pointer' }}
+              title="클릭하여 배분 편집"
+            >
+              {renderAllocations(r)}
+            </div>
+          )}
+        </td>
+        <td style={{...td, fontSize: 11, color: '#64748b'}}>{r.memo}</td>
+      </tr>
+    )
+  })}
+</tbody>
+```
+
+---
+
+## STEP 4: 합계 요약 섹션 수정
+
+합계 요약 테이블의 직원별 합산 로직은 기존 그대로 유지.
+다만 데이터 소스를 변경된 테이블과 동일하게 allocations 기반으로 집계.
+
+직원별 개인 인센 합계 계산:
+```typescript
+const staffIncentiveSums: Record<string, number> = {}
+records.forEach(r => {
+  const incentiveBase = Math.floor(r.grossAmount / 11)
+  r.allocations.forEach(a => {
+    if (a.ratio > 0) {
+      const amount = Math.floor(incentiveBase * a.ratio / 100)
+      staffIncentiveSums[a.staffName] = (staffIncentiveSums[a.staffName] || 0) + amount
+    }
+  })
+})
+```
+
+합계 테이블 컬럼:
+| 직원명 | 개인 인센 합계 | 절사 | 비고 |
+
+절사는 기존 로직 유지.
+
+---
+
+## 완료 기준 체크리스트
+
+- [ ] 메인 테이블 가로 스크롤 없이 화면에 맞음
+- [ ] 배정된 직원+비율+금액만 뱃지 형태로 표시
+- [ ] 미배정 건은 '미배정' 텍스트 표시
+- [ ] 비율합계 < 100이면 '미배분 N%' 표시 (주황/빨강 강조)
+- [ ] 배분 내역 셀 클릭 시 인라인 편집 모드 전환
+- [ ] 편집 모드: 직원 추가/제거, 비율 입력, 합계 실시간 계산
+- [ ] 합계 100% 초과 시 저장 버튼 비활성화
+- [ ] 저장 후 데이터 새로고침
+- [ ] 합계 요약 섹션 정상 동작
+- [ ] 지사 인센 관리 섹션 기존 로직 유지
+- [ ] 기존 정산내역 탭 UI/기능 변화 없음
+
+## 주의사항
+
+- IncentiveTab.tsx 파일만 수정한다. 다른 파일 수정 금지.
+- API 변경 없음 (기존 allocation PUT API 그대로 사용).
+- 기존 계산 로직(인센대상액 = grossAmount/11, 지사인센 적립 등) 변경 없음.

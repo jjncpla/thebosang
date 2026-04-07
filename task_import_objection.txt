@@ -1,0 +1,136 @@
+# Task: 기일관리(ObjectionCase) 엑셀 데이터 임포트
+
+## 목표
+이의제기 기일관리 페이지에 엑셀(이의제기 시트)에서 파싱된 300개 레코드를 일괄 임포트하는 1회용 API를 생성한다.
+
+---
+
+## STEP 0: 전제 확인
+1. `prisma/schema.prisma`를 읽어 `ObjectionCase` 모델의 정확한 필드명 목록을 확인한다.
+2. 기존 `app/api/objection/cases/route.ts` (또는 유사 경로)를 읽어 import 경로 패턴(prisma, auth) 확인.
+3. 프로젝트 루트에 `objection_cases_import.json` 파일이 있는지 확인한다. 이 파일은 사용자가 수동으로 복사해 놓은 300개 레코드 JSON 데이터다.
+
+---
+
+## STEP 1: 데이터 파일 생성
+`objection_cases_import.json`의 내용을 읽어 `app/api/import-objection-cases/data.ts`를 생성한다.
+
+파일 내용 형식:
+```typescript
+// 자동 생성된 임포트 데이터 — 사용 후 삭제
+export const IMPORT_DATA = [
+  // ... JSON 배열 내용을 그대로 복사
+] as const
+```
+
+각 레코드의 필드:
+- approvalStatus: string (승인/불승인/일부승인)
+- tfName: string
+- patientName: string  
+- caseType: string (소음성 난청/COPD/근골격계 등)
+- decisionDate: string | null (YYYY-MM-DD)
+- examResult: string | null (기각/인용/제척도과 등)
+- examResultDate: string | null (YYYY-MM-DD)
+- examClaimDate: string | null (YYYY-MM-DD, 청구일만 있고 결과 미정인 경우)
+- reExamResult: string | null
+- reExamResultDate: string | null
+- reExamClaimDate: string | null
+- managerName: string | null (담당자 이름 — User FK 조회용)
+- progressStatus: string | null (진행중/종결/송무인계/검토중)
+- memo: string | null
+
+---
+
+## STEP 2: 임포트 API 라우트 생성
+`app/api/import-objection-cases/route.ts`를 생성한다.
+
+```typescript
+import { NextResponse } from 'next/server'
+import { prisma } from '@/lib/prisma'  // 실제 import 경로로 수정
+import { auth } from '@/auth'           // 실제 import 경로로 수정
+import { IMPORT_DATA } from './data'
+
+export async function POST() {
+  const session = await auth()
+  if (!session || session.user?.role !== 'ADMIN') {
+    return NextResponse.json({ error: '권한 없음' }, { status: 403 })
+  }
+
+  // 기존 데이터 확인
+  const existing = await prisma.objectionCase.count()
+  if (existing > 0) {
+    return NextResponse.json({ 
+      error: `이미 ${existing}개 데이터가 존재합니다. 임포트 전에 기존 데이터를 삭제하세요.` 
+    }, { status: 400 })
+  }
+
+  // 전체 User 목록 조회 (담당자 이름 → ID 매핑)
+  const users = await prisma.user.findMany({ select: { id: true, name: true } })
+  const userMap = new Map(users.map(u => [u.name, u.id]))
+
+  let success = 0
+  let failed = 0
+  const errors: string[] = []
+
+  for (const record of IMPORT_DATA) {
+    try {
+      // 담당자 ID 조회 (없으면 null)
+      const managerId = record.managerName ? userMap.get(record.managerName) ?? null : null
+
+      // schema.prisma에서 확인된 실제 필드명으로 맞게 수정
+      await prisma.objectionCase.create({
+        data: {
+          approvalStatus: record.approvalStatus || '불승인',
+          tfName: record.tfName || '',
+          patientName: record.patientName || '',
+          caseType: record.caseType || '',
+          decisionDate: record.decisionDate ? new Date(record.decisionDate) : null,
+          examResult: record.examResult ?? null,
+          examResultDate: record.examResultDate ? new Date(record.examResultDate) : null,
+          examClaimDate: record.examClaimDate ? new Date(record.examClaimDate) : null,
+          reExamResult: record.reExamResult ?? null,
+          reExamResultDate: record.reExamResultDate ? new Date(record.reExamResultDate) : null,
+          reExamClaimDate: record.reExamClaimDate ? new Date(record.reExamClaimDate) : null,
+          managerId: managerId,
+          progressStatus: record.progressStatus || '종결',
+          memo: record.memo ?? null,
+        }
+      })
+      success++
+    } catch (e) {
+      failed++
+      errors.push(`${record.patientName}: ${e instanceof Error ? e.message : String(e)}`)
+    }
+  }
+
+  return NextResponse.json({
+    success,
+    failed,
+    total: IMPORT_DATA.length,
+    errors: errors.slice(0, 20), // 최대 20개만 반환
+    message: `${success}개 임포트 완료, ${failed}개 실패`
+  })
+}
+```
+
+**주의사항**:
+- `prisma.objectionCase.create`의 `data` 필드는 schema.prisma의 실제 필드명을 기준으로 수정한다.
+- 없는 필드는 제거, 필드명이 다르면 맞게 변경.
+- `managerId` 필드가 없으면 제거한다.
+- 필수 필드(NOT NULL, 기본값 없음)가 있으면 적절한 기본값 설정.
+
+---
+
+## STEP 3: 확인
+- TypeScript 타입 에러 없는지 확인 (`npx tsc --noEmit`)
+- 두 파일 모두 생성됐는지 확인
+- 작업 완료 보고
+
+---
+
+## 완료 후 사용 방법 (사용자에게 안내)
+```
+POST https://thebosang-production.up.railway.app/api/import-objection-cases
+(ADMIN 계정으로 로그인된 상태에서 브라우저 콘솔 또는 API 클라이언트에서 호출)
+```
+임포트 완료 후 `app/api/import-objection-cases/` 디렉토리 전체 삭제.
