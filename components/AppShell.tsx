@@ -233,11 +233,15 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           <nav style={{ flex: 1, padding: "8px 0" }}>
             {(role === "이산계정"
               ? MENU_ITEMS.filter((m) => m.path === "/cases-view")
-              : MENU_ITEMS.filter((m) => m.id !== "cases-view")
+              : MENU_ITEMS.filter((m) => {
+                  if (m.id === "cases-view") return false
+                  if (m.restricted === "admin" && role !== "ADMIN") return false
+                  if (m.restricted === "org" && !["ADMIN", "SENIOR_MANAGER", "SITE_MANAGER"].includes(role)) return false
+                  return true
+                })
             ).map((item) => {
               const active = isActive(item.path, item.children);
               const isOpen = openMenus.has(item.id);
-              const restricted = !!item.restricted;
 
               return (
                 <div key={item.id}>
@@ -249,7 +253,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                       background: active ? "rgba(41,171,226,0.2)" : "none",
                       border: "none",
                       borderLeft: active ? "3px solid #29ABE2" : "3px solid transparent",
-                      color: active ? "#a8e6f8" : restricted ? "rgba(255,255,255,0.2)" : "rgba(255,255,255,0.85)",
+                      color: active ? "#a8e6f8" : "rgba(255,255,255,0.85)",
                       display: "flex",
                       alignItems: "center",
                       gap: 10,
