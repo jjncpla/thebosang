@@ -11,6 +11,7 @@ interface Schedule {
   tfName: string
   hospitalName: string
   clinicType: string
+  category: string
   examRound: number
   scheduledDate: string | null
   isAllDay: boolean
@@ -36,6 +37,8 @@ function isSameDay(d1: Date, d2: Date) {
 
 const STATUS_LABELS: Record<string, string> = { scheduled: '예정', done: '완료', cancelled: '취소', unknown: '미정' }
 const STATUS_COLORS: Record<string, string> = { scheduled: '#3B82F6', done: '#22C55E', cancelled: '#EF4444', unknown: '#F59E0B' }
+const CATEGORIES = ['특진', '재특진', '회의', '행사', '기타'] as const
+const CATEGORY_COLORS: Record<string, string> = { '특진': '', '재특진': '', '회의': '#9B59B6', '행사': '#E67E22', '기타': '#95A5A6' }
 
 // ─── 메인 컴포넌트 ────────────────────────────────────────────────
 export default function SpecialClinicPage() {
@@ -53,9 +56,13 @@ function SpecialClinicCalendar() {
   const now = new Date()
   const [year, setYear] = useState(Number(searchParams?.get('year')) || now.getFullYear())
   const [month, setMonth] = useState(Number(searchParams?.get('month')) || now.getMonth() + 1)
-  const [tfFilter, setTfFilter] = useState(searchParams?.get('tf') || '')
-  const [typeFilter, setTypeFilter] = useState(searchParams?.get('type') || '')
+  const [selectedTFs, setSelectedTFs] = useState<string[]>([])
+  const [tfPanelOpen, setTfPanelOpen] = useState(false)
+  const tfPanelRef = useRef<HTMLDivElement>(null)
+  const [categoryFilter, setCategoryFilter] = useState('')
   const [statusFilter, setStatusFilter] = useState(searchParams?.get('status') || 'all')
+  const [searchQuery, setSearchQuery] = useState('')
+  const [debouncedQuery, setDebouncedQuery] = useState('')
 
   const [schedules, setSchedules] = useState<Schedule[]>([])
   const [allTfNames, setAllTfNames] = useState<string[]>([])
@@ -82,25 +89,39 @@ function SpecialClinicCalendar() {
     const params = new URLSearchParams()
     params.set('year', String(year))
     params.set('month', String(month))
-    if (tfFilter) params.set('tf', tfFilter)
-    if (typeFilter) params.set('type', typeFilter)
     if (statusFilter !== 'all') params.set('status', statusFilter)
     router.replace(`/tf/special-clinic?${params}`, { scroll: false })
-  }, [year, month, tfFilter, typeFilter, statusFilter, router])
+  }, [year, month, statusFilter, router])
 
-  // 데이터 로드
+  // 검색 debounce
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedQuery(searchQuery), 300)
+    return () => clearTimeout(timer)
+  }, [searchQuery])
+
+  // TF 패널 외부 클릭 닫기
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (tfPanelRef.current && !tfPanelRef.current.contains(e.target as Node)) setTfPanelOpen(false)
+    }
+    if (tfPanelOpen) document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [tfPanelOpen])
+
+  // 데이터 로드 (전체 — 프론트에서 필터링)
   const load = useCallback(async () => {
     setLoading(true)
     const qs = new URLSearchParams({
       month: `${year}-${pad(month)}`,
       status: statusFilter,
     })
-    if (tfFilter) qs.set('tfName', tfFilter)
-    if (typeFilter) qs.set('clinicType', typeFilter)
     const res = await fetch(`/api/tf/special-clinic?${qs}`)
-    if (res.ok) setSchedules(await res.json())
+    if (res.ok) {
+      const data = await res.json()
+      setSchedules(data)
+    }
     setLoading(false)
-  }, [year, month, tfFilter, typeFilter, statusFilter])
+  }, [year, month, statusFilter])
 
   useEffect(() => { load() }, [load])
 
@@ -133,6 +154,32 @@ function SpecialClinicCalendar() {
   }, [year, month])
   const tfList = allTfNames
 
+  // 프론트 필터링 (TF 복수선택 + 카테고리 + 검색)
+  const filteredSchedules = schedules.filter(s => {
+    if (selectedTFs.length > 0 && !selectedTFs.includes(s.tfName)) return false
+    if (categoryFilter && s.category !== categoryFilter && s.clinicType !== categoryFilter) return false
+    if (debouncedQuery) {
+      const q = debouncedQuery.toLowerCase()
+      if (![s.patientName, s.hospitalName, s.tfName, s.memo ?? ''].some(f => f.toLowerCase().includes(q))) return false
+    }
+    return true
+  })
+
+  // 검색 결과 (전체 데이터 기반 — 캘린더에 표시되는 건 filteredSchedules)
+  const searchResults = debouncedQuery
+    ? schedules.filter(s =>
+        [s.patientName, s.hospitalName, s.tfName, s.memo ?? ''].some(f => f.toLowerCase().includes(debouncedQuery.toLowerCase()))
+      )
+    : []
+
+  // TF 선택 토글
+  function toggleTF(tf: string) {
+    setSelectedTFs(prev => prev.includes(tf) ? prev.filter(t => t !== tf) : [...prev, tf])
+  }
+  const tfButtonLabel = selectedTFs.length === 0 ? '전체 TF'
+    : selectedTFs.length === 1 ? selectedTFs[0]
+    : `${selectedTFs[0]} 외 ${selectedTFs.length - 1}개`
+
   // 달력 그리드 생성
   const firstDay = new Date(year, month - 1, 1)
   const lastDay = new Date(year, month, 0)
@@ -151,7 +198,7 @@ function SpecialClinicCalendar() {
 
   function getSchedulesForDay(day: number) {
     const target = new Date(year, month - 1, day)
-    return schedules.filter(s => {
+    return filteredSchedules.filter(s => {
       if (!s.scheduledDate) return false
       return isSameDay(new Date(s.scheduledDate), target)
     })
@@ -227,7 +274,7 @@ function SpecialClinicCalendar() {
   function prevDay() { setCurrentDay(d => { const n = new Date(d); n.setDate(n.getDate() - 1); return n }) }
   function nextDay() { setCurrentDay(d => { const n = new Date(d); n.setDate(n.getDate() + 1); return n }) }
   function getSchedulesForDate(d: Date) {
-    return schedules.filter(s => s.scheduledDate && isSameDay(new Date(s.scheduledDate), d))
+    return filteredSchedules.filter(s => s.scheduledDate && isSameDay(new Date(s.scheduledDate), d))
   }
 
   // 날짜 클릭 → 일별 뷰로
@@ -266,7 +313,7 @@ function SpecialClinicCalendar() {
     <div className="p-4 space-y-4" style={{ maxWidth: 1200 }}>
       {/* 헤더 */}
       <div className="flex items-center justify-between flex-wrap gap-2">
-        <h1 className="text-lg font-bold text-gray-800">TF업무 &gt; 특진 일정</h1>
+        <h1 className="text-lg font-bold text-gray-800">TF업무 &gt; 통합 캘린더</h1>
         <button
           onClick={() => openManualModal()}
           className="px-3 py-1.5 text-sm bg-sky-500 text-white rounded hover:bg-sky-600"
@@ -317,17 +364,35 @@ function SpecialClinicCalendar() {
 
         <span className="text-gray-300">|</span>
 
-        <select value={tfFilter} onChange={e => setTfFilter(e.target.value)}
-          className="border rounded px-2 py-1 text-xs">
-          <option value="">전체 TF</option>
-          {tfList.map(tf => <option key={tf} value={tf}>{tf}</option>)}
-        </select>
+        {/* TF 복수선택 드롭다운 */}
+        <div className="relative" ref={tfPanelRef}>
+          <button
+            onClick={() => setTfPanelOpen(p => !p)}
+            className="border rounded px-2 py-1 text-xs flex items-center gap-1 hover:bg-gray-50"
+          >
+            {tfButtonLabel} <span className="text-gray-400">▼</span>
+          </button>
+          {tfPanelOpen && (
+            <div className="absolute top-full mt-1 left-0 bg-white border rounded-lg shadow-lg z-40 w-48 py-1">
+              <div className="flex gap-1 px-2 py-1 border-b">
+                <button onClick={() => setSelectedTFs([])} className="text-[10px] text-sky-500 hover:underline">전체</button>
+                <button onClick={() => setSelectedTFs([...tfList])} className="text-[10px] text-sky-500 hover:underline">모두 선택</button>
+              </div>
+              {tfList.map(tf => (
+                <label key={tf} className="flex items-center gap-2 px-2 py-1 hover:bg-gray-50 cursor-pointer text-xs">
+                  <input type="checkbox" checked={selectedTFs.includes(tf)} onChange={() => toggleTF(tf)} className="rounded" />
+                  <span className="w-2 h-2 rounded-sm flex-shrink-0" style={{ backgroundColor: getTFColor(tf) }} />
+                  {tf}
+                </label>
+              ))}
+            </div>
+          )}
+        </div>
 
-        <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)}
+        <select value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)}
           className="border rounded px-2 py-1 text-xs">
-          <option value="">전체 유형</option>
-          <option value="특진">특진</option>
-          <option value="재특진">재특진</option>
+          <option value="">전체 카테고리</option>
+          {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
         </select>
 
         <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
@@ -339,6 +404,16 @@ function SpecialClinicCalendar() {
         </select>
 
         {loading && <span className="text-xs text-gray-400">로딩...</span>}
+
+        <div className="ml-auto">
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            placeholder="재해자명, 병원명, TF명 검색..."
+            className="border rounded px-2 py-1 text-xs w-52 focus:outline-none focus:border-sky-400"
+          />
+        </div>
       </div>
 
       {/* 캘린더 + TF 범례 flex 레이아웃 */}
@@ -437,7 +512,7 @@ function SpecialClinicCalendar() {
         {viewMode === 'week' && (
           <div className="grid grid-cols-7 border-b last:border-b-0" style={{ minHeight: 300 }}>
             {getWeekDays().map((wd, di) => {
-              const wdSchedules = schedules.filter(s => s.scheduledDate && isSameDay(new Date(s.scheduledDate), wd))
+              const wdSchedules = filteredSchedules.filter(s => s.scheduledDate && isSameDay(new Date(s.scheduledDate), wd))
               const isToday = isSameDay(wd, now)
               const dk = dateKey(wd.getFullYear(), wd.getMonth() + 1, wd.getDate())
               const holidayName = holidays[dk]
@@ -587,17 +662,62 @@ function SpecialClinicCalendar() {
           <div className="sticky top-4 border rounded-lg p-3 bg-white">
             <div className="text-[10px] font-semibold text-gray-500 mb-2">TF 범례</div>
             <div className="space-y-1.5">
-              {tfList.map(tf => (
-                <div key={tf} className="flex items-center gap-1.5">
-                  <span className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ backgroundColor: getTFColor(tf) }} />
-                  <span className="text-[10px] text-gray-700">{tf}</span>
-                </div>
-              ))}
+              {tfList.map(tf => {
+                const isActive = selectedTFs.length === 0 || selectedTFs.includes(tf)
+                return (
+                  <div key={tf}
+                    onClick={() => toggleTF(tf)}
+                    className="flex items-center gap-1.5 cursor-pointer hover:bg-gray-50 rounded px-0.5 -mx-0.5"
+                    style={{ opacity: isActive ? 1 : 0.35 }}
+                  >
+                    <span className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ backgroundColor: getTFColor(tf) }} />
+                    <span className="text-[10px] text-gray-700">{tf}</span>
+                  </div>
+                )
+              })}
             </div>
           </div>
         </div>
       )}
       </div>{/* flex wrapper end */}
+
+      {/* 검색 결과 목록 */}
+      {debouncedQuery && searchResults.length > 0 && (
+        <div className="border rounded-lg bg-white overflow-hidden">
+          <div className="px-3 py-2 bg-gray-50 border-b text-xs font-medium text-gray-600">
+            검색 결과: &quot;{debouncedQuery}&quot; — {searchResults.length}건
+          </div>
+          <div className="max-h-48 overflow-y-auto">
+            {searchResults.map(s => (
+              <button key={s.id}
+                onClick={() => {
+                  if (s.scheduledDate) {
+                    const d = new Date(s.scheduledDate)
+                    setYear(d.getFullYear())
+                    setMonth(d.getMonth() + 1)
+                  }
+                  setSelected(s)
+                  setPopupPosition({ x: window.innerWidth / 2 - 150, y: 200 })
+                }}
+                className="w-full text-left px-3 py-1.5 text-xs hover:bg-sky-50 border-b last:border-b-0 flex items-center gap-3"
+              >
+                <span className="text-gray-400 min-w-[90px]">
+                  {s.scheduledDate ? new Date(s.scheduledDate).toLocaleDateString('ko-KR') : '-'}
+                </span>
+                <span className="font-medium text-gray-800">{s.patientName}</span>
+                <span className="text-gray-500">{s.clinicType} {s.examRound}차</span>
+                <span className="text-gray-400 truncate">{s.hospitalName}</span>
+                <span className="ml-auto text-[10px]" style={{ color: getTFColor(s.tfName) }}>{s.tfName}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+      {debouncedQuery && searchResults.length === 0 && (
+        <div className="text-center py-3 text-gray-400 text-xs border rounded-lg">
+          &quot;{debouncedQuery}&quot;에 대한 검색 결과가 없습니다
+        </div>
+      )}
 
       {/* ── 말풍선 팝업 ── */}
       {selected && (
@@ -697,6 +817,7 @@ function InputModal({
   // 직접 입력
   const [form, setForm] = useState({
     patientName: '', tfName: '', hospitalName: '', clinicType: '특진',
+    category: '특진',
     examRound: 1, scheduledDate: defaultDate || `${defaultYear}-${pad(defaultMonth)}-01`,
     scheduledTime: '', memo: '',
   })
@@ -720,6 +841,7 @@ function InputModal({
         tfName: form.tfName,
         hospitalName: form.hospitalName,
         clinicType: form.clinicType,
+        category: form.category,
         examRound: form.examRound,
         scheduledDate: new Date(form.scheduledDate),
         isAllDay: !hasTime,
@@ -760,7 +882,7 @@ function InputModal({
       <div className="relative bg-white rounded-xl shadow-xl w-full max-w-lg p-5 space-y-4 max-h-[90vh] overflow-y-auto"
         onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between">
-          <h2 className="text-sm font-bold">특진 일정 등록</h2>
+          <h2 className="text-sm font-bold">일정 등록</h2>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600">✕</button>
         </div>
 
@@ -803,6 +925,12 @@ function InputModal({
                     </label>
                   ))}
                 </div>
+              </div>
+              <div>
+                <label className="text-xs text-gray-500">카테고리</label>
+                <select value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))} className={inputCls}>
+                  {['특진','재특진','회의','행사','기타'].map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
               </div>
               <div>
                 <label className="text-xs text-gray-500">회차</label>

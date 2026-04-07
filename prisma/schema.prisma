@@ -1000,6 +1000,7 @@ model SpecialClinicSchedule {
   tfName          String
   hospitalName    String
   clinicType      String    // "특진" | "재특진"
+  category        String    @default("특진") // "특진" | "재특진" | "회의" | "행사" | "기타"
   examRound       Int
   scheduledDate   DateTime?
   isAllDay        Boolean   @default(true)
