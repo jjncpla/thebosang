@@ -90,6 +90,7 @@ function getDeadline(item: ObjectionCase): Date | null {
 }
 
 function getRowBg(item: ObjectionCase): string {
+  if (item.progressStatus === "종결") return "#f0fdf4";
   const d = getDeadline(item);
   if (!d) return "white";
   const diff = (d.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24);
@@ -345,29 +346,32 @@ export default function ObjectionDeadlinePage() {
   const tfList = filterBranch ? BRANCH_TF_MAP[filterBranch] ?? [] : [];
   const now = new Date();
 
-  // 이의제기 탭 stats
+  // 이의제기 탭 stats (종결 건은 별도 집계, 다른 카드에서 제외)
+  const activeItems = items.filter(i => i.progressStatus !== "종결" && i.progressStatus !== "송무인계");
   const objStats = {
-    waiting: items.filter(i => !i.examClaimDate && i.progressStatus !== "종결").length,
-    ongoing: items.filter(i => (i.examClaimDate && !i.examResult) || (i.reExamClaimDate && !i.reExamResult)).length,
-    urgent: items.filter(i => {
+    waiting: activeItems.filter(i => !i.examClaimDate).length,
+    ongoing: activeItems.filter(i => (i.examClaimDate && !i.examResult) || (i.reExamClaimDate && !i.reExamResult)).length,
+    urgent: activeItems.filter(i => {
       const d = getDeadline(i);
       if (!d) return false;
       const diff = (d.getTime() - now.getTime()) / (1000*60*60*24);
       return diff >= 0 && diff <= 7;
     }).length,
-    expired: items.filter(i => {
+    expired: activeItems.filter(i => {
       const d = getDeadline(i);
       return d != null && d < now;
     }).length,
     litigation: items.filter(i => i.progressStatus === "송무인계").length,
+    closed: items.filter(i => i.progressStatus === "종결").length,
   };
 
-  // Apply stats filter client-side
-  const filteredItems = statsFilter === "접수대기" ? items.filter(i => !i.examClaimDate && i.progressStatus !== "종결")
-    : statsFilter === "진행중" ? items.filter(i => (i.examClaimDate && !i.examResult) || (i.reExamClaimDate && !i.reExamResult))
-    : statsFilter === "제척임박" ? items.filter(i => { const d = getDeadline(i); if (!d) return false; const diff = (d.getTime() - now.getTime()) / (1000*60*60*24); return diff >= 0 && diff <= 7; })
-    : statsFilter === "제척도과" ? items.filter(i => { const d = getDeadline(i); return d != null && d < now; })
+  // Apply stats filter client-side (종결 건은 종결 필터에서만 표시)
+  const filteredItems = statsFilter === "접수대기" ? activeItems.filter(i => !i.examClaimDate)
+    : statsFilter === "진행중" ? activeItems.filter(i => (i.examClaimDate && !i.examResult) || (i.reExamClaimDate && !i.reExamResult))
+    : statsFilter === "제척임박" ? activeItems.filter(i => { const d = getDeadline(i); if (!d) return false; const diff = (d.getTime() - now.getTime()) / (1000*60*60*24); return diff >= 0 && diff <= 7; })
+    : statsFilter === "제척도과" ? activeItems.filter(i => { const d = getDeadline(i); return d != null && d < now; })
     : statsFilter === "송무인계" ? items.filter(i => i.progressStatus === "송무인계")
+    : statsFilter === "종결" ? items.filter(i => i.progressStatus === "종결")
     : items;
 
   // 소송 인계 stats
@@ -441,13 +445,14 @@ export default function ObjectionDeadlinePage() {
       {tab === "objection" && (
         <>
           {/* Stats */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 10, marginBottom: 14 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 10, marginBottom: 14 }}>
             {[
               { key: "접수대기", label: "접수 대기", value: objStats.waiting, color: "#6b7280" },
               { key: "진행중", label: "진행 중", value: objStats.ongoing, color: "#29ABE2" },
               { key: "제척임박", label: "제척 임박 (7일 이내)", value: objStats.urgent, color: "#d97706" },
               { key: "제척도과", label: "제척도과/재처분 필요", value: objStats.expired, color: "#dc2626" },
               { key: "송무인계", label: "송무 인계", value: objStats.litigation, color: "#9333ea" },
+              { key: "종결", label: "종결", value: objStats.closed, color: "#059669" },
             ].map(s => (
               <div key={s.key} onClick={() => setStatsFilter(statsFilter === s.key ? "" : s.key)} style={cardStyle(s.color, statsFilter === s.key)}>
                 <div style={{ fontSize: 10, color: "#6b7280", fontWeight: 700, marginBottom: 4 }}>{s.label}</div>
