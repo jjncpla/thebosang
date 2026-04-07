@@ -1,6 +1,6 @@
 'use client'
 
-import { Suspense, useCallback, useEffect, useState } from 'react'
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { getTFColor } from '@/lib/tf-colors'
 
@@ -63,6 +63,17 @@ function SpecialClinicCalendar() {
   const [showModal, setShowModal] = useState(false)
   const [modalTab, setModalTab] = useState<'form' | 'paste'>('form')
 
+  // 캘린더 고도화 상태
+  const [viewMode, setViewMode] = useState<'month' | 'week'>('month')
+  const [currentWeekStart, setCurrentWeekStart] = useState<Date>(() => {
+    const d = new Date(); d.setDate(d.getDate() - d.getDay()); d.setHours(0,0,0,0); return d
+  })
+  const [expandedDates, setExpandedDates] = useState<Set<string>>(new Set())
+  const [popupPosition, setPopupPosition] = useState<{ x: number; y: number }>({ x: 0, y: 0 })
+  const [holidays, setHolidays] = useState<Record<string, string>>({})
+  const [draggedEventId, setDraggedEventId] = useState<string | null>(null)
+  const popupRef = useRef<HTMLDivElement>(null)
+
   // URL 동기화
   useEffect(() => {
     const params = new URLSearchParams()
@@ -89,6 +100,25 @@ function SpecialClinicCalendar() {
   }, [year, month, tfFilter, typeFilter, statusFilter])
 
   useEffect(() => { load() }, [load])
+
+  // 공휴일 로드
+  useEffect(() => {
+    fetch(`/api/holidays?year=${year}&month=${month}`)
+      .then(r => r.json())
+      .then(data => { if (data && typeof data === 'object') setHolidays(data) })
+      .catch(() => {})
+  }, [year, month])
+
+  // 팝업 외부 클릭 닫기
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (popupRef.current && !popupRef.current.contains(e.target as Node)) {
+        setSelected(null)
+      }
+    }
+    if (selected) document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [selected])
 
   // TF 목록 (현재 데이터에서)
   const tfList = [...new Set(schedules.map(s => s.tfName))].sort()
@@ -126,6 +156,63 @@ function SpecialClinicCalendar() {
     else setMonth(m => m + 1)
   }
 
+  // 주 네비게이션
+  function prevWeek() {
+    setCurrentWeekStart(d => { const n = new Date(d); n.setDate(n.getDate() - 7); return n })
+  }
+  function nextWeek() {
+    setCurrentWeekStart(d => { const n = new Date(d); n.setDate(n.getDate() + 7); return n })
+  }
+  function getWeekDays(): Date[] {
+    return Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(currentWeekStart); d.setDate(d.getDate() + i); return d
+    })
+  }
+
+  // 날짜키
+  function dateKey(y: number, m: number, d: number) {
+    return `${y}-${pad(m)}-${pad(d)}`
+  }
+
+  // 일정 카드 클릭 (팝업)
+  function handleEventClick(s: Schedule, e: React.MouseEvent) {
+    e.stopPropagation()
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+    let x = rect.right + 8
+    let y = rect.top
+    if (x + 320 > window.innerWidth) x = rect.left - 328
+    if (y + 350 > window.innerHeight) y = window.innerHeight - 360
+    if (x < 0) x = 8
+    if (y < 0) y = 8
+    setPopupPosition({ x, y })
+    setSelected(s)
+  }
+
+  // 드래그 앤 드롭
+  async function handleDrop(targetDate: Date) {
+    if (!draggedEventId) return
+    try {
+      await fetch(`/api/tf/special-clinic/${draggedEventId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ scheduledDate: targetDate.toISOString() }),
+      })
+      load()
+    } catch (e) {
+      console.error('날짜 변경 실패:', e)
+    }
+    setDraggedEventId(null)
+  }
+
+  // 접기/펼치기
+  function toggleExpand(key: string) {
+    setExpandedDates(prev => {
+      const next = new Set(prev)
+      next.has(key) ? next.delete(key) : next.add(key)
+      return next
+    })
+  }
+
   // 삭제
   async function handleDelete(id: string) {
     if (!confirm('삭제하시겠습니까?')) return
@@ -160,11 +247,37 @@ function SpecialClinicCalendar() {
         </button>
       </div>
 
-      {/* 월 네비게이션 + 필터 */}
+      {/* 월/주 네비게이션 + 필터 */}
       <div className="flex items-center gap-3 flex-wrap">
-        <button onClick={prevMonth} className="px-2 py-1 border rounded hover:bg-gray-50">&lt;</button>
-        <span className="text-sm font-semibold min-w-[100px] text-center">{year}년 {month}월</span>
-        <button onClick={nextMonth} className="px-2 py-1 border rounded hover:bg-gray-50">&gt;</button>
+        {viewMode === 'month' ? (
+          <>
+            <button onClick={prevMonth} className="px-2 py-1 border rounded hover:bg-gray-50">&lt;</button>
+            <span className="text-sm font-semibold min-w-[100px] text-center">{year}년 {month}월</span>
+            <button onClick={nextMonth} className="px-2 py-1 border rounded hover:bg-gray-50">&gt;</button>
+          </>
+        ) : (
+          <>
+            <button onClick={prevWeek} className="px-2 py-1 border rounded hover:bg-gray-50">&lt;</button>
+            <span className="text-sm font-semibold min-w-[180px] text-center">
+              {currentWeekStart.getFullYear()}년 {currentWeekStart.getMonth() + 1}월 {currentWeekStart.getDate()}일 — {(() => {
+                const end = new Date(currentWeekStart); end.setDate(end.getDate() + 6)
+                return `${end.getMonth() + 1}월 ${end.getDate()}일`
+              })()}
+            </span>
+            <button onClick={nextWeek} className="px-2 py-1 border rounded hover:bg-gray-50">&gt;</button>
+          </>
+        )}
+
+        <span className="text-gray-300">|</span>
+
+        <div className="flex bg-gray-100 rounded p-0.5">
+          {(['month', 'week'] as const).map(m => (
+            <button key={m} onClick={() => setViewMode(m)}
+              className={`px-2.5 py-1 text-xs rounded font-medium transition-colors ${viewMode === m ? 'bg-white shadow-sm text-gray-800' : 'text-gray-500'}`}>
+              {m === 'month' ? '월별' : '주별'}
+            </button>
+          ))}
+        </div>
 
         <span className="text-gray-300">|</span>
 
@@ -203,26 +316,49 @@ function SpecialClinicCalendar() {
           ))}
         </div>
 
-        {/* 주별 행 */}
-        {weeks.map((wk, wi) => (
+        {/* 월별 뷰 */}
+        {viewMode === 'month' && weeks.map((wk, wi) => (
           <div key={wi} className="grid grid-cols-7 border-b last:border-b-0" style={{ minHeight: 100 }}>
             {wk.map((day, di) => {
               const daySchedules = day ? getSchedulesForDay(day) : []
-              const isToday = day && isSameDay(new Date(year, month - 1, day), now)
-              const maxShow = 3
+              const isToday = day !== null && isSameDay(new Date(year, month - 1, day), now)
+              const dk = day ? dateKey(year, month, day) : ''
+              const isExpanded = expandedDates.has(dk)
+              const maxShow = 2
+              const holidayName = day ? holidays[dk] : null
+              const isHoliday = !!holidayName
+              const isDragOver = false // CSS handles this via onDragOver
+
               return (
-                <div key={di} className={`border-r last:border-r-0 p-1 ${day ? 'bg-white' : 'bg-gray-50'}`}>
-                  {day && (
+                <div key={di}
+                  className={`border-r last:border-r-0 p-1 transition-colors ${day ? 'bg-white' : 'bg-gray-50/50'}`}
+                  onDragOver={day ? (e) => { e.preventDefault(); e.currentTarget.style.backgroundColor = '#eff6ff' } : undefined}
+                  onDragLeave={day ? (e) => { e.currentTarget.style.backgroundColor = '' } : undefined}
+                  onDrop={day ? (e) => { e.preventDefault(); e.currentTarget.style.backgroundColor = ''; handleDrop(new Date(year, month - 1, day)) } : undefined}
+                >
+                  {day !== null && (
                     <>
-                      <div className={`text-xs mb-1 ${isToday ? 'bg-sky-500 text-white w-5 h-5 rounded-full flex items-center justify-center font-bold' : di === 0 ? 'text-red-400' : di === 6 ? 'text-blue-400' : 'text-gray-600'}`}>
-                        {day}
+                      <div className="flex items-center gap-1 mb-0.5">
+                        <div className={`text-xs ${isToday ? 'bg-[#29ABE2] text-white w-5 h-5 rounded-full flex items-center justify-center font-bold' : (di === 0 || isHoliday) ? 'text-red-400' : di === 6 ? 'text-blue-400' : 'text-gray-600'}`}>
+                          {day}
+                        </div>
+                        {holidayName && (
+                          <span className="text-[9px] text-red-400 truncate">{holidayName}</span>
+                        )}
                       </div>
-                      {daySchedules.slice(0, maxShow).map(s => (
+                      {(isExpanded ? daySchedules : daySchedules.slice(0, maxShow)).map(s => (
                         <button
                           key={s.id}
-                          onClick={() => setSelected(s)}
-                          className="w-full text-left mb-0.5 rounded px-1 py-0.5 hover:opacity-80 transition-opacity"
-                          style={{ backgroundColor: getTFColor(s.tfName) + '18', borderLeft: `3px solid ${getTFColor(s.tfName)}` }}
+                          draggable
+                          onDragStart={() => setDraggedEventId(s.id)}
+                          onDragEnd={() => setDraggedEventId(null)}
+                          onClick={(e) => handleEventClick(s, e)}
+                          className="w-full text-left mb-0.5 rounded px-1 py-0.5 cursor-pointer transition-all hover:brightness-95"
+                          style={{
+                            backgroundColor: getTFColor(s.tfName) + '18',
+                            borderLeft: `3px solid ${getTFColor(s.tfName)}`,
+                            opacity: draggedEventId === s.id ? 0.4 : 1,
+                          }}
                         >
                           <div className="flex items-center gap-1">
                             <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: getTFColor(s.tfName) }} />
@@ -234,9 +370,12 @@ function SpecialClinicCalendar() {
                         </button>
                       ))}
                       {daySchedules.length > maxShow && (
-                        <div className="text-[9px] text-gray-400 text-center">
-                          외 {daySchedules.length - maxShow}건
-                        </div>
+                        <button
+                          onClick={() => toggleExpand(dk)}
+                          className="w-full text-[9px] text-sky-500 hover:text-sky-700 text-center py-0.5 cursor-pointer"
+                        >
+                          {isExpanded ? '▲ 접기' : `+ ${daySchedules.length - maxShow}개 더보기`}
+                        </button>
                       )}
                     </>
                   )}
@@ -245,6 +384,67 @@ function SpecialClinicCalendar() {
             })}
           </div>
         ))}
+
+        {/* 주별 뷰 */}
+        {viewMode === 'week' && (
+          <div className="grid grid-cols-7 border-b last:border-b-0" style={{ minHeight: 300 }}>
+            {getWeekDays().map((wd, di) => {
+              const wdSchedules = schedules.filter(s => s.scheduledDate && isSameDay(new Date(s.scheduledDate), wd))
+              const isToday = isSameDay(wd, now)
+              const dk = dateKey(wd.getFullYear(), wd.getMonth() + 1, wd.getDate())
+              const holidayName = holidays[dk]
+              const isHoliday = !!holidayName
+              const isCurrentMonth = wd.getMonth() + 1 === month && wd.getFullYear() === year
+
+              return (
+                <div key={di}
+                  className={`border-r last:border-r-0 p-1.5 flex flex-col ${isCurrentMonth ? 'bg-white' : 'bg-gray-50/50'}`}
+                  style={{ minHeight: 120 }}
+                  onDragOver={e => { e.preventDefault(); e.currentTarget.style.backgroundColor = '#eff6ff' }}
+                  onDragLeave={e => { e.currentTarget.style.backgroundColor = '' }}
+                  onDrop={e => { e.preventDefault(); e.currentTarget.style.backgroundColor = ''; handleDrop(wd) }}
+                >
+                  <div className="mb-1">
+                    <div className={`text-xs ${isToday ? 'bg-[#29ABE2] text-white w-5 h-5 rounded-full flex items-center justify-center font-bold' : (di === 0 || isHoliday) ? 'text-red-400' : di === 6 ? 'text-blue-400' : isCurrentMonth ? 'text-gray-600' : 'text-gray-300'}`}>
+                      {wd.getDate()}
+                    </div>
+                    {holidayName && <div className="text-[9px] text-red-400">{holidayName}</div>}
+                  </div>
+                  <div className="flex-1 space-y-0.5 overflow-y-auto">
+                    {wdSchedules.map(s => (
+                      <button
+                        key={s.id}
+                        draggable
+                        onDragStart={() => setDraggedEventId(s.id)}
+                        onDragEnd={() => setDraggedEventId(null)}
+                        onClick={(e) => handleEventClick(s, e)}
+                        className="w-full text-left rounded px-1 py-0.5 cursor-pointer transition-all hover:brightness-95"
+                        style={{
+                          backgroundColor: getTFColor(s.tfName) + '18',
+                          borderLeft: `3px solid ${getTFColor(s.tfName)}`,
+                          opacity: draggedEventId === s.id ? 0.4 : 1,
+                        }}
+                      >
+                        <div className="flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: getTFColor(s.tfName) }} />
+                          <span className="text-[10px] font-medium truncate text-gray-800">{s.patientName}</span>
+                        </div>
+                        <div className="text-[9px] text-gray-500 pl-2.5">
+                          {s.clinicType} {s.examRound}차
+                        </div>
+                        {!s.isAllDay && s.scheduledHour != null && (
+                          <div className="text-[9px] text-sky-600 pl-2.5 font-medium">
+                            {fmtTime(s.scheduledHour, s.scheduledMinute)}
+                          </div>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
       </div>
 
       {/* TF 범례 */}
@@ -260,75 +460,66 @@ function SpecialClinicCalendar() {
         </div>
       )}
 
-      {/* ── 상세 슬라이드 패널 ── */}
+      {/* ── 말풍선 팝업 ── */}
       {selected && (
-        <div className="fixed inset-0 z-50 flex justify-end" onClick={() => setSelected(null)}>
-          <div className="absolute inset-0 bg-black/20" />
-          <div className="relative w-full max-w-md bg-white shadow-xl h-full overflow-y-auto"
-            onClick={e => e.stopPropagation()}>
-            <div className="p-5 space-y-4">
-              <div className="flex items-center justify-between">
-                <h2 className="text-base font-bold text-gray-800">일정 상세</h2>
-                <button onClick={() => setSelected(null)} className="text-gray-400 hover:text-gray-600 text-lg">✕</button>
+        <div ref={popupRef}
+          className="fixed z-50 bg-white rounded-xl shadow-2xl border border-gray-200 w-[300px]"
+          style={{
+            left: popupPosition.x, top: popupPosition.y,
+            animation: 'fadeInScale 0.15s ease-out',
+          }}
+        >
+          <style>{`@keyframes fadeInScale { from { opacity:0; transform:scale(0.95) } to { opacity:1; transform:scale(1) } }`}</style>
+          <div className="p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="w-3 h-3 rounded-full" style={{ backgroundColor: getTFColor(selected.tfName) }} />
+                <span className="text-xs font-medium" style={{ color: getTFColor(selected.tfName) }}>{selected.tfName}</span>
               </div>
+              <button onClick={() => setSelected(null)} className="text-gray-400 hover:text-gray-600 text-sm">✕</button>
+            </div>
 
-              <div className="space-y-3 text-sm">
-                <div className="flex items-center gap-2">
-                  <span className="w-3 h-3 rounded-full" style={{ backgroundColor: getTFColor(selected.tfName) }} />
-                  <span className="font-semibold text-base">{selected.patientName}</span>
-                </div>
+            <div className="text-sm font-bold text-gray-800">
+              {selected.patientName} &nbsp;{selected.clinicType} {selected.examRound}차
+            </div>
 
-                <div className="grid grid-cols-2 gap-2 text-xs">
-                  <div><span className="text-gray-400">TF</span><p className="font-medium">{selected.tfName}</p></div>
-                  <div><span className="text-gray-400">병원</span><p className="font-medium">{selected.hospitalName}</p></div>
-                  <div><span className="text-gray-400">유형</span><p className="font-medium">{selected.clinicType} {selected.examRound}차</p></div>
-                  <div><span className="text-gray-400">날짜</span><p className="font-medium">
-                    {selected.scheduledDate ? new Date(selected.scheduledDate).toLocaleDateString('ko-KR') : '-'}
-                    {!selected.isAllDay && ` ${fmtTime(selected.scheduledHour, selected.scheduledMinute)}`}
-                  </p></div>
-                </div>
+            <div className="text-xs text-gray-600">{selected.hospitalName}</div>
 
-                <div>
-                  <span className="text-xs text-gray-400">상태</span>
-                  <div className="flex gap-1 mt-1">
-                    {(['scheduled','done','cancelled'] as const).map(st => (
-                      <button key={st}
-                        onClick={() => handleStatusChange(selected.id, st)}
-                        className="px-2 py-1 text-xs rounded border transition-colors"
-                        style={selected.status === st
-                          ? { backgroundColor: STATUS_COLORS[st], color: '#fff', borderColor: STATUS_COLORS[st] }
-                          : { borderColor: '#ddd', color: '#666' }
-                        }
-                      >
-                        {STATUS_LABELS[st]}
-                      </button>
-                    ))}
-                  </div>
-                </div>
+            <div className="text-xs text-gray-600">
+              {selected.scheduledDate ? new Date(selected.scheduledDate).toLocaleDateString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit', weekday: 'short' }) : '-'}
+              {!selected.isAllDay && ` ${fmtTime(selected.scheduledHour, selected.scheduledMinute)}`}
+            </div>
 
-                {selected.sender && (
-                  <div><span className="text-xs text-gray-400">발신자</span><p className="text-xs">{selected.sender}</p></div>
-                )}
-                {selected.sourceDate && (
-                  <div><span className="text-xs text-gray-400">메시지 발송일</span><p className="text-xs">{new Date(selected.sourceDate).toLocaleString('ko-KR')}</p></div>
-                )}
-                {selected.memo && (
-                  <div><span className="text-xs text-gray-400">메모</span><p className="text-xs whitespace-pre-wrap bg-gray-50 p-2 rounded">{selected.memo}</p></div>
-                )}
-                {selected.rawMessage && (
-                  <details className="text-xs">
-                    <summary className="text-gray-400 cursor-pointer">원본 메시지</summary>
-                    <pre className="mt-1 bg-gray-50 p-2 rounded whitespace-pre-wrap text-[10px] max-h-48 overflow-y-auto">{selected.rawMessage}</pre>
-                  </details>
-                )}
+            <div className="flex items-center gap-1">
+              <span className="text-xs text-gray-400">상태:</span>
+              <div className="flex gap-1">
+                {(['scheduled','done','cancelled'] as const).map(st => (
+                  <button key={st}
+                    onClick={() => handleStatusChange(selected.id, st)}
+                    className="px-1.5 py-0.5 text-[10px] rounded border transition-colors"
+                    style={selected.status === st
+                      ? { backgroundColor: STATUS_COLORS[st], color: '#fff', borderColor: STATUS_COLORS[st] }
+                      : { borderColor: '#ddd', color: '#666' }
+                    }
+                  >
+                    {STATUS_LABELS[st]}
+                  </button>
+                ))}
               </div>
+            </div>
 
-              <div className="flex gap-2 pt-2 border-t">
-                <button onClick={() => handleDelete(selected.id)}
-                  className="px-3 py-1.5 text-xs border border-red-300 text-red-500 rounded hover:bg-red-50">
-                  삭제
-                </button>
-              </div>
+            {selected.sender && (
+              <div className="text-xs"><span className="text-gray-400">발신: </span>{selected.sender}</div>
+            )}
+            {selected.memo && (
+              <div className="text-xs"><span className="text-gray-400">메모: </span><span className="whitespace-pre-wrap">{selected.memo}</span></div>
+            )}
+
+            <div className="flex gap-2 pt-2 border-t">
+              <button onClick={() => handleDelete(selected.id)}
+                className="px-3 py-1 text-xs border border-red-300 text-red-500 rounded hover:bg-red-50">
+                삭제
+              </button>
             </div>
           </div>
         </div>
