@@ -347,7 +347,10 @@ export default function ObjectionDeadlinePage() {
   const now = new Date();
 
   // 이의제기 탭 stats (종결 건은 별도 집계, 다른 카드에서 제외)
-  const activeItems = items.filter(i => i.progressStatus !== "종결" && i.progressStatus !== "송무인계");
+  const branchItems = filterBranch
+    ? items.filter(i => (BRANCH_TF_MAP[filterBranch] ?? []).includes(i.tfName))
+    : items;
+  const activeItems = branchItems.filter(i => i.progressStatus !== "종결" && i.progressStatus !== "송무인계");
   const objStats = {
     waiting: activeItems.filter(i => !i.examClaimDate).length,
     ongoing: activeItems.filter(i => (i.examClaimDate && !i.examResult) || (i.reExamClaimDate && !i.reExamResult)).length,
@@ -361,18 +364,24 @@ export default function ObjectionDeadlinePage() {
       const d = getDeadline(i);
       return d != null && d < now;
     }).length,
-    litigation: items.filter(i => i.progressStatus === "송무인계").length,
-    closed: items.filter(i => i.progressStatus === "종결").length,
+    litigation: branchItems.filter(i => i.progressStatus === "송무인계").length,
+    closed: branchItems.filter(i => i.progressStatus === "종결").length,
   };
 
   // Apply stats filter client-side (종결 건은 종결 필터에서만 표시)
-  const filteredItems = statsFilter === "접수대기" ? activeItems.filter(i => !i.examClaimDate)
+  const statsFiltered = statsFilter === "접수대기" ? activeItems.filter(i => !i.examClaimDate)
     : statsFilter === "진행중" ? activeItems.filter(i => (i.examClaimDate && !i.examResult) || (i.reExamClaimDate && !i.reExamResult))
     : statsFilter === "제척임박" ? activeItems.filter(i => { const d = getDeadline(i); if (!d) return false; const diff = (d.getTime() - now.getTime()) / (1000*60*60*24); return diff >= 0 && diff <= 7; })
     : statsFilter === "제척도과" ? activeItems.filter(i => { const d = getDeadline(i); return d != null && d < now; })
-    : statsFilter === "송무인계" ? items.filter(i => i.progressStatus === "송무인계")
-    : statsFilter === "종결" ? items.filter(i => i.progressStatus === "종결")
-    : items;
+    : statsFilter === "송무인계" ? branchItems.filter(i => i.progressStatus === "송무인계")
+    : statsFilter === "종결" ? branchItems.filter(i => i.progressStatus === "종결")
+    : branchItems;
+
+  // 검색어 클라이언트 필터링 (API race condition 방지)
+  const searchTrimmed = search.trim();
+  const filteredItems = searchTrimmed
+    ? statsFiltered.filter(i => i.patientName.includes(searchTrimmed))
+    : statsFiltered;
 
   // 소송 인계 stats
   const litStats = {
