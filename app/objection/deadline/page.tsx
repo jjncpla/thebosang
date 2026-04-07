@@ -287,10 +287,9 @@ export default function ObjectionDeadlinePage() {
     if (filterTf) p.set("tfName", filterTf);
     if (filterProgress && filterProgress !== "송무인계") p.set("progressStatus", filterProgress);
     if (filterCaseType) p.set("caseType", filterCaseType);
-    if (search) p.set("search", search);
     const res = await fetch(`/api/objection/cases?${p}`);
     if (res.ok) setItems(await res.json());
-  }, [filterTf, filterProgress, filterCaseType, search]);
+  }, [filterTf, filterProgress, filterCaseType]);
 
   const fetchLitigation = useCallback(async () => {
     const res = await fetch("/api/objection/cases?type=litigation");
