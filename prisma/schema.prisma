@@ -145,6 +145,10 @@ model HearingLossDetail {
   specialExam5Date      DateTime?
   specialExam5Contact   String?
   specialExam5Attendee  String?
+
+  // 재특진 병원
+  reSpecialClinic String?
+
   reSpecialExam1Date    DateTime?
   reSpecialExam1Contact String?
   reSpecialExam1Attendee String?
@@ -255,6 +259,16 @@ model HearingLossExam {
   abrLeft        Float?
   impedanceRight String?
   impedanceLeft  String?
+
+  // PTA 요약 평균값 (임포트용 — 주파수별 미확보 시 임시 저장)
+  ptaAvgR  Float?   // 기도청력 우측 PTA 평균 (dB)
+  ptaAvgL  Float?   // 기도청력 좌측 PTA 평균 (dB)
+  boneAvgR Float?   // 골도청력 우측 평균 (dB)
+  boneAvgL Float?   // 골도청력 좌측 평균 (dB)
+
+  // ASSR (청성안정반응)
+  assrRight Float?  // ASSR 우측 (dB)
+  assrLeft  Float?  // ASSR 좌측 (dB)
 
   isReliable            Boolean?
   medicalRecordObtained Boolean  @default(false)
