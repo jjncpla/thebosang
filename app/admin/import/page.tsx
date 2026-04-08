@@ -810,6 +810,18 @@ export default function ImportPage() {
                 </div>
               )}
 
+              {/* 필수값 누락 상세 */}
+              {hlVerifyResult.missingRequired?.length > 0 && (
+                <div style={{ marginBottom: 12 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "#dc2626", marginBottom: 6 }}>필수값 누락 목록</div>
+                  <div style={{ background: "#fef2f2", borderRadius: 6, padding: "8px 12px", fontSize: 12, color: "#991b1b", lineHeight: 1.8 }}>
+                    {hlVerifyResult.missingRequired.map((m: any, i: number) => (
+                      <div key={i}>행 {m.row}: {m.field} 없음</div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* 상태값 경고 */}
               {hlVerifyResult.statusWarnings?.length > 0 && (
                 <div style={{ marginBottom: 12 }}>
