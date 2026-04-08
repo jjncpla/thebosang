@@ -340,6 +340,7 @@ export async function POST(req: NextRequest) {
         total: verifyReport.total,
         dbUsers: users.map((u) => u.name),
         statusDistribution,
+        korHeaders: korHeaders.filter(h => h.length > 0),
         managerMismatches: uniqueMismatches.map((m) => ({
           ...m,
           occurrences: mismatchCounts[`${m.field}:${m.value}`] || 1,
