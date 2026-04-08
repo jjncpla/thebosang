@@ -6,29 +6,29 @@ export default function PneumoconiosisTable() {
         <table style={tableStyle}>
           <thead>
             <tr style={headerRow}>
-              <th style={{ ...colTh, width: 50 }}>등급</th>
-              <th style={{ ...colTh, width: 120 }}>병형</th>
-              <th style={{ ...colTh, width: 90 }}>심폐기능</th>
-              <th style={{ ...colTh, width: 130 }}>
+              <th style={{ ...colTh, width: 44 }}>등급</th>
+              <th style={{ ...colTh, width: 100 }}>병형</th>
+              <th style={{ ...colTh, width: 72 }}>심폐기능</th>
+              <th style={{ ...colTh, width: 110 }}>
                 FEV1<br /><span style={headerSub}>(1초량)</span>
               </th>
-              <th style={{ ...colTh, width: 120 }}>
+              <th style={{ ...colTh, width: 100 }}>
                 FVC<br /><span style={headerSub}>(노력성폐활량)</span>
               </th>
-              <th style={{ ...colTh, width: 90 }}>진폐보상연금</th>
-              <th style={{ ...colTh, width: 100 }}>진폐재해위로금</th>
+              <th style={{ ...colTh, width: 80 }}>진폐보상연금</th>
+              <th style={{ ...colTh, width: 80 }}>진폐재해위로금</th>
             </tr>
           </thead>
           <tbody>
             {rows.map((row, i) => (
               <tr key={i} style={{ backgroundColor: i % 2 === 0 ? "#fff" : "#f8fbff" }}>
                 <td style={{ ...td, fontWeight: 600 }}>{row.grade}</td>
-                <td style={{ ...td, textAlign: row.disease ? "left" : "center", whiteSpace: "pre-wrap", fontSize: 11 }}>
+                <td style={{ ...td, whiteSpace: "pre-wrap" }}>
                   {row.disease}
                 </td>
                 <td style={td}>{row.lung}</td>
-                <td style={{ ...td, fontSize: 11 }}>{row.fev1}</td>
-                <td style={{ ...td, fontSize: 11 }}>{row.fvc}</td>
+                <td style={td}>{row.fev1}</td>
+                <td style={td}>{row.fvc}</td>
                 <td style={{ ...td, color: row.pension ? "#1a7ab5" : "#bbb", fontWeight: row.pension ? 600 : 400 }}>
                   {row.pension || "\u2014"}
                 </td>
@@ -86,8 +86,9 @@ const titleStyle: React.CSSProperties = {
 const tableStyle: React.CSSProperties = {
   borderCollapse: "collapse",
   width: "100%",
-  minWidth: 700,
-  fontSize: 13,
+  maxWidth: 620,
+  margin: "0 auto",
+  fontSize: 14,
   boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
   borderRadius: 8,
   overflow: "hidden",
@@ -101,7 +102,7 @@ const headerRow: React.CSSProperties = {
 
 const colTh: React.CSSProperties = {
   border: "1px solid #6AABC5",
-  padding: "9px 8px",
+  padding: "8px 6px",
   textAlign: "center",
   fontWeight: 600,
   color: "#fff",
@@ -116,7 +117,7 @@ const headerSub: React.CSSProperties = {
 
 const td: React.CSSProperties = {
   border: "1px solid #e8f0f5",
-  padding: "7px 8px",
+  padding: "6px 6px",
   textAlign: "center",
   color: "#374151",
   verticalAlign: "middle",
