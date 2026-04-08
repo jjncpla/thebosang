@@ -1648,14 +1648,13 @@ function CaseCommonInfoSection({ caseItem, onUpdated }: { caseItem: CaseData; on
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 0, marginBottom: 12, border: "1px solid #f1f5f9", borderRadius: 6, overflow: "hidden" }}>
                 {([
                   ["TF명", caseItem.tfName ?? "-"],
-                  ["지사", caseItem.branch ?? "-"],
+                  ["관할공단", caseItem.kwcOfficeName ?? "-"],
                   ["영업담당", caseItem.salesManager ?? "-"],
                   ["실무담당", caseItem.caseManager ?? "-"],
                   ["영업경로", caseItem.salesRoute ?? "-"],
                   ["원스톱", caseItem.isOneStop ? "예" : "아니오"],
                   ["약정일", formatDate(caseItem.contractDate)],
                   ["접수일", formatDate(caseItem.receptionDate)],
-                  ["관할 공단", caseItem.kwcOfficeName ?? "-"],
                 ] as [string, string][]).map(([label, value]) => (
                   <div key={label} style={{ display: "flex", gap: 8, borderBottom: "1px solid #f9fafb", padding: "7px 12px", background: "white" }}>
                     <span style={{ fontSize: 11, color: "#9ca3af", width: 56, flexShrink: 0 }}>{label}</span>

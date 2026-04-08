@@ -1536,7 +1536,7 @@ function BasicInfoTab({ caseData, onUpdated }: { caseData: CaseData; onUpdated: 
             <InfoRow label="사건유형">{CASE_TYPE_LABELS[caseData.caseType] ?? caseData.caseType}</InfoRow>
             <InfoRow label="사건번호">{caseData.caseNumber ?? "-"}</InfoRow>
             <InfoRow label="TF명">{caseData.tfName ?? "-"}</InfoRow>
-            <InfoRow label="지사">{caseData.branch ?? "-"}</InfoRow>
+            <InfoRow label="관할공단">{caseData.kwcOfficeName ?? "-"}</InfoRow>
           </InfoCard>
           <InfoCard title="담당자 정보">
             <InfoRow label="영업담당">{caseData.salesManager ?? "-"}</InfoRow>

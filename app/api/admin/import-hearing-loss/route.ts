@@ -198,14 +198,14 @@ export async function POST(req: NextRequest) {
 
       const caseType  = parseStr(col(row, 'caseType')) || 'HEARING_LOSS'
       const tfName    = parseStr(col(row, 'TF명')) || paramTfName
-      const branch    = parseStr(col(row, '지사')) || paramBranch
+      const branch    = paramBranch || null
       const subAgent  = parseStr(col(row, '소속/대리인'))
       const salesRoute = parseStr(col(row, '소개자'))
       const isOneStop = parseBool(col(row, '원스톱'))
       const status    = parseStr(col(row, '진행상태', '진행상황')) || 'CONSULTING'
       const receptionDate = parseDate(col(row, '접수일자'))
       const contractDate  = parseDate(col(row, '약정일자'))
-      const kwcOfficeName = parseStr(col(row, '관할공단지사'))
+      const kwcOfficeName = parseStr(col(row, '지사', '관할공단지사', '관할 공단'))
       const caseMemo  = parseStr(col(row, '사건메모', '비고'))
       const closedReason = parseStr(col(row, '종결사유'))
 
