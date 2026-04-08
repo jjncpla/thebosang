@@ -79,7 +79,9 @@
       "Bash(unset RAILWAY_TOKEN)",
       "Bash(RAILWAY_TOKEN=24c3f10b-3baf-4602-9b2b-410ccc3e3644 railway whoami 2>&1)",
       "Bash(find /c/Users/jjakg/thebosang/app -type f -path *branch* -name *.tsx)",
-      "Bash(wc:*)"
+      "Bash(wc:*)",
+      "Skill(claude-api)",
+      "Bash(npx tsx:*)"
     ]
   },
   "enableAllProjectMcpServers": true,

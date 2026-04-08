@@ -1,0 +1,204 @@
+TBSS - 통합 캘린더 고도화 3가지
+세션 타입: 기능 개발 (기존 페이지 확장)
+수술적 수정 원칙 - 기존 기능 건드리지 않고 추가/확장만
+
+===================================================
+사전 확인
+===================================================
+시작 전 아래 파일들 읽고 현재 구조 파악:
+1. app/tf/special-clinic/page.tsx (캘린더 메인)
+2. app/api/tf/special-clinic/route.ts (GET API)
+3. prisma/schema.prisma (SpecialClinicSchedule 모델 확인)
+4. 사이드바 네비게이션 파일 (메뉴명 변경용)
+
+===================================================
+수정 1: TF 복수 선택 필터
+===================================================
+현재: select 단일 선택 (전체 / TF명 하나)
+변경: 체크박스 방식 복수 선택
+
+UI 변경:
+현재: [전체TF ▼] select 드롭다운
+변경: [TF 선택 ▼] 버튼 클릭 시 드롭다운 패널 열림
+
+드롭다운 패널:
+┌─────────────────────┐
+│ [전체 선택] [초기화] │
+├─────────────────────┤
+│ ☑ 울산동부TF        │
+│ ☐ 울산남부TF        │
+│ ☑ 창원TF            │
+│ ☐ 부산TF            │
+│ ☐ 포항TF            │
+│ ...                 │
+└─────────────────────┘
+
+버튼 표시 텍스트:
+- 아무것도 선택 안함 or 전체: "전체 TF"
+- 1개 선택: "울산동부TF"
+- 2개 이상 선택: "울산동부TF 외 1개"
+
+상태 변경:
+기존: const [tfFilter, setTfFilter] = useState("all")
+변경: const [selectedTFs, setSelectedTFs] = useState<string[]>([]) // 빈 배열 = 전체
+
+패널 열기/닫기: const [tfPanelOpen, setTfPanelOpen] = useState(false)
+패널 외부 클릭 시 닫힘 (useEffect + mousedown)
+
+필터링 로직:
+selectedTFs.length === 0 → 전체 표시
+selectedTFs.length > 0 → selectedTFs.includes(s.tfName) 인 것만 표시
+
+API 호출 변경:
+현재: ?tfName=울산동부TF (단일)
+변경: selectedTFs를 클라이언트에서 필터링 (API는 전체 조회 후 프론트 필터)
+→ allSchedules fetch는 그대로, filteredSchedules 계산 시 selectedTFs 적용
+
+TF 범례 사이드바 연동:
+- 범례의 TF 색상 뱃지 클릭 시 해당 TF 선택/해제 토글
+- 선택된 TF는 범례에서 진하게, 미선택은 흐리게 표시
+
+===================================================
+수정 2: 통합 캘린더로 전환
+===================================================
+
+2-1. 명칭 변경
+- 페이지 제목: "특진 일정" → "통합 캘린더"
+- 사이드바 메뉴: "특진 일정" → "통합 캘린더"
+- 페이지 내 모든 "특진 일정" 텍스트 → "통합 캘린더"
+- URL은 /tf/special-clinic 유지 (변경 시 기존 webhook 연동 깨질 수 있음)
+
+2-2. 일정 카테고리 필드 추가
+SpecialClinicSchedule 모델에 category 필드 추가:
+  category  String  @default("특진")
+  // "특진" | "회의" | "기타" | "공지" | "행사" 등
+
+스키마 변경 후:
+→ 1회용 init API 방식으로 DB 반영
+  파일: app/api/init-add-category/route.ts
+  내용:
+    ALTER TABLE "SpecialClinicSchedule" ADD COLUMN IF NOT EXISTS "category" TEXT DEFAULT '특진';
+  배포 후 /api/init-add-category 접속 1회 실행
+
+2-3. 수동입력 모달에 카테고리 선택 추가
+  - 카테고리 select 필드 추가
+  - 옵션: 특진 / 재특진 / 회의 / 행사 / 기타
+  - 카테고리별 아이콘 또는 색상 구분 (선택사항)
+
+2-4. 필터에 카테고리 필터 추가
+  현재: [유형: 특진/재특진]
+  변경: [카테고리: 전체/특진/재특진/회의/행사/기타]
+
+2-5. 일정 카드에 카테고리 뱃지 표시
+  특진: 기존 TF 색상 유지
+  회의: 보라색 (#9B59B6) 뱃지
+  기타: 회색 뱃지
+
+===================================================
+수정 3: 일정 검색 기능
+===================================================
+UI 위치: 필터 영역 우측 또는 별도 줄
+
+검색창:
+┌─────────────────────────────────────┐
+│ 🔍 재해자명, 병원명, TF명 검색...   │
+└─────────────────────────────────────┘
+
+검색 동작:
+- 입력 즉시 실시간 필터링 (debounce 300ms)
+- 검색 범위: patientName, hospitalName, tfName, memo
+- 대소문자/공백 무시
+- 다른 필터(TF, 카테고리, 상태)와 AND 조건으로 결합
+
+검색 결과 표시:
+캘린더 뷰에서 검색 시 → 해당 일정이 있는 날짜 셀 강조 (배경 연한 노란색)
++ 캘린더 아래 "검색 결과 목록" 패널 표시:
+
+┌─────────────────────────────────────────────────┐
+│ 검색 결과: "이민진" — 3건                       │
+├─────────────────────────────────────────────────┤
+│ 2026.04.15 (수) │ 이민진 특진 1차 │ 근복 대구병원 │ 울산동부TF │
+│ 2026.05.02 (목) │ 이민진 특진 2차 │ 근복 대구병원 │ 울산동부TF │
+│ 2026.05.20 (화) │ 이민진 특진 3차 │ 근복 대구병원 │ 울산동부TF │
+└─────────────────────────────────────────────────┘
+
+목록 행 클릭 시:
+- 해당 월로 이동 (currentYear, currentMonth 변경)
+- 해당 일정 말풍선 팝업 자동 오픈
+
+검색창 비우면 결과 목록 패널 숨김.
+
+상태 추가:
+const [searchQuery, setSearchQuery] = useState("")
+const [debouncedQuery, setDebouncedQuery] = useState("")
+
+useEffect(() => {
+  const timer = setTimeout(() => setDebouncedQuery(searchQuery), 300)
+  return () => clearTimeout(timer)
+}, [searchQuery])
+
+검색 필터링:
+const searchFiltered = debouncedQuery
+  ? filteredSchedules.filter(s =>
+      [s.patientName, s.hospitalName, s.tfName, s.memo ?? ""]
+        .some(field => field.toLowerCase().includes(debouncedQuery.toLowerCase()))
+    )
+  : filteredSchedules
+
+검색 결과 목록은 searchFiltered (월 범위 제한 없이 전체 데이터에서):
+→ allSchedules 기준으로 별도 검색 결과 계산
+→ 검색 시에는 월 범위 제한 없이 전체 기간 검색
+
+===================================================
+DB 스키마 변경 처리 (init API 방식)
+===================================================
+schema.prisma 수정:
+  model SpecialClinicSchedule {
+    ...
+    category  String  @default("특진")  // 추가
+    ...
+  }
+
+1회용 init API 생성:
+파일: app/api/init-add-category/route.ts
+
+import { prisma } from "@/lib/prisma"
+import { NextResponse } from "next/server"
+
+export async function GET() {
+  try {
+    await prisma.$executeRaw`
+      ALTER TABLE "SpecialClinicSchedule"
+      ADD COLUMN IF NOT EXISTS "category" TEXT NOT NULL DEFAULT '특진'
+    `
+    return NextResponse.json({ ok: true, message: "category 컬럼 추가 완료" })
+  } catch (e: any) {
+    return NextResponse.json({ ok: false, error: e.message })
+  }
+}
+
+배포 후 브라우저에서 1회 접속:
+https://thebosang-production.up.railway.app/api/init-add-category
+
+===================================================
+구현 순서
+===================================================
+1. schema.prisma에 category 필드 추가
+2. app/api/init-add-category/route.ts 생성
+3. app/tf/special-clinic/page.tsx 수정:
+   a. 명칭 변경 (특진 일정 → 통합 캘린더)
+   b. selectedTFs 상태 + TF 복수선택 드롭다운 패널
+   c. category 필터 추가
+   d. searchQuery 상태 + 검색창 UI
+   e. 검색 결과 목록 패널
+   f. 수동입력 모달에 category 필드 추가
+4. 사이드바 메뉴명 변경
+
+===================================================
+수술적 수정 원칙
+===================================================
+- webhook, 파서, 공휴일 API 파일 건드리지 않음
+- URL /tf/special-clinic 변경 금지 (webhook 연동 깨짐)
+- 기존 드래그, 말풍선, 접기/펼치기 로직 건드리지 않음
+- TypeScript 타입 에러 없도록 유지
+- category 필드는 기존 데이터 호환을 위해 default "특진"
