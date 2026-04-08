@@ -61,32 +61,32 @@ export async function POST(req: NextRequest) {
       : wb.SheetNames[0]
     const ws = wb.Sheets[sheetName]
 
-    // 행 1: 제목, 행 2: 한글 헤더, 행 3: DB 필드명, 행 4~: 데이터
     const allRows = XLSX.utils.sheet_to_json(ws, {
       header: 1,
       defval: null,
+      raw: false,   // 날짜/숫자를 문자열로 통일
     }) as any[][]
 
-    // 헤더 행 동적 탐지 — '성명' 셀이 있는 행을 헤더로 인식
-    const headerRowIdx = allRows.findIndex((row: any[]) =>
-      row.some((v: any) => String(v ?? '').replace('★ ', '').trim() === '성명')
+    // 헤더 탐지 — '성명' 또는 '★ 성명'이 있는 행 탐색 (첫 10행 내)
+    const HEADER_KEYWORDS = ['성명', '★ 성명', '★성명']
+    const headerRowIdx = allRows.slice(0, 10).findIndex((row: any[]) =>
+      row.some((v: any) => HEADER_KEYWORDS.includes(String(v ?? '').trim()))
     )
 
-    if (headerRowIdx < 0) {
-      return NextResponse.json({ ok: false, error: '헤더 행(성명 컬럼)을 찾을 수 없습니다. 올바른 TBSS 임포트 양식인지 확인해주세요.' }, { status: 400 })
-    }
+    // 못 찾으면 Row 인덱스 1(엑셀 2행)을 강제 사용
+    const resolvedHeaderIdx = headerRowIdx >= 0 ? headerRowIdx : 1
 
-    // 헤더 행에서 ★ 제거 후 정규화
-    const korHeaders: string[] = allRows[headerRowIdx].map((v: any) =>
-      String(v ?? '').replace('★ ', '').trim()
+    const korHeaders: string[] = allRows[resolvedHeaderIdx].map((v: any) =>
+      String(v ?? '').replace(/★\s*/g, '').trim()
     )
-    // 데이터는 헤더(+1) + DB필드명 행(+1) 건너뛰고 그 다음부터
-    const dataRows = allRows.slice(headerRowIdx + 2).filter((r: any[]) =>
-      r.some((v: any) => v !== null && v !== '')
+
+    // DB필드명 행(헤더+1) 다음부터 데이터
+    const dataRows = allRows.slice(resolvedHeaderIdx + 2).filter((r: any[]) =>
+      r.some((v: any) => v !== null && v !== '' && v !== undefined)
     )
 
     if (dataRows.length === 0) {
-      return NextResponse.json({ ok: false, error: '데이터 행이 없습니다' }, { status: 400 })
+      return NextResponse.json({ ok: false, error: `데이터 행이 없습니다 (헤더 위치: ${resolvedHeaderIdx}행, 전체 행 수: ${allRows.length})` }, { status: 400 })
     }
 
     function col(row: any[], name: string): any {
