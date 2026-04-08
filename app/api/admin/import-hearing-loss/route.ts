@@ -64,29 +64,63 @@ export async function POST(req: NextRequest) {
     const allRows = XLSX.utils.sheet_to_json(ws, {
       header: 1,
       defval: null,
-      raw: false,   // 날짜/숫자를 문자열로 통일
+      raw: false,
     }) as any[][]
 
-    // 헤더 탐지 — '성명' 또는 '★ 성명'이 있는 행 탐색 (첫 10행 내)
-    const HEADER_KEYWORDS = ['성명', '★ 성명', '★성명']
-    const headerRowIdx = allRows.slice(0, 10).findIndex((row: any[]) =>
-      row.some((v: any) => HEADER_KEYWORDS.includes(String(v ?? '').trim()))
-    )
+    if (!allRows || allRows.length === 0) {
+      return NextResponse.json({
+        ok: false,
+        error: `시트 "${sheetName}"에서 데이터를 읽을 수 없습니다. 시트 목록: ${wb.SheetNames.join(', ')}`,
+      }, { status: 400 })
+    }
 
-    // 못 찾으면 Row 인덱스 1(엑셀 2행)을 강제 사용
-    const resolvedHeaderIdx = headerRowIdx >= 0 ? headerRowIdx : 1
+    // 디버그: 첫 5행의 첫 5셀을 반환 (문제 진단용)
+    const debugRows = allRows.slice(0, 5).map((r, i) => ({
+      rowIdx: i,
+      cells: (r || []).slice(0, 5).map((v: any) => String(v ?? '(null)')),
+    }))
 
-    const korHeaders: string[] = allRows[resolvedHeaderIdx].map((v: any) =>
+    // 헤더 탐지 — '성명' 포함 셀이 있는 행 탐색 (전체 행에서)
+    const headerRowIdx = allRows.findIndex((row: any[]) => {
+      if (!row || !Array.isArray(row)) return false
+      return row.some((v: any) => {
+        const s = String(v ?? '').replace(/★\s*/g, '').trim()
+        return s === '성명'
+      })
+    })
+
+    if (headerRowIdx < 0) {
+      return NextResponse.json({
+        ok: false,
+        error: `헤더 행(성명 컬럼)을 찾을 수 없습니다.`,
+        debug: { sheetName, totalRows: allRows.length, firstRows: debugRows },
+      }, { status: 400 })
+    }
+
+    const headerRow = allRows[headerRowIdx]
+    if (!headerRow || !Array.isArray(headerRow)) {
+      return NextResponse.json({
+        ok: false,
+        error: `헤더 행(index ${headerRowIdx})이 비어있습니다.`,
+        debug: { sheetName, totalRows: allRows.length, firstRows: debugRows },
+      }, { status: 400 })
+    }
+
+    const korHeaders: string[] = headerRow.map((v: any) =>
       String(v ?? '').replace(/★\s*/g, '').trim()
     )
 
     // DB필드명 행(헤더+1) 다음부터 데이터
-    const dataRows = allRows.slice(resolvedHeaderIdx + 2).filter((r: any[]) =>
-      r.some((v: any) => v !== null && v !== '' && v !== undefined)
+    const dataRows = allRows.slice(headerRowIdx + 2).filter((r: any[]) =>
+      r && Array.isArray(r) && r.some((v: any) => v !== null && v !== '' && v !== undefined)
     )
 
     if (dataRows.length === 0) {
-      return NextResponse.json({ ok: false, error: `데이터 행이 없습니다 (헤더 위치: ${resolvedHeaderIdx}행, 전체 행 수: ${allRows.length})` }, { status: 400 })
+      return NextResponse.json({
+        ok: false,
+        error: `데이터 행이 없습니다 (헤더 위치: ${headerRowIdx}행, 전체 행 수: ${allRows.length})`,
+        debug: { sheetName, headerRowIdx, korHeaders: korHeaders.slice(0, 10), firstRows: debugRows },
+      }, { status: 400 })
     }
 
     function col(row: any[], name: string): any {
