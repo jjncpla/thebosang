@@ -154,7 +154,7 @@ export async function POST(req: NextRequest) {
 
     for (let i = 0; i < dataRows.length; i++) {
       const row = dataRows[i]
-      const rowNum = i + 4 // 실제 엑셀 행 번호
+      const rowNum = headerRowIdx + 2 + i + 1 // 헤더 + DB필드명행 + 데이터 index + 1(엑셀 1-based)
 
       const name      = parseStr(col(row, '성명'))
       const ssn       = parseStr(col(row, '주민번호'))
@@ -180,8 +180,8 @@ export async function POST(req: NextRequest) {
       const branchManagerName = parseStr(col(row, '지사담당자명'))
 
       // 필수 체크
-      if (!name) verifyReport.missingRequired.push({ row: rowNum, field: '성명' })
-      if (!ssn)  verifyReport.missingRequired.push({ row: rowNum, field: '주민번호' })
+      if (!name) verifyReport.missingRequired.push({ row: rowNum, field: '성명', rawValue: String(col(row, '성명') ?? '(빈값)') })
+      if (!ssn)  verifyReport.missingRequired.push({ row: rowNum, field: '주민번호', rawValue: String(col(row, '주민번호') ?? '(빈값)') })
 
       // 상태값 체크
       if (status && !STATUS_MAP[status]) {

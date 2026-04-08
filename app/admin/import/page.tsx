@@ -816,7 +816,7 @@ export default function ImportPage() {
                   <div style={{ fontSize: 12, fontWeight: 700, color: "#dc2626", marginBottom: 6 }}>필수값 누락 목록</div>
                   <div style={{ background: "#fef2f2", borderRadius: 6, padding: "8px 12px", fontSize: 12, color: "#991b1b", lineHeight: 1.8 }}>
                     {hlVerifyResult.missingRequired.map((m: any, i: number) => (
-                      <div key={i}>행 {m.row}: {m.field} 없음</div>
+                      <div key={i}>행 {m.row}: {m.field} 없음 (읽힌 값: {m.rawValue ?? '-'})</div>
                     ))}
                   </div>
                 </div>
