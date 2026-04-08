@@ -22,15 +22,16 @@ const STATUS_MAP: Record<string, string> = {
   '특진요구': 'EXAM_REQUESTED', '특진요청': 'EXAM_REQUESTED',
   '특진병원선정': 'EXAM_CLINIC_SELECTED', '병원선정': 'EXAM_CLINIC_SELECTED',
   '특진예정': 'EXAM_SCHEDULED', '특진일정': 'EXAM_SCHEDULED',
-  '특진중': 'IN_EXAM', '특진진행': 'IN_EXAM',
+  '특진중': 'IN_EXAM', '특진진행': 'IN_EXAM', '특진 중': 'IN_EXAM',
   '특진완료': 'EXAM_DONE',
-  '전문조사요구': 'EXPERT_REQUESTED', '전문조사요청': 'EXPERT_REQUESTED',
+  '전문조사요구': 'EXPERT_REQUESTED', '전문조사요청': 'EXPERT_REQUESTED', '전문의뢰': 'EXPERT_REQUESTED',
   '전문조사완료': 'EXPERT_DONE',
   '결정': 'DECISION_RECEIVED', '처분': 'DECISION_RECEIVED', '결정수령': 'DECISION_RECEIVED',
   '검토중': 'REVIEWING', '검토': 'REVIEWING',
   '승인': 'APPROVED', '인용': 'APPROVED',
-  '불승인': 'REJECTED', '기각': 'REJECTED', '불인용': 'REJECTED',
-  '종결': 'CLOSED',
+  '불승인': 'REJECTED', '기각': 'REJECTED', '불인용': 'REJECTED', '반려': 'REJECTED',
+  '종결': 'CLOSED', '파기': 'CLOSED',
+  '보류': 'CONSULTING',
 }
 
 function parseDate(val: any): Date | null {
@@ -151,9 +152,15 @@ export async function POST(req: NextRequest) {
       }, { status: 400 })
     }
 
-    function col(row: any[], name: string): any {
-      const idx = korHeaders.indexOf(name)
-      return idx >= 0 ? row[idx] : null
+    // 컬럼명 여러 별칭 지원
+    function col(row: any[], ...names: string[]): any {
+      for (const name of names) {
+        const idx = korHeaders.indexOf(name)
+        if (idx >= 0 && row[idx] !== null && row[idx] !== undefined && String(row[idx]).trim() !== '') {
+          return row[idx]
+        }
+      }
+      return null
     }
 
     // ── DB에서 User 목록 조회 ────────────────────────
@@ -195,16 +202,16 @@ export async function POST(req: NextRequest) {
       const subAgent  = parseStr(col(row, '소속/대리인'))
       const salesRoute = parseStr(col(row, '소개자'))
       const isOneStop = parseBool(col(row, '원스톱'))
-      const status    = parseStr(col(row, '진행상태')) || parseStr(col(row, '진행상황')) || 'CONSULTING'
+      const status    = parseStr(col(row, '진행상태', '진행상황')) || 'CONSULTING'
       const receptionDate = parseDate(col(row, '접수일자'))
       const contractDate  = parseDate(col(row, '약정일자'))
       const kwcOfficeName = parseStr(col(row, '관할공단지사'))
-      const caseMemo  = parseStr(col(row, '사건메모'))
+      const caseMemo  = parseStr(col(row, '사건메모', '비고'))
       const closedReason = parseStr(col(row, '종결사유'))
 
       const salesManagerName  = parseStr(col(row, '영업담당자명'))
-      const caseManagerName   = parseStr(col(row, '사건담당자명'))
-      const branchManagerName = parseStr(col(row, '지사담당자명'))
+      const caseManagerName   = parseStr(col(row, '사건담당자명', '담당자'))
+      const branchManagerName = parseStr(col(row, '지사담당자명', '지사담당자'))
 
       // 필수 체크
       if (!name) verifyReport.missingRequired.push({ row: rowNum, field: '성명', rawValue: String(col(row, '성명') ?? '(빈값)') })
@@ -237,7 +244,7 @@ export async function POST(req: NextRequest) {
 
       // HearingLossDetail
       const firstClinic   = parseStr(col(row, '초진병원'))
-      const firstExamDate = parseDate(col(row, '초진일'))
+      const firstExamDate = parseDate(col(row, '초진일', '1차 초진'))
       const firstExamRight = parseFloat2(col(row, '초진우측PTA'))
       const firstExamLeft  = parseFloat2(col(row, '초진좌측PTA'))
       const firstExamSpeech = parseFloat2(col(row, '초진어음명료도'))
@@ -245,44 +252,44 @@ export async function POST(req: NextRequest) {
       const isDisabilityRegistered = parseBool(col(row, '국가장애등록'))
       const specialClinic  = parseStr(col(row, '특진병원'))
       const reSpecialClinic = parseStr(col(row, '재특진병원'))
-      const exam1Date  = parseDate(col(row, '특진1차일'))
-      const exam2Date  = parseDate(col(row, '특진2차일'))
-      const exam3Date  = parseDate(col(row, '특진3차일'))
+      const exam1Date  = parseDate(col(row, '특진1차일', '1차 특진'))
+      const exam2Date  = parseDate(col(row, '특진2차일', '2차 특진'))
+      const exam3Date  = parseDate(col(row, '특진3차일', '3차 특진'))
       const reExam1Date = parseDate(col(row, '재특진1차일'))
       const reExam2Date = parseDate(col(row, '재특진2차일'))
       const reExam3Date = parseDate(col(row, '재특진3차일'))
-      const expertClinic = parseStr(col(row, '전문조사기관'))
-      const expertDate   = parseDate(col(row, '전문조사일'))
-      const decisionType = parseStr(col(row, '처분유형'))
-      const decisionReceivedAt = parseDate(col(row, '처분일'))
+      const expertClinic = parseStr(col(row, '전문조사기관', '전문조사'))
+      const expertDate   = parseDate(col(row, '전문조사일', '전문조사 일정'))
+      const decisionType = parseStr(col(row, '처분유형', '처분결과'))
+      const decisionReceivedAt = parseDate(col(row, '처분일', '처분일자'))
       const disabilityGrade = parseStr(col(row, '장해등급'))
 
       // HearingLossExam INITIAL
       const hasInitialExam = [
-        col(row, '기도(우)PTA'), col(row, '기도(좌)PTA'),
-        col(row, '골도(우)PTA'), col(row, '골도(좌)PTA'),
-        col(row, '어음명료도(우)'), col(row, '어음명료도(좌)'),
+        col(row, '기도(우)PTA', '기도(우)'), col(row, '기도(좌)PTA', '기도(좌)'),
+        col(row, '골도(우)PTA', '골도(우)'), col(row, '골도(좌)PTA', '골도(좌)'),
+        col(row, '어음명료도(우)', '어음(우)'), col(row, '어음명료도(좌)', '어음(좌)'),
         col(row, 'ABR(우)'), col(row, 'ABR(좌)'),
         col(row, '임피던스(우)'), col(row, '임피던스(좌)'),
-        col(row, 'ASSR(우)_메모'), col(row, 'ASSR(좌)_메모'),
+        col(row, 'ASSR(우)_메모', 'ASSR(우)', 'ASSR (우)'), col(row, 'ASSR(좌)_메모', 'ASSR(좌)', 'ASSR (좌)'),
       ].some((v) => v !== null && v !== '')
 
       const initialExam = hasInitialExam ? {
         examSet: 'INITIAL',
         examRound: 3,
-        ptaAvgR:   parseFloat2(col(row, '기도(우)PTA')),
-        ptaAvgL:   parseFloat2(col(row, '기도(좌)PTA')),
-        boneAvgR:  parseFloat2(col(row, '골도(우)PTA')),
-        boneAvgL:  parseFloat2(col(row, '골도(좌)PTA')),
-        speechRight: parseFloat2(col(row, '어음명료도(우)')),
-        speechLeft:  parseFloat2(col(row, '어음명료도(좌)')),
+        ptaAvgR:   parseFloat2(col(row, '기도(우)PTA', '기도(우)')),
+        ptaAvgL:   parseFloat2(col(row, '기도(좌)PTA', '기도(좌)')),
+        boneAvgR:  parseFloat2(col(row, '골도(우)PTA', '골도(우)')),
+        boneAvgL:  parseFloat2(col(row, '골도(좌)PTA', '골도(좌)')),
+        speechRight: parseFloat2(col(row, '어음명료도(우)', '어음(우)')),
+        speechLeft:  parseFloat2(col(row, '어음명료도(좌)', '어음(좌)')),
         abrRight:  parseFloat2(col(row, 'ABR(우)')),
         abrLeft:   parseFloat2(col(row, 'ABR(좌)')),
         impedanceRight: parseStr(col(row, '임피던스(우)')),
         impedanceLeft:  parseStr(col(row, '임피던스(좌)')),
-        assrRight: parseFloat2(col(row, 'ASSR(우)_메모')),
-        assrLeft:  parseFloat2(col(row, 'ASSR(좌)_메모')),
-        memo: parseStr(col(row, '특진특이사항')),
+        assrRight: parseFloat2(col(row, 'ASSR(우)_메모', 'ASSR(우)', 'ASSR (우)')),
+        assrLeft:  parseFloat2(col(row, 'ASSR(좌)_메모', 'ASSR(좌)', 'ASSR (좌)')),
+        memo: parseStr(col(row, '특진특이사항', '특이사항')),
       } : null
 
       // HearingLossExam RE
