@@ -112,9 +112,16 @@ export async function POST(req: NextRequest) {
     )
 
     // DB필드명 행(헤더+1) 다음부터 데이터
-    const dataRows = allRows.slice(headerRowIdx + 2).filter((r: any[]) =>
-      r && Array.isArray(r) && r.some((v: any) => v !== null && v !== '' && v !== undefined)
-    )
+    const nameColIdx = korHeaders.indexOf('성명')
+    const dataRows = allRows.slice(headerRowIdx + 2).filter((r: any[]) => {
+      if (!r || !Array.isArray(r)) return false
+      // 성명 컬럼에 값이 있는 행만 데이터로 인식
+      if (nameColIdx >= 0) {
+        const nameVal = String(r[nameColIdx] ?? '').trim()
+        return nameVal.length > 0
+      }
+      return r.some((v: any) => v !== null && v !== '' && v !== undefined)
+    })
 
     if (dataRows.length === 0) {
       return NextResponse.json({
