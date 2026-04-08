@@ -15,6 +15,21 @@ const BRANCH_TF_MAP: Record<string, string[]> = {
 };
 
 const TF_OPTIONS = Object.values(BRANCH_TF_MAP).flat();
+
+const BRANCH_GROUPS: Record<string, { label: string; tfNames: string[] }> = {
+  ulsan: {
+    label: '울산지사',
+    tfNames: ['울산', '울산 '],
+  },
+  ulsan_east: {
+    label: '울산동부지사',
+    tfNames: ['울동', '울산동부', '울산동부TF'],
+  },
+  ulsan_combined: {
+    label: '울산 통합 (울산+동부)',
+    tfNames: ['울산', '울산 ', '울동', '울산동부', '울산동부TF'],
+  },
+};
 const APPROVAL_OPTIONS = ["승인", "불승인", "일부승인"];
 const PROGRESS_OPTIONS = ["진행중", "종결", "송무인계", "검토중"];
 const EXAM_RESULT_OPTIONS = ["기각", "인용", "취하", "진행중"];
@@ -83,6 +98,13 @@ function addDays(iso: string | null, days: number): Date | null {
   return d;
 }
 
+/** 날짜만 비교하기 위해 시분초를 제거한 일수 차이 (deadline 당일 = 0) */
+function dayDiff(deadline: Date, today: Date): number {
+  const d = new Date(deadline.getFullYear(), deadline.getMonth(), deadline.getDate());
+  const t = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  return (d.getTime() - t.getTime()) / (1000 * 60 * 60 * 24);
+}
+
 function getDeadline(item: ObjectionCase): Date | null {
   if (item.reExamResultDate) return addDays(item.reExamResultDate, 90);
   if (item.examResultDate && (item.examResult === "기각" || item.examResult === "인용")) return addDays(item.examResultDate, 90);
@@ -93,7 +115,7 @@ function getRowBg(item: ObjectionCase): string {
   if (item.progressStatus === "종결") return "#f0fdf4";
   const d = getDeadline(item);
   if (!d) return "white";
-  const diff = (d.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24);
+  const diff = dayDiff(d, new Date());
   if (diff < 0) return "#fef2f2";
   if (diff <= 7) return "#fefce8";
   return "white";
@@ -342,39 +364,62 @@ export default function ObjectionDeadlinePage() {
     await fetchWage();
   };
 
-  const tfList = filterBranch ? BRANCH_TF_MAP[filterBranch] ?? [] : [];
   const now = new Date();
 
+  // 지사 선택 시 관할 TF 목록 (통합 그룹은 포함된 지사들의 TF 합산)
+  const availableTfs = (() => {
+    if (!filterBranch || !BRANCH_GROUPS[filterBranch]) return TF_OPTIONS;
+    const branchLabel = BRANCH_GROUPS[filterBranch].label;
+    if (BRANCH_TF_MAP[branchLabel]) return BRANCH_TF_MAP[branchLabel];
+    // 통합 그룹: BRANCH_TF_MAP에서 tfNames에 매칭되는 지사들의 TF를 합산
+    const matchedTfs = new Set<string>();
+    for (const [branchName, tfs] of Object.entries(BRANCH_TF_MAP)) {
+      if (BRANCH_GROUPS[filterBranch].tfNames.some(tn => branchName.includes(tn.trim()))) {
+        tfs.forEach(tf => matchedTfs.add(tf));
+      }
+    }
+    return matchedTfs.size > 0 ? Array.from(matchedTfs) : TF_OPTIONS;
+  })();
+
   // 이의제기 탭 stats (종결 건은 별도 집계, 다른 카드에서 제외)
-  const branchItems = filterBranch
-    ? items.filter(i => (BRANCH_TF_MAP[filterBranch] ?? []).includes(i.tfName))
+  const branchItems = filterBranch && BRANCH_GROUPS[filterBranch]
+    ? items.filter(i => BRANCH_GROUPS[filterBranch].tfNames.includes(i.tfName.trim()))
     : items;
-  const activeItems = branchItems.filter(i => i.progressStatus !== "종결" && i.progressStatus !== "송무인계");
+  // TF 필터 적용
+  const tfFiltered = filterTf ? branchItems.filter(i => i.tfName.trim() === filterTf) : branchItems;
+  const activeItems = tfFiltered.filter(i => i.progressStatus !== "종결" && i.progressStatus !== "송무인계");
+
+  // 심사청구일 또는 재심사청구일이 있으면 청구 중단 → 제척도과 아님
+  const isClaimInProgress = (i: ObjectionCase) => !!(i.examClaimDate || i.reExamClaimDate);
+
   const objStats = {
     waiting: activeItems.filter(i => !i.examClaimDate).length,
     ongoing: activeItems.filter(i => (i.examClaimDate && !i.examResult) || (i.reExamClaimDate && !i.reExamResult)).length,
     urgent: activeItems.filter(i => {
+      if (isClaimInProgress(i)) return false;
       const d = getDeadline(i);
       if (!d) return false;
-      const diff = (d.getTime() - now.getTime()) / (1000*60*60*24);
+      const diff = dayDiff(d, now);
       return diff >= 0 && diff <= 7;
     }).length,
     expired: activeItems.filter(i => {
+      if (isClaimInProgress(i)) return false;
       const d = getDeadline(i);
-      return d != null && d < now;
+      if (!d) return false;
+      return dayDiff(d, now) < 0;
     }).length,
-    litigation: branchItems.filter(i => i.progressStatus === "송무인계").length,
-    closed: branchItems.filter(i => i.progressStatus === "종결").length,
+    litigation: tfFiltered.filter(i => i.progressStatus === "송무인계").length,
+    closed: tfFiltered.filter(i => i.progressStatus === "종결").length,
   };
 
   // Apply stats filter client-side (종결 건은 종결 필터에서만 표시)
   const statsFiltered = statsFilter === "접수대기" ? activeItems.filter(i => !i.examClaimDate)
     : statsFilter === "진행중" ? activeItems.filter(i => (i.examClaimDate && !i.examResult) || (i.reExamClaimDate && !i.reExamResult))
-    : statsFilter === "제척임박" ? activeItems.filter(i => { const d = getDeadline(i); if (!d) return false; const diff = (d.getTime() - now.getTime()) / (1000*60*60*24); return diff >= 0 && diff <= 7; })
-    : statsFilter === "제척도과" ? activeItems.filter(i => { const d = getDeadline(i); return d != null && d < now; })
-    : statsFilter === "송무인계" ? branchItems.filter(i => i.progressStatus === "송무인계")
-    : statsFilter === "종결" ? branchItems.filter(i => i.progressStatus === "종결")
-    : branchItems;
+    : statsFilter === "제척임박" ? activeItems.filter(i => { if (isClaimInProgress(i)) return false; const d = getDeadline(i); if (!d) return false; const diff = dayDiff(d, now); return diff >= 0 && diff <= 7; })
+    : statsFilter === "제척도과" ? activeItems.filter(i => { if (isClaimInProgress(i)) return false; const d = getDeadline(i); if (!d) return false; return dayDiff(d, now) < 0; })
+    : statsFilter === "송무인계" ? tfFiltered.filter(i => i.progressStatus === "송무인계")
+    : statsFilter === "종결" ? tfFiltered.filter(i => i.progressStatus === "종결")
+    : tfFiltered;
 
   // 검색어 클라이언트 필터링 (API race condition 방지)
   const searchTrimmed = search.trim();
@@ -475,18 +520,16 @@ export default function ObjectionDeadlinePage() {
               <div style={{ fontSize: 11, color: "#6b7280", fontWeight: 700, marginBottom: 4 }}>지사</div>
               <select value={filterBranch} onChange={e => { setFilterBranch(e.target.value); setFilterTf(""); }} style={inputStyle}>
                 <option value="">전체</option>
-                {Object.keys(BRANCH_TF_MAP).map(b => <option key={b} value={b}>{b}</option>)}
+                {Object.entries(BRANCH_GROUPS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
               </select>
             </div>
-            {filterBranch && (
-              <div>
-                <div style={{ fontSize: 11, color: "#6b7280", fontWeight: 700, marginBottom: 4 }}>TF</div>
-                <select value={filterTf} onChange={e => setFilterTf(e.target.value)} style={inputStyle}>
-                  <option value="">전체</option>
-                  {tfList.map(t => <option key={t} value={t}>{t}</option>)}
-                </select>
-              </div>
-            )}
+            <div>
+              <div style={{ fontSize: 11, color: "#6b7280", fontWeight: 700, marginBottom: 4 }}>TF</div>
+              <select value={filterTf} onChange={e => setFilterTf(e.target.value)} style={inputStyle}>
+                <option value="">전체</option>
+                {availableTfs.map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
+            </div>
             <div>
               <div style={{ fontSize: 11, color: "#6b7280", fontWeight: 700, marginBottom: 4 }}>진행상태</div>
               <select value={filterProgress} onChange={e => setFilterProgress(e.target.value)} style={inputStyle}>
@@ -530,7 +573,7 @@ export default function ObjectionDeadlinePage() {
                   {filteredItems.map(item => {
                     const deadline = getDeadline(item);
                     const bg = getRowBg(item);
-                    const diff = deadline ? (deadline.getTime() - now.getTime()) / (1000 * 60 * 60 * 24) : null;
+                    const diff = deadline ? dayDiff(deadline, now) : null;
                     return (
                       <tr key={item.id} onClick={() => { setTarget(item); setModal(true); }} style={{ background: bg, borderBottom: "1px solid #f1f5f9", cursor: "pointer" }}>
                         <td style={{ padding: "8px 10px" }}><ApprovalBadge status={item.approvalStatus} />{item.isQualityReview && <span style={{ marginLeft: 4, fontSize: 9, background: "#7c3aed", color: "white", borderRadius: 3, padding: "1px 5px" }}>질판위</span>}</td>
