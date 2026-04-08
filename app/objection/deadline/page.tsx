@@ -393,7 +393,7 @@ export default function ObjectionDeadlinePage() {
   const isClaimInProgress = (i: ObjectionCase) => !!(i.examClaimDate || i.reExamClaimDate);
 
   const objStats = {
-    waiting: activeItems.filter(i => !i.examClaimDate).length,
+    waiting: activeItems.filter(i => !isClaimInProgress(i)).length,
     ongoing: activeItems.filter(i => (i.examClaimDate && !i.examResult) || (i.reExamClaimDate && !i.reExamResult)).length,
     urgent: activeItems.filter(i => {
       if (isClaimInProgress(i)) return false;
@@ -413,7 +413,7 @@ export default function ObjectionDeadlinePage() {
   };
 
   // Apply stats filter client-side (종결 건은 종결 필터에서만 표시)
-  const statsFiltered = statsFilter === "접수대기" ? activeItems.filter(i => !i.examClaimDate)
+  const statsFiltered = statsFilter === "접수대기" ? activeItems.filter(i => !isClaimInProgress(i))
     : statsFilter === "진행중" ? activeItems.filter(i => (i.examClaimDate && !i.examResult) || (i.reExamClaimDate && !i.reExamResult))
     : statsFilter === "제척임박" ? activeItems.filter(i => { if (isClaimInProgress(i)) return false; const d = getDeadline(i); if (!d) return false; const diff = dayDiff(d, now); return diff >= 0 && diff <= 7; })
     : statsFilter === "제척도과" ? activeItems.filter(i => { if (isClaimInProgress(i)) return false; const d = getDeadline(i); if (!d) return false; return dayDiff(d, now) < 0; })
