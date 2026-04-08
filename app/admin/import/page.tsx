@@ -91,10 +91,7 @@ export default function ImportPage() {
   const [wageDeleteConfirm, setWageDeleteConfirm] = useState(false);
   const [wageDeleteConfirming, setWageDeleteConfirming] = useState(false);
 
-  // ─── 이산TF 검증+임포트 상태 ───
-  const hlFileInputRef = useRef<HTMLInputElement>(null);
-  const [hlFile, setHlFile] = useState<File | null>(null);
-  const [hlDragging, setHlDragging] = useState(false);
+  // ─── HL 검증+임포트 상태 (기존 file/selectedTf/selectedBranch 재사용) ───
   const [hlVerifying, setHlVerifying] = useState(false);
   const [hlImporting, setHlImporting] = useState(false);
   const [hlVerifyResult, setHlVerifyResult] = useState<any>(null);
@@ -127,15 +124,17 @@ export default function ImportPage() {
   };
 
   const handleHlVerify = async () => {
-    if (!hlFile) return;
+    if (!file || !selectedTf) return;
     setHlVerifying(true);
     setHlVerifyResult(null);
     setHlImportResult(null);
     setHlError(null);
     try {
       const fd = new FormData();
-      fd.append("file", hlFile);
+      fd.append("file", file);
       fd.append("mode", "verify");
+      fd.append("tfName", selectedTf);
+      fd.append("branch", selectedBranch);
       const res = await fetch("/api/admin/import-hearing-loss", { method: "POST", body: fd });
       const data = await res.json();
       if (!res.ok) { setHlError(data.error ?? "검증 오류"); return; }
@@ -145,14 +144,16 @@ export default function ImportPage() {
   };
 
   const handleHlImport = async () => {
-    if (!hlFile) return;
+    if (!file || !selectedTf) return;
     setHlImporting(true);
     setHlImportResult(null);
     setHlError(null);
     try {
       const fd = new FormData();
-      fd.append("file", hlFile);
+      fd.append("file", file);
       fd.append("mode", "import");
+      fd.append("tfName", selectedTf);
+      fd.append("branch", selectedBranch);
       const res = await fetch("/api/admin/import-hearing-loss", { method: "POST", body: fd });
       const data = await res.json();
       if (!res.ok) { setHlError(data.error ?? "임포트 오류"); return; }
@@ -168,6 +169,9 @@ export default function ImportPage() {
     setResult(null);
     setServerError(null);
     setProgress(null);
+    setHlVerifyResult(null);
+    setHlImportResult(null);
+    setHlError(null);
   };
 
   const handleDrop = (e: React.DragEvent) => {
@@ -318,7 +322,7 @@ export default function ImportPage() {
             value={selectedDisease.value}
             onChange={(e) => {
               const opt = DISEASE_OPTIONS.find(o => o.value === e.target.value);
-              if (opt) { setSelectedDisease(opt); setResult(null); setServerError(null); }
+              if (opt) { setSelectedDisease(opt); setResult(null); setServerError(null); setHlVerifyResult(null); setHlImportResult(null); setHlError(null); }
             }}
             style={{ border: "1px solid #e5e7eb", borderRadius: 6, padding: "7px 12px", fontSize: 13, color: "#374151", background: "#f9fafb", width: "100%", cursor: "pointer" }}
           >
@@ -409,29 +413,38 @@ export default function ImportPage() {
           </ul>
         </div>
 
-        {/* 버튼 */}
-        <button
-          onClick={handleSubmit}
-          disabled={!file || !selectedTf || loading}
-          style={{
-            background: !file || !selectedTf || loading ? "#9ca3af" : "#29ABE2",
-            color: "white",
-            border: "none",
-            borderRadius: 6,
-            padding: "10px 24px",
-            fontSize: 14,
-            fontWeight: 700,
-            cursor: !file || !selectedTf || loading ? "not-allowed" : "pointer",
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
-          }}
-        >
-          {loading && (
-            <span style={{ display: "inline-block", width: 14, height: 14, border: "2px solid rgba(255,255,255,0.3)", borderTopColor: "white", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
-          )}
-          {loading ? "임포트 중..." : "임포트 시작"}
-        </button>
+        {/* 버튼 — 소음성 난청: 검증→임포트, 기타: 직접 임포트 */}
+        {selectedDisease.value === "HEARING_LOSS" ? (
+          <button
+            onClick={handleHlVerify}
+            disabled={!file || !selectedTf || hlVerifying}
+            style={{
+              background: !file || !selectedTf || hlVerifying ? "#9ca3af" : "#1d4ed8",
+              color: "white", border: "none", borderRadius: 6, padding: "10px 24px",
+              fontSize: 14, fontWeight: 700,
+              cursor: !file || !selectedTf || hlVerifying ? "not-allowed" : "pointer",
+              display: "flex", alignItems: "center", gap: 8,
+            }}
+          >
+            {hlVerifying && <span style={{ display: "inline-block", width: 14, height: 14, border: "2px solid rgba(255,255,255,0.3)", borderTopColor: "white", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />}
+            {hlVerifying ? "검증 중..." : "검증 실행"}
+          </button>
+        ) : (
+          <button
+            onClick={handleSubmit}
+            disabled={!file || !selectedTf || loading}
+            style={{
+              background: !file || !selectedTf || loading ? "#9ca3af" : "#29ABE2",
+              color: "white", border: "none", borderRadius: 6, padding: "10px 24px",
+              fontSize: 14, fontWeight: 700,
+              cursor: !file || !selectedTf || loading ? "not-allowed" : "pointer",
+              display: "flex", alignItems: "center", gap: 8,
+            }}
+          >
+            {loading && <span style={{ display: "inline-block", width: 14, height: 14, border: "2px solid rgba(255,255,255,0.3)", borderTopColor: "white", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />}
+            {loading ? "임포트 중..." : "임포트 시작"}
+          </button>
+        )}
       </div>
 
       {/* 진행상황 */}
@@ -480,6 +493,128 @@ export default function ImportPage() {
               <div style={{ fontSize: 12, fontWeight: 700, color: "#374151", marginBottom: 8 }}>오류 목록</div>
               <div style={{ background: "#fef2f2", borderRadius: 6, padding: "10px 14px", fontSize: 12, color: "#991b1b", lineHeight: 1.8, maxHeight: 200, overflowY: "auto" }}>
                 {result.errors.map((e, i) => <div key={i}>• {e}</div>)}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* HL 검증 에러 */}
+      {selectedDisease.value === "HEARING_LOSS" && hlError && (
+        <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, padding: "12px 16px", color: "#dc2626", fontSize: 13, marginBottom: 16 }}>
+          {hlError}
+        </div>
+      )}
+
+      {/* HL 검증 결과 */}
+      {selectedDisease.value === "HEARING_LOSS" && hlVerifyResult && (
+        <div style={{ background: "white", borderRadius: 10, border: "1px solid #e5e7eb", padding: 24, boxShadow: "0 1px 3px rgba(0,0,0,0.05)", marginBottom: 16 }}>
+          <div style={{ fontSize: 15, fontWeight: 700, color: "#111827", marginBottom: 12 }}>검증 결과</div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 10, marginBottom: 16 }}>
+            <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 6, padding: "10px 12px", textAlign: "center" }}>
+              <div style={{ fontSize: 22, fontWeight: 800, color: "#16a34a" }}>{hlVerifyResult.total}</div>
+              <div style={{ fontSize: 11, color: "#15803d" }}>총 건수</div>
+            </div>
+            <div style={{ background: hlVerifyResult.summary?.missingRequiredCount > 0 ? "#fef2f2" : "#f0fdf4", border: `1px solid ${hlVerifyResult.summary?.missingRequiredCount > 0 ? "#fecaca" : "#bbf7d0"}`, borderRadius: 6, padding: "10px 12px", textAlign: "center" }}>
+              <div style={{ fontSize: 22, fontWeight: 800, color: hlVerifyResult.summary?.missingRequiredCount > 0 ? "#dc2626" : "#16a34a" }}>{hlVerifyResult.summary?.missingRequiredCount ?? 0}</div>
+              <div style={{ fontSize: 11, color: "#6b7280" }}>필수값 누락</div>
+            </div>
+            <div style={{ background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 6, padding: "10px 12px", textAlign: "center" }}>
+              <div style={{ fontSize: 22, fontWeight: 800, color: "#ca8a04" }}>{hlVerifyResult.summary?.managerMismatchCount ?? 0}</div>
+              <div style={{ fontSize: 11, color: "#92400e" }}>담당자 미매핑</div>
+            </div>
+            <div style={{ background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: 6, padding: "10px 12px", textAlign: "center" }}>
+              <div style={{ fontSize: 22, fontWeight: 800, color: "#1d4ed8" }}>{hlVerifyResult.summary?.ssnDuplicateCount ?? 0}</div>
+              <div style={{ fontSize: 11, color: "#1e40af" }}>SSN 중복 (업데이트)</div>
+            </div>
+          </div>
+          {hlVerifyResult.missingRequired?.length > 0 && (
+            <div style={{ marginBottom: 12 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "#dc2626", marginBottom: 6 }}>필수값 누락 목록</div>
+              <div style={{ background: "#fef2f2", borderRadius: 6, padding: "8px 12px", fontSize: 12, color: "#991b1b", lineHeight: 1.8 }}>
+                {hlVerifyResult.missingRequired.map((m: any, i: number) => (
+                  <div key={i}>행 {m.row}: {m.field} 없음 (읽힌 값: {m.rawValue ?? '-'})</div>
+                ))}
+              </div>
+            </div>
+          )}
+          {hlVerifyResult.managerMismatches?.length > 0 && (
+            <div style={{ marginBottom: 12 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "#92400e", marginBottom: 6 }}>담당자 미매핑 목록</div>
+              <div style={{ background: "#fffbeb", borderRadius: 6, padding: "8px 12px", fontSize: 12, color: "#78350f", lineHeight: 1.8 }}>
+                {hlVerifyResult.managerMismatches.map((m: any, i: number) => (
+                  <div key={i}>{m.value} ({m.field}, {m.occurrences}건) — DB에 없는 이름</div>
+                ))}
+              </div>
+            </div>
+          )}
+          {hlVerifyResult.statusWarnings?.length > 0 && (
+            <div style={{ marginBottom: 12 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "#dc2626", marginBottom: 6 }}>잘못된 상태값</div>
+              <div style={{ background: "#fef2f2", borderRadius: 6, padding: "8px 12px", fontSize: 12, color: "#991b1b", lineHeight: 1.8 }}>
+                {hlVerifyResult.statusWarnings.map((w: any, i: number) => (
+                  <div key={i}>행 {w.row}: {w.value}</div>
+                ))}
+              </div>
+            </div>
+          )}
+          {hlVerifyResult.dbUsers && (
+            <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 12 }}>
+              DB 등록 User 목록: {hlVerifyResult.dbUsers.join(", ")}
+            </div>
+          )}
+          {hlVerifyResult.summary?.ssnDuplicateCount > 0 && (
+            <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 12, background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: 6, padding: "8px 12px" }}>
+              SSN 중복 {hlVerifyResult.summary.ssnDuplicateCount}건은 기존 사건을 업데이트(덮어쓰기)합니다.
+            </div>
+          )}
+          <button
+            onClick={handleHlImport}
+            disabled={hlImporting || !hlVerifyResult.summary?.readyToImport}
+            style={{
+              background: hlImporting || !hlVerifyResult.summary?.readyToImport ? "#9ca3af" : "#16a34a",
+              color: "white", border: "none", borderRadius: 6, padding: "10px 24px",
+              fontSize: 14, fontWeight: 700,
+              cursor: hlImporting || !hlVerifyResult.summary?.readyToImport ? "not-allowed" : "pointer",
+              display: "flex", alignItems: "center", gap: 8,
+            }}
+          >
+            {hlImporting && <span style={{ display: "inline-block", width: 14, height: 14, border: "2px solid rgba(255,255,255,0.3)", borderTopColor: "white", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />}
+            {hlImporting ? "임포트 중..." : "실제 임포트 실행"}
+          </button>
+          {!hlVerifyResult.summary?.readyToImport && (
+            <div style={{ fontSize: 12, color: "#dc2626", marginTop: 8 }}>
+              필수값 누락 또는 잘못된 상태값이 있어 임포트할 수 없습니다.
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* HL 임포트 결과 */}
+      {selectedDisease.value === "HEARING_LOSS" && hlImportResult && (
+        <div style={{ background: "white", borderRadius: 10, border: "1px solid #bbf7d0", padding: 24, boxShadow: "0 1px 3px rgba(0,0,0,0.05)", marginBottom: 16 }}>
+          <div style={{ fontSize: 15, fontWeight: 700, color: "#111827", marginBottom: 12 }}>임포트 결과</div>
+          <div style={{ display: "flex", gap: 12, marginBottom: hlImportResult.errors?.length > 0 ? 16 : 0 }}>
+            <div style={{ flex: 1, background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 8, padding: "14px 16px", textAlign: "center" }}>
+              <div style={{ fontSize: 28, fontWeight: 800, color: "#16a34a" }}>{hlImportResult.created}</div>
+              <div style={{ fontSize: 12, color: "#15803d", marginTop: 4 }}>신규 생성</div>
+            </div>
+            <div style={{ flex: 1, background: "#fefce8", border: "1px solid #fde047", borderRadius: 8, padding: "14px 16px", textAlign: "center" }}>
+              <div style={{ fontSize: 28, fontWeight: 800, color: "#ca8a04" }}>{hlImportResult.updated}</div>
+              <div style={{ fontSize: 12, color: "#a16207", marginTop: 4 }}>업데이트</div>
+            </div>
+            <div style={{ flex: 1, background: hlImportResult.errors?.length > 0 ? "#fef2f2" : "#f9fafb", border: `1px solid ${hlImportResult.errors?.length > 0 ? "#fecaca" : "#e5e7eb"}`, borderRadius: 8, padding: "14px 16px", textAlign: "center" }}>
+              <div style={{ fontSize: 28, fontWeight: 800, color: hlImportResult.errors?.length > 0 ? "#dc2626" : "#6b7280" }}>{hlImportResult.errors?.length ?? 0}</div>
+              <div style={{ fontSize: 12, color: hlImportResult.errors?.length > 0 ? "#b91c1c" : "#9ca3af", marginTop: 4 }}>오류</div>
+            </div>
+          </div>
+          {hlImportResult.errors?.length > 0 && (
+            <div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "#374151", marginBottom: 8 }}>오류 목록</div>
+              <div style={{ background: "#fef2f2", borderRadius: 6, padding: "10px 14px", fontSize: 12, color: "#991b1b", lineHeight: 1.8, maxHeight: 200, overflowY: "auto" }}>
+                {hlImportResult.errors.map((e: any, i: number) => (
+                  <div key={i}>행 {e.row}: {e.name} ({e.ssn}) — {e.error}</div>
+                ))}
               </div>
             </div>
           )}
@@ -715,196 +850,6 @@ export default function ImportPage() {
           confirming={wageDeleteConfirming}
         />
       )}
-
-      {/* ─── 이산TF 소음성 난청 검증+임포트 ─── */}
-      <div style={{ marginTop: 40 }}>
-        <div style={{ fontSize: 11, fontWeight: 700, color: "#9ca3af", letterSpacing: 2, marginBottom: 4 }}>ADMIN</div>
-        <h2 style={{ fontSize: 18, fontWeight: 800, color: "#111827", margin: "0 0 20px 0" }}>소음성 난청 데이터 검증 + 임포트</h2>
-
-        <div style={{ background: "white", borderRadius: 10, border: "1px solid #e5e7eb", padding: 24, boxShadow: "0 1px 3px rgba(0,0,0,0.05)" }}>
-          {/* 1단계: 파일 선택 */}
-          <div style={{ fontSize: 13, fontWeight: 700, color: "#374151", marginBottom: 10 }}>1단계: 파일 선택</div>
-          <div
-            onClick={() => hlFileInputRef.current?.click()}
-            onDragOver={(e) => { e.preventDefault(); setHlDragging(true); }}
-            onDragLeave={() => setHlDragging(false)}
-            onDrop={(e) => { e.preventDefault(); setHlDragging(false); const f = e.dataTransfer.files[0]; if (f) { setHlFile(f); setHlVerifyResult(null); setHlImportResult(null); setHlError(null); } }}
-            style={{
-              border: `2px dashed ${hlDragging ? "#29ABE2" : "#d1d5db"}`,
-              borderRadius: 8, padding: "28px 20px", textAlign: "center", cursor: "pointer",
-              background: hlDragging ? "#eff6ff" : "#f9fafb", transition: "all 0.15s", marginBottom: 20,
-            }}
-          >
-            <div style={{ fontSize: 28, marginBottom: 8 }}>📂</div>
-            {hlFile ? (
-              <div>
-                <div style={{ fontSize: 14, fontWeight: 600, color: "#111827", marginBottom: 4 }}>{hlFile.name}</div>
-                <div style={{ fontSize: 12, color: "#6b7280" }}>{(hlFile.size / 1024).toFixed(1)} KB</div>
-              </div>
-            ) : (
-              <div>
-                <div style={{ fontSize: 14, color: "#374151", marginBottom: 4 }}>변환결과 엑셀 파일을 드래그하거나 클릭하여 선택</div>
-                <div style={{ fontSize: 12, color: "#9ca3af" }}>.xlsx 파일 지원</div>
-              </div>
-            )}
-          </div>
-          <input ref={hlFileInputRef} type="file" accept=".xlsx,.xls" style={{ display: "none" }}
-            onChange={(e) => { const f = e.target.files?.[0]; if (f) { setHlFile(f); setHlVerifyResult(null); setHlImportResult(null); setHlError(null); } }}
-          />
-
-          {/* 2단계: 사전 검증 */}
-          <div style={{ fontSize: 13, fontWeight: 700, color: "#374151", marginBottom: 10 }}>2단계: 사전 검증</div>
-          <button
-            onClick={handleHlVerify}
-            disabled={!hlFile || hlVerifying}
-            style={{
-              background: !hlFile || hlVerifying ? "#9ca3af" : "#1d4ed8",
-              color: "white", border: "none", borderRadius: 6, padding: "10px 24px",
-              fontSize: 14, fontWeight: 700, cursor: !hlFile || hlVerifying ? "not-allowed" : "pointer",
-              display: "flex", alignItems: "center", gap: 8, marginBottom: 16,
-            }}
-          >
-            {hlVerifying && <span style={{ display: "inline-block", width: 14, height: 14, border: "2px solid rgba(255,255,255,0.3)", borderTopColor: "white", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />}
-            {hlVerifying ? "검증 중..." : "검증 실행"}
-          </button>
-
-          {/* 에러 */}
-          {hlError && (
-            <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, padding: "12px 16px", color: "#dc2626", fontSize: 13, marginBottom: 16 }}>
-              {hlError}
-            </div>
-          )}
-
-          {/* 검증 결과 */}
-          {hlVerifyResult && (
-            <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, padding: 20, marginBottom: 20 }}>
-              <div style={{ fontSize: 14, fontWeight: 700, color: "#111827", marginBottom: 12 }}>검증 결과</div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 10, marginBottom: 16 }}>
-                <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 6, padding: "10px 12px", textAlign: "center" }}>
-                  <div style={{ fontSize: 22, fontWeight: 800, color: "#16a34a" }}>{hlVerifyResult.total}</div>
-                  <div style={{ fontSize: 11, color: "#15803d" }}>총 건수</div>
-                </div>
-                <div style={{ background: hlVerifyResult.summary?.missingRequiredCount > 0 ? "#fef2f2" : "#f0fdf4", border: `1px solid ${hlVerifyResult.summary?.missingRequiredCount > 0 ? "#fecaca" : "#bbf7d0"}`, borderRadius: 6, padding: "10px 12px", textAlign: "center" }}>
-                  <div style={{ fontSize: 22, fontWeight: 800, color: hlVerifyResult.summary?.missingRequiredCount > 0 ? "#dc2626" : "#16a34a" }}>{hlVerifyResult.summary?.missingRequiredCount ?? 0}</div>
-                  <div style={{ fontSize: 11, color: "#6b7280" }}>필수값 누락</div>
-                </div>
-                <div style={{ background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 6, padding: "10px 12px", textAlign: "center" }}>
-                  <div style={{ fontSize: 22, fontWeight: 800, color: "#ca8a04" }}>{hlVerifyResult.summary?.managerMismatchCount ?? 0}</div>
-                  <div style={{ fontSize: 11, color: "#92400e" }}>담당자 미매핑</div>
-                </div>
-                <div style={{ background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: 6, padding: "10px 12px", textAlign: "center" }}>
-                  <div style={{ fontSize: 22, fontWeight: 800, color: "#1d4ed8" }}>{hlVerifyResult.summary?.ssnDuplicateCount ?? 0}</div>
-                  <div style={{ fontSize: 11, color: "#1e40af" }}>SSN 중복 (업데이트)</div>
-                </div>
-              </div>
-
-              {/* 담당자 미매핑 상세 */}
-              {hlVerifyResult.managerMismatches?.length > 0 && (
-                <div style={{ marginBottom: 12 }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: "#92400e", marginBottom: 6 }}>담당자 미매핑 목록</div>
-                  <div style={{ background: "#fffbeb", borderRadius: 6, padding: "8px 12px", fontSize: 12, color: "#78350f", lineHeight: 1.8 }}>
-                    {hlVerifyResult.managerMismatches.map((m: any, i: number) => (
-                      <div key={i}>{m.value} ({m.field}, {m.occurrences}건) — DB에 없는 이름</div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* 필수값 누락 상세 */}
-              {hlVerifyResult.missingRequired?.length > 0 && (
-                <div style={{ marginBottom: 12 }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: "#dc2626", marginBottom: 6 }}>필수값 누락 목록</div>
-                  <div style={{ background: "#fef2f2", borderRadius: 6, padding: "8px 12px", fontSize: 12, color: "#991b1b", lineHeight: 1.8 }}>
-                    {hlVerifyResult.missingRequired.map((m: any, i: number) => (
-                      <div key={i}>행 {m.row}: {m.field} 없음 (읽힌 값: {m.rawValue ?? '-'})</div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* 상태값 경고 */}
-              {hlVerifyResult.statusWarnings?.length > 0 && (
-                <div style={{ marginBottom: 12 }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: "#dc2626", marginBottom: 6 }}>잘못된 상태값</div>
-                  <div style={{ background: "#fef2f2", borderRadius: 6, padding: "8px 12px", fontSize: 12, color: "#991b1b", lineHeight: 1.8 }}>
-                    {hlVerifyResult.statusWarnings.map((w: any, i: number) => (
-                      <div key={i}>행 {w.row}: {w.value}</div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* DB 유저 목록 */}
-              {hlVerifyResult.dbUsers && (
-                <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 8 }}>
-                  DB 등록 User 목록: {hlVerifyResult.dbUsers.join(", ")}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* 3단계: 실제 임포트 */}
-          {hlVerifyResult && (
-            <>
-              <div style={{ fontSize: 13, fontWeight: 700, color: "#374151", marginBottom: 10 }}>3단계: 실제 임포트 실행</div>
-              {hlVerifyResult.summary?.ssnDuplicateCount > 0 && (
-                <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 10, background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: 6, padding: "8px 12px" }}>
-                  SSN 중복 {hlVerifyResult.summary.ssnDuplicateCount}건은 기존 사건을 업데이트(덮어쓰기)합니다.
-                </div>
-              )}
-              <button
-                onClick={handleHlImport}
-                disabled={hlImporting || !hlVerifyResult.summary?.readyToImport}
-                style={{
-                  background: hlImporting || !hlVerifyResult.summary?.readyToImport ? "#9ca3af" : "#16a34a",
-                  color: "white", border: "none", borderRadius: 6, padding: "10px 24px",
-                  fontSize: 14, fontWeight: 700, cursor: hlImporting || !hlVerifyResult.summary?.readyToImport ? "not-allowed" : "pointer",
-                  display: "flex", alignItems: "center", gap: 8, marginBottom: 16,
-                }}
-              >
-                {hlImporting && <span style={{ display: "inline-block", width: 14, height: 14, border: "2px solid rgba(255,255,255,0.3)", borderTopColor: "white", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />}
-                {hlImporting ? "임포트 중..." : "실제 임포트 실행"}
-              </button>
-              {!hlVerifyResult.summary?.readyToImport && (
-                <div style={{ fontSize: 12, color: "#dc2626", marginBottom: 16 }}>
-                  필수값 누락 또는 잘못된 상태값이 있어 임포트할 수 없습니다. 엑셀을 수정 후 다시 검증하세요.
-                </div>
-              )}
-            </>
-          )}
-
-          {/* 임포트 결과 */}
-          {hlImportResult && (
-            <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 8, padding: 20 }}>
-              <div style={{ fontSize: 14, fontWeight: 700, color: "#111827", marginBottom: 12 }}>임포트 결과</div>
-              <div style={{ display: "flex", gap: 12, marginBottom: hlImportResult.errors?.length > 0 ? 16 : 0 }}>
-                <div style={{ flex: 1, background: "white", border: "1px solid #bbf7d0", borderRadius: 8, padding: "14px 16px", textAlign: "center" }}>
-                  <div style={{ fontSize: 28, fontWeight: 800, color: "#16a34a" }}>{hlImportResult.created}</div>
-                  <div style={{ fontSize: 12, color: "#15803d", marginTop: 4 }}>신규 생성</div>
-                </div>
-                <div style={{ flex: 1, background: "white", border: "1px solid #fde047", borderRadius: 8, padding: "14px 16px", textAlign: "center" }}>
-                  <div style={{ fontSize: 28, fontWeight: 800, color: "#ca8a04" }}>{hlImportResult.updated}</div>
-                  <div style={{ fontSize: 12, color: "#a16207", marginTop: 4 }}>업데이트</div>
-                </div>
-                <div style={{ flex: 1, background: "white", border: `1px solid ${hlImportResult.errors?.length > 0 ? "#fecaca" : "#e5e7eb"}`, borderRadius: 8, padding: "14px 16px", textAlign: "center" }}>
-                  <div style={{ fontSize: 28, fontWeight: 800, color: hlImportResult.errors?.length > 0 ? "#dc2626" : "#6b7280" }}>{hlImportResult.errors?.length ?? 0}</div>
-                  <div style={{ fontSize: 12, color: hlImportResult.errors?.length > 0 ? "#b91c1c" : "#9ca3af", marginTop: 4 }}>오류</div>
-                </div>
-              </div>
-              {hlImportResult.errors?.length > 0 && (
-                <div>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: "#374151", marginBottom: 8 }}>오류 목록</div>
-                  <div style={{ background: "#fef2f2", borderRadius: 6, padding: "10px 14px", fontSize: 12, color: "#991b1b", lineHeight: 1.8, maxHeight: 200, overflowY: "auto" }}>
-                    {hlImportResult.errors.map((e: any, i: number) => (
-                      <div key={i}>행 {e.row}: {e.name} ({e.ssn}) — {e.error}</div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      </div>
 
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>

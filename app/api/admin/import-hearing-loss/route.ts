@@ -46,6 +46,8 @@ export async function POST(req: NextRequest) {
     const formData = await req.formData()
     const file = formData.get('file') as File | null
     const mode = (formData.get('mode') as string) || 'verify'
+    const paramTfName = (formData.get('tfName') as string) || null
+    const paramBranch = (formData.get('branch') as string) || null
 
     if (!file) {
       return NextResponse.json({ ok: false, error: '파일이 없습니다' }, { status: 400 })
@@ -170,8 +172,8 @@ export async function POST(req: NextRequest) {
       const patMemo   = parseStr(col(row, '재해자메모'))
 
       const caseType  = parseStr(col(row, 'caseType')) || 'HEARING_LOSS'
-      const tfName    = parseStr(col(row, 'TF명'))
-      const branch    = parseStr(col(row, '지사'))
+      const tfName    = parseStr(col(row, 'TF명')) || paramTfName
+      const branch    = parseStr(col(row, '지사')) || paramBranch
       const subAgent  = parseStr(col(row, '소속/대리인'))
       const salesRoute = parseStr(col(row, '소개자'))
       const isOneStop = parseBool(col(row, '원스톱'))
