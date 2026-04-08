@@ -71,20 +71,20 @@ const tableStyle: React.CSSProperties = {
 };
 
 const headerRow: React.CSSProperties = {
-  backgroundColor: "#29ABE2",
+  backgroundColor: "#78B8D4",
   color: "#fff",
 };
 
 /* 사선 구분 셀 */
 const diagonalCell: React.CSSProperties = {
   position: "relative",
-  backgroundColor: "#29ABE2",
+  backgroundColor: "#78B8D4",
   color: "#fff",
   width: 120,
   minWidth: 120,
   height: 64,
   padding: 0,
-  border: "1px solid #1a9ad0",
+  border: "1px solid #6AABC5",
   verticalAlign: "middle",
 };
 
@@ -115,7 +115,7 @@ const diagonalBottomLeft: React.CSSProperties = {
 
 /* 열 헤더 */
 const colHeaderStyle: React.CSSProperties = {
-  border: "1px solid #1a9ad0",
+  border: "1px solid #6AABC5",
   padding: "8px 6px",
   textAlign: "center",
   fontWeight: 600,

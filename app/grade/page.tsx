@@ -1471,7 +1471,7 @@ export default function GradePage() {
                   overflow: 'hidden',
                 }}>
                   <thead>
-                    <tr style={{ backgroundColor: '#29ABE2', color: '#fff' }}>
+                    <tr style={{ backgroundColor: '#78B8D4', color: '#fff' }}>
                       <th style={{ padding: '10px 14px', textAlign: 'center', fontWeight: 600, width: '80px' }}>장해등급</th>
                       <th style={{ padding: '10px 14px', textAlign: 'center', fontWeight: 600, width: '100px' }}>장해연금(일)</th>
                       <th style={{ padding: '10px 14px', textAlign: 'center', fontWeight: 600, width: '110px' }}>장해일시금(일)</th>
@@ -1521,9 +1521,9 @@ export default function GradePage() {
                               fontSize: '13px',
                               color: '#fff',
                               backgroundColor:
-                                row.note === '연금' ? '#29ABE2' :
-                                row.note === '연금/일시금 선택' ? '#8DC63F' :
-                                '#006838',
+                                row.note === '연금' ? '#78B8D4' :
+                                row.note === '연금/일시금 선택' ? '#A3D177' :
+                                '#4A9B6E',
                               verticalAlign: 'middle',
                             }}
                           >

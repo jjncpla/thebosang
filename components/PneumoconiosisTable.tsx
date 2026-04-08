@@ -3,77 +3,125 @@ export default function PneumoconiosisTable() {
     <div style={wrapper}>
       <h2 style={titleStyle}>폐질환 등급표</h2>
       <div style={{ overflowX: "auto" }}>
-        <table style={{ borderCollapse: "collapse", minWidth: 1100, fontSize: 12, width: "100%" }}>
+        <table style={tableStyle}>
           <thead>
-            <tr>
-              <th rowSpan={2} style={th}>등급</th>
-              <th rowSpan={2} style={th}>병형</th>
-              <th rowSpan={2} style={th}>심폐기능</th>
-              <th rowSpan={2} style={th}>
-                FEV1<br /><span style={sub}>(1초량)</span>
+            <tr style={headerRow}>
+              <th style={{ ...colTh, width: 50 }}>등급</th>
+              <th style={{ ...colTh, width: 120 }}>병형</th>
+              <th style={{ ...colTh, width: 90 }}>심폐기능</th>
+              <th style={{ ...colTh, width: 130 }}>
+                FEV1<br /><span style={headerSub}>(1초량)</span>
               </th>
-              <th rowSpan={2} style={th}>
-                FVC<br /><span style={sub}>(노력성폐활량)</span>
+              <th style={{ ...colTh, width: 120 }}>
+                FVC<br /><span style={headerSub}>(노력성폐활량)</span>
               </th>
-              <th rowSpan={2} style={th}>
-                심폐기능곤란자<br /><span style={sub}>COPD</span>
-              </th>
-              <th rowSpan={2} style={th}>
-                진폐<br />일반 장해
-              </th>
-              <th rowSpan={2} style={th}>기초연금액</th>
-              <th colSpan={2} style={th}>진폐보상연금</th>
-              <th rowSpan={2} style={th}>진폐재해위로금</th>
-              <th colSpan={2} style={th}>장해보상연금</th>
-              <th rowSpan={2} style={th}>장해보상일시금</th>
-            </tr>
-            <tr>
-              <th style={th}>연</th>
-              <th style={th}>일</th>
-              <th style={th}>연</th>
-              <th style={th}>일</th>
+              <th style={{ ...colTh, width: 90 }}>진폐보상연금</th>
+              <th style={{ ...colTh, width: 100 }}>진폐재해위로금</th>
             </tr>
           </thead>
           <tbody>
             {rows.map((row, i) => (
-              <tr key={i}>
-                {row.map((cell, j) => (
-                  <td key={j} style={j === 7 ? { ...td, whiteSpace: "pre-wrap", textAlign: "left", fontSize: 11 } : td}>
-                    {cell}
-                  </td>
-                ))}
+              <tr key={i} style={{ backgroundColor: i % 2 === 0 ? "#fff" : "#f8fbff" }}>
+                <td style={{ ...td, fontWeight: 600 }}>{row.grade}</td>
+                <td style={{ ...td, textAlign: row.disease ? "left" : "center", whiteSpace: "pre-wrap", fontSize: 11 }}>
+                  {row.disease}
+                </td>
+                <td style={td}>{row.lung}</td>
+                <td style={{ ...td, fontSize: 11 }}>{row.fev1}</td>
+                <td style={{ ...td, fontSize: 11 }}>{row.fvc}</td>
+                <td style={{ ...td, color: row.pension ? "#1a7ab5" : "#bbb", fontWeight: row.pension ? 600 : 400 }}>
+                  {row.pension || "\u2014"}
+                </td>
+                <td style={{ ...td, fontWeight: row.consolation ? 600 : 400, color: row.consolation ? "#333" : "#bbb" }}>
+                  {row.consolation || "\u2014"}
+                </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
-      <p style={noteStyle}>※ FEV1, FVC 쓸 경우: 1초율 70% 미만 55</p>
+      <p style={noteStyle}>※ 산업재해보상보험법 시행령 별표 기준</p>
     </div>
   );
 }
 
-const rows: string[][] = [
-  ["1", "모든 병형", "고도 F3", "FEV1 < 30%", "-", "요양대상", "-",
-    "2021년 1,273,120원\n2022년 1,337,360원\n2023년 1,404,520원",
-    "월", "1,040", "329", "월", "1,474", "-"],
-  ["2", "", "", "", "", "", "", "", "", "291", "", "", "1,309", "-"],
-  ["3", "모든 병형", "중등도 F2", "30% ≤ FEV1 < 55%", "45% < χ ≤ 55%", "-", "-", "", "연", "132", "849", "257", "연", "1,155"],
-  ["4", "", "", "", "", "", "", "", "", "224", "", "", "", "1,012"],
-  ["5", "4형", "경도 F1", "55% ≤ FEV1 < 70%", "55% < χ ≤ 70%", "4B, 4C형", "-", "", "월", "6", "677", "193", "월", "869"],
-  ["6", "", "", "", "", "", "", "", "", "164", "", "", "", "737"],
-  ["7", "1, 2, 3형", "경도 F1", "55% ≤ FEV1 < 70%", "55% < χ ≤ 70%", "4A, 3형", "55% ≤ FEV1 < 70%", "", "연", "72", "526", "138", "연", "616"],
-  ["8", "", "", "", "", "", "", "", "", "", "", "", "", "495"],
-  ["9", "3, 4형", "경미 F1/2", "70% ≤ FEV1 < 80%", "70% < χ ≤ 80%", "-", "-", "", "월", "2", "387", "", "월", "385"],
-  ["10", "", "", "", "", "", "", "", "", "", "", "", "", "297"],
-  ["11", "1, 2형 F1/2 또는\n2, 3, 4형 F0형", "-", "70% ≤ FEV1 < 80%", "-", "-", "2형", "", "연", "24", "288", "", "연", "220"],
-  ["12", "", "", "", "", "", "", "", "", "", "", "", "", "154"],
-  ["13", "1형", "정상 F0", "FEV1 ≥ 80%", "80% ≤", "-", "1형", "", "월", "2", "215", "", "월", "99"],
-  ["14", "(FEV1 초율\n1초율 70% 미만 55%)", "", "", "", "", "", "", "", "", "", "", "", ""],
+/* ── 데이터 ── */
+
+type Row = {
+  grade: string;
+  disease: string;
+  lung: string;
+  fev1: string;
+  fvc: string;
+  pension: string;
+  consolation: string;
+};
+
+const rows: Row[] = [
+  { grade: "1",  disease: "모든 병형",            lung: "고도 F3",    fev1: "FEV1 < 30%",         fvc: "-",              pension: "월 11일",  consolation: "1,040" },
+  { grade: "2",  disease: "",                      lung: "",           fev1: "",                    fvc: "",               pension: "",         consolation: "" },
+  { grade: "3",  disease: "모든 병형",            lung: "중등도 F2",  fev1: "30% ≤ FEV1 < 55%",   fvc: "45% < χ ≤ 55%",  pension: "연 132일", consolation: "849" },
+  { grade: "4",  disease: "",                      lung: "",           fev1: "",                    fvc: "",               pension: "",         consolation: "" },
+  { grade: "5",  disease: "4형",                  lung: "경도 F1",    fev1: "55% ≤ FEV1 < 70%",   fvc: "55% < χ ≤ 70%",  pension: "월 6일",   consolation: "677" },
+  { grade: "6",  disease: "",                      lung: "",           fev1: "",                    fvc: "",               pension: "",         consolation: "" },
+  { grade: "7",  disease: "1, 2, 3형",            lung: "경도 F1",    fev1: "55% ≤ FEV1 < 70%",   fvc: "55% < χ ≤ 70%",  pension: "연 72일",  consolation: "526" },
+  { grade: "8",  disease: "",                      lung: "",           fev1: "",                    fvc: "",               pension: "",         consolation: "" },
+  { grade: "9",  disease: "3, 4형",               lung: "경미 F1/2",  fev1: "70% ≤ FEV1 < 80%",   fvc: "70% < χ ≤ 80%",  pension: "월 2일",   consolation: "387" },
+  { grade: "10", disease: "",                      lung: "",           fev1: "",                    fvc: "",               pension: "",         consolation: "" },
+  { grade: "11", disease: "1, 2형 F1/2 또는\n2, 3, 4형 F0형", lung: "-", fev1: "70% ≤ FEV1 < 80%", fvc: "-",            pension: "연 24일",  consolation: "288" },
+  { grade: "12", disease: "",                      lung: "",           fev1: "",                    fvc: "",               pension: "",         consolation: "" },
+  { grade: "13", disease: "1형",                  lung: "정상 F0",    fev1: "FEV1 ≥ 80%",         fvc: "80% ≤",          pension: "월 2일",   consolation: "215" },
+  { grade: "14", disease: "",                      lung: "",           fev1: "",                    fvc: "",               pension: "",         consolation: "" },
 ];
 
+/* ── 스타일 (옅은 톤) ── */
+
 const wrapper: React.CSSProperties = { padding: 24 };
-const titleStyle: React.CSSProperties = { fontSize: 18, fontWeight: 700, color: "#111827", marginBottom: 16, paddingBottom: 8, borderBottom: "1px solid #e5e7eb" };
-const th: React.CSSProperties = { border: "1px solid #d1d5db", padding: "7px 8px", background: "#f3f4f6", textAlign: "center", fontWeight: 600, color: "#374151", verticalAlign: "middle" };
-const td: React.CSSProperties = { border: "1px solid #d1d5db", padding: "6px 8px", textAlign: "center", color: "#374151", verticalAlign: "middle" };
-const sub: React.CSSProperties = { fontSize: 10, color: "#6b7280", fontWeight: 400 };
-const noteStyle: React.CSSProperties = { marginTop: 12, fontSize: 13, color: "#4b5563" };
+
+const titleStyle: React.CSSProperties = {
+  fontSize: 18, fontWeight: 700, color: "#111827",
+  marginBottom: 16, paddingBottom: 8, borderBottom: "1px solid #e5e7eb",
+};
+
+const tableStyle: React.CSSProperties = {
+  borderCollapse: "collapse",
+  width: "100%",
+  minWidth: 700,
+  fontSize: 13,
+  boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
+  borderRadius: 8,
+  overflow: "hidden",
+  tableLayout: "fixed",
+};
+
+const headerRow: React.CSSProperties = {
+  backgroundColor: "#78B8D4",
+  color: "#fff",
+};
+
+const colTh: React.CSSProperties = {
+  border: "1px solid #6AABC5",
+  padding: "9px 8px",
+  textAlign: "center",
+  fontWeight: 600,
+  color: "#fff",
+  verticalAlign: "middle",
+};
+
+const headerSub: React.CSSProperties = {
+  fontSize: 10,
+  fontWeight: 400,
+  color: "rgba(255,255,255,0.75)",
+};
+
+const td: React.CSSProperties = {
+  border: "1px solid #e8f0f5",
+  padding: "7px 8px",
+  textAlign: "center",
+  color: "#374151",
+  verticalAlign: "middle",
+};
+
+const noteStyle: React.CSSProperties = {
+  marginTop: 12, fontSize: 13, color: "#4b5563",
+};
