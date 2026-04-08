@@ -6,6 +6,7 @@ const prisma = new PrismaClient()
 
 // ── 상태 매핑 ──────────────────────────────────────
 const STATUS_MAP: Record<string, string> = {
+  // 영문 enum
   CONSULTING: 'CONSULTING', CONTRACTED: 'CONTRACTED',
   DOC_COLLECTING: 'DOC_COLLECTING', SUBMITTED: 'SUBMITTED',
   EXAM_REQUESTED: 'EXAM_REQUESTED', EXAM_CLINIC_SELECTED: 'EXAM_CLINIC_SELECTED',
@@ -13,6 +14,23 @@ const STATUS_MAP: Record<string, string> = {
   EXPERT_REQUESTED: 'EXPERT_REQUESTED', EXPERT_DONE: 'EXPERT_DONE',
   DECISION_RECEIVED: 'DECISION_RECEIVED', REVIEWING: 'REVIEWING',
   APPROVED: 'APPROVED', REJECTED: 'REJECTED', CLOSED: 'CLOSED',
+  // 한글 매핑
+  '상담중': 'CONSULTING', '상담': 'CONSULTING',
+  '약정완료': 'CONTRACTED', '약정': 'CONTRACTED',
+  '서류수집': 'DOC_COLLECTING', '서류수집중': 'DOC_COLLECTING',
+  '접수': 'SUBMITTED', '접수완료': 'SUBMITTED', '청구접수': 'SUBMITTED',
+  '특진요구': 'EXAM_REQUESTED', '특진요청': 'EXAM_REQUESTED',
+  '특진병원선정': 'EXAM_CLINIC_SELECTED', '병원선정': 'EXAM_CLINIC_SELECTED',
+  '특진예정': 'EXAM_SCHEDULED', '특진일정': 'EXAM_SCHEDULED',
+  '특진중': 'IN_EXAM', '특진진행': 'IN_EXAM',
+  '특진완료': 'EXAM_DONE',
+  '전문조사요구': 'EXPERT_REQUESTED', '전문조사요청': 'EXPERT_REQUESTED',
+  '전문조사완료': 'EXPERT_DONE',
+  '결정': 'DECISION_RECEIVED', '처분': 'DECISION_RECEIVED', '결정수령': 'DECISION_RECEIVED',
+  '검토중': 'REVIEWING', '검토': 'REVIEWING',
+  '승인': 'APPROVED', '인용': 'APPROVED',
+  '불승인': 'REJECTED', '기각': 'REJECTED', '불인용': 'REJECTED',
+  '종결': 'CLOSED',
 }
 
 function parseDate(val: any): Date | null {
@@ -177,7 +195,7 @@ export async function POST(req: NextRequest) {
       const subAgent  = parseStr(col(row, '소속/대리인'))
       const salesRoute = parseStr(col(row, '소개자'))
       const isOneStop = parseBool(col(row, '원스톱'))
-      const status    = parseStr(col(row, '진행상태')) || 'CONSULTING'
+      const status    = parseStr(col(row, '진행상태')) || parseStr(col(row, '진행상황')) || 'CONSULTING'
       const receptionDate = parseDate(col(row, '접수일자'))
       const contractDate  = parseDate(col(row, '약정일자'))
       const kwcOfficeName = parseStr(col(row, '관할공단지사'))
