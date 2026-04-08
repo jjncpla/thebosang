@@ -585,6 +585,11 @@ export default function ImportPage() {
               DB 등록 User 목록: {hlVerifyResult.dbUsers.join(", ")}
             </div>
           )}
+          {hlVerifyResult.statusDistribution && (
+            <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 12 }}>
+              진행상태 분포: {Object.entries(hlVerifyResult.statusDistribution as Record<string, number>).map(([k, v]) => `${k}(${v}건)`).join(", ")}
+            </div>
+          )}
           {hlVerifyResult.summary?.ssnDuplicateCount > 0 && (
             <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 12, background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: 6, padding: "8px 12px" }}>
               SSN 중복 {hlVerifyResult.summary.ssnDuplicateCount}건은 기존 사건을 업데이트(덮어쓰기)합니다.

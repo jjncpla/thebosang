@@ -294,7 +294,7 @@ export async function POST(req: NextRequest) {
         rowNum,
         patient: { name, ssn, phone, address, memo: patMemo },
         case_: {
-          caseType, status: STATUS_MAP[status] || 'CONSULTING',
+          caseType, status: STATUS_MAP[status] || 'CONSULTING', rawStatus: status,
           tfName, branch, subAgent, salesRoute, isOneStop,
           receptionDate, contractDate, kwcOfficeName,
           memo: caseMemo, closedReason,
@@ -327,11 +327,19 @@ export async function POST(req: NextRequest) {
         mismatchCounts[key] = (mismatchCounts[key] || 0) + 1
       }
 
+      // 진행상태 값 분포 (디버깅용)
+      const statusDistribution: Record<string, number> = {}
+      for (const job of importJobs) {
+        const rawStatus = job.case_.rawStatus || '(없음)'
+        statusDistribution[rawStatus] = (statusDistribution[rawStatus] || 0) + 1
+      }
+
       return NextResponse.json({
         ok: true,
         mode: 'verify',
         total: verifyReport.total,
         dbUsers: users.map((u) => u.name),
+        statusDistribution,
         managerMismatches: uniqueMismatches.map((m) => ({
           ...m,
           occurrences: mismatchCounts[`${m.field}:${m.value}`] || 1,
