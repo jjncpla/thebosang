@@ -146,7 +146,7 @@ export async function POST(req: NextRequest) {
       total: dataRows.length,
       managerMismatches: [] as Array<{ row: number; field: string; value: string }>,
       ssnDuplicates: [] as Array<{ row: number; ssn: string }>,
-      missingRequired: [] as Array<{ row: number; field: string }>,
+      missingRequired: [] as Array<{ row: number; field: string; rawValue: string }>,
       statusWarnings: [] as Array<{ row: number; value: string }>,
     }
 
