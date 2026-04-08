@@ -55,10 +55,11 @@ export async function POST(req: NextRequest) {
     const buf = await file.arrayBuffer()
     const wb = XLSX.read(buf, { type: 'buffer', cellDates: true })
 
-    // "변환결과" 또는 첫 번째 시트 사용
-    const sheetName = wb.SheetNames.includes('변환결과')
-      ? '변환결과'
-      : wb.SheetNames[0]
+    // 데이터 시트 탐색: "변환결과" → "울산북부TF" → Chart가 아닌 첫 시트 → 첫 시트
+    const sheetName = wb.SheetNames.find(n => n === '변환결과')
+      ?? wb.SheetNames.find(n => n.includes('TF'))
+      ?? wb.SheetNames.find(n => !n.toLowerCase().startsWith('chart'))
+      ?? wb.SheetNames[0]
     const ws = wb.Sheets[sheetName]
 
     const allRows = XLSX.utils.sheet_to_json(ws, {
