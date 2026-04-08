@@ -1405,7 +1405,7 @@ function TFMonitoringSection() {
    ═══════════════════════════════════════════════════════════════ */
 type WageMenu = "minimum" | "construction" | "compensation" | "calculator" | "stats" | "manage" | null;
 type ActivePage =
-  | "장해보상일수" | "소음성난청" | "폐질환등급표" | "안질환등급표"
+  | "장해보상일수" | "소음성난청" | "폐질환등급표"
   | "근로복지공단규정" | "평균임금"
   | "재해조사" | "담당TF모니터링" | "TF공지" | "TF통계"
   | "최초요양급여" | "추가상병" | "재요양"
@@ -1450,7 +1450,6 @@ export default function GradePage() {
           ["장해보상일수", "장해보상일수"],
           ["소음성난청",   "소음성 난청"],
           ["폐질환등급표", "폐질환 등급표"],
-          ["안질환등급표", "안질환 등급표"],
           ["평균임금",     "평균임금"],
         ] as [ActivePage, string][]).map(([key, label]) => (
           <button key={String(key)} onClick={() => setActivePage(key)} style={activePage === key ? activeSubBtn : subBtn}>{label}</button>

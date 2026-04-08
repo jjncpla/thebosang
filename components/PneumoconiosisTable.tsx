@@ -86,13 +86,11 @@ const titleStyle: React.CSSProperties = {
 const tableStyle: React.CSSProperties = {
   borderCollapse: "collapse",
   width: "100%",
-  maxWidth: 620,
-  margin: "0 auto",
   fontSize: 14,
   boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
   borderRadius: 8,
   overflow: "hidden",
-  tableLayout: "fixed",
+  tableLayout: "auto",
 };
 
 const headerRow: React.CSSProperties = {
