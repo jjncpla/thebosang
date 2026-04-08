@@ -78,6 +78,9 @@ export default function ImportPage() {
   const [deleteModal, setDeleteModal] = useState(false);
   const [deleteConfirming, setDeleteConfirming] = useState(false);
   const [deleteResult, setDeleteResult] = useState<string | null>(null);
+  const [unassignedModal, setUnassignedModal] = useState(false);
+  const [unassignedDeleting, setUnassignedDeleting] = useState(false);
+  const [unassignedResult, setUnassignedResult] = useState<string | null>(null);
 
   const [simpleDeleteModal, setSimpleDeleteModal] = useState<{ title: string; message: string; apiPath: string } | null>(null);
   const [simpleDeleteConfirming, setSimpleDeleteConfirming] = useState(false);
@@ -306,6 +309,25 @@ export default function ImportPage() {
     } finally {
       setDeleteConfirming(false);
       setDeleteModal(false);
+    }
+  };
+
+  const handleDeleteUnassigned = async () => {
+    setUnassignedDeleting(true);
+    try {
+      const res = await fetch("/api/admin/delete-tf", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ unassigned: true }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setUnassignedResult(`오류: ${data.error ?? "삭제 실패"}`); }
+      else { setUnassignedResult(`TF 미배정 사건 ${data.deletedCases}건이 삭제되었습니다.`); }
+    } catch {
+      setUnassignedResult("네트워크 오류가 발생했습니다");
+    } finally {
+      setUnassignedDeleting(false);
+      setUnassignedModal(false);
     }
   };
 
@@ -654,6 +676,34 @@ export default function ImportPage() {
           </div>
         )}
       </div>
+
+      {/* TF 미배정 데이터 삭제 */}
+      <div style={{ background: "white", borderRadius: 10, border: "1px solid #fecaca", padding: 24, boxShadow: "0 1px 3px rgba(0,0,0,0.05)", marginTop: 16 }}>
+        <div style={{ fontSize: 13, fontWeight: 800, color: "#dc2626", marginBottom: 12 }}>TF 미배정 데이터 삭제</div>
+        <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 14, lineHeight: 1.6 }}>
+          TF가 배정되지 않은(tfName이 null인) 모든 사건과 관련 데이터를 삭제합니다.
+        </div>
+        <button
+          onClick={() => { setUnassignedResult(null); setUnassignedModal(true); }}
+          style={{ background: "#dc2626", color: "white", border: "none", borderRadius: 6, padding: "10px 20px", fontSize: 13, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}
+        >
+          TF 미배정 전체 삭제
+        </button>
+        {unassignedResult && (
+          <div style={{ marginTop: 12, fontSize: 13, color: unassignedResult.startsWith("오류") ? "#dc2626" : "#16a34a", background: unassignedResult.startsWith("오류") ? "#fef2f2" : "#f0fdf4", border: `1px solid ${unassignedResult.startsWith("오류") ? "#fecaca" : "#bbf7d0"}`, borderRadius: 6, padding: "8px 12px" }}>
+            {unassignedResult}
+          </div>
+        )}
+      </div>
+
+      {unassignedModal && (
+        <ConfirmModal
+          message="TF가 배정되지 않은 모든 사건을 삭제합니다."
+          onConfirm={handleDeleteUnassigned}
+          onCancel={() => setUnassignedModal(false)}
+          confirming={unassignedDeleting}
+        />
+      )}
 
       {deleteModal && (
         <ConfirmModal

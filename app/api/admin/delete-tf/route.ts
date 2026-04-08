@@ -3,10 +3,11 @@ import { prisma } from "@/lib/prisma";
 
 export async function DELETE(req: NextRequest) {
   try {
-    const { tfName } = await req.json();
-    if (!tfName) return NextResponse.json({ error: "tfName 필요" }, { status: 400 });
+    const { tfName, unassigned } = await req.json();
+    if (!tfName && !unassigned) return NextResponse.json({ error: "tfName 또는 unassigned 필요" }, { status: 400 });
 
-    const cases = await prisma.case.findMany({ where: { tfName }, select: { id: true, patientId: true } });
+    const whereClause = unassigned ? { tfName: null as string | null } : { tfName };
+    const cases = await prisma.case.findMany({ where: whereClause, select: { id: true, patientId: true } });
     const caseIds = cases.map(c => c.id);
     const patientIds = [...new Set(cases.map(c => c.patientId))];
 
@@ -37,7 +38,7 @@ export async function DELETE(req: NextRequest) {
       await prisma.timelineEvent.deleteMany({ where: { caseId: { in: caseIds } } });
       await prisma.todo.deleteMany({ where: { caseId: { in: caseIds } } });
 
-      await prisma.case.deleteMany({ where: { tfName } });
+      await prisma.case.deleteMany({ where: whereClause });
     }
 
     for (const patientId of patientIds) {
