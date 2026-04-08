@@ -64,19 +64,30 @@ export async function POST(req: NextRequest) {
     // 행 1: 제목, 행 2: 한글 헤더, 행 3: DB 필드명, 행 4~: 데이터
     const allRows = XLSX.utils.sheet_to_json(ws, {
       header: 1,
-      range: 1,   // 행 2부터 읽기 (0-indexed → 행 2 = index 1)
       defval: null,
     }) as any[][]
 
-    if (allRows.length < 3) {
-      return NextResponse.json({ ok: false, error: '데이터가 없습니다' }, { status: 400 })
+    // 헤더 행 동적 탐지 — '성명' 셀이 있는 행을 헤더로 인식
+    const headerRowIdx = allRows.findIndex((row: any[]) =>
+      row.some((v: any) => String(v ?? '').replace('★ ', '').trim() === '성명')
+    )
+
+    if (headerRowIdx < 0) {
+      return NextResponse.json({ ok: false, error: '헤더 행(성명 컬럼)을 찾을 수 없습니다. 올바른 TBSS 임포트 양식인지 확인해주세요.' }, { status: 400 })
     }
 
-    const korHeaders: string[] = allRows[0].map((v: any) => String(v ?? '').trim())
-    // 데이터는 행 index 2부터 (한글헤더=0, DB필드=1, 데이터=2~)
-    const dataRows = allRows.slice(2).filter((r: any[]) =>
+    // 헤더 행에서 ★ 제거 후 정규화
+    const korHeaders: string[] = allRows[headerRowIdx].map((v: any) =>
+      String(v ?? '').replace('★ ', '').trim()
+    )
+    // 데이터는 헤더(+1) + DB필드명 행(+1) 건너뛰고 그 다음부터
+    const dataRows = allRows.slice(headerRowIdx + 2).filter((r: any[]) =>
       r.some((v: any) => v !== null && v !== '')
     )
+
+    if (dataRows.length === 0) {
+      return NextResponse.json({ ok: false, error: '데이터 행이 없습니다' }, { status: 400 })
+    }
 
     function col(row: any[], name: string): any {
       const idx = korHeaders.indexOf(name)
