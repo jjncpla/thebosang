@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 
 const STATUS_MAP: Record<string, string> = {
-  CONSULTING: "상담 중",
+  CONSULTING: "접수 대기",
   CONTRACTED: "약정 완료",
   DOC_COLLECTING: "자료 수집 중",
   SUBMITTED: "공단 접수 완료",

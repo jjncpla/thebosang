@@ -184,7 +184,7 @@ async function handleCaseQuery(chatId: number, searchName: string) {
   }
 
   const statusMap: Record<string, string> = {
-    CONSULTING: "상담 중",
+    CONSULTING: "접수 대기",
     CONTRACTED: "약정 완료",
     DOC_COLLECTING: "서류 수집",
     SUBMITTED: "접수 완료",

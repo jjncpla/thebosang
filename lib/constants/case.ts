@@ -8,7 +8,7 @@ export const HEARING_LOSS_STATUS = [
 ] as const;
 
 export const CASE_STATUS_LABELS: Record<string, string> = {
-  CONSULTING: "상담 중",
+  CONSULTING: "접수 대기",
   WAITING_FIRST_CLINIC: "초진 대기",
   CONTRACTED: "약정 완료",
   DOC_COLLECTING: "서류 수집 중",
