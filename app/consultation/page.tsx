@@ -615,12 +615,12 @@ export default function ConsultationPage() {
       <div style={{ background: "white", borderRadius: 10, border: "1px solid #e5e7eb", overflow: "hidden", boxShadow: "0 1px 3px rgba(0,0,0,0.05)" }}>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
           <thead>
-            <tr style={{ background: "#f8fafc", borderBottom: "2px solid #e5e7eb" }}>
+            <tr style={{ background: "#29ABE2", borderBottom: "2px solid #1A8BBF" }}>
               <th style={{ padding: "10px 10px", width: 36 }}>
                 <input type="checkbox" checked={items.length > 0 && selectedIds.size === items.length} onChange={toggleSelectAll} />
               </th>
               {["성명", "연락처", "사건종류", "담당자", "상담경로", "방문일자", "사건수임", "비고", ""].map((h) => (
-                <th key={h} style={{ padding: "10px 14px", textAlign: "left", fontSize: 11, fontWeight: 700, color: "#6b7280", letterSpacing: 1, whiteSpace: "nowrap" }}>{h}</th>
+                <th key={h} style={{ padding: "10px 14px", textAlign: "left", fontSize: 11, fontWeight: 700, color: "#fff", letterSpacing: 1, whiteSpace: "nowrap" }}>{h}</th>
               ))}
             </tr>
           </thead>

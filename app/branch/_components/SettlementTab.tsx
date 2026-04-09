@@ -284,7 +284,7 @@ export default function SettlementTab() {
         <div className="overflow-x-auto">
           <table className="w-full border-collapse text-sm">
             <thead>
-              <tr className="bg-gray-50">
+              <tr className="bg-[#29ABE2] text-white">
                 <th className={`${cellCls} text-left w-28`}>지사</th>
                 <th className={`${cellCls} text-left w-16`}>항목</th>
                 {months.map(m => (
@@ -498,7 +498,7 @@ export default function SettlementTab() {
         <div className="overflow-x-auto">
           <table className="w-full border-collapse text-sm">
             <thead>
-              <tr className="bg-gray-50">
+              <tr className="bg-[#29ABE2] text-white">
                 <th className={`${cellCls} text-left w-24`}>성명</th>
                 {months.flatMap(m => [
                   <th key={`${m}-c`} className={`${cellCls} text-right w-20`}>{m}월 약정</th>,
@@ -575,7 +575,7 @@ export default function SettlementTab() {
         <div className="overflow-x-auto">
           <table className="w-full border-collapse text-sm">
             <thead>
-              <tr className="bg-gray-50">
+              <tr className="bg-[#29ABE2] text-white">
                 <th className={`${cellCls} text-left`}>성명</th>
                 <th className={`${cellCls} text-center`}>월</th>
                 <th className={`${cellCls} text-right`}>문서 발신</th>

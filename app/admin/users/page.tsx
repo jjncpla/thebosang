@@ -272,7 +272,7 @@ const s = {
   addBtn:       { padding: "9px 20px", fontSize: 13, fontWeight: 700, background: "#1e40af", color: "#fff", border: "none", borderRadius: 6, cursor: "pointer" } as React.CSSProperties,
   tableWrap:    { background: "#fff", border: "1px solid #e5e7eb", borderRadius: 10, padding: 20 } as React.CSSProperties,
   table:        { width: "100%", borderCollapse: "collapse" as const, fontSize: 13 },
-  th:           { background: "#f9fafb", padding: "10px 12px", textAlign: "left" as const, fontWeight: 600, color: "#374151", borderBottom: "2px solid #e5e7eb" },
+  th:           { background: "#29ABE2", padding: "10px 12px", textAlign: "left" as const, fontWeight: 600, color: "#fff", borderBottom: "2px solid #1A8BBF" },
   td:           { padding: "10px 12px", borderBottom: "1px solid #f3f4f6", color: "#111827" } as React.CSSProperties,
   selfRow:      { background: "#eff6ff" } as React.CSSProperties,
   roleSelect:   { padding: "4px 8px", fontSize: 12, border: "1px solid #d1d5db", borderRadius: 4, cursor: "pointer" } as React.CSSProperties,

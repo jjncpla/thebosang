@@ -125,9 +125,9 @@ function JurisdictionModal({ onClose }: { onClose: () => void }) {
         </div>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
           <thead>
-            <tr style={{ background: "#f8fafc" }}>
-              <th style={{ padding: "8px 12px", textAlign: "left", fontWeight: 700, fontSize: 11, color: "#6b7280", borderBottom: "2px solid #e5e7eb", whiteSpace: "nowrap" }}>지사</th>
-              <th style={{ padding: "8px 12px", textAlign: "left", fontWeight: 700, fontSize: 11, color: "#6b7280", borderBottom: "2px solid #e5e7eb" }}>담당 TF</th>
+            <tr style={{ background: "#29ABE2" }}>
+              <th style={{ padding: "8px 12px", textAlign: "left", fontWeight: 700, fontSize: 11, color: "#fff", borderBottom: "2px solid #1A8BBF", whiteSpace: "nowrap" }}>지사</th>
+              <th style={{ padding: "8px 12px", textAlign: "left", fontWeight: 700, fontSize: 11, color: "#fff", borderBottom: "2px solid #1A8BBF" }}>담당 TF</th>
             </tr>
           </thead>
           <tbody>
@@ -981,12 +981,12 @@ export default function CasesPage() {
         )}
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
           <thead>
-            <tr style={{ background: "#f8fafc", borderBottom: "2px solid #e5e7eb" }}>
+            <tr style={{ background: "#29ABE2", borderBottom: "2px solid #1A8BBF" }}>
               <th style={{ padding: "10px 12px", width: 36 }}>
                 <input type="checkbox" checked={allChecked} onChange={toggleAll} style={{ cursor: "pointer" }} />
               </th>
               {COLUMNS.map((h) => (
-                <th key={h} style={{ padding: "10px 16px", textAlign: "left", fontSize: 11, fontWeight: 700, color: "#6b7280", letterSpacing: 1, whiteSpace: "nowrap" }}>{h}</th>
+                <th key={h} style={{ padding: "10px 16px", textAlign: "left", fontSize: 11, fontWeight: 700, color: "#fff", letterSpacing: 1, whiteSpace: "nowrap" }}>{h}</th>
               ))}
             </tr>
           </thead>

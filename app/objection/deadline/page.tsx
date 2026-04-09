@@ -452,7 +452,7 @@ export default function ObjectionDeadlinePage() {
   });
 
   const inputStyle: React.CSSProperties = { border: "1px solid #e5e7eb", borderRadius: 6, padding: "6px 10px", fontSize: 12, color: "#374151", background: "#f9fafb" };
-  const thStyle: React.CSSProperties = { padding: "8px 10px", textAlign: "left", fontSize: 10, fontWeight: 700, color: "#6b7280", whiteSpace: "nowrap" };
+  const thStyle: React.CSSProperties = { padding: "8px 10px", textAlign: "left", fontSize: 10, fontWeight: 700, color: "#fff", whiteSpace: "nowrap" };
 
   return (
     <div style={{ padding: 24, minHeight: "100%", background: "#f1f5f9", fontFamily: "'Malgun Gothic','Apple SD Gothic Neo','Segoe UI',sans-serif" }}>
@@ -560,7 +560,7 @@ export default function ObjectionDeadlinePage() {
             <div style={{ overflowX: "auto" }}>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
                 <thead>
-                  <tr style={{ background: "#f8fafc", borderBottom: "2px solid #e5e7eb" }}>
+                  <tr style={{ background: "#29ABE2", borderBottom: "2px solid #1A8BBF" }}>
                     {["승인여부","TF","성명","사건분류","처분일","제척도래일","심사청구일","심사결과","심사송달일","재심사청구일","재심사결과","재심사송달일","담당자","진행상태","관리"].map(h => (
                       <th key={h} style={thStyle}>{h}</th>
                     ))}
@@ -629,7 +629,7 @@ export default function ObjectionDeadlinePage() {
             <div style={{ overflowX: "auto" }}>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
                 <thead>
-                  <tr style={{ background: "#f8fafc", borderBottom: "2px solid #e5e7eb" }}>
+                  <tr style={{ background: "#29ABE2", borderBottom: "2px solid #1A8BBF" }}>
                     {["TF","성명","사건분류","심사결과","재심사결과","소송 상태","소송 메모","관리"].map(h => (
                       <th key={h} style={thStyle}>{h}</th>
                     ))}
@@ -693,7 +693,7 @@ export default function ObjectionDeadlinePage() {
             <div style={{ overflowX: "auto" }}>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
                 <thead>
-                  <tr style={{ background: "#f8fafc", borderBottom: "2px solid #e5e7eb" }}>
+                  <tr style={{ background: "#29ABE2", borderBottom: "2px solid #1A8BBF" }}>
                     {["TF","성명","사건분류","최종 적용임금","상세 쟁점","검토담당자","진행상태","관리"].map(h => (
                       <th key={h} style={thStyle}>{h}</th>
                     ))}

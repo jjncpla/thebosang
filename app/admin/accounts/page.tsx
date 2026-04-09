@@ -292,7 +292,7 @@ const s = {
   dim:          { fontSize: 13, color: "#9ca3af", margin: 0 } as React.CSSProperties,
   tableWrap:    { overflowX: "auto" as const },
   table:        { width: "100%", borderCollapse: "collapse" as const, fontSize: 13 },
-  th:           { background: "#f9fafb", padding: "9px 12px", textAlign: "left" as const, fontWeight: 600, color: "#374151", borderBottom: "2px solid #e5e7eb", whiteSpace: "nowrap" as const },
+  th:           { background: "#29ABE2", padding: "9px 12px", textAlign: "left" as const, fontWeight: 600, color: "#fff", borderBottom: "2px solid #1A8BBF", whiteSpace: "nowrap" as const },
   td:           { padding: "9px 12px", borderBottom: "1px solid #f3f4f6", color: "#111827", verticalAlign: "top" as const } as React.CSSProperties,
   badge:        { display: "inline-block", padding: "2px 8px", borderRadius: 4, fontSize: 12, fontWeight: 600 } as React.CSSProperties,
   approveBtn:   { padding: "5px 12px", fontSize: 12, fontWeight: 600, background: "#065f46", color: "#fff", border: "none", borderRadius: 4, cursor: "pointer" } as React.CSSProperties,

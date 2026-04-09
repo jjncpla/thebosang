@@ -70,7 +70,7 @@ export default function BranchPerformanceTab({
   const [activities, setActivities] = useState<WeeklyActivity[]>([])
   const [loading, setLoading] = useState(false)
 
-  const th = { padding: '8px 10px', background: '#f8fafc', fontWeight: 600, fontSize: 12, borderBottom: '1px solid #e2e8f0', textAlign: 'center' as const, whiteSpace: 'nowrap' as const }
+  const th = { padding: '8px 10px', background: '#29ABE2', color: '#fff', fontWeight: 600, fontSize: 12, borderBottom: '1px solid #1A8BBF', textAlign: 'center' as const, whiteSpace: 'nowrap' as const }
   const td = { padding: '6px 10px', fontSize: 12, borderBottom: '1px solid #f1f5f9', textAlign: 'center' as const }
 
   useEffect(() => {

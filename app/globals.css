@@ -4,6 +4,18 @@
   --background: #ffffff;
   --foreground: #171717;
 
+  /* 더보상 브랜드 색상 (단축 별칭) */
+  --brand-sky: #29ABE2;
+  --brand-sky-light: #E8F6FD;
+  --brand-sky-dark: #1A8BBF;
+  --brand-lime: #8DC63F;
+  --brand-lime-light: #F0F7E4;
+  --brand-lime-dark: #6BA030;
+  --brand-deep: #006838;
+  --brand-deep-light: #E6F2EC;
+  --brand-deep-dark: #004F2D;
+  --brand-text: #231F20;
+
   /* ── 더보상 브랜드 컬러 ── */
   --blue-700: #1480B0;
   --blue-600: #1A95C8;
@@ -76,3 +88,36 @@ input:focus, select:focus, textarea:focus {
   border-color: var(--blue-500);
   box-shadow: 0 0 0 3px rgba(41, 171, 226, 0.14);
 }
+
+/* ============================================
+   더보상 브랜드 공통 스타일 (로그인 페이지 제외)
+   ============================================ */
+
+.btn-brand-primary { background-color: var(--brand-sky); color: white; border: none; border-radius: 6px; padding: 8px 18px; font-size: 13px; font-weight: 600; cursor: pointer; transition: background-color 0.15s; }
+.btn-brand-primary:hover { background-color: var(--brand-sky-dark); }
+
+.btn-brand-secondary { background-color: var(--brand-lime); color: white; border: none; border-radius: 6px; padding: 8px 18px; font-size: 13px; font-weight: 600; cursor: pointer; transition: background-color 0.15s; }
+.btn-brand-secondary:hover { background-color: var(--brand-lime-dark); }
+
+.btn-brand-dark { background-color: var(--brand-deep); color: white; border: none; border-radius: 6px; padding: 8px 18px; font-size: 13px; font-weight: 600; cursor: pointer; transition: background-color 0.15s; }
+.btn-brand-dark:hover { background-color: var(--brand-deep-dark); }
+
+.btn-brand-outline { background-color: white; color: var(--brand-sky); border: 1.5px solid var(--brand-sky); border-radius: 6px; padding: 8px 18px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.15s; }
+.btn-brand-outline:hover { background-color: var(--brand-sky-light); }
+
+.table-brand thead tr { background-color: var(--brand-sky); color: white; }
+.table-brand thead th { padding: 10px 14px; font-size: 12px; font-weight: 600; text-align: left; }
+.table-brand tbody tr { border-bottom: 1px solid #E5E7EB; }
+.table-brand tbody tr:nth-child(even) { background-color: var(--brand-sky-light); }
+.table-brand tbody td { padding: 9px 14px; font-size: 13px; color: var(--brand-text); }
+
+.badge-sky { background-color: var(--brand-sky-light); color: var(--brand-sky-dark); padding: 3px 10px; border-radius: 999px; font-size: 11px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px; }
+.badge-lime { background-color: var(--brand-lime-light); color: var(--brand-lime-dark); padding: 3px 10px; border-radius: 999px; font-size: 11px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px; }
+.badge-deep { background-color: var(--brand-deep-light); color: var(--brand-deep); padding: 3px 10px; border-radius: 999px; font-size: 11px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px; }
+
+.card-accent-sky { border-left: 3px solid var(--brand-sky); border-radius: 0 10px 10px 0; }
+.card-accent-lime { border-left: 3px solid var(--brand-lime); border-radius: 0 10px 10px 0; }
+.card-accent-deep { border-left: 3px solid var(--brand-deep); border-radius: 0 10px 10px 0; }
+
+.section-banner-sky { background-color: var(--brand-sky); color: white; border-radius: 8px; padding: 12px 18px; }
+.section-banner-deep { background-color: var(--brand-deep); color: white; border-radius: 8px; padding: 12px 18px; }
