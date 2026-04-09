@@ -74,7 +74,7 @@ export function parseSpecialClinicMessage(
           if (inner.includes('TF')) {
             // 첫 '/' 이전
             const tfPart = inner.split('/')[0].trim()
-            currentTF = tfPart
+            currentTF = normalizeTfName(tfPart)
             break
           }
         }
@@ -166,6 +166,14 @@ export function parseSpecialClinicMessage(
   }
 
   return results
+}
+
+function normalizeTfName(name: string): string {
+  const trimmed = name.trim()
+  if (trimmed.startsWith('더보상') || trimmed.startsWith('이산')) {
+    return trimmed
+  }
+  return '이산' + trimmed
 }
 
 function parseDate(text: string, msgDate: Date): Date | null {
