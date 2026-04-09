@@ -44,7 +44,7 @@ type Case = {
 };
 
 function getCaseStatus(c: Case): string {
-  if (c.caseType === "HEARING_LOSS") return c.hearingLoss?.status ?? "-";
+  if (c.caseType === "HEARING_LOSS") return c.status;
   if (c.caseType === "COPD") return c.copd?.status ?? "-";
   if (c.caseType === "PNEUMOCONIOSIS") return c.pneumoconiosis?.status ?? "-";
   if (c.caseType === "MUSCULOSKELETAL") return c.musculoskeletal?.status ?? "-";
@@ -1027,7 +1027,7 @@ export default function CasesPage() {
                     <td style={{ padding: "12px 16px", color: "#374151" }}>{c.salesManager ?? "-"}</td>
                     <td style={{ padding: "12px 16px", color: "#374151" }}>{c.caseManager ?? "-"}</td>
                     <td style={{ padding: "12px 16px" }}>
-                      <StatusBadge status={c.hearingLoss?.status ?? c.status} />
+                      <StatusBadge status={c.status} />
                     </td>
                     <td style={{ padding: "12px 16px", color: "#6b7280" }}>{c.hearingLoss?.firstClinic ?? "-"}</td>
                     <td style={{ padding: "12px 16px", color: "#6b7280" }}>{c.hearingLoss?.specialClinic ?? "-"}</td>
@@ -1045,7 +1045,7 @@ export default function CasesPage() {
                     <td style={{ padding: "12px 16px", color: "#6b7280" }}>{c.tfName ?? "-"}</td>
                     <td style={{ padding: "12px 16px", color: "#374151" }}>{c.caseManager ?? "-"}</td>
                     <td style={{ padding: "12px 16px" }}>
-                      <StatusBadge status={getCaseStatus(c)} />
+                      <StatusBadge status={c.status} />
                     </td>
                     <td style={{ padding: "12px 16px", color: "#9ca3af", fontFamily: "monospace", fontSize: 12 }}>{formatDate(c.receptionDate ?? c.createdAt)}</td>
                   </>
