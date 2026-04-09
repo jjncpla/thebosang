@@ -23,7 +23,41 @@ export async function GET(req: NextRequest) {
     orderBy: { createdAt: "desc" },
   });
 
-  return NextResponse.json(items);
+  // DECISION_RECEIVED 상태 사건 자동 인입
+  const existingCaseIds = items.map(r => r.caseId).filter(Boolean) as string[];
+
+  const decisionWhere: Record<string, unknown> = {
+    status: 'DECISION_RECEIVED',
+    ...(existingCaseIds.length > 0 ? { id: { notIn: existingCaseIds } } : {}),
+    ...(tfName ? { tfName } : {}),
+  };
+  if (caseType) decisionWhere.caseType = caseType;
+  if (search) decisionWhere.patient = { name: { contains: search, mode: "insensitive" } };
+
+  const decisionCases = await prisma.case.findMany({
+    where: decisionWhere,
+    include: {
+      patient: { select: { name: true } },
+      hearingLoss: { select: { decisionReceivedAt: true } },
+    },
+    orderBy: { createdAt: 'desc' },
+  });
+
+  const autoItems = decisionCases.map(c => ({
+    id: `auto_${c.id}`,
+    tfName: c.tfName ?? '',
+    patientName: c.patient.name,
+    caseType: c.caseType,
+    approvalStatus: '',
+    progressStatus: '',
+    decisionDate: c.hearingLoss?.decisionReceivedAt?.toISOString() ?? null,
+    hasInfoDisclosure: false,
+    memo: null,
+    caseId: c.id,
+    isAutoFilled: true,
+  }));
+
+  return NextResponse.json([...autoItems, ...items]);
 }
 
 export async function POST(req: NextRequest) {
@@ -158,6 +192,25 @@ export async function POST(req: NextRequest) {
           approvalStatus: item.approvalStatus,
           progressStatus: "진행중",
         }
+      });
+    }
+  }
+
+  // Case.status 자동 전이
+  if (item.caseId) {
+    const statusMap: Record<string, string> = {
+      '검토중': 'REVIEWING',
+      '이의제기 진행': 'OBJECTION',
+      '평정청구 진행': 'WAGE_CORRECTION',
+      '종결': 'CLOSED',
+      '송무 인계': 'CLOSED',
+      '송무 검토': 'CLOSED',
+    };
+    const newStatus = statusMap[item.progressStatus];
+    if (newStatus) {
+      await prisma.case.update({
+        where: { id: item.caseId },
+        data: { status: newStatus },
       });
     }
   }

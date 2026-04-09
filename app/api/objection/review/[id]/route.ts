@@ -75,6 +75,25 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }
   }
 
+  // Case.status 자동 전이
+  if (item.caseId) {
+    const statusMap: Record<string, string> = {
+      '검토중': 'REVIEWING',
+      '이의제기 진행': 'OBJECTION',
+      '평정청구 진행': 'WAGE_CORRECTION',
+      '종결': 'CLOSED',
+      '송무 인계': 'CLOSED',
+      '송무 검토': 'CLOSED',
+    };
+    const newStatus = statusMap[item.progressStatus];
+    if (newStatus) {
+      await prisma.case.update({
+        where: { id: item.caseId },
+        data: { status: newStatus },
+      });
+    }
+  }
+
   // progressStatus 변경 시 Todo 자동 생성
   const TODO_TRIGGER_STATUS: Record<string, { title: string; type: string }> = {
     "이의제기 진행": { title: "이의제기 이유서 작성 필요", type: "OBJECTION_DEADLINE" },

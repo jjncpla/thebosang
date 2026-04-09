@@ -3,19 +3,11 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CASE_TYPE_LABELS } from "@/lib/constants/case";
+import { TF_BY_BRANCH } from "@/lib/constants/tf";
 
-const BRANCH_TF_MAP: Record<string, string[]> = {
-  "울산지사": ["울산TF", "이산울산북부TF"],
-  "울산동부지사": ["울산동부TF", "이산울산동부TF"],
-  "울산남부지사": ["울산남부TF", "이산울산남부TF"],
-  "부산경남지사": ["부산경남TF"],
-  "서울북부지사": ["서울북부TF"],
-  "경기안산지사": ["경기안산TF"],
-  "전북익산지사": ["전북익산TF"],
-  "경북구미지사": ["경북구미TF"],
-};
-const BRANCH_LIST = Object.keys(BRANCH_TF_MAP);
-const ALL_TF_OPTIONS = Object.values(BRANCH_TF_MAP).flat();
+const BRANCH_TF_MAP = TF_BY_BRANCH;
+const BRANCH_LIST = Object.keys(TF_BY_BRANCH);
+const ALL_TF_OPTIONS = Object.values(TF_BY_BRANCH).flat();
 const APPROVAL_OPTIONS = ["승인", "불승인", "일부승인"];
 const PROGRESS_OPTIONS = ["종결", "검토중", "이의제기 진행", "송무 검토", "송무 인계", "평정청구 진행"];
 const PROGRESS_FILTER_OPTIONS = ["미검토", "검토중", "이의제기 진행", "송무 인계", "평정청구 진행"];
@@ -34,6 +26,7 @@ type ReviewItem = {
   hasInfoDisclosure: boolean;
   memo: string | null;
   caseId: string | null;
+  isAutoFilled?: boolean;
 };
 
 type WageItem = {
@@ -430,10 +423,15 @@ export default function ObjectionReviewPage() {
                     const deadline = addDays(item.decisionDate, 90);
                     const now = new Date();
                     const diff = deadline ? (deadline.getTime() - now.getTime()) / (1000 * 60 * 60 * 24) : null;
-                    const rowStyle = getRowStyle(item);
+                    const rowStyle = item.isAutoFilled ? { background: "#eff6ff" } : getRowStyle(item);
                     return (
-                      <tr key={item.id} onClick={() => { setReviewTarget(item); setReviewModal(true); }} style={{ ...rowStyle, borderBottom: "1px solid #f1f5f9", cursor: "pointer" }} onMouseEnter={e => { if (!rowStyle.background) e.currentTarget.style.background = "#f8fafc"; }} onMouseLeave={e => { e.currentTarget.style.background = (rowStyle.background as string) ?? "white"; }}>
-                        <td style={{ padding: "10px 12px" }}><ApprovalBadge status={item.approvalStatus} /></td>
+                      <tr key={item.id} onClick={() => { if (!item.isAutoFilled) { setReviewTarget(item); setReviewModal(true); } }} style={{ ...rowStyle, borderBottom: "1px solid #f1f5f9", cursor: item.isAutoFilled ? "default" : "pointer" }} onMouseEnter={e => { if (!rowStyle.background) e.currentTarget.style.background = "#f8fafc"; }} onMouseLeave={e => { e.currentTarget.style.background = (rowStyle.background as string) ?? "white"; }}>
+                        <td style={{ padding: "10px 12px" }}>
+                          {item.isAutoFilled
+                            ? <span style={{ display: "inline-block", padding: "2px 8px", borderRadius: 999, fontSize: 11, fontWeight: 700, background: "#DCEEFA", color: "#1480B0", border: "1px solid #50BDEA" }}>결정수령</span>
+                            : <ApprovalBadge status={item.approvalStatus} />
+                          }
+                        </td>
                         <td style={{ padding: "10px 12px", color: "#374151" }}>{item.tfName}</td>
                         <td style={{ padding: "10px 12px", fontWeight: 600, color: "#111827" }}>{item.patientName}</td>
                         <td style={{ padding: "10px 12px", color: "#6b7280" }}>{CASE_TYPE_LABELS[item.caseType] || item.caseType}</td>
@@ -444,17 +442,36 @@ export default function ObjectionReviewPage() {
                           {diff !== null && diff < 0 && " 🔴"}
                         </td>
                         <td style={{ padding: "10px 12px", color: "#374151" }}>
-                          {item.progressStatus || <span style={{ color: "#9ca3af" }}>미검토</span>}
-                          {item.progressStatus === "이의제기 진행" && (
-                            <a href="/objection/deadline" onClick={(e) => e.stopPropagation()} style={{ fontSize: 11, color: "#29ABE2", textDecoration: "underline", marginLeft: 6 }}>기일 관리 →</a>
-                          )}
+                          {item.isAutoFilled
+                            ? <span style={{ color: "#9ca3af" }}>미검토</span>
+                            : <>
+                                {item.progressStatus || <span style={{ color: "#9ca3af" }}>미검토</span>}
+                                {item.progressStatus === "이의제기 진행" && (
+                                  <a href="/objection/deadline" onClick={(e) => e.stopPropagation()} style={{ fontSize: 11, color: "#29ABE2", textDecoration: "underline", marginLeft: 6 }}>기일 관리 →</a>
+                                )}
+                              </>
+                          }
                         </td>
                         <td style={{ padding: "10px 12px", color: item.hasInfoDisclosure ? "#15803d" : "#9ca3af" }}>{item.hasInfoDisclosure ? "✓ 있음" : "없음"}</td>
                         <td style={{ padding: "10px 12px" }}>
-                          {item.caseId && (
-                            <button onClick={(e) => { e.stopPropagation(); handleLaborRecordDownload(item.caseId!); }} style={{ border: "none", borderRadius: 4, padding: "3px 8px", fontSize: 11, color: "white", background: "#006838", cursor: "pointer", marginRight: 4 }}>📋 업무처리부</button>
+                          {item.isAutoFilled ? (
+                            <button onClick={async e => {
+                              e.stopPropagation();
+                              await fetch('/api/objection/review', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ caseId: item.caseId, approvalStatus: '불승인', progressStatus: '검토중' }),
+                              });
+                              fetchReviews();
+                            }} style={{ border: "none", borderRadius: 5, padding: "4px 12px", fontSize: 11, fontWeight: 600, color: "white", background: "#29ABE2", cursor: "pointer" }}>검토 시작</button>
+                          ) : (
+                            <>
+                              {item.caseId && (
+                                <button onClick={(e) => { e.stopPropagation(); handleLaborRecordDownload(item.caseId!); }} style={{ border: "none", borderRadius: 4, padding: "3px 8px", fontSize: 11, color: "white", background: "#006838", cursor: "pointer", marginRight: 4 }}>📋 업무처리부</button>
+                              )}
+                              <button onClick={async e => { e.stopPropagation(); if (!confirm("삭제하시겠습니까?")) return; await fetch(`/api/objection/review/${item.id}`, { method: "DELETE" }); fetchReviews(); }} style={{ border: "1px solid #e5e7eb", borderRadius: 5, padding: "3px 8px", fontSize: 11, color: "#dc2626", background: "white", cursor: "pointer" }}>삭제</button>
+                            </>
                           )}
-                          <button onClick={async e => { e.stopPropagation(); if (!confirm("삭제하시겠습니까?")) return; await fetch(`/api/objection/review/${item.id}`, { method: "DELETE" }); fetchReviews(); }} style={{ border: "1px solid #e5e7eb", borderRadius: 5, padding: "3px 8px", fontSize: 11, color: "#dc2626", background: "white", cursor: "pointer" }}>삭제</button>
                         </td>
                       </tr>
                     );
