@@ -30,7 +30,62 @@ export async function GET(req: NextRequest) {
     orderBy: { createdAt: "desc" },
   });
 
-  return NextResponse.json(items);
+  // 소송인계 탭이면 autoItems 제외
+  if (type === "litigation") {
+    return NextResponse.json(items);
+  }
+
+  // OBJECTION 상태 Case 자동 인입
+  const existingCaseIds = items.map(r => r.caseId).filter(Boolean) as string[];
+
+  const objectionWhere: Record<string, unknown> = {
+    status: 'OBJECTION',
+    ...(existingCaseIds.length > 0 ? { id: { notIn: existingCaseIds } } : {}),
+    ...(tfName ? { tfName } : {}),
+  };
+  if (caseType) objectionWhere.caseType = caseType;
+  if (search) objectionWhere.patient = { name: { contains: search, mode: "insensitive" } };
+
+  const objectionCases = await prisma.case.findMany({
+    where: objectionWhere,
+    include: {
+      patient: { select: { name: true } },
+      hearingLoss: { select: { decisionReceivedAt: true } },
+    },
+    orderBy: { createdAt: 'desc' },
+  });
+
+  const autoItems = objectionCases.map(c => ({
+    id: `auto_${c.id}`,
+    tfName: c.tfName ?? '',
+    patientName: c.patient.name,
+    caseType: c.caseType,
+    approvalStatus: '불승인',
+    progressStatus: '진행중',
+    decisionDate: c.hearingLoss?.decisionReceivedAt?.toISOString() ?? null,
+    examClaimDate: null,
+    examResult: null,
+    examResultDate: null,
+    reExamClaimDate: null,
+    reExamResult: null,
+    reExamResultDate: null,
+    isQualityReview: false,
+    managerId: null,
+    manager: null,
+    memo: null,
+    litigationHandover: false,
+    litigationMemo: null,
+    needsReDecision: false,
+    litigationStatus: null,
+    wageCorrectStatus: null,
+    reviewId: null,
+    caseId: c.id,
+    isAutoFilled: true,
+    createdAt: c.createdAt,
+    updatedAt: c.updatedAt,
+  }));
+
+  return NextResponse.json([...autoItems, ...items]);
 }
 
 export async function POST(req: NextRequest) {

@@ -60,6 +60,8 @@ type ObjectionCase = {
   litigationStatus: string | null;
   needsReDecision: boolean;
   wageCorrectStatus: string | null;
+  caseId?: string | null;
+  isAutoFilled?: boolean;
 };
 
 type WageItem = {
@@ -572,11 +574,16 @@ export default function ObjectionDeadlinePage() {
                   )}
                   {filteredItems.map(item => {
                     const deadline = getDeadline(item);
-                    const bg = getRowBg(item);
+                    const bg = item.isAutoFilled ? "#eff6ff" : getRowBg(item);
                     const diff = deadline ? dayDiff(deadline, now) : null;
                     return (
-                      <tr key={item.id} onClick={() => { setTarget(item); setModal(true); }} style={{ background: bg, borderBottom: "1px solid #f1f5f9", cursor: "pointer" }}>
-                        <td style={{ padding: "8px 10px" }}><ApprovalBadge status={item.approvalStatus} />{item.isQualityReview && <span style={{ marginLeft: 4, fontSize: 9, background: "#7c3aed", color: "white", borderRadius: 3, padding: "1px 5px" }}>질판위</span>}</td>
+                      <tr key={item.id} onClick={() => { if (!item.isAutoFilled) { setTarget(item); setModal(true); } }} style={{ background: bg, borderBottom: "1px solid #f1f5f9", cursor: item.isAutoFilled ? "default" : "pointer" }}>
+                        <td style={{ padding: "8px 10px" }}>
+                          {item.isAutoFilled
+                            ? <span style={{ display: "inline-block", padding: "2px 8px", borderRadius: 999, fontSize: 11, fontWeight: 700, background: "#DCEEFA", color: "#1480B0", border: "1px solid #50BDEA" }}>이의제기</span>
+                            : <><ApprovalBadge status={item.approvalStatus} />{item.isQualityReview && <span style={{ marginLeft: 4, fontSize: 9, background: "#7c3aed", color: "white", borderRadius: 3, padding: "1px 5px" }}>질판위</span>}</>
+                          }
+                        </td>
                         <td style={{ padding: "8px 10px", color: "#374151" }}>{item.tfName}</td>
                         <td style={{ padding: "8px 10px", fontWeight: 600, color: "#111827" }}>{item.patientName}</td>
                         <td style={{ padding: "8px 10px", color: "#6b7280" }}>{CASE_TYPE_LABELS[item.caseType] || item.caseType}</td>
@@ -595,7 +602,19 @@ export default function ObjectionDeadlinePage() {
                           <span style={{ display: "inline-block", padding: "2px 7px", borderRadius: 999, fontSize: 10, fontWeight: 600, background: item.progressStatus === "진행중" ? "#eff6ff" : item.progressStatus === "종결" ? "#f1f5f9" : "#fdf4ff", color: item.progressStatus === "진행중" ? "#29ABE2" : item.progressStatus === "종결" ? "#6b7280" : "#7c3aed" }}>{item.progressStatus}</span>
                         </td>
                         <td style={{ padding: "8px 10px" }}>
-                          <button onClick={async e => { e.stopPropagation(); if (!confirm("삭제?")) return; await fetch(`/api/objection/cases/${item.id}`, { method: "DELETE" }); fetchItems(); }} style={{ border: "1px solid #e5e7eb", borderRadius: 4, padding: "2px 7px", fontSize: 10, color: "#dc2626", background: "white", cursor: "pointer" }}>삭제</button>
+                          {item.isAutoFilled ? (
+                            <button onClick={async e => {
+                              e.stopPropagation();
+                              await fetch('/api/objection/cases', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ caseId: item.caseId, tfName: item.tfName, patientName: item.patientName, caseType: item.caseType, approvalStatus: '불승인', progressStatus: '진행중' }),
+                              });
+                              fetchItems();
+                            }} style={{ border: "none", borderRadius: 5, padding: "3px 10px", fontSize: 10, fontWeight: 600, color: "white", background: "#29ABE2", cursor: "pointer" }}>등록</button>
+                          ) : (
+                            <button onClick={async e => { e.stopPropagation(); if (!confirm("삭제?")) return; await fetch(`/api/objection/cases/${item.id}`, { method: "DELETE" }); fetchItems(); }} style={{ border: "1px solid #e5e7eb", borderRadius: 4, padding: "2px 7px", fontSize: 10, color: "#dc2626", background: "white", cursor: "pointer" }}>삭제</button>
+                          )}
                         </td>
                       </tr>
                     );
