@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useCallback, Suspense } from "react";
 import { useRouter, useParams, useSearchParams } from "next/navigation";
-import { CASE_TYPE_LABELS, DISPOSAL_TYPE, GRADE_TYPE, STATUS_BY_CASE_TYPE, HEARING_LOSS_STATUS, CASE_STATUS_LABELS } from "@/lib/constants/case";
+import { CASE_TYPE_LABELS, DISPOSAL_TYPE, GRADE_TYPE, STATUS_BY_CASE_TYPE, HEARING_LOSS_STATUS, CASE_STATUS_LABELS, CASE_STATUS_COLORS } from "@/lib/constants/case";
 import ContactSelector from "@/components/ui/ContactSelector";
 import BranchSelector from "@/components/ui/BranchSelector";
 import { OCC_DISEASE_COMMITTEES } from "@/constants/occDiseaseCommittees";
@@ -239,34 +239,14 @@ const STATUS_COLOR: Record<string, { bg: string; color: string; border: string; 
   "반려":        { bg: "#FEF2F2", color: "#b91c1c", border: "1px solid #FECACA", dot: "#EF4444" },
   "보류":        { bg: "#F1F5F9", color: "#64748B", border: "1px solid #CBD5E1", dot: "#94A3B8" },
   "파기":        { bg: "#F1F5F9", color: "#64748B", border: "1px solid #CBD5E1", dot: "#94A3B8" },
-  // 영문 키
-  "CONSULTING":             { bg: "#DCEEFA", color: "#1480B0", border: "1px solid #50BDEA", dot: "#29ABE2" },
-  "CONTRACTED":             { bg: "#DCEEFA", color: "#1480B0", border: "1px solid #50BDEA", dot: "#29ABE2" },
-  "DOC_COLLECTING":         { bg: "#FEF3C7", color: "#92400E", border: "1px solid #FCD34D", dot: "#F59E0B" },
-  "SUBMITTED":              { bg: "#DCEEFA", color: "#1480B0", border: "1px solid #50BDEA", dot: "#29ABE2" },
-  "EXAM_REQUESTED":         { bg: "#D0EAD9", color: "#006838", border: "1px solid #00854A", dot: "#006838" },
-  "EXAM_CLINIC_SELECTED":   { bg: "#D0EAD9", color: "#006838", border: "1px solid #00854A", dot: "#006838" },
-  "EXAM_SCHEDULED":         { bg: "#D0EAD9", color: "#006838", border: "1px solid #00854A", dot: "#006838" },
-  "IN_EXAM":                { bg: "#D0EAD9", color: "#006838", border: "1px solid #00854A", dot: "#006838" },
-  "EXAM_DONE":              { bg: "#D0EAD9", color: "#006838", border: "1px solid #00854A", dot: "#006838" },
-  "EXPERT_REQUESTED":       { bg: "#D0EAD9", color: "#005530", border: "1px solid #006838", dot: "#005530" },
-  "EXPERT_CLINIC_SELECTED": { bg: "#D0EAD9", color: "#005530", border: "1px solid #006838", dot: "#005530" },
-  "EXPERT_DONE":            { bg: "#D0EAD9", color: "#005530", border: "1px solid #006838", dot: "#005530" },
-  "BANK_REQUESTED":         { bg: "#EEF7FD", color: "#1480B0", border: "1px solid #84D1F2", dot: "#29ABE2" },
-  "BANK_SUBMITTED":         { bg: "#EEF7FD", color: "#1480B0", border: "1px solid #84D1F2", dot: "#29ABE2" },
-  "DECISION_RECEIVED":      { bg: "#E8F5EE", color: "#005530", border: "1px solid #D0EAD9", dot: "#006838" },
-  "REVIEWING":              { bg: "#F1F5F9", color: "#64748B", border: "1px solid #CBD5E1", dot: "#94A3B8" },
-  "INFO_REQUESTED":         { bg: "#FEF3C7", color: "#92400E", border: "1px solid #FCD34D", dot: "#F59E0B" },
-  "APPROVED":               { bg: "#E8F5D0", color: "#5A8A1F", border: "1px solid #A2D158", dot: "#8DC63F" },
-  "REJECTED":               { bg: "#FEF2F2", color: "#b91c1c", border: "1px solid #FECACA", dot: "#EF4444" },
-  "CLOSED":                 { bg: "#F1F5F9", color: "#64748B", border: "1px solid #CBD5E1", dot: "#94A3B8" },
-  "OBJECTION":              { bg: "#FEF0E0", color: "#C45E00", border: "1px solid #FDBA74", dot: "#F97316" },
-  "WAGE_CORRECTION":        { bg: "#FEF0E0", color: "#C45E00", border: "1px solid #FDBA74", dot: "#F97316" },
 };
 
 function StatusBadge({ status }: { status: string }) {
   const label = CASE_STATUS_LABELS[status] ?? status;
-  const s = STATUS_COLOR[status] ?? STATUS_COLOR[label] ?? { bg: "#1e293b", color: "#94a3b8", border: "1px solid #475569", dot: "#64748b" };
+  const ec = CASE_STATUS_COLORS[status];
+  const s = ec
+    ? { bg: ec.bg, color: ec.color, border: `1px solid ${ec.border}`, dot: ec.border }
+    : STATUS_COLOR[status] ?? STATUS_COLOR[label] ?? { bg: "#1e293b", color: "#94a3b8", border: "1px solid #475569", dot: "#64748b" };
   return (
     <span style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "3px 10px", borderRadius: 999, fontSize: 11, fontWeight: 700, background: s.bg, color: s.color, border: s.border }}>
       <span style={{ width: 6, height: 6, borderRadius: "50%", background: s.dot }} />

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { CASE_TYPE_LABELS, CASE_STATUS_LABELS } from "@/lib/constants/case";
+import { CASE_TYPE_LABELS, CASE_STATUS_LABELS, CASE_STATUS_COLORS, DEFAULT_STATUS_COLOR } from "@/lib/constants/case";
 import { TF_BY_BRANCH } from "@/lib/constants/tf";
 import {
   FILTER_DEFINITIONS_BY_TYPE,
@@ -86,7 +86,11 @@ const STATUS_COLOR: Record<string, { bg: string; color: string; border: string; 
 
 function StatusBadge({ status }: { status: string }) {
   const displayStatus = CASE_STATUS_LABELS[status] ?? status;
-  const s = STATUS_COLOR[displayStatus] ?? { bg: "#1e293b", color: "#94a3b8", border: "1px solid #475569", dot: "#64748b" };
+  const enumColor = CASE_STATUS_COLORS[status];
+  const labelColor = STATUS_COLOR[displayStatus];
+  const s = enumColor
+    ? { bg: enumColor.bg, color: enumColor.color, border: `1px solid ${enumColor.border}`, dot: enumColor.border }
+    : labelColor ?? { bg: "#1e293b", color: "#94a3b8", border: "1px solid #475569", dot: "#64748b" };
   return (
     <span style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "3px 10px", borderRadius: 999, fontSize: 11, fontWeight: 700, background: s.bg, color: s.color, border: s.border }}>
       <span style={{ width: 6, height: 6, borderRadius: "50%", background: s.dot, flexShrink: 0 }} />

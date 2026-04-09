@@ -92,3 +92,44 @@ export const CASE_TYPE_LABELS: Record<string, string> = {
 
 export const DISPOSAL_TYPE = ["승인", "불승인", "반려", "보류", "파기"] as const;
 export const GRADE_TYPE = ["일반", "조정", "가중", "준용"] as const;
+
+export const CASE_STATUS_COLORS: Record<string, { bg: string; color: string; border: string }> = {
+  // 초기 단계 - 회색/연보라
+  CONSULTING:              { bg: '#475569', color: '#fff', border: '#64748b' },
+  WAITING_FIRST_CLINIC:    { bg: '#7c3aed', color: '#fff', border: '#8b5cf6' },
+
+  // 약정/서류 단계 - 파랑 계열
+  CONTRACTED:              { bg: '#2563eb', color: '#fff', border: '#3b82f6' },
+  DOC_COLLECTING:          { bg: '#0284c7', color: '#fff', border: '#0ea5e9' },
+
+  // 접수 완료 - 더보상 스카이블루
+  SUBMITTED:               { bg: '#29ABE2', color: '#fff', border: '#1d9fd0' },
+
+  // 특진 단계 - 청록~초록 계열
+  EXAM_REQUESTED:          { bg: '#0d9488', color: '#fff', border: '#14b8a6' },
+  EXAM_CLINIC_SELECTED:    { bg: '#059669', color: '#fff', border: '#10b981' },
+  EXAM_SCHEDULED:          { bg: '#16a34a', color: '#fff', border: '#22c55e' },
+  IN_EXAM:                 { bg: '#ca8a04', color: '#fff', border: '#eab308' },
+  EXAM_DONE:               { bg: '#d97706', color: '#fff', border: '#f59e0b' },
+
+  // 전문조사 단계 - 보라 계열
+  EXPERT_REQUESTED:        { bg: '#7c3aed', color: '#fff', border: '#8b5cf6' },
+  EXPERT_CLINIC_SELECTED:  { bg: '#6d28d9', color: '#fff', border: '#7c3aed' },
+  EXPERT_DONE:             { bg: '#5b21b6', color: '#fff', border: '#6d28d9' },
+
+  // 결정/검토 단계 - 주황~노랑 계열
+  BANK_REQUESTED:          { bg: '#ea580c', color: '#fff', border: '#f97316' },
+  BANK_SUBMITTED:          { bg: '#dc2626', color: '#fff', border: '#ef4444' },
+  DECISION_RECEIVED:       { bg: '#b45309', color: '#fff', border: '#d97706' },
+  REVIEWING:               { bg: '#92400e', color: '#fff', border: '#b45309' },
+  INFO_REQUESTED:          { bg: '#0e7490', color: '#fff', border: '#0891b2' },
+
+  // 최종 결과
+  APPROVED:                { bg: '#8DC63F', color: '#fff', border: '#7ab535' },
+  REJECTED:                { bg: '#dc2626', color: '#fff', border: '#b91c1c' },
+  CLOSED:                  { bg: '#374151', color: '#9ca3af', border: '#4b5563' },
+  OBJECTION:               { bg: '#c2410c', color: '#fff', border: '#ea580c' },
+  WAGE_CORRECTION:         { bg: '#0e7490', color: '#fff', border: '#0891b2' },
+};
+
+export const DEFAULT_STATUS_COLOR = { bg: '#1e293b', color: '#94a3b8', border: '#475569' };
