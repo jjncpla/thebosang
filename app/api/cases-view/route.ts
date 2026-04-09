@@ -15,7 +15,9 @@ export async function GET(req: NextRequest) {
   const userId = (session.user as { id?: string }).id ?? "";
   const role = (session.user as { role?: string }).role ?? "";
 
-  const salesFilter = myOnly ? { salesManagerId: userId } : {};
+  // STAFF 권한: 본인 영업담당 사건만 강제 필터
+  const isForcedMyOnly = role === "STAFF";
+  const salesFilter = (myOnly || isForcedMyOnly) ? { salesManagerId: userId } : {};
 
   try {
     const cases = await prisma.case.findMany({
@@ -44,6 +46,7 @@ export async function GET(req: NextRequest) {
     // 이산계정: 주민번호 마스킹
     const result = cases.map((c) => ({
       id: c.id,
+      patientId: c.patientId,
       caseType: c.caseType,
       status: c.status,
       patientName: c.patient?.name ?? "",

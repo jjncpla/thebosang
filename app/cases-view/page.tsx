@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 
 const STATUS_MAP: Record<string, string> = {
@@ -37,6 +38,7 @@ const CASE_TYPE_MAP: Record<string, string> = {
 
 export default function CasesViewPage() {
   const { data: session } = useSession();
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState<"all" | "my">("all");
   const [cases, setCases] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -46,6 +48,7 @@ export default function CasesViewPage() {
 
   const role = (session?.user as { role?: string })?.role ?? "";
   const isIsanAccount = role === "이산계정";
+  const isStaff = role === "STAFF";
 
   const fetchCases = async (myOnly: boolean) => {
     setLoading(true);
@@ -69,12 +72,12 @@ export default function CasesViewPage() {
   };
 
   useEffect(() => {
-    fetchCases(activeTab === "my");
+    fetchCases(isStaff || activeTab === "my");
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab]);
+  }, [activeTab, isStaff]);
 
   const handleSearch = () => {
-    fetchCases(activeTab === "my");
+    fetchCases(isStaff || activeTab === "my");
   };
 
   return (
@@ -83,8 +86,8 @@ export default function CasesViewPage() {
         사건 조회
       </h1>
 
-      {/* 탭 — 이산계정은 탭 숨김 (전체 조회만) */}
-      {!isIsanAccount && (
+      {/* 탭 — 이산계정/STAFF는 탭 숨김 */}
+      {!isIsanAccount && !isStaff && (
         <div className="flex gap-2 mb-6">
           {[
             { key: "all", label: "전체 조회" },
@@ -155,7 +158,7 @@ export default function CasesViewPage() {
       {/* 결과 카운트 */}
       <div className="text-sm text-gray-500 mb-3">
         총 {cases.length}건
-        {activeTab === "my" && !isIsanAccount && " (내 영업 담당 사건)"}
+        {(isStaff || (activeTab === "my" && !isIsanAccount)) && " (내 영업 담당 사건)"}
       </div>
 
       {/* 테이블 */}
@@ -187,8 +190,14 @@ export default function CasesViewPage() {
                 cases.map((c, i) => (
                   <tr
                     key={c.id}
+                    onClick={() => {
+                      if (!isIsanAccount && c.patientId) {
+                        router.push(`/patients/${c.patientId}`);
+                      }
+                    }}
                     style={{
                       backgroundColor: i % 2 === 0 ? "white" : "#f8fafc",
+                      cursor: isIsanAccount ? "default" : "pointer",
                     }}
                   >
                     <td className="px-3 py-2 font-medium">{c.patientName}</td>
