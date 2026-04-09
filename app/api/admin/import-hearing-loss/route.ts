@@ -205,7 +205,7 @@ export async function POST(req: NextRequest) {
       const status    = parseStr(col(row, '진행상태', '진행상황')) || 'CONSULTING'
       const receptionDate = parseDate(col(row, '접수일자'))
       const contractDate  = parseDate(col(row, '약정일자'))
-      const kwcOfficeName = parseStr(col(row, '지사', '관할공단지사', '관할 공단'))
+      const kwcOfficeName = parseStr(col(row, '지사', '관할공단지사', '관할 공단', '지역본부'))
       const caseMemo  = parseStr(col(row, '사건메모', '비고'))
       const closedReason = parseStr(col(row, '종결사유'))
 
