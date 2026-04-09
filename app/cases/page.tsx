@@ -1027,7 +1027,7 @@ export default function CasesPage() {
                     <td style={{ padding: "12px 16px", color: "#374151" }}>{c.salesManager ?? "-"}</td>
                     <td style={{ padding: "12px 16px", color: "#374151" }}>{c.caseManager ?? "-"}</td>
                     <td style={{ padding: "12px 16px" }}>
-                      <StatusBadge status={CASE_STATUS_LABELS[c.hearingLoss?.status ?? c.status] ?? c.hearingLoss?.status ?? c.status} />
+                      <StatusBadge status={c.hearingLoss?.status ?? c.status} />
                     </td>
                     <td style={{ padding: "12px 16px", color: "#6b7280" }}>{c.hearingLoss?.firstClinic ?? "-"}</td>
                     <td style={{ padding: "12px 16px", color: "#6b7280" }}>{c.hearingLoss?.specialClinic ?? "-"}</td>
@@ -1045,7 +1045,7 @@ export default function CasesPage() {
                     <td style={{ padding: "12px 16px", color: "#6b7280" }}>{c.tfName ?? "-"}</td>
                     <td style={{ padding: "12px 16px", color: "#374151" }}>{c.caseManager ?? "-"}</td>
                     <td style={{ padding: "12px 16px" }}>
-                      <StatusBadge status={CASE_STATUS_LABELS[c.status] ?? getCaseStatus(c) ?? "-"} />
+                      <StatusBadge status={getCaseStatus(c)} />
                     </td>
                     <td style={{ padding: "12px 16px", color: "#9ca3af", fontFamily: "monospace", fontSize: 12 }}>{formatDate(c.receptionDate ?? c.createdAt)}</td>
                   </>
