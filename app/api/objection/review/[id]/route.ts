@@ -60,6 +60,12 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }
 
     if (!existingObjectionCase) {
+      // 제척도래일 자동 산정 (처분일 + 90일)
+      let examClaimDeadline: Date | null = null;
+      if (item.decisionDate) {
+        examClaimDeadline = new Date(item.decisionDate);
+        examClaimDeadline.setDate(examClaimDeadline.getDate() + 90);
+      }
       await prisma.objectionCase.create({
         data: {
           caseId: item.caseId || null,
@@ -68,6 +74,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
           patientName: item.patientName,
           caseType: item.caseType,
           decisionDate: item.decisionDate,
+          examClaimDeadline,
           approvalStatus: item.approvalStatus,
           progressStatus: "진행중",
         }

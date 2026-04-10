@@ -32,7 +32,7 @@ model Case {
   // EXAM_REQUESTED / EXAM_CLINIC_SELECTED / EXAM_SCHEDULED / IN_EXAM / EXAM_DONE /
   // EXPERT_REQUESTED / EXPERT_CLINIC_SELECTED / EXPERT_DONE /
   // BANK_REQUESTED / BANK_SUBMITTED / DECISION_RECEIVED /
-  // REVIEWING / INFO_REQUESTED / APPROVED / REJECTED / CLOSED / OBJECTION / WAGE_CORRECTION
+  // REVIEWING / INFO_REQUESTED / APPROVED / REJECTED / CLOSED / OBJECTION / WAGE_CORRECTION / REVIEW_CLOSED
 
   // 파생 사건 연결 (평균임금 정정 청구 등)
   parentCaseId String?
@@ -636,6 +636,7 @@ model ObjectionCase {
   caseType              String    // 소음성 난청 / COPD / 근골격계 등
   approvalStatus        String    // 승인 / 불승인 / 일부승인
   decisionDate          DateTime? // 처분일(안날) — 제척기간 기산일
+  examClaimDeadline     DateTime? // 제척도래일 (처분일+90일 또는 +180일)
   // 심사청구
   examClaimDate         DateTime? // 심사청구일
   examResult            String?   // 기각 / 인용 / 취하 / null(진행중)

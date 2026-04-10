@@ -50,12 +50,50 @@ export async function PUT(
       }
     }
 
+    // 기존 데이터 조회 (결정수령일 변경 감지용)
+    const existingDetail = await prisma.hearingLossDetail.findUnique({
+      where: { caseId },
+      select: { decisionReceivedAt: true },
+    });
+
     const detail = await prisma.hearingLossDetail.upsert({
       where: { caseId },
       create: { caseId, ...data },
       update: data,
       include: { exams: { orderBy: [{ examSet: "asc" }, { examRound: "asc" }] } },
     });
+
+    // 결정수령일이 새로 입력된 경우 → Case.status 전이 + ObjectionReview 자동 생성
+    if (detail.decisionReceivedAt && !existingDetail?.decisionReceivedAt) {
+      await prisma.case.update({
+        where: { id: caseId },
+        data: { status: "DECISION_RECEIVED" },
+      });
+
+      const existingReview = await prisma.objectionReview.findFirst({
+        where: { caseId },
+      });
+      if (!existingReview) {
+        const caseInfo = await prisma.case.findUnique({
+          where: { id: caseId },
+          include: { patient: { select: { name: true } } },
+        });
+        if (caseInfo) {
+          await prisma.objectionReview.create({
+            data: {
+              caseId,
+              tfName: caseInfo.tfName ?? "",
+              patientName: caseInfo.patient?.name ?? "",
+              caseType: caseInfo.caseType ?? "",
+              approvalStatus: detail.decisionType === "APPROVED" ? "승인" : "불승인",
+              progressStatus: "",
+              decisionDate: detail.decisionReceivedAt,
+            },
+          });
+        }
+      }
+    }
+
     return NextResponse.json(detail);
   } catch (err) {
     console.error("[PUT /api/cases/[caseId]/hearing-loss]", err);
