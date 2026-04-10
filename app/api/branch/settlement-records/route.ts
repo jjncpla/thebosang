@@ -40,6 +40,34 @@ export async function POST(req: NextRequest) {
     },
     include: { allocations: true },
   })
+
+  // 정산 담당자 지정 시 Todo 자동 생성
+  if (recordData.settlementStaffId) {
+    const existing = await prisma.todo.findFirst({
+      where: {
+        assignedTo: recordData.settlementStaffId,
+        type: "WAGE_REQUEST",
+        isDone: false,
+        title: { contains: record.victimName ?? "" },
+      },
+    })
+    if (!existing) {
+      const dueDate = new Date()
+      dueDate.setDate(dueDate.getDate() + 7)
+      await prisma.todo.create({
+        data: {
+          title: `[정산요청] ${record.victimName ?? ""} — ${record.branchName} ${record.year}년 ${record.month}월`,
+          type: "WAGE_REQUEST",
+          dueDate,
+          patientName: record.victimName ?? null,
+          assignedTo: recordData.settlementStaffId,
+          isDone: false,
+          memo: `TF: ${record.tfName ?? ""} / 총액: ${record.grossAmount?.toLocaleString() ?? ""}원`,
+        },
+      })
+    }
+  }
+
   return NextResponse.json(record)
 }
 

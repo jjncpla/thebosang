@@ -519,7 +519,8 @@ model User {
   timelineEvents TimelineEvent[]
   consultations  Consultation[]  @relation("ConsultationManager")
   objectionCases   ObjectionCase[]   @relation("ObjectionManager")
-  objectionReviews ObjectionReview[] @relation("ObjectionReviewAssignee")
+  objectionReviews  ObjectionReview[]  @relation("ObjectionReviewAssignee")
+  settlementRecords SettlementRecord[] @relation("SettlementStaffUser")
   todos          Todo[]
   evaluations         StaffEvaluation[]    @relation("EvaluationTarget")
   workOrders          WorkOrder[]          @relation("WorkOrderAuthor")
@@ -893,6 +894,8 @@ model SettlementRecord {
   tfName              String?
   salesStaffName      String?
   settlementStaffName String?
+  settlementStaffId   String?
+  settlementStaffUser User?   @relation("SettlementStaffUser", fields: [settlementStaffId], references: [id])
   grossAmount         Int
   deduction           Int                    @default(0)
   isInstallment           Boolean  @default(false)

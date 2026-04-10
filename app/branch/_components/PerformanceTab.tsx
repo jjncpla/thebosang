@@ -31,6 +31,7 @@ interface SettlementRow {
   tfName: string
   salesStaffName: string
   settlementStaffName: string
+  settlementStaffId?: string | null
   grossAmount: number
   deduction: number
   isInstallment?: boolean
@@ -1198,6 +1199,7 @@ export default function PerformanceTab() {
       <AddSettlementForm
         branchName={branch} year={year} defaultMonth={month || new Date().getMonth() + 1}
         userNames={userNames}
+        users={users}
         onSave={async (row) => {
           const res = await fetch('/api/branch/settlement-records', {
             method: 'POST',
@@ -1578,14 +1580,15 @@ export default function PerformanceTab() {
 
 // ─── 직접 추가 폼 ─────────────────────────────────────────────────
 function AddSettlementForm({
-  branchName, year, defaultMonth, userNames,
+  branchName, year, defaultMonth, userNames, users,
   onSave, onCancel,
 }: {
   branchName: string
   year: number
   defaultMonth: number
   userNames: string[]
-  onSave: (row: SettlementRow & { year: number; month: number }) => Promise<void>
+  users: UserItem[]
+  onSave: (row: SettlementRow & { year: number; month: number; settlementStaffId?: string | null }) => Promise<void>
   onCancel: () => void
 }) {
   const [form, setForm] = useState({
@@ -1599,6 +1602,7 @@ function AddSettlementForm({
     totalInstallmentAmount: 0,
     paidInstallmentAmount: 0,
     settlementStaffName: '',
+    settlementStaffId: '' as string,
     grossAmount: 0,
     deduction: 0,
     memo: '',
@@ -1632,6 +1636,7 @@ function AddSettlementForm({
         month: rowMonth,
         paymentDate: payDate || '',
         deduction: form.deduction || 0,
+        settlementStaffId: form.settlementStaffId || null,
       })
     } finally {
       setSaving(false)
@@ -1714,11 +1719,15 @@ function AddSettlementForm({
         {/* 정산담당자 */}
         <div>
           <label className="text-xs text-gray-500">정산담당자</label>
-          <select value={form.settlementStaffName}
-            onChange={e => setForm(f => ({ ...f, settlementStaffName: e.target.value }))}
+          <select value={form.settlementStaffId}
+            onChange={e => {
+              const uid = e.target.value
+              const userName = users.find(u => u.id === uid)?.name ?? ''
+              setForm(f => ({ ...f, settlementStaffId: uid, settlementStaffName: userName }))
+            }}
             className={`${inputCls} mt-0.5`}>
             <option value="">선택</option>
-            {userNames.map(n => <option key={n} value={n}>{n}</option>)}
+            {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
           </select>
         </div>
 

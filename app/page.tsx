@@ -46,6 +46,18 @@ export default function TodoPage() {
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState<Set<TaskType>>(new Set(ALL_TYPES));
   const [memoText, setMemoText] = useState("");
+  const [stats, setStats] = useState<{
+    total: number; done: number; rate: number;
+    byType: Record<string, { total: number; done: number }>;
+  } | null>(null);
+
+  useEffect(() => {
+    const n = new Date();
+    fetch(`/api/todos/stats?year=${n.getFullYear()}&month=${n.getMonth() + 1}`)
+      .then(r => r.json())
+      .then(setStats)
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     const fetchTodos = async () => {
@@ -229,6 +241,42 @@ export default function TodoPage() {
 
         {/* ── 우측: 필터 + 메모 ── */}
         <div style={{ width: 260, flexShrink: 0, display: "flex", flexDirection: "column", gap: 16 }}>
+
+          {/* 수행율 위젯 */}
+          {stats && (
+            <div style={card}>
+              <div style={sideCardH}>이번 달 수행율</div>
+              <div style={{ padding: "12px 16px" }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                  <span style={{ fontSize: 13, color: "#475569" }}>완료 {stats.done}건 / 전체 {stats.total}건</span>
+                  <span style={{ fontSize: 18, fontWeight: 800, color: "#29ABE2" }}>{stats.rate}%</span>
+                </div>
+                <div style={{ width: "100%", background: "#e2e8f0", borderRadius: 999, height: 8, marginBottom: 12 }}>
+                  <div style={{ width: `${stats.rate}%`, background: "#29ABE2", borderRadius: 999, height: 8, transition: "width 0.3s" }} />
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 4, textAlign: "center" }}>
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: "#ea580c" }}>
+                      {stats.byType.OBJECTION_DEADLINE?.done ?? 0}/{stats.byType.OBJECTION_DEADLINE?.total ?? 0}
+                    </div>
+                    <div style={{ fontSize: 10, color: "#94a3b8" }}>제척임박</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: "#1e40af" }}>
+                      {stats.byType.WAGE_REQUEST?.done ?? 0}/{stats.byType.WAGE_REQUEST?.total ?? 0}
+                    </div>
+                    <div style={{ fontSize: 10, color: "#94a3b8" }}>정산요청</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: "#065f46" }}>
+                      {stats.byType.GENERAL?.done ?? 0}/{stats.byType.GENERAL?.total ?? 0}
+                    </div>
+                    <div style={{ fontSize: 10, color: "#94a3b8" }}>일반업무</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* 필터 */}
           <div style={card}>
