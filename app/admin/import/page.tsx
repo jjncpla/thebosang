@@ -126,6 +126,23 @@ export default function ImportPage() {
     } catch { /* silent */ } finally { setWageDeleteConfirming(false); }
   };
 
+  const [hlParsedRows, setHlParsedRows] = useState<any[][] | null>(null);
+
+  const parseHlFile = async (): Promise<any[][] | null> => {
+    if (hlParsedRows) return hlParsedRows;
+    if (!file) return null;
+    const buf = await file.arrayBuffer();
+    const wb = XLSX.read(buf, { type: "buffer", cellDates: true });
+    const sheetName = wb.SheetNames.find(n => n === "변환결과")
+      ?? wb.SheetNames.find(n => n.includes("TF"))
+      ?? wb.SheetNames.find(n => !n.toLowerCase().startsWith("chart"))
+      ?? wb.SheetNames[0];
+    const ws = wb.Sheets[sheetName];
+    const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null, raw: false }) as any[][];
+    setHlParsedRows(rows);
+    return rows;
+  };
+
   const handleHlVerify = async () => {
     if (!file || !selectedTf) return;
     setHlVerifying(true);
@@ -133,12 +150,13 @@ export default function ImportPage() {
     setHlImportResult(null);
     setHlError(null);
     try {
-      const fd = new FormData();
-      fd.append("file", file);
-      fd.append("mode", "verify");
-      fd.append("tfName", selectedTf);
-      fd.append("branch", selectedBranch);
-      const res = await fetch("/api/admin/import-hearing-loss", { method: "POST", body: fd });
+      const rows = await parseHlFile();
+      if (!rows) { setHlError("파일 파싱 실패"); return; }
+      const res = await fetch("/api/admin/import-hearing-loss", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode: "verify", rows, tfName: selectedTf, branch: selectedBranch }),
+      });
       const data = await res.json();
       if (!res.ok) { setHlError(data.error ?? "검증 오류"); return; }
       setHlVerifyResult(data);
@@ -152,12 +170,13 @@ export default function ImportPage() {
     setHlImportResult(null);
     setHlError(null);
     try {
-      const fd = new FormData();
-      fd.append("file", file);
-      fd.append("mode", "import");
-      fd.append("tfName", selectedTf);
-      fd.append("branch", selectedBranch);
-      const res = await fetch("/api/admin/import-hearing-loss", { method: "POST", body: fd });
+      const rows = await parseHlFile();
+      if (!rows) { setHlError("파일 파싱 실패"); return; }
+      const res = await fetch("/api/admin/import-hearing-loss", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode: "import", rows, tfName: selectedTf, branch: selectedBranch }),
+      });
       const data = await res.json();
       if (!res.ok) { setHlError(data.error ?? "임포트 오류"); return; }
       setHlImportResult(data);
@@ -169,6 +188,7 @@ export default function ImportPage() {
 
   const handleFile = (f: File) => {
     setFile(f);
+    setHlParsedRows(null);
     setResult(null);
     setServerError(null);
     setProgress(null);

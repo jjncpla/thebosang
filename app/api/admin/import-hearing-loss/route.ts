@@ -3,7 +3,6 @@ export const dynamic = 'force-dynamic'
 
 import { NextRequest, NextResponse } from 'next/server'
 import { PrismaClient } from '@prisma/client'
-import * as XLSX from 'xlsx'
 
 const prisma = new PrismaClient()
 
@@ -65,39 +64,17 @@ function parseBool(val: any): boolean {
 
 export async function POST(req: NextRequest) {
   try {
-    const formData = await req.formData()
-    const file = formData.get('file') as File | null
-    const mode = (formData.get('mode') as string) || 'verify'
-    const paramTfName = (formData.get('tfName') as string) || null
-    const paramBranch = (formData.get('branch') as string) || null
-
-    if (!file) {
-      return NextResponse.json({ ok: false, error: '파일이 없습니다' }, { status: 400 })
-    }
-
-    // xlsx 파싱
-    const buf = await file.arrayBuffer()
-    const wb = XLSX.read(buf, { type: 'buffer', cellDates: true })
-
-    // 데이터 시트 탐색: "변환결과" → "울산북부TF" → Chart가 아닌 첫 시트 → 첫 시트
-    const sheetName = wb.SheetNames.find(n => n === '변환결과')
-      ?? wb.SheetNames.find(n => n.includes('TF'))
-      ?? wb.SheetNames.find(n => !n.toLowerCase().startsWith('chart'))
-      ?? wb.SheetNames[0]
-    const ws = wb.Sheets[sheetName]
-
-    const allRows = XLSX.utils.sheet_to_json(ws, {
-      header: 1,
-      defval: null,
-      raw: false,
-    }) as any[][]
+    const body = await req.json()
+    const mode = body.mode || 'verify'
+    const paramTfName = body.tfName || null
+    const paramBranch = body.branch || null
+    const allRows: any[][] = body.rows
 
     if (!allRows || allRows.length === 0) {
-      return NextResponse.json({
-        ok: false,
-        error: `시트 "${sheetName}"에서 데이터를 읽을 수 없습니다. 시트 목록: ${wb.SheetNames.join(', ')}`,
-      }, { status: 400 })
+      return NextResponse.json({ ok: false, error: '데이터가 없습니다' }, { status: 400 })
     }
+
+    const sheetName = body.sheetName || '(클라이언트 파싱)'
 
     // 디버그: 첫 5행의 첫 5셀을 반환 (문제 진단용)
     const debugRows = allRows.slice(0, 5).map((r, i) => ({
