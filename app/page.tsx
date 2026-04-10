@@ -46,6 +46,8 @@ export default function TodoPage() {
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState<Set<TaskType>>(new Set(ALL_TYPES));
   const [memoText, setMemoText] = useState("");
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [addForm, setAddForm] = useState({ title: "", dueDate: "", memo: "" });
   const [stats, setStats] = useState<{
     total: number; done: number; rate: number;
     byType: Record<string, { total: number; done: number }>;
@@ -59,22 +61,21 @@ export default function TodoPage() {
       .catch(() => {});
   }, []);
 
-  useEffect(() => {
-    const fetchTodos = async () => {
-      try {
-        const res = await fetch("/api/todos");
-        if (res.ok) {
-          const data = await res.json();
-          setTasks(data);
-        }
-      } catch (e) {
-        console.error("Todo 로드 실패", e);
-      } finally {
-        setLoading(false);
+  const fetchTodos = async () => {
+    try {
+      const res = await fetch("/api/todos");
+      if (res.ok) {
+        const data = await res.json();
+        setTasks(data);
       }
-    };
-    fetchTodos();
-  }, []);
+    } catch (e) {
+      console.error("Todo 로드 실패", e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { fetchTodos(); }, []);
 
   const handleToggleDone = async (id: string, isDone: boolean) => {
     await fetch(`/api/todos/${id}`, {
@@ -83,6 +84,30 @@ export default function TodoPage() {
       body: JSON.stringify({ isDone: !isDone }),
     });
     setTasks(prev => prev.map(t => t.id === id ? { ...t, isDone: !isDone } : t));
+  };
+
+  const handleAddTodo = async () => {
+    if (!addForm.title || !addForm.dueDate) return;
+    try {
+      const res = await fetch("/api/todos", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: addForm.title, dueDate: addForm.dueDate, type: "GENERAL", memo: addForm.memo || null }),
+      });
+      if (res.ok) {
+        setShowAddModal(false);
+        setAddForm({ title: "", dueDate: selectedDate || "", memo: "" });
+        fetchTodos();
+      }
+    } catch (e) { console.error(e); }
+  };
+
+  const handleDeleteTodo = async (todoId: string) => {
+    if (!confirm("이 업무를 삭제하시겠습니까?")) return;
+    try {
+      const res = await fetch(`/api/todos/${todoId}`, { method: "DELETE" });
+      if (res.ok) fetchTodos();
+    } catch (e) { console.error(e); }
   };
 
   const todayStr = fmt(now);
@@ -205,7 +230,10 @@ export default function TodoPage() {
               <span style={{ fontWeight: 700, fontSize: 14, color: "#1e293b" }}>
                 {selectedDate} 업무 목록
               </span>
-              <span style={{ fontSize: 12, color: "#94a3b8" }}>{dayTasks.length}건</span>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ fontSize: 12, color: "#94a3b8" }}>{dayTasks.length}건</span>
+                <button onClick={() => { setAddForm({ title: "", dueDate: selectedDate || "", memo: "" }); setShowAddModal(true); }} style={{ background: "#29ABE2", color: "white", border: "none", borderRadius: 6, padding: "4px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>+ 업무 추가</button>
+              </div>
             </div>
             <div style={{ padding: "8px 16px 16px" }}>
               {dayTasks.length === 0 ? (
@@ -231,6 +259,7 @@ export default function TodoPage() {
                       <span style={{ fontSize: 12, color: "#94a3b8", whiteSpace: "nowrap" }}>
                         {t.dueDate ? `기한 ${t.dueDate.slice(0, 10)}` : ""}
                       </span>
+                      <button onClick={() => handleDeleteTodo(t.id)} style={{ fontSize: 11, color: "#ef4444", background: "none", border: "none", cursor: "pointer", opacity: 0.4, padding: "2px 4px" }} onMouseEnter={e => e.currentTarget.style.opacity = "1"} onMouseLeave={e => e.currentTarget.style.opacity = "0.4"}>삭제</button>
                     </div>
                   );
                 })
@@ -322,6 +351,34 @@ export default function TodoPage() {
 
         </div>
       </div>
+
+      {/* 업무 추가 모달 */}
+      {showAddModal && (
+        <>
+          <div onClick={() => setShowAddModal(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 999 }} />
+          <div style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)", background: "white", borderRadius: 12, padding: 24, zIndex: 1000, width: 400, maxWidth: "95%", boxShadow: "0 20px 60px rgba(0,0,0,0.3)", fontFamily: "'Malgun Gothic','Apple SD Gothic Neo','Segoe UI',sans-serif" }}>
+            <h3 style={{ fontSize: 15, fontWeight: 700, color: "#111827", marginBottom: 16 }}>업무 추가</h3>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <div>
+                <label style={{ fontSize: 12, color: "#6b7280", fontWeight: 600, display: "block", marginBottom: 4 }}>업무명 *</label>
+                <input type="text" value={addForm.title} onChange={e => setAddForm(p => ({ ...p, title: e.target.value }))} placeholder="업무 내용을 입력하세요" style={{ width: "100%", border: "1px solid #e2e8f0", borderRadius: 8, padding: "8px 12px", fontSize: 13, outline: "none", boxSizing: "border-box" }} />
+              </div>
+              <div>
+                <label style={{ fontSize: 12, color: "#6b7280", fontWeight: 600, display: "block", marginBottom: 4 }}>기한 *</label>
+                <input type="date" value={addForm.dueDate} onChange={e => setAddForm(p => ({ ...p, dueDate: e.target.value }))} style={{ width: "100%", border: "1px solid #e2e8f0", borderRadius: 8, padding: "8px 12px", fontSize: 13, outline: "none", boxSizing: "border-box" }} />
+              </div>
+              <div>
+                <label style={{ fontSize: 12, color: "#6b7280", fontWeight: 600, display: "block", marginBottom: 4 }}>메모</label>
+                <textarea value={addForm.memo} onChange={e => setAddForm(p => ({ ...p, memo: e.target.value }))} placeholder="메모 (선택)" rows={3} style={{ width: "100%", border: "1px solid #e2e8f0", borderRadius: 8, padding: "8px 12px", fontSize: 13, outline: "none", resize: "vertical", boxSizing: "border-box" }} />
+              </div>
+            </div>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 16 }}>
+              <button onClick={() => setShowAddModal(false)} style={{ border: "1px solid #e2e8f0", borderRadius: 8, padding: "8px 16px", fontSize: 13, color: "#374151", background: "white", cursor: "pointer" }}>취소</button>
+              <button onClick={handleAddTodo} disabled={!addForm.title || !addForm.dueDate} style={{ background: "#29ABE2", color: "white", border: "none", borderRadius: 8, padding: "8px 16px", fontSize: 13, fontWeight: 700, cursor: "pointer", opacity: (!addForm.title || !addForm.dueDate) ? 0.5 : 1 }}>저장</button>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }

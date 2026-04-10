@@ -1463,8 +1463,40 @@ function PneumoconiosisTab({ caseId }: { caseId: string }) {
 const BRANCHES = ["울산지사", "부산지사", "경남지사", "서울지사", "경기지사", "인천지사", "대구지사", "광주지사", "대전지사", "기타"];
 const SALES_ROUTES = ["직접", "제휴", "소개", "온라인", "기타"];
 
+const FORM_LIST = [
+  { type: "DISABILITY_CLAIM", label: "장해급여 청구서" },
+  { type: "NOISE_WORK_CONFIRM", label: "소음작업 확인서" },
+  { type: "AGENT_APPOINTMENT", label: "대리인 선임신고서" },
+  { type: "POWER_OF_ATTORNEY", label: "위임장" },
+  { type: "SPECIAL_CLINIC", label: "특진선택확인서" },
+  { type: "EXPERT_CLINIC", label: "전문조사확인서" },
+  { type: "WORK_HISTORY", label: "직업력 표준문답서" },
+] as const;
+
 function BasicInfoTab({ caseData, onUpdated }: { caseData: CaseData; onUpdated: (c: CaseData) => void }) {
   const [editing, setEditing] = useState(false);
+  const [formLoading, setFormLoading] = useState<string | null>(null);
+
+  const handleFormDownload = async (formType: string) => {
+    setFormLoading(formType);
+    try {
+      const res = await fetch(`/api/cases/${caseData.id}/forms?type=${formType}`);
+      if (!res.ok) throw new Error("서식 생성 실패");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const label = FORM_LIST.find(f => f.type === formType)?.label || formType;
+      a.download = `${caseData.patient?.name || ""}_${label}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      alert("서식 생성에 실패했습니다.");
+    } finally {
+      setFormLoading(null);
+    }
+  };
+
   const [form, setForm] = useState({
     caseType: caseData.caseType,
     caseNumber: caseData.caseNumber ?? "",
@@ -1537,6 +1569,18 @@ function BasicInfoTab({ caseData, onUpdated }: { caseData: CaseData; onUpdated: 
             {caseData.memo}
           </div>
         )}
+        {/* 서식 생성 */}
+        <div style={{ background: "#f8fafc", borderRadius: 10, border: "1px solid #e5e7eb", padding: 16, marginBottom: 16 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: "#374151", marginBottom: 10 }}>서식 생성 (DB 데이터 자동 완성)</div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8 }}>
+            {FORM_LIST.map(f => (
+              <button key={f.type} onClick={() => handleFormDownload(f.type)} disabled={formLoading === f.type} style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 12px", border: "1px solid #e5e7eb", borderRadius: 8, background: "white", fontSize: 12, color: "#374151", cursor: "pointer", opacity: formLoading === f.type ? 0.5 : 1 }}>
+                {formLoading === f.type ? "생성중..." : f.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
         <button onClick={() => setEditing(true)} style={{ background: "white", color: "#374151", border: "1px solid #e5e7eb", borderRadius: 6, padding: "7px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
           수정
         </button>
