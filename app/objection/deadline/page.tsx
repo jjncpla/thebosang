@@ -150,10 +150,38 @@ function CaseModal({ initial, managers, onClose, onSave }: {
       examResultDate: toInputDate(initial.examResultDate),
       reExamClaimDate: toInputDate(initial.reExamClaimDate),
       reExamResultDate: toInputDate(initial.reExamResultDate),
-    } : { tfName: "", patientName: "", caseType: "", approvalStatus: "불승인", progressStatus: "진행중", isQualityReview: false }
+      caseId: initial.caseId ?? null,
+    } : { tfName: "", patientName: "", caseType: "", approvalStatus: "불승인", progressStatus: "진행중", isQualityReview: false, caseId: null as string | null }
   );
   const [saving, setSaving] = useState(false);
+  const [caseSearchQuery, setCaseSearchQuery] = useState("");
+  const [caseSearchResults, setCaseSearchResults] = useState<{ id: string; patient?: { name: string }; tfName?: string; caseType?: string; branch?: string }[]>([]);
+  const [caseSearchLoading, setCaseSearchLoading] = useState(false);
   const set = (k: string, v: unknown) => setForm((f: CaseForm) => ({ ...f, [k]: v }));
+
+  const handleCaseSearch = async () => {
+    if (!caseSearchQuery.trim()) return;
+    setCaseSearchLoading(true);
+    try {
+      const res = await fetch(`/api/cases?search=${encodeURIComponent(caseSearchQuery)}&limit=10`);
+      const data = await res.json();
+      setCaseSearchResults(data.cases || data || []);
+    } catch (e) { console.error(e); }
+    finally { setCaseSearchLoading(false); }
+  };
+
+  const handleCaseSelect = (c: { id: string; patient?: { name: string }; tfName?: string; caseType?: string }) => {
+    const caseTypeMap: Record<string, string> = { HEARING_LOSS: "난청", COPD: "COPD", PNEUMOCONIOSIS: "진폐", MUSCULOSKELETAL: "근골격계" };
+    setForm(prev => ({
+      ...prev,
+      caseId: c.id,
+      tfName: c.tfName || prev.tfName,
+      patientName: c.patient?.name || prev.patientName,
+      caseType: caseTypeMap[c.caseType ?? ""] || c.caseType || prev.caseType,
+    }));
+    setCaseSearchResults([]);
+    setCaseSearchQuery("");
+  };
 
   const handleSave = async () => {
     setSaving(true);
@@ -173,6 +201,34 @@ function CaseModal({ initial, managers, onClose, onSave }: {
           <h2 style={{ margin: 0, fontSize: 15, fontWeight: 800, color: "#111827" }}>{initial ? "수정" : "등록"} — 기일관리</h2>
           <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "#6b7280" }}>✕</button>
         </div>
+        {/* 사건 DB 연결 */}
+        <div style={{ marginBottom: 14, padding: "10px 12px", background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: 8 }}>
+          <p style={{ fontSize: 11, fontWeight: 700, color: "#1d4ed8", marginBottom: 6 }}>사건 DB 연결 <span style={{ fontWeight: 400, color: "#60a5fa" }}>(선택 — 연결 시 TF·성명 자동 채움)</span></p>
+          {form.caseId ? (
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "white", borderRadius: 6, padding: "6px 10px", border: "1px solid #93c5fd" }}>
+              <span style={{ fontSize: 12, color: "#1d4ed8", fontWeight: 600 }}>✓ 사건 연결됨</span>
+              <button type="button" onClick={() => set("caseId", null)} style={{ fontSize: 11, color: "#ef4444", background: "none", border: "none", cursor: "pointer" }}>연결 해제</button>
+            </div>
+          ) : (
+            <div>
+              <div style={{ display: "flex", gap: 6 }}>
+                <input type="text" placeholder="성명 또는 TF명으로 검색..." value={caseSearchQuery} onChange={e => setCaseSearchQuery(e.target.value)} onKeyDown={e => e.key === "Enter" && handleCaseSearch()} style={{ flex: 1, border: "1px solid #e5e7eb", borderRadius: 6, padding: "5px 10px", fontSize: 12, outline: "none" }} />
+                <button type="button" onClick={handleCaseSearch} disabled={caseSearchLoading} style={{ padding: "5px 12px", background: "#3b82f6", color: "white", border: "none", borderRadius: 6, fontSize: 12, cursor: "pointer", opacity: caseSearchLoading ? 0.5 : 1 }}>{caseSearchLoading ? "..." : "검색"}</button>
+              </div>
+              {caseSearchResults.length > 0 && (
+                <div style={{ marginTop: 4, border: "1px solid #e5e7eb", borderRadius: 6, background: "white", maxHeight: 140, overflowY: "auto" }}>
+                  {caseSearchResults.map((c) => (
+                    <div key={c.id} onClick={() => handleCaseSelect(c)} style={{ padding: "6px 10px", fontSize: 12, cursor: "pointer", borderBottom: "1px solid #f1f5f9", display: "flex", justifyContent: "space-between" }} onMouseEnter={e => e.currentTarget.style.background = "#eff6ff"} onMouseLeave={e => e.currentTarget.style.background = "white"}>
+                      <span><b>{c.patient?.name}</b> <span style={{ color: "#9ca3af", marginLeft: 4 }}>{c.tfName}</span></span>
+                      <span style={{ color: "#9ca3af", fontSize: 11 }}>{c.branch}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px 14px" }}>
           <div><label style={labelStyle}>TF</label><select style={inputStyle} value={form.tfName ?? ""} onChange={e => set("tfName", e.target.value)}><option value="">선택</option>{TF_OPTIONS.map(t => <option key={t} value={t}>{t}</option>)}</select></div>
           <div><label style={labelStyle}>성명</label><input style={inputStyle} value={form.patientName ?? ""} onChange={e => set("patientName", e.target.value)} /></div>
