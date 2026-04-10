@@ -46,3 +46,8 @@ next-env.d.ts
 *.tmp
 
 lib/generated/
+
+# 로컬 설정 / 작업 지시 파일
+.claude/settings.local.json
+task_*.txt
+import_system_task.txt
