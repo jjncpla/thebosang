@@ -55,6 +55,7 @@ export async function GET(req: NextRequest) {
     memo: null,
     caseId: c.id,
     isAutoFilled: true,
+    assignedTo: null,
   }));
 
   return NextResponse.json([...autoItems, ...items]);

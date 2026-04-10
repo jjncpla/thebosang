@@ -27,6 +27,7 @@ type ReviewItem = {
   memo: string | null;
   caseId: string | null;
   isAutoFilled?: boolean;
+  assignedTo: string | null;
 };
 
 type WageItem = {
@@ -257,6 +258,12 @@ export default function ObjectionReviewPage() {
   const [reviewModal, setReviewModal] = useState(false);
   const [reviewTarget, setReviewTarget] = useState<ReviewItem | null>(null);
 
+  // 담당자 목록
+  const [users, setUsers] = useState<{ id: string; name: string }[]>([]);
+  useEffect(() => {
+    fetch("/api/users").then(r => r.json()).then(data => setUsers(data ?? []));
+  }, []);
+
   // Wage tab state
   const [wages, setWages] = useState<WageItem[]>([]);
   const [filterWageBranch, setFilterWageBranch] = useState("");
@@ -410,14 +417,14 @@ export default function ObjectionReviewPage() {
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                 <thead>
                   <tr style={{ background: "#f8fafc", borderBottom: "2px solid #e5e7eb" }}>
-                    {["승인여부", "TF", "성명", "사건분류", "처분일", "제척도래일", "사건진행여부", "정공여부", "관리"].map(h => (
+                    {["승인여부", "TF", "성명", "사건분류", "처분일", "제척도래일", "사건진행여부", "담당자", "정공여부", "관리"].map(h => (
                       <th key={h} style={{ padding: "9px 12px", textAlign: "left", fontSize: 11, fontWeight: 700, color: "#6b7280", whiteSpace: "nowrap" }}>{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {filteredReviews.length === 0 && (
-                    <tr><td colSpan={9} style={{ padding: "40px 16px", textAlign: "center", color: "#9ca3af", fontSize: 13 }}>데이터가 없습니다</td></tr>
+                    <tr><td colSpan={10} style={{ padding: "40px 16px", textAlign: "center", color: "#9ca3af", fontSize: 13 }}>데이터가 없습니다</td></tr>
                   )}
                   {filteredReviews.map(item => {
                     const deadline = addDays(item.decisionDate, 90);
@@ -451,6 +458,25 @@ export default function ObjectionReviewPage() {
                                 )}
                               </>
                           }
+                        </td>
+                        <td style={{ padding: "10px 12px" }} onClick={e => e.stopPropagation()}>
+                          <select
+                            value={item.assignedTo ?? ""}
+                            onChange={async (e) => {
+                              const assignedTo = e.target.value || null;
+                              await fetch(`/api/objection/review/${item.id}`, {
+                                method: "PUT",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ assignedTo }),
+                              });
+                              fetchReviews();
+                              if (assignedTo) alert("담당자에게 처분 검토 요청 Todo가 생성되었습니다.");
+                            }}
+                            style={{ border: "1px solid #e5e7eb", borderRadius: 6, padding: "4px 8px", fontSize: 11, color: "#374151", background: "#f9fafb", cursor: "pointer", minWidth: 90 }}
+                          >
+                            <option value="">미지정</option>
+                            {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                          </select>
                         </td>
                         <td style={{ padding: "10px 12px", color: item.hasInfoDisclosure ? "#15803d" : "#9ca3af" }}>{item.hasInfoDisclosure ? "✓ 있음" : "없음"}</td>
                         <td style={{ padding: "10px 12px" }}>

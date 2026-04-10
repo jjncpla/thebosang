@@ -144,6 +144,60 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   return NextResponse.json(item);
 }
 
+export async function PUT(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const session = await auth();
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const { id } = await params;
+  const body = await req.json();
+  const { assignedTo } = body;
+
+  const updated = await prisma.objectionReview.update({
+    where: { id },
+    data: { assignedTo: assignedTo || null },
+  });
+
+  // assignedTo가 새로 지정된 경우 Todo 자동 생성
+  if (assignedTo) {
+    const existing = await prisma.todo.findFirst({
+      where: {
+        caseId: updated.caseId ?? undefined,
+        assignedTo,
+        type: "GENERAL",
+        title: { contains: "처분 검토 요청" },
+        isDone: false,
+      },
+    });
+
+    if (!existing) {
+      const dueDate = new Date();
+      dueDate.setDate(dueDate.getDate() + 7);
+
+      await prisma.todo.create({
+        data: {
+          title: `[처분검토] ${updated.patientName} 처분 검토 요청`,
+          type: "GENERAL",
+          dueDate,
+          caseId: updated.caseId ?? null,
+          patientName: updated.patientName,
+          assignedTo,
+          isDone: false,
+          memo: `TF: ${updated.tfName} / 처분일: ${
+            updated.decisionDate
+              ? updated.decisionDate.toISOString().split("T")[0]
+              : "미입력"
+          } / 승인여부: ${updated.approvalStatus}`,
+        },
+      });
+    }
+  }
+
+  return NextResponse.json({ ok: true, data: updated });
+}
+
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

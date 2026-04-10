@@ -518,7 +518,8 @@ model User {
   branchCases    Case[]          @relation("BranchManager")
   timelineEvents TimelineEvent[]
   consultations  Consultation[]  @relation("ConsultationManager")
-  objectionCases ObjectionCase[] @relation("ObjectionManager")
+  objectionCases   ObjectionCase[]   @relation("ObjectionManager")
+  objectionReviews ObjectionReview[] @relation("ObjectionReviewAssignee")
   todos          Todo[]
   evaluations         StaffEvaluation[]    @relation("EvaluationTarget")
   workOrders          WorkOrder[]          @relation("WorkOrderAuthor")
@@ -611,6 +612,8 @@ model ObjectionReview {
   approvalStatus String    // 승인 / 불승인 / 일부승인
   progressStatus String    // 종결 / 검토중 / 이의제기 진행 / 송무 검토 / 송무 인계 / 평정 청구 진행
   hasInfoDisclosure Boolean @default(false) // 정공 여부
+  assignedTo   String?
+  assignedUser User?    @relation("ObjectionReviewAssignee", fields: [assignedTo], references: [id])
   memo           String?
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
