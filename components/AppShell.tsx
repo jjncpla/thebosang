@@ -25,6 +25,7 @@ const MENU_ITEMS: MenuItem[] = [
       { id: "cases-list", label: "사건 목록", path: "/cases" },
       { id: "patients-list", label: "재해자 목록", path: "/patients" },
       { id: "cases-db", label: "사건 DB", path: "/cases/db" },
+      { id: "cases-import", label: "데이터 임포트", path: "/cases/import" },
     ],
   },
   { id: "forms", label: "양식 관리", icon: "📋", path: "/forms", restricted: "admin" },
@@ -285,6 +286,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                     <div>
                       {item.children.filter((child) => {
                         if (child.id === "patients-list") return role === "ADMIN";
+                        if (child.id === "cases-import") return role === "ADMIN" || role === "SENIOR_MANAGER";
                         return true;
                       }).map((child) => {
                         const childActive =
