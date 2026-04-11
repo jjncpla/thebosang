@@ -5,11 +5,14 @@ const prisma = new PrismaClient()
 
 export async function GET() {
   try {
-    const result = await prisma.case.updateMany({
-      where: { tfName: '더보상울산지사TF' },
-      data: { tfName: '더보상울산TF' },
+    // 실제 DB에 있는 tfName 값 목록 조회
+    const tfNames = await prisma.case.groupBy({
+      by: ['tfName'],
+      _count: { tfName: true },
+      orderBy: { _count: { tfName: 'desc' } },
     })
-    return NextResponse.json({ ok: true, updated: result.count })
+
+    return NextResponse.json({ ok: true, tfNames })
   } catch (e: any) {
     return NextResponse.json({ ok: false, error: e.message }, { status: 500 })
   }
