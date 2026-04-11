@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import * as XLSX from 'xlsx'
 import { auth } from '@/auth'
-import prisma from '@/lib/prisma'
+import { prisma } from '@/lib/prisma'
 
 const CASE_TYPE_MAP: Record<string, string> = {
   '소음성난청': 'HEARING_LOSS',
