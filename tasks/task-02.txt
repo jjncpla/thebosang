@@ -1,0 +1,285 @@
+# TASK-02: 서식 생성 UI 연결 + 관리자 노무사 정보 입력 + kwcOfficeName 필드 추가
+# 실행: cat task-02.txt | claude --dangerously-skip-permissions
+
+## 개요
+task-01에서 구현한 7개 서식 PDF API를 UI에 연결한다.
+- app/patients/[patientId]/page.tsx — 소음성 난청 사건초기 섹션에 서식 버튼 추가, 하단 FormTab 제거
+- app/cases/[caseId]/page.tsx — 동일하게 FormTab 정리
+- app/admin/users/page.tsx — 노무사 전문 정보 입력 UI 추가
+- CaseCommonInfoSection — kwcOfficeName 입력 필드 추가
+
+---
+
+## STEP 1: app/patients/[patientId]/page.tsx
+
+### 1-A. FormTab 컴포넌트 교체 (line 1150~1166)
+기존 FormTab 컴포넌트 전체를 아래로 교체한다.
+
+```tsx
+// 서식 생성 버튼 목록 정의
+const FORMS = [
+  { type: 'DISABILITY_CLAIM',   label: '장해급여 청구서' },
+  { type: 'NOISE_WORK_CONFIRM', label: '소음작업 종사 사실 확인서' },
+  { type: 'AGENT_APPOINTMENT',  label: '대리인 선임신고서' },
+  { type: 'POWER_OF_ATTORNEY',  label: '위임장' },
+  { type: 'SPECIAL_CLINIC',     label: '특진의료기관 선택 확인서 (특진)' },
+  { type: 'EXPERT_CLINIC',      label: '특진의료기관 선택 확인서 (전문조사)' },
+  { type: 'WORK_HISTORY',       label: '직업력 조사 표준문답서' },
+]
+
+function FormButtons({ caseId }: { caseId: string }) {
+  const [loading, setLoading] = useState<string | null>(null)
+
+  const handleDownload = async (type: string, label: string) => {
+    setLoading(type)
+    try {
+      const res = await fetch(`/api/cases/${caseId}/forms?type=${type}`)
+      if (!res.ok) throw new Error('생성 실패')
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${label}.pdf`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch (e) {
+      alert('서식 생성에 실패했습니다.')
+    } finally {
+      setLoading(null)
+    }
+  }
+
+  const handleDownloadAll = async () => {
+    for (const form of FORMS) {
+      await handleDownload(form.type, form.label)
+    }
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+      {/* 일괄 생성 버튼 */}
+      <button
+        onClick={handleDownloadAll}
+        disabled={!!loading}
+        style={{
+          padding: '10px 16px',
+          backgroundColor: '#006838',
+          color: 'white',
+          border: 'none',
+          borderRadius: '6px',
+          cursor: loading ? 'not-allowed' : 'pointer',
+          fontWeight: 'bold',
+          fontSize: '14px',
+          opacity: loading ? 0.7 : 1,
+        }}
+      >
+        {loading ? '생성 중...' : '📄 접수 서식 일괄 생성'}
+      </button>
+
+      {/* 개별 서식 버튼 */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
+        {FORMS.map((form) => (
+          <button
+            key={form.type}
+            onClick={() => handleDownload(form.type, form.label)}
+            disabled={!!loading}
+            style={{
+              padding: '8px 12px',
+              backgroundColor: loading === form.type ? '#29ABE2' : '#f5f5f5',
+              color: loading === form.type ? 'white' : '#333',
+              border: '1px solid #ddd',
+              borderRadius: '4px',
+              cursor: loading ? 'not-allowed' : 'pointer',
+              fontSize: '12px',
+              textAlign: 'left',
+              opacity: loading && loading !== form.type ? 0.5 : 1,
+            }}
+          >
+            {loading === form.type ? '⏳ ' : '📋 '}{form.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+```
+
+### 1-B. 소음성 난청 사건초기 섹션에 서식 버튼 삽입 (line 613 근처)
+HearingLossTab 함수 내 첫 번째 "사건초기" 아코디언 헤더(line 613) 섹션 본문 안,
+기존 내용 **맨 아래**에 아래를 추가한다.
+섹션 제목: "접수 서식 생성"
+
+```tsx
+{/* 접수 서식 생성 */}
+<div style={{
+  marginTop: '16px',
+  padding: '16px',
+  backgroundColor: '#f0faf4',
+  borderRadius: '8px',
+  border: '1px solid #8DC63F',
+}}>
+  <div style={{ fontWeight: 'bold', fontSize: '14px', marginBottom: '12px', color: '#006838' }}>
+    📄 접수 서식 생성
+  </div>
+  <FormButtons caseId={caseId} />
+</div>
+```
+
+※ caseId는 해당 스코프에서 접근 가능한 변수명 사용. 없으면 props나 상위 state에서 참조.
+※ line 843, 1051의 동일 패턴 아코디언(타 상병용)에는 추가하지 않는다. 소음성 난청(line 613) 에만 추가.
+
+### 1-C. 하단 서식 생성 섹션 제거
+- line 1595~1596의 `<FormTab>` 호출 코드 삭제
+- FormTab이 더 이상 쓰이지 않으면 컴포넌트 정의(line 1150~1166)도 삭제
+  단, FormButtons는 유지
+
+---
+
+## STEP 2: app/cases/[caseId]/page.tsx
+
+line 1542, 1613, 1655에 있는 FormTab 관련 코드를 정리한다.
+
+- FormTab 컴포넌트 호출부 삭제
+- FormTab 컴포넌트 정의가 이 파일에도 있다면 삭제
+- 단, 이 파일에서 소음성 난청 사건초기 섹션이 별도로 존재한다면
+  patients 파일과 동일하게 FormButtons 삽입 (없으면 생략)
+
+※ 수술적 수정 원칙: FormTab 관련 코드만 제거. 나머지 코드 건드리지 말 것.
+
+---
+
+## STEP 3: CaseCommonInfoSection — kwcOfficeName 입력 필드 추가
+
+파일: CaseCommonInfoSection이 정의된 컴포넌트 파일 찾기
+(app/patients/[patientId]/page.tsx 내부이거나 별도 컴포넌트 파일)
+
+kwcOfficeName 편집 필드를 기존 사건 기본정보 편집 UI에 추가한다.
+
+```tsx
+// 표시 레이블: "관할 공단"
+// placeholder: "예: 울산, 부산동부"
+// 저장: 기존 사건 정보 저장 API와 동일하게 처리
+<div>
+  <label style={{ fontSize: '12px', color: '#666' }}>관할 공단</label>
+  <input
+    type="text"
+    value={editData.kwcOfficeName ?? ''}
+    onChange={(e) => setEditData({ ...editData, kwcOfficeName: e.target.value })}
+    placeholder="예: 울산, 부산동부"
+    style={{
+      width: '100%',
+      padding: '6px 8px',
+      border: '1px solid #ddd',
+      borderRadius: '4px',
+      fontSize: '13px',
+    }}
+  />
+</div>
+```
+
+저장 API PATCH 요청에 kwcOfficeName 포함 여부 확인 후 없으면 추가.
+
+---
+
+## STEP 4: app/admin/users/page.tsx — 노무사 전문 정보 입력 UI
+
+### 4-A. 계정 목록에서 편집 버튼 → 상세 편집 모달/폼 확장
+기존 계정 추가 폼(line 20~46)은 그대로 두고,
+계정 목록 각 행에 "편집" 버튼 추가 (없으면) → 클릭 시 편집 폼 열림.
+
+편집 폼에 아래 필드 추가:
+
+```tsx
+// 노무사 전문 정보 섹션 (편집 폼 내부)
+<div style={{ borderTop: '1px solid #eee', paddingTop: '12px', marginTop: '12px' }}>
+  <div style={{ fontWeight: 'bold', fontSize: '13px', marginBottom: '8px', color: '#006838' }}>
+    노무사 정보 (서식 자동생성용)
+  </div>
+  
+  {/* 등록번호 */}
+  <div style={{ marginBottom: '8px' }}>
+    <label>공인노무사 등록번호</label>
+    <input type="text" value={editUser.licenseNo ?? ''} 
+      onChange={(e) => setEditUser({...editUser, licenseNo: e.target.value})}
+      placeholder="예: 2024-0001" />
+  </div>
+  
+  {/* 생년월일 */}
+  <div style={{ marginBottom: '8px' }}>
+    <label>생년월일 (YY.MM.DD)</label>
+    <input type="text" value={editUser.birthDate ?? ''}
+      onChange={(e) => setEditUser({...editUser, birthDate: e.target.value})}
+      placeholder="예: 85.03.12" />
+  </div>
+  
+  {/* 지사/상호 */}
+  <div style={{ marginBottom: '8px' }}>
+    <label>지사명 (상호)</label>
+    <input type="text" value={editUser.branchName ?? ''}
+      onChange={(e) => setEditUser({...editUser, branchName: e.target.value})}
+      placeholder="예: 울산지사" />
+  </div>
+  
+  {/* 사무소 주소 */}
+  <div style={{ marginBottom: '8px' }}>
+    <label>사무소 주소</label>
+    <input type="text" value={editUser.officeAddress ?? ''}
+      onChange={(e) => setEditUser({...editUser, officeAddress: e.target.value})}
+      placeholder="사무소 주소 입력" />
+  </div>
+  
+  {/* Tel / Fax 나란히 */}
+  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '8px' }}>
+    <div>
+      <label>사무실 전화 (Tel)</label>
+      <input type="text" value={editUser.officeTel ?? ''}
+        onChange={(e) => setEditUser({...editUser, officeTel: e.target.value})}
+        placeholder="052-000-0000" />
+    </div>
+    <div>
+      <label>팩스 (Fax)</label>
+      <input type="text" value={editUser.officeFax ?? ''}
+        onChange={(e) => setEditUser({...editUser, officeFax: e.target.value})}
+        placeholder="052-000-0000" />
+    </div>
+  </div>
+  
+  {/* 부서 / 직책 나란히 */}
+  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+    <div>
+      <label>부서</label>
+      <input type="text" value={editUser.department ?? ''}
+        onChange={(e) => setEditUser({...editUser, department: e.target.value})}
+        placeholder="예: 울산TF" />
+    </div>
+    <div>
+      <label>직책</label>
+      <input type="text" value={editUser.jobTitle ?? ''}
+        onChange={(e) => setEditUser({...editUser, jobTitle: e.target.value})}
+        placeholder="예: 노무사" />
+    </div>
+  </div>
+</div>
+```
+
+### 4-B. 저장 API
+User 편집 저장 시 기존 PATCH /api/admin/users/[id] 또는 유사 엔드포인트에
+위 신규 필드들을 포함해서 전송.
+해당 API 파일에서 Prisma update에 신규 필드 추가:
+```typescript
+licenseNo, birthDate, officeAddress, officeTel, officeFax,
+branchName, department, jobTitle
+```
+
+---
+
+## 완료 확인
+
+1. 소음성 난청 사건초기 섹션에 "접수 서식 생성" 블록이 보임
+2. 개별 서식 버튼 클릭 시 PDF 다운로드 동작
+3. 일괄 생성 버튼 클릭 시 7개 PDF 순차 다운로드
+4. 하단 기존 FormTab 섹션 사라짐
+5. 관리자 페이지 계정 편집 시 노무사 정보 입력 가능
+6. 사건 기본정보에 "관할 공단" 입력 필드 보임
+7. TypeScript 컴파일 에러 없음
+

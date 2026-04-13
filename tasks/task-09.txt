@@ -1,0 +1,115 @@
+# TASK-09: 장해급여청구서 좌표 전면 교체 (확정값)
+# 실행: cat task-09.txt | claude --dangerously-skip-permissions
+
+## 개요
+app/api/cases/[caseId]/forms/route.ts의 DISABILITY_CLAIM 케이스를
+아래 확정 좌표로 전면 교체한다.
+DISABILITY_CLAIM 케이스 내부만 수정. 다른 케이스 절대 건드리지 말 것.
+
+---
+
+## DISABILITY_CLAIM 케이스 전체 교체 코드
+
+case 'DISABILITY_CLAIM': {
+  const pdfDoc = await loadBlankForm('disability_claim.pdf')
+  const font = await loadKoreanFont(pdfDoc)
+  const page = pdfDoc.getPages()[0]
+
+  const bf = parseBirthDate(patient.jumin ?? '')
+  const df = parseDateFields(detail?.firstExamDate ?? null)
+  const today = parseDateFields(new Date())
+  const manager = caseData.caseManager
+
+  // 성명
+  drawText(page, patient.name ?? '', 157, 670, font, 9)
+
+  // 생년월일 각 자리
+  drawText(page, bf.Y1, 286, 671, font, 9)
+  drawText(page, bf.Y2, 303, 671, font, 9)
+  drawText(page, bf.Y3, 320, 671, font, 9)
+  drawText(page, bf.Y4, 337, 671, font, 9)
+  drawText(page, bf.M1, 368, 671, font, 9)
+  drawText(page, bf.M2, 385, 671, font, 9)
+  drawText(page, bf.D1, 415, 671, font, 9)
+  drawText(page, bf.D2, 433, 671, font, 9)
+
+  // 연락처
+  drawText(page, patient.phone ?? '', 465, 327, font, 9)
+
+  // 재해발생일 각 자리
+  drawText(page, df.y1, 103, 639, font, 9)
+  drawText(page, df.y2, 120, 639, font, 9)
+  drawText(page, df.y3, 137, 639, font, 9)
+  drawText(page, df.y4, 153, 639, font, 9)
+  drawText(page, df.m1, 185, 639, font, 9)
+  drawText(page, df.m2, 202, 639, font, 9)
+  drawText(page, df.d1, 233, 639, font, 9)
+  drawText(page, df.d2, 250, 639, font, 9)
+
+  // 오늘 날짜
+  drawText(page, today.연도, 392, 340, font, 9)
+  drawText(page, today.월자, 440, 340, font, 9)
+  drawText(page, today.일자, 473, 340, font, 9)
+
+  // 청구인
+  drawText(page, patient.name ?? '', 325, 328, font, 9)
+  drawText(page, patient.phone ?? '', 483, 327, font, 9)
+
+  // 대리인
+  drawText(page, `공인노무사 ${manager?.name ?? ''}`, 325, 313, font, 9)
+  drawText(page, manager?.officeTel ?? '', 483, 313, font, 9)
+
+  // 관할공단
+  drawText(page, caseData.kwcOfficeName ?? '', 299, 93, font, 9)
+
+  // 수령계좌 변경여부
+  drawText(page, detail?.bankAccount ? '√' : '', 287, 619, font, 9)
+  drawText(page, !detail?.bankAccount ? '√' : '', 362, 619, font, 9)
+
+  // 수령계좌 정보
+  drawText(page, detail?.bankName ?? '', 189, 600, font, 9)
+  drawText(page, detail?.bankAccount ?? '', 169, 581, font, 9)
+  drawText(page, detail?.bankAccountHolder ?? '', 470, 581, font, 9)
+
+  // 계좌종류
+  drawText(page, detail?.bankAccountType !== '전용계좌' ? '√' : '', 120, 561, font, 9)
+  drawText(page, detail?.bankAccountType === '전용계좌' ? '√' : '', 222, 562, font, 9)
+
+  // 확인사항①
+  drawText(page, detail?.confirmPriorDisability === true ? '√' : '', 434, 539, font, 9)
+  drawText(page, detail?.confirmPriorDisability !== true ? '√' : '', 483, 539, font, 9)
+
+  // 확인사항②
+  drawText(page, detail?.confirmPriorCompensation === true ? '√' : '', 428, 509, font, 9)
+  drawText(page, detail?.confirmPriorCompensation !== true ? '√' : '', 469, 509, font, 9)
+
+  // 수령내역
+  drawText(page, detail?.receiptDate ?? '', 127, 464, font, 8)
+  drawText(page, detail?.receiptAmount ?? '', 209, 465, font, 8)
+  drawText(page, detail?.receiptPayer ?? '', 297, 466, font, 8)
+
+  // 이송비
+  drawText(page, detail?.transferCost ?? '', 183, 440, font, 9)
+  drawText(page, detail?.transferCostDetail ?? '', 317, 440, font, 8)
+
+  // 합병증 등 예방관리
+  drawText(page, detail?.complicationPart ?? '', 207, 396, font, 8)
+  drawText(page, detail?.complicationHospital ?? '', 453, 396, font, 8)
+
+  const pdfBytes = await pdfDoc.save()
+  return new NextResponse(pdfBytes, {
+    headers: {
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': 'attachment; filename="장해급여청구서.pdf"',
+    }
+  })
+}
+
+---
+
+## 주의사항
+- 위 코드 블록으로 기존 DISABILITY_CLAIM 케이스 전체를 교체
+- detail 변수는 caseData.hearingLossDetail (이미 상단에서 선언되어 있을 것)
+- 없으면 const detail = caseData.hearingLossDetail 상단에 추가
+- TypeScript 컴파일 에러 없을 것
+

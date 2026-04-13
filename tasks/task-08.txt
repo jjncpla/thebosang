@@ -1,0 +1,99 @@
+# TASK-08: 장해급여청구서 PDF 좌표 반영
+# 실행: cat task-08.txt | claude --dangerously-skip-permissions
+
+## 개요
+app/api/cases/[caseId]/forms/route.ts의 DISABILITY_CLAIM 케이스에서
+모든 drawText 좌표를 아래 확정값으로 교체한다.
+수술적 수정만 — DISABILITY_CLAIM 케이스 내부 좌표값만 변경.
+
+---
+
+## 교체할 좌표 (전체)
+
+### 기존 필드 (첫 번째 전달값 기준)
+```
+성명:           drawText(page, patient.name, 157, 670, font, 9)
+
+생년월일 각 자리:
+  Y1: drawText(page, bf.Y1, 286, 671, font, 9)
+  Y2: drawText(page, bf.Y2, 303, 671, font, 9)
+  Y3: drawText(page, bf.Y3, 320, 671, font, 9)
+  Y4: drawText(page, bf.Y4, 337, 671, font, 9)
+  M1: drawText(page, bf.M1, 368, 671, font, 9)
+  M2: drawText(page, bf.M2, 385, 671, font, 9)
+  D1: drawText(page, bf.D1, 415, 671, font, 9)
+  D2: drawText(page, bf.D2, 433, 671, font, 9)
+
+재해발생일 각 자리:
+  y1: drawText(page, df.y1, 103, 639, font, 9)
+  y2: drawText(page, df.y2, 120, 639, font, 9)
+  y3: drawText(page, df.y3, 137, 639, font, 9)
+  y4: drawText(page, df.y4, 153, 639, font, 9)
+  m1: drawText(page, df.m1, 185, 639, font, 9)
+  m2: drawText(page, df.m2, 202, 639, font, 9)
+  d1: drawText(page, df.d1, 233, 639, font, 9)
+  d2: drawText(page, df.d2, 250, 639, font, 9)
+
+연락처:         drawText(page, patient.phone ?? '', 465, 327, font, 9)
+
+오늘 날짜:
+  연도: drawText(page, today.연도, 392, 340, font, 9)
+  월:   drawText(page, today.월자, 440, 340, font, 9)
+  일:   drawText(page, today.일자, 473, 340, font, 9)
+
+청구인:
+  성명: drawText(page, patient.name, 325, 328, font, 9)
+  연락처: drawText(page, patient.phone ?? '', 483, 327, font, 9)
+
+대리인:
+  성명: drawText(page, `공인노무사 ${manager?.name ?? ''}`, 325, 313, font, 9)
+  Tel:  drawText(page, manager?.officeTel ?? '', 483, 313, font, 9)
+
+관할공단: drawText(page, caseData.kwcOfficeName ?? '', 299, 93, font, 9)
+```
+
+### 신규 필드 (이번 전달값 기준)
+```
+수령계좌 변경여부:
+  예 체크:    drawText(page, detail?.bankAccount ? '√' : '', 287, 619, font, 9)
+  아니오 체크: drawText(page, !detail?.bankAccount ? '√' : '', 362, 619, font, 9)
+
+은행명:     drawText(page, detail?.bankName ?? '', 189, 600, font, 9)
+계좌번호:   drawText(page, detail?.bankAccount ?? '', 169, 581, font, 9)
+예금주:     drawText(page, detail?.bankAccountHolder ?? '', 470, 581, font, 9)
+
+계좌종류:
+  보통계좌:   drawText(page, detail?.bankAccountType !== '전용계좌' ? '√' : '', 120, 561, font, 9)
+  전용계좌:   drawText(page, detail?.bankAccountType === '전용계좌' ? '√' : '', 222, 562, font, 9)
+
+확인사항①:
+  예:    drawText(page, detail?.confirmPriorDisability === true ? '√' : '', 434, 539, font, 9)
+  아니오: drawText(page, detail?.confirmPriorDisability !== true ? '√' : '', 483, 539, font, 9)
+
+확인사항②:
+  예:    drawText(page, detail?.confirmPriorCompensation === true ? '√' : '', 428, 509, font, 9)
+  아니오: drawText(page, detail?.confirmPriorCompensation !== true ? '√' : '', 469, 509, font, 9)
+
+수령내역 (② 예인 경우):
+  수령일자:  drawText(page, detail?.receiptDate ?? '', 127, 464, font, 8)
+  수령금액:  drawText(page, detail?.receiptAmount ?? '', 209, 465, font, 8)
+  지급한자:  drawText(page, detail?.receiptPayer ?? '', 297, 466, font, 8)
+
+이송비:
+  비용:     drawText(page, detail?.transferCost ?? '', 183, 440, font, 9)
+  산출내역:  drawText(page, detail?.transferCostDetail ?? '', 317, 440, font, 8)
+
+합병증:
+  부위:     drawText(page, detail?.complicationPart ?? '', 207, 396, font, 8)
+  의료기관:  drawText(page, detail?.complicationHospital ?? '', 453, 396, font, 8)
+```
+
+---
+
+## 주의사항
+- DISABILITY_CLAIM 케이스 내부만 수정. 다른 서식 케이스 건드리지 말 것
+- detail은 caseData.hearingLossDetail (nullable). 옵셔널 체이닝 유지
+- 기존에 임시 좌표(0)로 설정된 코드 전부 위 값으로 교체
+- address 필드는 장해급여청구서에 불필요 — 삽입하지 말 것
+- TypeScript 컴파일 에러 없을 것
+

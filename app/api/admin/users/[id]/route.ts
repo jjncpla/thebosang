@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { authPrisma } from "@/lib/auth-db";
 import { prisma } from "@/lib/prisma";
+import bcrypt from "bcryptjs";
 
 async function requireAdmin() {
   const session = await auth();
@@ -23,11 +24,17 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (!await requireAdmin()) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const { id } = await params;
   const body = await req.json();
-  const { role, licenseNo, birthDate, officeAddress, officeTel, officeFax, branchName, regionName, department, jobTitle } = body;
+  const { role, newPassword, licenseNo, birthDate, officeAddress, officeTel, officeFax, branchName, regionName, department, jobTitle } = body;
 
   // auth DB: role 업데이트
   if (role !== undefined) {
     await authPrisma.user.update({ where: { id }, data: { role } });
+  }
+
+  // auth DB: 비밀번호 초기화
+  if (newPassword !== undefined) {
+    const hashed = await bcrypt.hash(newPassword, 12);
+    await authPrisma.user.update({ where: { id }, data: { password: hashed } });
   }
 
   // main DB: 노무사 전문 정보 업데이트 (upsert — main DB에 없을 수도 있음)

@@ -1,0 +1,18 @@
+두 가지 에러 수정해줘.
+
+1. ClientFetchError: Failed to execute 'json' on 'Response': Unexpected end of JSON input
+- AuthJS 설정 문제로 보임
+- auth.ts 또는 [...nextauth] route 확인해서 수정
+
+2. 로그인 시도 시 HTTP 500 에러
+- admin@dbs.com 계정으로 로그인하면 500 뜸
+- PostgreSQL 연결 문제 또는 시드 데이터 미생성 가능성 있음
+- 터미널에서 실제 에러 로그 확인 후 수정
+- 필요시 시드 스크립트 다시 실행
+
+순서:
+1. 서버 로그에서 실제 500 에러 원인 파악
+2. auth.ts 설정 점검
+3. PostgreSQL 연결 및 User 테이블 존재 여부 확인
+4. 시드 스크립트 실행해서 admin 계정 생성
+5. 수정 후 서버 재시작

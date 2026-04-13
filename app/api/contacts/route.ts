@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { authPrisma } from '@/lib/auth-db'
 import { auth } from '@/auth'
 
 export async function GET(request: Request) {
@@ -45,7 +46,23 @@ export async function GET(request: Request) {
     ? await prisma.isanOffice.findMany({ orderBy: { name: 'asc' } })
     : []
 
-  return NextResponse.json({ contacts, offices })
+  // userId가 있는 Contact에 대해 User 정보 병합
+  const contactsArr = contacts as any[]
+  const userIds = contactsArr.map((c: any) => c.userId).filter(Boolean) as string[]
+  let userMap: Record<string, any> = {}
+  if (userIds.length > 0) {
+    const users = await authPrisma.user.findMany({
+      where: { id: { in: userIds } },
+      select: { id: true, email: true, name: true, role: true, createdAt: true },
+    })
+    userMap = Object.fromEntries((users as any[]).map((u: any) => [u.id, u]))
+  }
+  const enrichedContacts = contactsArr.map((c: any) => ({
+    ...c,
+    user: c.userId ? (userMap[c.userId] || null) : null,
+  }))
+
+  return NextResponse.json({ contacts: enrichedContacts, offices })
 }
 
 export async function POST(request: Request) {

@@ -3,6 +3,13 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useSession } from 'next-auth/react'
 
+interface UserInfo {
+  id: string
+  email: string
+  name: string
+  role: string
+  createdAt: string
+}
 interface Contact {
   id: string
   firmType: string
@@ -16,6 +23,8 @@ interface Contact {
   jobGrade: string
   hireDate: string | null
   leaveDate: string | null
+  userId?: string | null
+  user?: UserInfo | null
 }
 interface IsanOffice {
   id: string; name: string; tel: string; fax: string; address: string
@@ -42,6 +51,12 @@ export default function ContactsTab() {
   const [modalOpen, setModalOpen] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [formData, setFormData] = useState<any>(EMPTY_FORM)
+
+  // 계정 관리 상태
+  const [accountFilter, setAccountFilter] = useState<'all' | 'has' | 'none'>('all')
+  const [accountModal, setAccountModal] = useState<{ mode: 'create' | 'edit'; contact: Contact } | null>(null)
+  const [accountForm, setAccountForm] = useState({ email: '', password: '1234', role: 'STAFF' })
+  const [accountSubmitting, setAccountSubmitting] = useState(false)
 
   const fetchContacts = useCallback(async () => {
     setLoading(true)
@@ -93,6 +108,118 @@ export default function ContactsTab() {
     fetchContacts()
   }
 
+  const openAccountCreate = (c: Contact) => {
+    setAccountForm({ email: c.email || '', password: '1234', role: 'STAFF' })
+    setAccountModal({ mode: 'create', contact: c })
+  }
+  const openAccountEdit = (c: Contact) => {
+    setAccountForm({ email: c.user?.email || '', password: '', role: c.user?.role || 'STAFF' })
+    setAccountModal({ mode: 'edit', contact: c })
+  }
+
+  const handleCreateAccount = async () => {
+    if (!accountModal) return
+    if (!accountForm.email.trim()) { alert('이메일을 입력해주세요.'); return }
+    if (!accountForm.password.trim()) { alert('비밀번호를 입력해주세요.'); return }
+    setAccountSubmitting(true)
+    // 1) 계정 생성
+    const res = await fetch('/api/admin/users', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: accountModal.contact.name,
+        email: accountForm.email,
+        password: accountForm.password,
+        role: accountForm.role,
+      }),
+    })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      alert(`계정 생성 실패: ${err.error || JSON.stringify(err)}`)
+      setAccountSubmitting(false)
+      return
+    }
+    const user = await res.json()
+    // 2) Contact에 userId 연결
+    await fetch(`/api/contacts/${accountModal.contact.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: user.id }),
+    })
+    setAccountModal(null)
+    setAccountSubmitting(false)
+    fetchContacts()
+  }
+
+  const handleUpdateAccountRole = async () => {
+    if (!accountModal?.contact.userId) return
+    setAccountSubmitting(true)
+    await fetch(`/api/admin/users/${accountModal.contact.userId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ role: accountForm.role }),
+    })
+    setAccountModal(null)
+    setAccountSubmitting(false)
+    fetchContacts()
+  }
+
+  const handleResetPassword = async () => {
+    if (!accountModal?.contact.userId) return
+    if (!confirm('비밀번호를 1234로 초기화하시겠습니까?')) return
+    setAccountSubmitting(true)
+    await fetch(`/api/admin/users/${accountModal.contact.userId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ newPassword: '1234' }),
+    })
+    alert('비밀번호가 1234로 초기화되었습니다.')
+    setAccountSubmitting(false)
+  }
+
+  const handleDeleteAccount = async () => {
+    if (!accountModal?.contact.userId) return
+    if (!confirm(`${accountModal.contact.name} 님의 계정을 삭제하시겠습니까?`)) return
+    setAccountSubmitting(true)
+    await fetch(`/api/admin/users/${accountModal.contact.userId}`, { method: 'DELETE' })
+    await fetch(`/api/contacts/${accountModal.contact.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: null }),
+    })
+    setAccountModal(null)
+    setAccountSubmitting(false)
+    fetchContacts()
+  }
+
+  const handleBulkCreateAccounts = async () => {
+    const targets = contacts.filter(c => c.firmType === 'TBOSANG' && !c.userId && c.jobGrade === '외근직')
+    if (targets.length === 0) { alert('일괄 생성할 대상이 없습니다.'); return }
+    if (!confirm(`계정이 없는 더보상 소속 외근직 ${targets.length}명의 계정을 일괄 생성합니다.\n초기 비밀번호: 1234\n\n계속하시겠습니까?`)) return
+    setAccountSubmitting(true)
+    let created = 0
+    for (const c of targets) {
+      if (!c.email) continue
+      const res = await fetch('/api/admin/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: c.name, email: c.email, password: '1234', role: 'STAFF' }),
+      })
+      if (res.ok) {
+        const user = await res.json()
+        await fetch(`/api/contacts/${c.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: user.id }),
+        })
+        created++
+      }
+    }
+    alert(`${created}명의 계정이 생성되었습니다.`)
+    setAccountSubmitting(false)
+    fetchContacts()
+  }
+
   const th = { padding: '10px 12px', backgroundColor: '#29ABE2', color: '#fff', fontWeight: 600, fontSize: 13, textAlign: 'left' as const, whiteSpace: 'nowrap' as const }
   const td = (i: number) => ({ padding: '8px 12px', fontSize: 13, backgroundColor: i % 2 === 0 ? '#fff' : '#f8fafc', borderBottom: '1px solid #e2e8f0' })
 
@@ -131,7 +258,25 @@ export default function ContactsTab() {
           <option value="변호사">변호사</option>
           <option value="기타">기타</option>
         </select>
+        {isAdmin && activeTab === 'TBOSANG' && (
+          <div style={{ display: 'flex', gap: 4, border: '1px solid #e2e8f0', borderRadius: 6, overflow: 'hidden' }}>
+            {(['all', 'has', 'none'] as const).map(f => (
+              <button key={f} onClick={() => setAccountFilter(f)}
+                style={{ padding: '6px 12px', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600,
+                  backgroundColor: accountFilter === f ? '#29ABE2' : '#fff',
+                  color: accountFilter === f ? '#fff' : '#64748b' }}>
+                {f === 'all' ? '전체' : f === 'has' ? '계정있음' : '계정없음'}
+              </button>
+            ))}
+          </div>
+        )}
         <span style={{ marginLeft: 'auto', color: '#64748b', fontSize: 13 }}>총 {contacts.length}명</span>
+        {isAdmin && activeTab === 'TBOSANG' && (
+          <button onClick={handleBulkCreateAccounts} disabled={accountSubmitting}
+            style={{ padding: '7px 14px', backgroundColor: '#0f172a', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
+            미생성 일괄 계정 생성
+          </button>
+        )}
         {isAdmin && (
           <button onClick={openAdd}
             style={{ padding: '7px 16px', backgroundColor: '#29ABE2', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
@@ -157,13 +302,20 @@ export default function ContactsTab() {
                 <th style={th}>입사일</th>
                 <th style={th}>퇴사일</th>
                 {activeTab === 'ISAN' && <th style={th}>이메일</th>}
+                {isAdmin && activeTab === 'TBOSANG' && <th style={{ ...th, textAlign: 'center' }}>계정 상태</th>}
                 {isAdmin && <th style={{ ...th, textAlign: 'center' }}>관리</th>}
               </tr>
             </thead>
             <tbody>
-              {contacts.length === 0 ? (
-                <tr><td colSpan={10} style={{ textAlign: 'center', padding: 32, color: '#94a3b8', fontSize: 13 }}>검색 결과가 없습니다.</td></tr>
-              ) : contacts.map((c, i) => (
+              {(() => {
+                const filtered = contacts.filter(c => {
+                  if (activeTab !== 'TBOSANG' || !isAdmin || accountFilter === 'all') return true
+                  if (accountFilter === 'has') return !!c.user
+                  return !c.user
+                })
+                return filtered.length === 0 ? (
+                  <tr><td colSpan={12} style={{ textAlign: 'center', padding: 32, color: '#94a3b8', fontSize: 13 }}>검색 결과가 없습니다.</td></tr>
+                ) : filtered.map((c, i) => (
                 <tr key={c.id}>
                   <td style={td(i)}>
                     <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: 12, backgroundColor: '#f0f9ff', color: '#0369a1', fontSize: 11, fontWeight: 600 }}>
@@ -197,6 +349,21 @@ export default function ContactsTab() {
                     {c.leaveDate ? new Date(c.leaveDate).toLocaleDateString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit' }) : '-'}
                   </td>
                   {activeTab === 'ISAN' && <td style={{ ...td(i), fontSize: 12, color: '#475569' }}>{c.email || '-'}</td>}
+                  {isAdmin && activeTab === 'TBOSANG' && (
+                    <td style={{ ...td(i), textAlign: 'center', whiteSpace: 'nowrap' }}>
+                      {c.user ? (
+                        <button onClick={() => openAccountEdit(c)}
+                          style={{ padding: '3px 10px', fontSize: 11, backgroundColor: '#f0fdf4', border: '1px solid #86efac', borderRadius: 4, cursor: 'pointer', color: '#166534', fontWeight: 600 }}>
+                          ✅ {c.user.role}
+                        </button>
+                      ) : (
+                        <button onClick={() => openAccountCreate(c)}
+                          style={{ padding: '3px 10px', fontSize: 11, backgroundColor: '#f8fafc', border: '1px solid #cbd5e1', borderRadius: 4, cursor: 'pointer', color: '#64748b' }}>
+                          ⬜ 계정 생성
+                        </button>
+                      )}
+                    </td>
+                  )}
                   {isAdmin && (
                     <td style={{ ...td(i), textAlign: 'center', whiteSpace: 'nowrap' }}>
                       <button onClick={() => openEdit(c)}
@@ -210,7 +377,8 @@ export default function ContactsTab() {
                     </td>
                   )}
                 </tr>
-              ))}
+              ))
+              })()}
             </tbody>
           </table>
         </div>
@@ -246,6 +414,91 @@ export default function ContactsTab() {
               </table>
             </div>
           )}
+        </div>
+      )}
+
+      {/* 계정 생성 모달 */}
+      {isAdmin && accountModal?.mode === 'create' && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.4)', zIndex: 1001, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ backgroundColor: '#fff', borderRadius: 12, padding: 28, width: 420, boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
+            <h3 style={{ margin: '0 0 16px', fontSize: 16, fontWeight: 700 }}>계정 생성</h3>
+            <p style={{ margin: '0 0 16px', fontSize: 13, color: '#475569' }}>
+              <b>{accountModal.contact.name}</b> ({accountModal.contact.branch || accountModal.contact.firm})
+            </p>
+            {[
+              { key: 'email', label: '이메일', type: 'email', placeholder: 'example@thebosang.kr' },
+              { key: 'password', label: '초기 비밀번호', type: 'text', placeholder: '1234' },
+            ].map(({ key, label, type, placeholder }) => (
+              <div key={key} style={{ marginBottom: 12 }}>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#475569', marginBottom: 4 }}>{label}</label>
+                <input type={type} value={(accountForm as any)[key]}
+                  onChange={e => setAccountForm(p => ({ ...p, [key]: e.target.value }))}
+                  placeholder={placeholder}
+                  style={{ width: '100%', padding: '8px 10px', border: '1px solid #cbd5e1', borderRadius: 6, fontSize: 13, boxSizing: 'border-box' as const }} />
+              </div>
+            ))}
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#475569', marginBottom: 4 }}>권한</label>
+              <select value={accountForm.role} onChange={e => setAccountForm(p => ({ ...p, role: e.target.value }))}
+                style={{ width: '100%', padding: '8px 10px', border: '1px solid #cbd5e1', borderRadius: 6, fontSize: 13 }}>
+                <option value="ADMIN">ADMIN</option>
+                <option value="STAFF">STAFF</option>
+                <option value="READONLY">READONLY</option>
+              </select>
+            </div>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button onClick={() => setAccountModal(null)} disabled={accountSubmitting}
+                style={{ padding: '8px 20px', border: '1px solid #cbd5e1', borderRadius: 6, background: '#fff', cursor: 'pointer', fontSize: 13 }}>
+                취소
+              </button>
+              <button onClick={handleCreateAccount} disabled={accountSubmitting}
+                style={{ padding: '8px 20px', backgroundColor: '#29ABE2', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
+                {accountSubmitting ? '생성 중...' : '계정 생성'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 계정 수정 모달 */}
+      {isAdmin && accountModal?.mode === 'edit' && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.4)', zIndex: 1001, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ backgroundColor: '#fff', borderRadius: 12, padding: 28, width: 420, boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
+            <h3 style={{ margin: '0 0 16px', fontSize: 16, fontWeight: 700 }}>계정 수정</h3>
+            <div style={{ marginBottom: 12, padding: '10px 14px', backgroundColor: '#f8fafc', borderRadius: 8, fontSize: 13, color: '#475569' }}>
+              <div><b>이름:</b> {accountModal.contact.name}</div>
+              <div><b>이메일:</b> {accountModal.contact.user?.email}</div>
+            </div>
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#475569', marginBottom: 4 }}>권한</label>
+              <select value={accountForm.role} onChange={e => setAccountForm(p => ({ ...p, role: e.target.value }))}
+                style={{ width: '100%', padding: '8px 10px', border: '1px solid #cbd5e1', borderRadius: 6, fontSize: 13 }}>
+                <option value="ADMIN">ADMIN</option>
+                <option value="STAFF">STAFF</option>
+                <option value="READONLY">READONLY</option>
+              </select>
+            </div>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'space-between', alignItems: 'center' }}>
+              <button onClick={handleDeleteAccount} disabled={accountSubmitting}
+                style={{ padding: '8px 16px', backgroundColor: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
+                계정 삭제
+              </button>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button onClick={handleResetPassword} disabled={accountSubmitting}
+                  style={{ padding: '8px 14px', backgroundColor: '#fff7ed', color: '#ea580c', border: '1px solid #fed7aa', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
+                  비번 초기화(1234)
+                </button>
+                <button onClick={() => setAccountModal(null)} disabled={accountSubmitting}
+                  style={{ padding: '8px 16px', border: '1px solid #cbd5e1', borderRadius: 6, background: '#fff', cursor: 'pointer', fontSize: 13 }}>
+                  취소
+                </button>
+                <button onClick={handleUpdateAccountRole} disabled={accountSubmitting}
+                  style={{ padding: '8px 20px', backgroundColor: '#29ABE2', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
+                  {accountSubmitting ? '저장 중...' : '저장'}
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 

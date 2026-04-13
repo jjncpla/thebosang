@@ -1,0 +1,469 @@
+# TBSS 사건관리 스키마 재설계 — Claude Code 지시사항
+
+## 작업 개요
+`prisma/schema.prisma`의 사건관리 관련 모델을 PRD 기반으로 재설계한다.
+기존에 존재하는 비사건관리 모델(User, SignupRequest, Notice, Message, TimelineEvent)은 절대 건드리지 않는다.
+
+---
+
+## 삭제할 기존 모델
+아래 모델들을 schema.prisma에서 제거한다:
+- HearingLossDetail
+- CopdDetail
+- PneumoconiosisDetail
+- MusculoskeletalDetail
+- OccupationalAccidentDetail
+- OccupationalCancerDetail
+- BereavedDetail
+- HolidayBenefit
+
+---
+
+## 수정할 기존 모델
+
+### Patient — 변경 없음 (유지)
+
+### Case — 아래 내용으로 교체
+
+```prisma
+model Case {
+  id            String    @id @default(cuid())
+  patientId     String
+  patient       Patient   @relation(fields: [patientId], references: [id])
+
+  caseType      String    // HEARING_LOSS / COPD / PNEUMOCONIOSIS / MUSCULOSKELETAL / OCCUPATIONAL_ACCIDENT / OCCUPATIONAL_CANCER / BEREAVED / OTHER
+  status        String    @default("CONSULTING")
+  // 기획사건 상태값: CONSULTING / CONTRACTED / DOC_COLLECTING / SUBMITTED /
+  // EXAM_REQUESTED / EXAM_CLINIC_SELECTED / EXAM_SCHEDULED / IN_EXAM / EXAM_DONE /
+  // EXPERT_REQUESTED / EXPERT_CLINIC_SELECTED / EXPERT_DONE /
+  // BANK_REQUESTED / BANK_SUBMITTED / DECISION_RECEIVED /
+  // REVIEWING / INFO_REQUESTED / APPROVED / REJECTED / CLOSED / OBJECTION / WAGE_CORRECTION
+
+  // 파생 사건 연결 (평균임금 정정 청구 등)
+  parentCaseId  String?
+  parentCase    Case?     @relation("CaseDerivation", fields: [parentCaseId], references: [id])
+  derivedCases  Case[]    @relation("CaseDerivation")
+
+  // TF / 지사
+  tfName        String?
+  branch        String?
+
+  // 담당자 (User FK)
+  salesManagerId   String?
+  salesManager     User?   @relation("SalesManager", fields: [salesManagerId], references: [id])
+  caseManagerId    String?
+  caseManager      User?   @relation("CaseManager", fields: [caseManagerId], references: [id])
+  branchManagerId  String?
+  branchManager    User?   @relation("BranchManager", fields: [branchManagerId], references: [id])
+
+  // 영업 정보
+  salesRoute    String?
+  subAgent      String?   // 소속/대리인
+  isOneStop     Boolean   @default(false)
+
+  // 약정
+  contractDate  DateTime?
+
+  // 접수
+  receptionDate DateTime?
+
+  memo          String?
+
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // 상병별 확장 테이블
+  hearingLoss          HearingLossDetail?
+  copd                 CopdDetail?
+  pneumoconiosis       PneumoconiosisDetail?
+  musculoskeletal      MusculoskeletalDetail?
+  occupationalAccident OccupationalAccidentDetail?
+  occupationalCancer   OccupationalCancerDetail?
+  bereaved             BereavedDetail?
+
+  messages      Message[]
+  timelines     TimelineEvent[]
+}
+```
+
+---
+
+## 추가할 신규 모델
+
+### HearingLossDetail
+
+```prisma
+model HearingLossDetail {
+  id     String @id @default(cuid())
+  caseId String @unique
+  case   Case   @relation(fields: [caseId], references: [id])
+
+  // 초진
+  firstClinic            String?
+  firstExamDate          DateTime?
+  firstExamRight         Float?
+  firstExamLeft          Float?
+  firstExamSpeech        Float?
+  passedInitialCriteria  Boolean   @default(false)
+  isDisabilityRegistered Boolean   @default(false)
+  isBig3                 Boolean   @default(false)
+
+  // 직업력
+  workHistory            Json?
+  workHistoryMemo        String?
+  lastNoiseWorkEndDate   DateTime?
+
+  // 접수/청구
+  claimSubmittedAt       DateTime?
+  claimNasPath           String?
+  telegramSharedAt       DateTime?
+
+  // 특진진찰요구서
+  examRequestReceivedAt  DateTime?
+  examPeriodStart        DateTime?
+  examPeriodEnd          DateTime?
+
+  // 특진병원 선택
+  specialClinic                    String?
+  examClinicSelectionSubmittedAt   DateTime?
+
+  // 전문조사
+  expertRequestReceivedAt          DateTime?
+  expertClinicOptions              Json?
+  expertClinic                     String?
+  expertClinicSelectionSubmittedAt DateTime?
+  expertDate                       DateTime?
+  expertAttendedStaffId            String?
+  expertMemo                       String?
+
+  // 결정
+  bankAccountRequestedAt  DateTime?
+  bankAccountSubmittedAt  DateTime?
+  decisionType            String?   // APPROVED / REJECTED
+  decisionReceivedAt      DateTime?
+  approvedDisease         String?
+  disabilityGrade         String?
+  disabilityStatus        String?
+  baseAssessment          String?
+  finalAssessment         String?
+  lumpSumAmount           Int?
+  avgWage                 Int?
+  compensationPaidAt      DateTime?
+
+  // 검토/정공
+  wageReviewMemo                  String?
+  adaptedWorkplaceReviewMemo      String?
+  infoDisclosureRequestedAt       DateTime?
+  infoDisclosureReceivedAt        DateTime?
+  rejectionReason                 String?
+  reviewMemo                      String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  exams HearingLossExam[]
+
+  @@map("hearing_loss_details")
+}
+```
+
+### HearingLossExam
+
+```prisma
+model HearingLossExam {
+  id                   String             @id @default(cuid())
+  hearingLossDetailId  String
+  hearingLossDetail    HearingLossDetail  @relation(fields: [hearingLossDetailId], references: [id])
+
+  examSet    String  // INITIAL(최초특진) / RE(재특진) / RE2(재재특진)
+  examRound  Int     // 1 / 2 / 3
+
+  examDate              DateTime?
+  attendedStaffId       String?
+
+  airRight              Float?
+  airLeft               Float?
+  boneRight             Float?
+  boneLeft              Float?
+  speechRight           Float?
+  speechLeft            Float?
+  abrRight              Float?
+  abrLeft               Float?
+  impedanceRight        String?
+  impedanceLeft         String?
+
+  isReliable            Boolean?
+  medicalRecordObtained Boolean   @default(false)
+  predictedGrade        String?
+  memo                  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("hearing_loss_exams")
+}
+```
+
+### CopdDetail (기존 필드 유지 + 상태값 제거)
+
+```prisma
+model CopdDetail {
+  id     String @id @default(cuid())
+  caseId String @unique
+  case   Case   @relation(fields: [caseId], references: [id])
+
+  // 초진
+  firstClinic   String?
+  firstExamDate DateTime?
+  fev1Rate      Float?
+  fev1Volume    Float?
+
+  // 특진
+  specialClinic String?
+  exam1Date     DateTime?
+  exam1Rate     Float?
+  exam1Volume   Float?
+  exam2Date     DateTime?
+  exam2Rate     Float?
+  exam2Volume   Float?
+  examMemo      String?
+
+  // 전문조사
+  expertOrgDate      DateTime?
+  reExamPossibleDate DateTime?
+
+  // 업무상질병판정위원회
+  occDiseaseCommittee  String?
+  occReferralDate      DateTime?
+  occReviewDate        DateTime?
+  occAttendanceType    String?
+  occAttendanceNote    String?
+
+  // 처분
+  disposalType    String?
+  disposalDate    DateTime?
+
+  // 장해
+  disabilityClaimDate             DateTime?
+  disabilityDispositionType       String?
+  disabilityGradeType             String?
+  disabilityDispositionGrade      String?
+  disabilityDispositionDate       DateTime?
+  disabilityDispositionNoticeDate DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("copd_details")
+}
+```
+
+### PneumoconiosisDetail (기존 유지)
+
+```prisma
+model PneumoconiosisDetail {
+  id     String @id @default(cuid())
+  caseId String @unique
+  case   Case   @relation(fields: [caseId], references: [id])
+
+  firstClinic           String?
+  firstExamDate         DateTime?
+  applicableLaw         String?
+  isRetired             String?
+  isNoticeReceived      Boolean   @default(false)
+  precisionExamDate     DateTime?
+  precisionResult       String?
+  precisionHospital     String?
+  precisionPossibleDate DateTime?
+  reExamPossibleDate    DateTime?
+  disposalType          String?
+  disposalDate          DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("pneumoconiosis_details")
+}
+```
+
+### MusculoskeletalDetail (기존 유지)
+
+```prisma
+model MusculoskeletalDetail {
+  id     String @id @default(cuid())
+  caseId String @unique
+  case   Case   @relation(fields: [caseId], references: [id])
+
+  bodyPart               String?
+  diseaseName            String?
+  occupation             String?
+  workHistory            String?
+  expertType             String?
+  expertRequestDate      DateTime?
+  expertScheduleDate     DateTime?
+  hasMedicalCommittee    Boolean   @default(false)
+  committeeSubmitDate    DateTime?
+  committeeReviewDate    DateTime?
+  disposalType           String?
+  approvalDate           DateTime?
+  disabilityApprovalDate DateTime?
+  hospitalName           String?
+  managingBranch         String?
+  treatmentStartDate     DateTime?
+  treatmentEndDate       DateTime?
+  claimCycle             String?
+  memo                   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("musculoskeletal_details")
+}
+```
+
+### OccupationalAccidentDetail (기존 유지)
+
+```prisma
+model OccupationalAccidentDetail {
+  id     String @id @default(cuid())
+  caseId String @unique
+  case   Case   @relation(fields: [caseId], references: [id])
+
+  caseName               String?
+  bodyPart               String?
+  diseaseName            String?
+  occupation             String?
+  workHistory            String?
+  expertType             String?
+  expertRequestDate      DateTime?
+  expertScheduleDate     DateTime?
+  hasMedicalCommittee    Boolean   @default(false)
+  committeeSubmitDate    DateTime?
+  committeeReviewDate    DateTime?
+  disposalType           String?
+  approvalDate           DateTime?
+  disabilityApprovalDate DateTime?
+  hospitalName           String?
+  managingBranch         String?
+  treatmentStartDate     DateTime?
+  treatmentEndDate       DateTime?
+  claimCycle             String?
+  memo                   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("occupational_accident_details")
+}
+```
+
+### OccupationalCancerDetail (기존 유지)
+
+```prisma
+model OccupationalCancerDetail {
+  id     String @id @default(cuid())
+  caseId String @unique
+  case   Case   @relation(fields: [caseId], references: [id])
+
+  diseaseName          String?
+  firstDiagnosisDate   DateTime?
+  lastWorkplace        String?
+  disposalType         String?
+  disposalDate         DateTime?
+  treatmentPeriod      String?
+  holidayBenefitPeriod String?
+  paymentStatus        String?
+  memo                 String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("occupational_cancer_details")
+}
+```
+
+### BereavedDetail (기존 유지)
+
+```prisma
+model BereavedDetail {
+  id     String @id @default(cuid())
+  caseId String @unique
+  case   Case   @relation(fields: [caseId], references: [id])
+
+  originCaseType       String?
+  diseaseName          String?
+  firstDiagnosisDate   DateTime?
+  lastWorkplace        String?
+  disposalType         String?
+  disposalDate         DateTime?
+  treatmentPeriod      String?
+  holidayBenefitPeriod String?
+  paymentStatus        String?
+  memo                 String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("bereaved_details")
+}
+```
+
+---
+
+## User 모델 수정
+
+기존 User 모델에 Case 담당자 역방향 관계 추가:
+
+```prisma
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String
+  name      String
+  role      String   @default("READONLY")
+  createdAt DateTime @default(now())
+
+  salesCases   Case[] @relation("SalesManager")
+  managedCases Case[] @relation("CaseManager")
+  branchCases  Case[] @relation("BranchManager")
+}
+```
+
+---
+
+## TimelineEvent 모델 수정
+
+작성자 FK 추가:
+
+```prisma
+model TimelineEvent {
+  id          Int      @id @default(autoincrement())
+  caseId      String
+  case        Case     @relation(fields: [caseId], references: [id])
+  title       String
+  date        DateTime
+  createdById String?
+  createdBy   User?    @relation(fields: [createdById], references: [id])
+  createdAt   DateTime @default(now())
+}
+```
+
+단, User 모델에 `timelineEvents TimelineEvent[]` 역방향 관계도 추가할 것.
+
+---
+
+## 작업 순서
+
+1. `prisma/schema.prisma` 파일을 위 내용대로 수정
+2. `npx prisma format` 실행하여 문법 검증
+3. `npx prisma migrate dev --name redesign_case_management` 실행
+4. 마이그레이션 성공 시 보고
+
+---
+
+## 주의사항
+
+- `lib/generated/` 폴더는 git에 커밋하지 않는다 (.gitignore 확인)
+- 기존 Case, Patient, Message, Notice, SignupRequest 모델의 기존 필드는 건드리지 않는다
+- HolidayBenefit 모델은 삭제한다 (Case에서 relation 제거 포함)
+- 마이그레이션 실행 전 Railway DB에 실데이터가 없으므로 reset이 필요하면 `--force-reset` 사용 가능

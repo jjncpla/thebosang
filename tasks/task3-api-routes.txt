@@ -1,0 +1,274 @@
+# Task 3: 소음성 난청 API Route 뼈대 생성
+
+## 사전 확인
+1. task2-schema.txt 작업이 완료되어 db push까지 성공했는지 확인하라.
+2. lib/prisma.ts 파일 경로와 export 방식을 확인하라.
+3. 아래 API들을 생성하기 전에 해당 경로에 파일이 이미 있는지 확인하라. 있으면 건드리지 마라.
+
+## 작업 목표
+소음성 난청 사건 상세 페이지에서 사용할 API Route 뼈대를 생성한다.
+실제 비즈니스 로직보다 구조와 타입이 올바른 것이 우선이다.
+
+---
+
+## 1. HearingLossDetail CRUD API
+
+### 파일 위치
+`app/api/hearing-loss/[caseId]/route.ts`
+
+### 구현 내용
+
+```typescript
+import { NextRequest, NextResponse } from 'next/server'
+import { auth } from '@/auth'
+import { prisma } from '@/lib/prisma'
+
+// GET: 특정 사건의 소음성 난청 상세 정보 조회
+export async function GET(
+  request: NextRequest,
+  { params }: { params: { caseId: string } }
+) {
+  try {
+    const session = await auth()
+    if (!session) {
+      return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
+    }
+
+    const detail = await prisma.hearingLossDetail.findUnique({
+      where: { caseId: params.caseId },
+      include: {
+        exams: {
+          orderBy: [
+            { examSet: 'asc' },
+            { examRound: 'asc' }
+          ]
+        }
+      }
+    })
+
+    if (!detail) {
+      return NextResponse.json({ error: '데이터가 없습니다.' }, { status: 404 })
+    }
+
+    return NextResponse.json(detail)
+  } catch (error) {
+    console.error('[HearingLossDetail GET]', error)
+    return NextResponse.json({ error: '서버 오류가 발생했습니다.' }, { status: 500 })
+  }
+}
+
+// POST: 소음성 난청 상세 정보 최초 생성
+export async function POST(
+  request: NextRequest,
+  { params }: { params: { caseId: string } }
+) {
+  try {
+    const session = await auth()
+    if (!session) {
+      return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
+    }
+
+    const body = await request.json()
+
+    const detail = await prisma.hearingLossDetail.create({
+      data: {
+        caseId: params.caseId,
+        ...body
+      }
+    })
+
+    return NextResponse.json(detail, { status: 201 })
+  } catch (error) {
+    console.error('[HearingLossDetail POST]', error)
+    return NextResponse.json({ error: '서버 오류가 발생했습니다.' }, { status: 500 })
+  }
+}
+
+// PATCH: 소음성 난청 상세 정보 수정
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: { caseId: string } }
+) {
+  try {
+    const session = await auth()
+    if (!session) {
+      return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
+    }
+
+    const body = await request.json()
+
+    const detail = await prisma.hearingLossDetail.update({
+      where: { caseId: params.caseId },
+      data: body
+    })
+
+    return NextResponse.json(detail)
+  } catch (error) {
+    console.error('[HearingLossDetail PATCH]', error)
+    return NextResponse.json({ error: '서버 오류가 발생했습니다.' }, { status: 500 })
+  }
+}
+```
+
+---
+
+## 2. HearingLossExam API (특진 회차별)
+
+### 파일 위치
+`app/api/hearing-loss/[caseId]/exams/route.ts`
+
+### 구현 내용
+
+```typescript
+import { NextRequest, NextResponse } from 'next/server'
+import { auth } from '@/auth'
+import { prisma } from '@/lib/prisma'
+
+// GET: 특정 사건의 특진 회차 목록 조회
+export async function GET(
+  request: NextRequest,
+  { params }: { params: { caseId: string } }
+) {
+  try {
+    const session = await auth()
+    if (!session) {
+      return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
+    }
+
+    const detail = await prisma.hearingLossDetail.findUnique({
+      where: { caseId: params.caseId },
+      select: { id: true }
+    })
+
+    if (!detail) {
+      return NextResponse.json({ error: '소음성 난청 상세 정보가 없습니다.' }, { status: 404 })
+    }
+
+    const exams = await prisma.hearingLossExam.findMany({
+      where: { hearingLossDetailId: detail.id },
+      orderBy: [
+        { examSet: 'asc' },
+        { examRound: 'asc' }
+      ]
+    })
+
+    return NextResponse.json(exams)
+  } catch (error) {
+    console.error('[HearingLossExam GET]', error)
+    return NextResponse.json({ error: '서버 오류가 발생했습니다.' }, { status: 500 })
+  }
+}
+
+// POST: 특진 회차 데이터 추가
+export async function POST(
+  request: NextRequest,
+  { params }: { params: { caseId: string } }
+) {
+  try {
+    const session = await auth()
+    if (!session) {
+      return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
+    }
+
+    const body = await request.json()
+
+    const detail = await prisma.hearingLossDetail.findUnique({
+      where: { caseId: params.caseId },
+      select: { id: true }
+    })
+
+    if (!detail) {
+      return NextResponse.json({ error: '소음성 난청 상세 정보가 없습니다. 먼저 기본 정보를 생성하세요.' }, { status: 404 })
+    }
+
+    const exam = await prisma.hearingLossExam.create({
+      data: {
+        hearingLossDetailId: detail.id,
+        examSet: body.examSet ?? 'INITIAL',
+        examRound: body.examRound ?? 1,
+        ...body
+      }
+    })
+
+    return NextResponse.json(exam, { status: 201 })
+  } catch (error) {
+    console.error('[HearingLossExam POST]', error)
+    return NextResponse.json({ error: '서버 오류가 발생했습니다.' }, { status: 500 })
+  }
+}
+```
+
+---
+
+## 3. HearingLossExam 개별 수정/삭제 API
+
+### 파일 위치
+`app/api/hearing-loss/[caseId]/exams/[examId]/route.ts`
+
+### 구현 내용
+
+```typescript
+import { NextRequest, NextResponse } from 'next/server'
+import { auth } from '@/auth'
+import { prisma } from '@/lib/prisma'
+
+// PATCH: 특진 회차 데이터 수정
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: { caseId: string; examId: string } }
+) {
+  try {
+    const session = await auth()
+    if (!session) {
+      return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
+    }
+
+    const body = await request.json()
+
+    const exam = await prisma.hearingLossExam.update({
+      where: { id: params.examId },
+      data: body
+    })
+
+    return NextResponse.json(exam)
+  } catch (error) {
+    console.error('[HearingLossExam PATCH]', error)
+    return NextResponse.json({ error: '서버 오류가 발생했습니다.' }, { status: 500 })
+  }
+}
+
+// DELETE: 특진 회차 데이터 삭제
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: { caseId: string; examId: string } }
+) {
+  try {
+    const session = await auth()
+    if (!session) {
+      return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
+    }
+
+    await prisma.hearingLossExam.delete({
+      where: { id: params.examId }
+    })
+
+    return NextResponse.json({ message: '삭제되었습니다.' })
+  } catch (error) {
+    console.error('[HearingLossExam DELETE]', error)
+    return NextResponse.json({ error: '서버 오류가 발생했습니다.' }, { status: 500 })
+  }
+}
+```
+
+---
+
+## 주의사항
+- lib/prisma.ts의 실제 export 방식을 확인하고 import 구문을 맞춰라.
+  - named export면 `import { prisma }`, default export면 `import prisma` 사용
+- auth() 함수 import 경로가 프로젝트에 맞는지 확인하라.
+- 파일 생성 후 TypeScript 타입 에러가 없는지 확인하라.
+
+## 완료 후 보고
+생성한 파일 목록과 경로를 나열하고,
+"API Route 뼈대 생성 완료" 라고 보고하라.
+git add/commit은 하지 마라. 사용자가 직접 확인 후 커밋한다.

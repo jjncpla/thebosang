@@ -24,6 +24,23 @@ export async function PUT(
   return NextResponse.json(contact)
 }
 
+export async function PATCH(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const session = await auth()
+  if ((session?.user as any)?.role !== 'ADMIN') {
+    return NextResponse.json({ error: '권한 없음' }, { status: 403 })
+  }
+  const { id } = await params
+  const body = await request.json()
+  const contact = await prisma.contact.update({
+    where: { id },
+    data: body,
+  })
+  return NextResponse.json(contact)
+}
+
 export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ id: string }> }

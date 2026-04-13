@@ -1,0 +1,405 @@
+# TASK-06: /forms 좌표 에디터 개선 — PDF 이미지 오버레이 + 방향키 마커 이동
+# 실행: cat task-06.txt | claude --dangerously-skip-permissions
+
+## 개요
+현재 iframe 방식으로는 오버레이가 불가능.
+PDF를 PNG 이미지로 변환해서 <img>로 표시하고,
+선택된 필드의 마커(십자선)를 이미지 위에 오버레이해서 방향키로 이동.
+
+---
+
+## STEP 1: PDF→PNG 변환 API 신규 생성
+
+파일: app/api/forms/preview/route.ts
+
+```typescript
+// GET /api/forms/preview?type=FORM_TYPE&page=1
+// public/forms/ 의 PDF를 PNG 이미지로 변환해서 반환
+
+import { NextRequest, NextResponse } from 'next/server'
+import { exec } from 'child_process'
+import { promisify } from 'util'
+import * as fs from 'fs'
+import * as path from 'path'
+import * as os from 'os'
+
+const execAsync = promisify(exec)
+
+const FILE_MAP: Record<string, string> = {
+  DISABILITY_CLAIM:   'disability_claim.pdf',
+  NOISE_WORK_CONFIRM: 'noise_work_confirm.pdf',
+  AGENT_APPOINTMENT:  'agent_appointment.pdf',
+  POWER_OF_ATTORNEY:  'power_of_attorney.pdf',
+  SPECIAL_CLINIC:     'special_clinic.pdf',
+  EXPERT_CLINIC:      'expert_clinic.pdf',
+  WORK_HISTORY:       'work_history.pdf',
+}
+
+export async function GET(req: NextRequest) {
+  const type = req.nextUrl.searchParams.get('type') ?? ''
+  const page = parseInt(req.nextUrl.searchParams.get('page') ?? '1', 10)
+  
+  const fileName = FILE_MAP[type]
+  if (!fileName) {
+    return new NextResponse('Unknown form type', { status: 400 })
+  }
+  
+  const pdfPath = path.join(process.cwd(), 'public', 'forms', fileName)
+  if (!fs.existsSync(pdfPath)) {
+    return new NextResponse('PDF not found', { status: 404 })
+  }
+  
+  // 임시 디렉터리에 PNG 출력
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'form-preview-'))
+  const outputPrefix = path.join(tmpDir, 'page')
+  
+  try {
+    // pdftoppm: poppler-utils (Railway Ubuntu에 기본 설치됨)
+    // -r 150: 150dpi (A4 = 약 1240x1754px)
+    // -png: PNG 출력
+    // -f {page} -l {page}: 특정 페이지만
+    await execAsync(
+      `pdftoppm -r 150 -png -f ${page} -l ${page} "${pdfPath}" "${outputPrefix}"`
+    )
+    
+    // 출력 파일 찾기 (pdftoppm은 outputPrefix-001.png 등으로 생성)
+    const files = fs.readdirSync(tmpDir).filter(f => f.endsWith('.png'))
+    if (files.length === 0) {
+      throw new Error('PNG conversion failed')
+    }
+    
+    const pngPath = path.join(tmpDir, files[0])
+    const pngBuffer = fs.readFileSync(pngPath)
+    
+    return new NextResponse(pngBuffer, {
+      headers: {
+        'Content-Type': 'image/png',
+        'Cache-Control': 'public, max-age=3600',
+      }
+    })
+  } finally {
+    // 임시 파일 정리
+    fs.rmSync(tmpDir, { recursive: true, force: true })
+  }
+}
+```
+
+pdftoppm이 없을 경우 fallback:
+- Railway에서 `apt-get install -y poppler-utils` 필요
+- railway.toml 또는 nixpacks.toml에 추가 필요
+
+railway.toml이 없으면 프로젝트 루트에 nixpacks.toml 생성:
+```toml
+[phases.setup]
+aptPkgs = ["poppler-utils"]
+```
+
+---
+
+## STEP 2: app/forms/page.tsx 전면 개선
+
+### 핵심 변경사항
+- iframe 제거 → `<img>` 태그로 PNG 표시
+- 이미지 위에 position:absolute 오버레이 div
+- 선택된 필드의 마커(십자선) 표시 + 방향키로 이동
+- 좌표 실시간 업데이트
+
+### State 추가/변경
+```typescript
+// 기존 state 유지하되 아래 추가/변경
+const [imgSize, setImgSize] = useState<{ w: number; h: number } | null>(null)
+const [previewLoading, setPreviewLoading] = useState(false)
+const imgRef = useRef<HTMLImageElement>(null)
+const containerRef = useRef<HTMLDivElement>(null)
+```
+
+### 미리보기 영역 교체
+
+기존 iframe을 아래로 교체:
+
+```tsx
+{/* PDF 미리보기 컨테이너 */}
+<div
+  ref={containerRef}
+  style={{
+    position: 'relative',
+    flex: 1,
+    border: '1px solid #ddd',
+    backgroundColor: '#888',
+    overflow: 'auto',
+    display: 'flex',
+    alignItems: 'flex-start',
+    justifyContent: 'center',
+  }}
+  tabIndex={0}           // 키보드 포커스 가능
+  onKeyDown={handleKeyDown}
+  onClick={handleImageClick}
+>
+  {selectedForm && (
+    <>
+      {/* PDF를 PNG로 렌더링 */}
+      <img
+        ref={imgRef}
+        src={`/api/forms/preview?type=${selectedForm}&page=${previewPage}&t=${Date.now()}`}
+        alt="서식 미리보기"
+        style={{
+          display: 'block',
+          maxWidth: '100%',
+          cursor: selectedField ? 'crosshair' : 'default',
+          userSelect: 'none',
+        }}
+        onLoad={(e) => {
+          const img = e.currentTarget
+          setImgSize({ w: img.naturalWidth, h: img.naturalHeight })
+          setPreviewLoading(false)
+        }}
+        onLoadStart={() => setPreviewLoading(true)}
+        draggable={false}
+      />
+
+      {/* 선택된 필드 마커 오버레이 */}
+      {selectedField && imgSize && imgRef.current && (() => {
+        // PDF pt → 이미지 px 변환
+        // PDF: 595pt, PNG at 150dpi: 약 1240px → 비율: 1240/595 ≈ 2.083
+        const rendered = imgRef.current.getBoundingClientRect()
+        const scaleX = rendered.width / imgSize.w
+        const scaleY = rendered.height / imgSize.h
+        
+        // pdf-lib 좌표 (좌하단 원점) → 이미지 좌표 (좌상단 원점)
+        // imgY = (841 - pdfY) * pxPerPt * scaleY
+        const pxPerPt = imgSize.h / 841  // 841pt = 이미지 높이
+        const markerX = selectedField.x * (imgSize.w / 595) * scaleX
+        const markerY = (841 - selectedField.y) * pxPerPt * scaleY
+
+        return (
+          <div
+            style={{
+              position: 'absolute',
+              left: imgRef.current.offsetLeft,
+              top: imgRef.current.offsetTop,
+              width: rendered.width,
+              height: rendered.height,
+              pointerEvents: 'none',
+            }}
+          >
+            {/* 십자선 마커 */}
+            <div style={{
+              position: 'absolute',
+              left: markerX - 10,
+              top: markerY - 10,
+              width: 20,
+              height: 20,
+              pointerEvents: 'none',
+            }}>
+              {/* 가로선 */}
+              <div style={{
+                position: 'absolute',
+                left: 0, top: 9,
+                width: 20, height: 2,
+                backgroundColor: '#FF0000',
+                opacity: 0.85,
+              }} />
+              {/* 세로선 */}
+              <div style={{
+                position: 'absolute',
+                left: 9, top: 0,
+                width: 2, height: 20,
+                backgroundColor: '#FF0000',
+                opacity: 0.85,
+              }} />
+            </div>
+
+            {/* 필드명 라벨 */}
+            <div style={{
+              position: 'absolute',
+              left: markerX + 12,
+              top: markerY - 18,
+              backgroundColor: 'rgba(255,0,0,0.85)',
+              color: 'white',
+              fontSize: '10px',
+              padding: '1px 4px',
+              borderRadius: '2px',
+              whiteSpace: 'nowrap',
+              pointerEvents: 'none',
+            }}>
+              {selectedField.label} ({selectedField.x}, {selectedField.y})
+            </div>
+          </div>
+        )
+      })()}
+
+      {/* 로딩 오버레이 */}
+      {previewLoading && (
+        <div style={{
+          position: 'absolute', inset: 0,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          backgroundColor: 'rgba(255,255,255,0.7)',
+          fontSize: '14px', color: '#666',
+        }}>
+          로딩 중...
+        </div>
+      )}
+    </>
+  )}
+</div>
+```
+
+### 이미지 클릭 → 마커 이동 핸들러
+
+```typescript
+const handleImageClick = (e: React.MouseEvent<HTMLDivElement>) => {
+  if (!selectedField || !imgRef.current || !imgSize) return
+  
+  const img = imgRef.current
+  const rect = img.getBoundingClientRect()
+  
+  // 클릭 위치 (이미지 내 px)
+  const clickX = e.clientX - rect.left
+  const clickY = e.clientY - rect.top
+  
+  // 이미지 px → pdf-lib pt 변환
+  const scaleX = imgSize.w / rect.width
+  const scaleY = imgSize.h / rect.height
+  
+  const pdfX = Math.round(clickX * scaleX * (595 / imgSize.w))
+  const pdfY = Math.round(841 - (clickY * scaleY * (841 / imgSize.h)))
+  
+  updateFieldCoord('x', pdfX)
+  updateFieldCoord('y', pdfY)
+}
+```
+
+### 방향키 핸들러 교체
+
+기존 input onKeyDown 대신 컨테이너 div에서 처리:
+
+```typescript
+const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+  if (!selectedField) return
+  const arrowKeys = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown']
+  if (!arrowKeys.includes(e.key)) return
+  
+  e.preventDefault()
+  const step = e.shiftKey ? 5 : 1
+  
+  switch (e.key) {
+    case 'ArrowLeft':  updateFieldCoord('x', selectedField.x - step); break
+    case 'ArrowRight': updateFieldCoord('x', selectedField.x + step); break
+    case 'ArrowUp':    updateFieldCoord('y', selectedField.y + step); break  // y축: 위 = y 증가
+    case 'ArrowDown':  updateFieldCoord('y', selectedField.y - step); break  // y축: 아래 = y 감소
+  }
+}
+```
+
+### 필드 선택 시 컨테이너 포커스
+
+```typescript
+const handleSelectField = (key: string) => {
+  const field = coordFields[selectedForm!]?.find(f => f.key === key)
+  if (field) {
+    setSelectedField(field)
+    // 컨테이너에 포커스 줘서 방향키 즉시 동작하게
+    setTimeout(() => containerRef.current?.focus(), 50)
+  }
+}
+```
+
+### 우측 패널 — x/y 표시 업데이트
+
+기존 수동 입력 필드는 유지하되, 값이 실시간으로 반영되도록:
+```tsx
+{selectedField && (
+  <div style={{ padding: '10px', border: '1px solid #29ABE2', borderRadius: '6px', fontSize: '12px', backgroundColor: '#e8f7fd' }}>
+    <div style={{ fontWeight: 'bold', marginBottom: '6px', color: '#29ABE2' }}>
+      📍 {selectedField.label}
+    </div>
+    <div style={{ display: 'flex', gap: '8px' }}>
+      <div>
+        <label style={{ fontSize: '11px', color: '#666' }}>x (pt)</label>
+        <input
+          type="number"
+          value={selectedField.x}
+          onChange={(e) => updateFieldCoord('x', Number(e.target.value))}
+          style={{ width: '70px', padding: '4px', fontSize: '12px', display: 'block' }}
+        />
+      </div>
+      <div>
+        <label style={{ fontSize: '11px', color: '#666' }}>y (pt)</label>
+        <input
+          type="number"
+          value={selectedField.y}
+          onChange={(e) => updateFieldCoord('y', Number(e.target.value))}
+          style={{ width: '70px', padding: '4px', fontSize: '12px', display: 'block' }}
+        />
+      </div>
+    </div>
+    <div style={{ marginTop: '6px', fontSize: '11px', color: '#888' }}>
+      이미지 클릭 또는 방향키(Shift: 5pt)로 이동
+    </div>
+  </div>
+)}
+```
+
+---
+
+## STEP 3: nixpacks.toml 또는 railway.toml 확인
+
+프로젝트 루트에 nixpacks.toml이 있으면:
+```toml
+[phases.setup]
+aptPkgs = ["poppler-utils"]
+```
+
+없으면 새로 생성. railway.toml이 있으면 거기에 추가.
+
+pdftoppm 명령어가 로컬(Windows)에서는 없을 수 있음.
+로컬 개발 시 fallback: pdftoppm 실패하면 대신 공란 PDF를 그대로 반환하고
+프론트에서 <iframe> fallback으로 처리.
+
+route.ts에 try-catch 추가:
+```typescript
+try {
+  await execAsync(`pdftoppm ...`)
+  // PNG 반환
+} catch {
+  // fallback: PDF 그대로 반환 (iframe으로 fallback 처리)
+  const pdfBuffer = fs.readFileSync(pdfPath)
+  return new NextResponse(pdfBuffer, {
+    headers: { 'Content-Type': 'application/pdf' }
+  })
+}
+```
+
+프론트에서 fallback:
+```tsx
+// src가 PDF일 경우 img 대신 iframe으로 표시
+// Content-Type 응답 헤더로 판단하거나, 별도 상태로 관리
+```
+
+간단하게: preview API 응답이 PDF면 <iframe>, PNG면 <img> 자동 전환:
+```typescript
+const [previewType, setPreviewType] = useState<'png' | 'pdf'>('png')
+
+// img onError 시 pdf fallback
+<img
+  src={previewUrl}
+  onError={() => setPreviewType('pdf')}
+  ...
+/>
+{previewType === 'pdf' && (
+  <iframe src={`/api/forms/blank?type=${selectedForm}`} ... />
+)}
+```
+
+---
+
+## 완료 확인
+
+1. /forms 에서 서식 선택 시 PNG 이미지로 미리보기 표시
+2. 필드 선택 시 이미지 위에 빨간 십자선 마커 + 필드명 라벨 표시
+3. 컨테이너 클릭 시 마커가 클릭 위치로 이동 + 좌표 업데이트
+4. 방향키(1pt) / Shift+방향키(5pt)로 마커 미세 이동
+5. 우측 패널 x/y 값이 실시간으로 반영
+6. "전체 좌표 복사" 버튼으로 모든 필드 좌표 클립보드 복사
+7. pdftoppm 없는 환경(로컬 Windows)에서 fallback으로 iframe 표시
+

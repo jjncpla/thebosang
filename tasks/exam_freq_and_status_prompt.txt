@@ -1,0 +1,517 @@
+# 특진 결과 주파수별 저장 + StatusBadge 한글화 — Claude Code 지시사항
+
+## 작업 개요
+1. HearingLossExam 테이블에 주파수별 청력역치 필드 추가 (기도/골도 각 4개 주파수)
+2. 어음청취역치(SRT) 필드 추가
+3. ExamRoundBlock UI를 아코디언 형태로 재구성, 6분법 자동계산 표시
+4. StatusBadge 컴포넌트 영문→한글 레이블 변환 + 색상 매핑
+
+## 절대 건드리지 말 것
+- HearingLossExam, ExamRoundBlock 이외의 모든 컴포넌트
+- HearingLossDetail 필드 (exams 배열 제외)
+- COPD, 진폐, 기타 상병 관련 코드
+- 기존 inputStyle, secWrap, AccordionHeader, DisabledSection 등 공통 UI
+
+---
+
+## 1. schema.prisma — HearingLossExam 필드 교체
+
+### 제거할 필드
+```
+airRight    Float?
+airLeft     Float?
+boneRight   Float?
+boneLeft    Float?
+```
+
+### 추가할 필드 (위 4개 자리에 삽입)
+```prisma
+// 기도청력역치 우측 (dB) — 주파수별
+air500R   Float?
+air1kR    Float?
+air2kR    Float?
+air4kR    Float?
+// 기도청력역치 좌측 (dB)
+air500L   Float?
+air1kL    Float?
+air2kL    Float?
+air4kL    Float?
+// 골도청력역치 우측 (dB)
+bone500R  Float?
+bone1kR   Float?
+bone2kR   Float?
+bone4kR   Float?
+// 골도청력역치 좌측 (dB)
+bone500L  Float?
+bone1kL   Float?
+bone2kL   Float?
+bone4kL   Float?
+// 어음청취역치 (dB) — SRT
+srtRight  Float?
+srtLeft   Float?
+```
+
+### speechRight / speechLeft는 유지 (어음명료도 %)
+### abrRight / abrLeft / impedanceRight / impedanceLeft 유지
+
+수정 후:
+```
+npx prisma db push
+```
+실행
+
+---
+
+## 2. page.tsx — HearingLossExam 타입 수정
+
+기존 `airRight`, `airLeft`, `boneRight`, `boneLeft` 제거하고 아래로 교체:
+
+```ts
+type HearingLossExam = {
+  id: string;
+  examSet: string;
+  examRound: number;
+  examDate: string | null;
+  // 기도 우측
+  air500R: number | null; air1kR: number | null; air2kR: number | null; air4kR: number | null;
+  // 기도 좌측
+  air500L: number | null; air1kL: number | null; air2kL: number | null; air4kL: number | null;
+  // 골도 우측
+  bone500R: number | null; bone1kR: number | null; bone2kR: number | null; bone4kR: number | null;
+  // 골도 좌측
+  bone500L: number | null; bone1kL: number | null; bone2kL: number | null; bone4kL: number | null;
+  // 어음
+  srtRight: number | null;
+  srtLeft: number | null;
+  speechRight: number | null;
+  speechLeft: number | null;
+  // ABR
+  abrRight: number | null;
+  abrLeft: number | null;
+  // 임피던스
+  impedanceRight: string | null;
+  impedanceLeft: string | null;
+  isReliable: boolean | null;
+  medicalRecordObtained: boolean;
+  predictedGrade: string | null;
+  memo: string | null;
+};
+```
+
+EMPTY_EXAM 상수도 동일하게 수정:
+```ts
+const EMPTY_EXAM = (examSet: string, examRound: number): HearingLossExam => ({
+  id: "", examSet, examRound, examDate: null,
+  air500R: null, air1kR: null, air2kR: null, air4kR: null,
+  air500L: null, air1kL: null, air2kL: null, air4kL: null,
+  bone500R: null, bone1kR: null, bone2kR: null, bone4kR: null,
+  bone500L: null, bone1kL: null, bone2kL: null, bone4kL: null,
+  srtRight: null, srtLeft: null,
+  speechRight: null, speechLeft: null,
+  abrRight: null, abrLeft: null,
+  impedanceRight: null, impedanceLeft: null,
+  isReliable: null, medicalRecordObtained: false, predictedGrade: null, memo: null,
+});
+```
+
+---
+
+## 3. page.tsx — ExamRoundBlock 컴포넌트 전면 재작성
+
+아래 구조로 완전히 새로 작성한다.
+
+### 6분법 계산 헬퍼 (컴포넌트 외부에 정의)
+```ts
+function calc6분법(v500: number | null, v1k: number | null, v2k: number | null, v4k: number | null): string {
+  if (v500 === null || v1k === null || v2k === null || v4k === null) return "-";
+  return ((v500 + 2 * v1k + 2 * v2k + v4k) / 6).toFixed(1);
+}
+```
+
+### ExamRoundBlock 구조
+```
+ExamRoundBlock
+  ├── 아코디언 헤더 (label + 6분법 요약 미리보기 + ▼/▲)
+  │    예: "1차  |  기도 우 52.5 / 좌 68.3  |  골도 우 52.5 / 좌 68.3"
+  │    데이터 없으면: "1차  |  미입력"
+  └── 아코디언 바디 (open 시 표시)
+       ├── [기도청력역치 (dB)] 소제목
+       │    ┌──────────────────────────────────────────────────────┐
+       │    │       │ 500Hz │ 1kHz │ 2kHz │ 4kHz │  6분법  │
+       │    │ 우측  │ input │input │input │input │  auto   │
+       │    │ 좌측  │ input │input │input │input │  auto   │
+       │    └──────────────────────────────────────────────────────┘
+       ├── [골도청력역치 (dB)] 소제목
+       │    ┌──────────────────────────────────────────────────────┐
+       │    │       │ 500Hz │ 1kHz │ 2kHz │ 4kHz │  6분법  │
+       │    │ 우측  │ input │input │input │input │  auto   │
+       │    │ 좌측  │ input │input │input │input │  auto   │
+       │    └──────────────────────────────────────────────────────┘
+       ├── [기골도 편차] 소제목 (골도값 있을 때만 표시)
+       │    ┌──────────────────────────────────┐
+       │    │       │ 500Hz │ 1kHz │ 2kHz │ 4kHz │
+       │    │ 우측  │  auto │ auto │ auto │ auto │ (|기도-골도| 계산)
+       │    │ 좌측  │  auto │ auto │ auto │ auto │
+       │    └──────────────────────────────────┘
+       ├── [어음청력검사] 소제목
+       │    우측: 청취역치(dB) input + 어음명료도(%) input
+       │    좌측: 청취역치(dB) input + 어음명료도(%) input
+       ├── [ABR (dBnHL)] 소제목
+       │    우측 input + 좌측 input
+       ├── [임피던스] 소제목
+       │    우측 input + 좌측 input
+       ├── 체크박스: 신뢰성 있음
+       ├── round === 3 일 때만: 의무기록지 발급 완료 체크박스 + 예상 장해등급 input
+       ├── 특이사항 textarea
+       └── [이 회차 저장] 버튼 + 저장 메시지
+```
+
+### ExamRoundBlock 구현 코드
+
+```tsx
+function ExamRoundBlock({
+  caseId, examSet, round, label, exams, setExams,
+}: {
+  caseId: string; examSet: string; round: number; label: string;
+  exams: HearingLossExam[]; setExams: React.Dispatch<React.SetStateAction<HearingLossExam[]>>;
+}) {
+  const [open, setOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+
+  const exam = exams.find((e) => e.examSet === examSet && e.examRound === round) ?? EMPTY_EXAM(examSet, round);
+
+  const setField = (key: keyof HearingLossExam, val: unknown) =>
+    setExams((prev) => {
+      const idx = prev.findIndex((e) => e.examSet === examSet && e.examRound === round);
+      const updated = { ...exam, [key]: val };
+      if (idx >= 0) { const next = [...prev]; next[idx] = updated; return next; }
+      return [...prev, updated];
+    });
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      const method = exam.id ? "PUT" : "POST";
+      const url = exam.id
+        ? `/api/cases/${caseId}/hearing-loss/exams/${exam.id}`
+        : `/api/cases/${caseId}/hearing-loss/exams`;
+      const res = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(exam) });
+      if (!res.ok) throw new Error();
+      const updated: HearingLossExam = await res.json();
+      setExams((prev) => {
+        const idx = prev.findIndex((e) => e.examSet === examSet && e.examRound === round);
+        if (idx >= 0) { const next = [...prev]; next[idx] = updated; return next; }
+        return [...prev, updated];
+      });
+      setMsg("저장되었습니다");
+      setTimeout(() => setMsg(null), 3000);
+    } catch { setMsg("오류가 발생했습니다"); }
+    finally { setSaving(false); }
+  };
+
+  const n = (key: keyof HearingLossExam) => {
+    const v = exam[key]; return (v === null || v === undefined) ? "" : String(v);
+  };
+  const numField = (key: keyof HearingLossExam) => (
+    <input type="number" style={{ ...inputStyle, width: 64 }} value={n(key)}
+      onChange={(e) => setField(key, e.target.value === "" ? null : Number(e.target.value))} />
+  );
+
+  const ptaR = calc6분법(exam.air500R, exam.air1kR, exam.air2kR, exam.air4kR);
+  const ptaL = calc6분법(exam.air500L, exam.air1kL, exam.air2kL, exam.air4kL);
+  const hasData = exam.air500R !== null || exam.air500L !== null;
+
+  // 아코디언 헤더 요약
+  const summary = hasData
+    ? `기도 우 ${ptaR} / 좌 ${ptaL} dB`
+    : "미입력";
+
+  // 기골도 편차 계산
+  const boneDiff = (airKey: keyof HearingLossExam, boneKey: keyof HearingLossExam) => {
+    const a = exam[airKey] as number | null;
+    const b = exam[boneKey] as number | null;
+    if (a === null || b === null) return "-";
+    return Math.abs(a - b).toFixed(0);
+  };
+
+  const subTitle = (text: string) => (
+    <div style={{ fontSize: 12, fontWeight: 700, color: "#374151", marginBottom: 8, marginTop: 12, paddingBottom: 4, borderBottom: "1px solid #e5e7eb" }}>{text}</div>
+  );
+
+  const freqTableStyle: React.CSSProperties = { borderCollapse: "collapse", width: "100%", fontSize: 12 };
+  const thStyle: React.CSSProperties = { padding: "4px 6px", background: "#f9fafb", border: "1px solid #e5e7eb", fontWeight: 600, color: "#6b7280", textAlign: "center" };
+  const tdStyle: React.CSSProperties = { padding: 4, border: "1px solid #f1f5f9", textAlign: "center" };
+  const autoStyle: React.CSSProperties = { padding: "4px 6px", border: "1px solid #f1f5f9", background: "#f0fdf4", color: "#15803d", fontWeight: 700, textAlign: "center", fontSize: 13 };
+
+  return (
+    <div style={{ border: "1px solid #e5e7eb", borderRadius: 6, marginBottom: 8, overflow: "hidden" }}>
+      {/* 아코디언 헤더 */}
+      <button onClick={() => setOpen((v) => !v)} style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 16px", background: open ? "#eff6ff" : "#fafafa", border: "none", cursor: "pointer", fontFamily: "inherit" }}>
+        <span style={{ fontSize: 13, fontWeight: 700, color: open ? "#1d4ed8" : "#374151" }}>{label}</span>
+        <span style={{ fontSize: 12, color: "#9ca3af" }}>{summary}  {open ? "▲" : "▼"}</span>
+      </button>
+
+      {open && (
+        <div style={{ padding: 16 }}>
+          {subTitle("기도청력역치 (dB)")}
+          <table style={freqTableStyle}>
+            <thead>
+              <tr>
+                <th style={thStyle}></th>
+                <th style={thStyle}>500Hz</th>
+                <th style={thStyle}>1kHz</th>
+                <th style={thStyle}>2kHz</th>
+                <th style={thStyle}>4kHz</th>
+                <th style={thStyle}>6분법</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td style={{ ...thStyle, width: 40 }}>우</td>
+                <td style={tdStyle}>{numField("air500R")}</td>
+                <td style={tdStyle}>{numField("air1kR")}</td>
+                <td style={tdStyle}>{numField("air2kR")}</td>
+                <td style={tdStyle}>{numField("air4kR")}</td>
+                <td style={autoStyle}>{ptaR}</td>
+              </tr>
+              <tr>
+                <td style={{ ...thStyle, width: 40 }}>좌</td>
+                <td style={tdStyle}>{numField("air500L")}</td>
+                <td style={tdStyle}>{numField("air1kL")}</td>
+                <td style={tdStyle}>{numField("air2kL")}</td>
+                <td style={tdStyle}>{numField("air4kL")}</td>
+                <td style={autoStyle}>{ptaL}</td>
+              </tr>
+            </tbody>
+          </table>
+
+          {subTitle("골도청력역치 (dB)")}
+          <table style={freqTableStyle}>
+            <thead>
+              <tr>
+                <th style={thStyle}></th>
+                <th style={thStyle}>500Hz</th>
+                <th style={thStyle}>1kHz</th>
+                <th style={thStyle}>2kHz</th>
+                <th style={thStyle}>4kHz</th>
+                <th style={thStyle}>6분법</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td style={{ ...thStyle, width: 40 }}>우</td>
+                <td style={tdStyle}>{numField("bone500R")}</td>
+                <td style={tdStyle}>{numField("bone1kR")}</td>
+                <td style={tdStyle}>{numField("bone2kR")}</td>
+                <td style={tdStyle}>{numField("bone4kR")}</td>
+                <td style={autoStyle}>{calc6분법(exam.bone500R, exam.bone1kR, exam.bone2kR, exam.bone4kR)}</td>
+              </tr>
+              <tr>
+                <td style={{ ...thStyle, width: 40 }}>좌</td>
+                <td style={tdStyle}>{numField("bone500L")}</td>
+                <td style={tdStyle}>{numField("bone1kL")}</td>
+                <td style={tdStyle}>{numField("bone2kL")}</td>
+                <td style={tdStyle}>{numField("bone4kL")}</td>
+                <td style={autoStyle}>{calc6분법(exam.bone500L, exam.bone1kL, exam.bone2kL, exam.bone4kL)}</td>
+              </tr>
+            </tbody>
+          </table>
+
+          {subTitle("기골도 편차 (dB)")}
+          <table style={freqTableStyle}>
+            <thead>
+              <tr>
+                <th style={thStyle}></th>
+                <th style={thStyle}>500Hz</th>
+                <th style={thStyle}>1kHz</th>
+                <th style={thStyle}>2kHz</th>
+                <th style={thStyle}>4kHz</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td style={{ ...thStyle, width: 40 }}>우</td>
+                {(["air500R","air1kR","air2kR","air4kR"] as const).map((ak, i) => {
+                  const bk = (["bone500R","bone1kR","bone2kR","bone4kR"] as const)[i];
+                  const diff = boneDiff(ak, bk);
+                  const over10 = diff !== "-" && Number(diff) > 10;
+                  return <td key={ak} style={{ ...autoStyle, color: over10 ? "#dc2626" : "#15803d" }}>{diff}</td>;
+                })}
+              </tr>
+              <tr>
+                <td style={{ ...thStyle, width: 40 }}>좌</td>
+                {(["air500L","air1kL","air2kL","air4kL"] as const).map((ak, i) => {
+                  const bk = (["bone500L","bone1kL","bone2kL","bone4kL"] as const)[i];
+                  const diff = boneDiff(ak, bk);
+                  const over10 = diff !== "-" && Number(diff) > 10;
+                  return <td key={ak} style={{ ...autoStyle, color: over10 ? "#dc2626" : "#15803d" }}>{diff}</td>;
+                })}
+              </tr>
+            </tbody>
+          </table>
+          <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 4 }}>※ 10dB 초과 시 빨간색 표시 (신뢰성 기준)</div>
+
+          {subTitle("어음청력검사")}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+              <label style={{ fontSize: 11, color: "#9ca3af", fontWeight: 600 }}>청취역치 우측 (dB)</label>
+              {numField("srtRight")}
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+              <label style={{ fontSize: 11, color: "#9ca3af", fontWeight: 600 }}>어음명료도 우측 (%)</label>
+              {numField("speechRight")}
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+              <label style={{ fontSize: 11, color: "#9ca3af", fontWeight: 600 }}>청취역치 좌측 (dB)</label>
+              {numField("srtLeft")}
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+              <label style={{ fontSize: 11, color: "#9ca3af", fontWeight: 600 }}>어음명료도 좌측 (%)</label>
+              {numField("speechLeft")}
+            </div>
+          </div>
+
+          {subTitle("ABR (dBnHL)")}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 10 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+              <label style={{ fontSize: 11, color: "#9ca3af", fontWeight: 600 }}>ABR 우측</label>
+              {numField("abrRight")}
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+              <label style={{ fontSize: 11, color: "#9ca3af", fontWeight: 600 }}>ABR 좌측</label>
+              {numField("abrLeft")}
+            </div>
+          </div>
+
+          {subTitle("임피던스 청력검사")}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 10 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+              <label style={{ fontSize: 11, color: "#9ca3af", fontWeight: 600 }}>임피던스 우측</label>
+              <select style={inputStyle} value={n("impedanceRight")} onChange={(e) => setField("impedanceRight", e.target.value || null)}>
+                <option value="">-</option>
+                {["A", "As", "Ad", "B", "C"].map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+              <label style={{ fontSize: 11, color: "#9ca3af", fontWeight: 600 }}>임피던스 좌측</label>
+              <select style={inputStyle} value={n("impedanceLeft")} onChange={(e) => setField("impedanceLeft", e.target.value || null)}>
+                <option value="">-</option>
+                {["A", "As", "Ad", "B", "C"].map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
+            </div>
+          </div>
+
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 16, marginTop: 14, alignItems: "center" }}>
+            <label style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, cursor: "pointer" }}>
+              <input type="checkbox" checked={exam.isReliable === true} onChange={(e) => setField("isReliable", e.target.checked ? true : null)} />
+              신뢰성 있음
+            </label>
+            {round === 3 && (
+              <>
+                <label style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, cursor: "pointer" }}>
+                  <input type="checkbox" checked={exam.medicalRecordObtained} onChange={(e) => setField("medicalRecordObtained", e.target.checked)} />
+                  의무기록지 발급 완료
+                </label>
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <label style={{ fontSize: 11, color: "#9ca3af", fontWeight: 600 }}>예상 장해등급</label>
+                  <input style={{ ...inputStyle, width: 100 }} value={n("predictedGrade")} onChange={(e) => setField("predictedGrade", e.target.value || null)} />
+                </div>
+              </>
+            )}
+          </div>
+
+          <div style={{ marginTop: 12 }}>
+            <label style={{ fontSize: 11, color: "#9ca3af", fontWeight: 600 }}>특이사항</label>
+            <textarea style={{ ...inputStyle, minHeight: 50, resize: "vertical", marginTop: 3 }} value={n("memo")} onChange={(e) => setField("memo", e.target.value || null)} />
+          </div>
+
+          <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 12 }}>
+            <button onClick={save} disabled={saving} style={{ background: "#2563eb", color: "white", border: "none", borderRadius: 6, padding: "6px 16px", fontSize: 12, fontWeight: 600, cursor: "pointer", opacity: saving ? 0.6 : 1 }}>
+              {saving ? "저장중..." : "이 회차 저장"}
+            </button>
+            {msg && <span style={{ fontSize: 12, color: msg.includes("오류") ? "#dc2626" : "#16a34a" }}>{msg}</span>}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+```
+
+---
+
+## 4. page.tsx — StatusBadge 한글화 + STATUS_COLOR 영문 키 추가
+
+### 4-1. import 수정
+기존:
+```ts
+import { CASE_TYPE_LABELS, DISPOSAL_TYPE, GRADE_TYPE, STATUS_BY_CASE_TYPE } from "@/lib/constants/case";
+```
+교체:
+```ts
+import { CASE_TYPE_LABELS, DISPOSAL_TYPE, GRADE_TYPE, STATUS_BY_CASE_TYPE, CASE_STATUS_LABELS } from "@/lib/constants/case";
+```
+
+### 4-2. STATUS_COLOR에 영문 키 추가
+기존 한글 키 목록 아래에 영문 키 추가:
+```ts
+const STATUS_COLOR: Record<string, { bg: string; color: string; border: string; dot: string }> = {
+  // 기존 한글 키 전부 유지 (삭제 금지)
+  "접수대기": { ... },
+  ...
+  // 영문 키 추가
+  "CONSULTING":             { bg: "#1e1b4b", color: "#a5b4fc", border: "1px solid #4338ca", dot: "#818cf8" },
+  "CONTRACTED":             { bg: "#082f49", color: "#7dd3fc", border: "1px solid #0369a1", dot: "#38bdf8" },
+  "DOC_COLLECTING":         { bg: "#082f49", color: "#bae6fd", border: "1px solid #0284c7", dot: "#38bdf8" },
+  "SUBMITTED":              { bg: "#1a2e05", color: "#86efac", border: "1px solid #15803d", dot: "#4ade80" },
+  "EXAM_REQUESTED":         { bg: "#1a2e05", color: "#86efac", border: "1px solid #15803d", dot: "#4ade80" },
+  "EXAM_CLINIC_SELECTED":   { bg: "#052e16", color: "#6ee7b7", border: "1px solid #059669", dot: "#34d399" },
+  "EXAM_SCHEDULED":         { bg: "#052e16", color: "#6ee7b7", border: "1px solid #059669", dot: "#34d399" },
+  "IN_EXAM":                { bg: "#052e16", color: "#6ee7b7", border: "1px solid #059669", dot: "#34d399" },
+  "EXAM_DONE":              { bg: "#052e16", color: "#86efac", border: "1px solid #15803d", dot: "#4ade80" },
+  "EXPERT_REQUESTED":       { bg: "#451a03", color: "#fcd34d", border: "1px solid #b45309", dot: "#fbbf24" },
+  "EXPERT_CLINIC_SELECTED": { bg: "#451a03", color: "#fcd34d", border: "1px solid #b45309", dot: "#fbbf24" },
+  "EXPERT_DONE":            { bg: "#451a03", color: "#fde68a", border: "1px solid #d97706", dot: "#fcd34d" },
+  "BANK_REQUESTED":         { bg: "#1e1b4b", color: "#c4b5fd", border: "1px solid #7c3aed", dot: "#a78bfa" },
+  "BANK_SUBMITTED":         { bg: "#1e1b4b", color: "#c4b5fd", border: "1px solid #7c3aed", dot: "#a78bfa" },
+  "DECISION_RECEIVED":      { bg: "#2e1065", color: "#d8b4fe", border: "1px solid #9333ea", dot: "#c084fc" },
+  "REVIEWING":              { bg: "#1c1917", color: "#d6d3d1", border: "1px solid #78716c", dot: "#a8a29e" },
+  "INFO_REQUESTED":         { bg: "#1c1917", color: "#d6d3d1", border: "1px solid #78716c", dot: "#a8a29e" },
+  "APPROVED":               { bg: "#052e16", color: "#86efac", border: "1px solid #16a34a", dot: "#4ade80" },
+  "REJECTED":               { bg: "#450a0a", color: "#fca5a5", border: "1px solid #b91c1c", dot: "#f87171" },
+  "CLOSED":                 { bg: "#1e293b", color: "#94a3b8", border: "1px solid #475569", dot: "#64748b" },
+  "OBJECTION":              { bg: "#450a0a", color: "#fca5a5", border: "1px solid #dc2626", dot: "#f87171" },
+  "WAGE_CORRECTION":        { bg: "#1e1b4b", color: "#c4b5fd", border: "1px solid #7c3aed", dot: "#a78bfa" },
+};
+```
+
+### 4-3. StatusBadge 컴포넌트 수정
+```tsx
+function StatusBadge({ status }: { status: string }) {
+  const label = CASE_STATUS_LABELS[status] ?? status;
+  const s = STATUS_COLOR[status] ?? STATUS_COLOR[label] ?? { bg: "#1e293b", color: "#94a3b8", border: "1px solid #475569", dot: "#64748b" };
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "3px 10px", borderRadius: 999, fontSize: 11, fontWeight: 700, background: s.bg, color: s.color, border: s.border }}>
+      <span style={{ width: 6, height: 6, borderRadius: "50%", background: s.dot }} />
+      {label}
+    </span>
+  );
+}
+```
+
+---
+
+## 5. 작업 순서
+
+1. `prisma/schema.prisma` — HearingLossExam 필드 수정
+2. `npx prisma db push` 실행
+3. `app/cases/[caseId]/page.tsx` — 타입, EMPTY_EXAM, ExamRoundBlock, StatusBadge 수정
+4. TypeScript 빌드 에러 확인 및 수정
+
+---
+
+## 주의사항
+- ExamRoundBlock만 교체. HearingLossTab 내부 다른 섹션(접수/청구, 특진진찰요구서, 전문조사, 결정, 검토/정공 등) 절대 건드리지 않음
+- 기존 한글 STATUS_COLOR 키 삭제 금지 (COPD 등 다른 상병에서 아직 사용 가능)
+- prisma import 경로는 기존 파일 참고

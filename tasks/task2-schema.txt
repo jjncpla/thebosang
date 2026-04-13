@@ -1,0 +1,167 @@
+# Task 2: schema.prisma 재설계 (소음성 난청 PRD 기반)
+
+## 사전 작업
+1. 먼저 prisma/schema.prisma 전체 내용을 읽어라.
+2. 현재 존재하는 모델명과 필드를 파악한 후 작업을 시작하라.
+3. 기존 모델 중 아래에서 추가/수정 대상이 아닌 것은 절대 건드리지 마라.
+
+## 작업 목표
+소음성 난청 PRD에 맞게 아래 3가지를 schema.prisma에 반영한다:
+1. Case 모델 필드 보완
+2. HearingLossDetail 모델 신규 추가
+3. HearingLossExam 모델 신규 추가
+
+---
+
+## 1. Case 모델 수정
+
+기존 Case 모델에서 아래 필드가 없으면 추가하라. 이미 있으면 건드리지 마라.
+
+추가할 필드:
+```
+caseType        String?   // HEARING_LOSS / COPD / PNEUMOCONIOSIS / MUSCULOSKELETAL / OCCUPATIONAL_ACCIDENT / OCCUPATIONAL_CANCER / BEREAVED / OTHER
+parentCaseId    String?   // 파생 사건 연결 (평균임금 정정 청구 등)
+status          String?   // 아래 CaseStatus 값 사용
+```
+
+CaseStatus 값 (주석으로 schema에 기재):
+```
+CONSULTING / CONTRACTED / DOC_COLLECTING / SUBMITTED
+EXAM_REQUESTED / EXAM_CLINIC_SELECTED / EXAM_SCHEDULED
+IN_EXAM / EXAM_DONE / EXPERT_REQUESTED / EXPERT_CLINIC_SELECTED
+EXPERT_DONE / BANK_REQUESTED / BANK_SUBMITTED / DECISION_RECEIVED
+REVIEWING / INFO_REQUESTED / APPROVED / REJECTED / CLOSED
+OBJECTION / WAGE_CORRECTION
+```
+
+---
+
+## 2. HearingLossDetail 모델 신규 추가
+
+Case와 1:1 관계. caseId를 FK로 사용.
+
+```prisma
+model HearingLossDetail {
+  id        String   @id @default(cuid())
+  caseId    String   @unique
+  case      Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  // 초진
+  firstClinic              String?
+  firstExamDate            DateTime?
+  firstExamRight           Float?
+  firstExamLeft            Float?
+  firstExamSpeech          Float?
+  passedInitialCriteria    Boolean   @default(false)
+  isDisabilityRegistered   Boolean   @default(false)
+  isBig3                   Boolean   @default(false)
+
+  // 직업력
+  workHistory              Json?
+  workHistoryMemo          String?
+  lastNoiseWorkEndDate     DateTime?
+
+  // 접수/청구
+  claimSubmittedAt         DateTime?
+  claimNasPath             String?
+  telegramSharedAt         DateTime?
+
+  // 특진진찰요구서
+  examRequestReceivedAt    DateTime?
+  examPeriodStart          DateTime?
+  examPeriodEnd            DateTime?
+
+  // 특진병원 선택
+  specialClinic                      String?
+  examClinicSelectionSubmittedAt     DateTime?
+
+  // 전문조사
+  expertRequestReceivedAt            DateTime?
+  expertClinicOptions                Json?
+  expertClinic                       String?
+  expertClinicSelectionSubmittedAt   DateTime?
+  expertDate                         DateTime?
+  expertAttendedStaffId              String?
+  expertMemo                         String?
+
+  // 결정
+  bankAccountRequestedAt    DateTime?
+  bankAccountSubmittedAt    DateTime?
+  decisionType              String?
+  decisionReceivedAt        DateTime?
+  approvedDisease           String?
+  disabilityGrade           String?
+  disabilityStatus          String?
+  baseAssessment            String?
+  finalAssessment           String?
+  lumpSumAmount             Int?
+  avgWage                   Int?
+  compensationPaidAt        DateTime?
+
+  // 검토/정공
+  wageReviewMemo                  String?
+  adaptedWorkplaceReviewMemo      String?
+  infoDisclosureRequestedAt       DateTime?
+  infoDisclosureReceivedAt        DateTime?
+  rejectionReason                 String?
+  reviewMemo                      String?
+
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  exams       HearingLossExam[]
+}
+```
+
+---
+
+## 3. HearingLossExam 모델 신규 추가
+
+특진 회차별 검사 결과. HearingLossDetail과 1:N 관계.
+
+```prisma
+model HearingLossExam {
+  id                    String             @id @default(cuid())
+  hearingLossDetailId   String
+  hearingLossDetail     HearingLossDetail  @relation(fields: [hearingLossDetailId], references: [id], onDelete: Cascade)
+
+  examSet               String    // INITIAL / RE / RE2
+  examRound             Int       // 1 / 2 / 3
+  examDate              DateTime?
+  attendedStaffId       String?
+
+  airRight              Float?
+  airLeft               Float?
+  boneRight             Float?
+  boneLeft              Float?
+  speechRight           Float?
+  speechLeft            Float?
+  abrRight              Float?
+  abrLeft               Float?
+  impedanceRight        String?
+  impedanceLeft         String?
+
+  isReliable            Boolean?
+  medicalRecordObtained Boolean   @default(false)
+  predictedGrade        String?
+  memo                  String?
+
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+}
+```
+
+---
+
+## 주의사항
+- Case 모델에 `hearingLossDetail HearingLossDetail?` relation 필드를 반드시 추가하라.
+- 기존 모델에 relation이 이미 있는지 확인 후 중복 추가하지 마라.
+- Prisma schema 문법 오류 없이 작성하라.
+
+## 완료 후 실행
+```bash
+npx prisma db push
+```
+
+db push 결과를 확인하고 에러가 있으면 수정 후 재실행하라.
+push 성공 시 "schema.prisma 재설계 완료" 라고 보고하라.

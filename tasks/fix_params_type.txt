@@ -1,0 +1,38 @@
+## 수정 목표
+Next.js 15+ 에서 dynamic route params가 Promise 타입으로 변경됨에 따른 빌드 에러 수정.
+
+## 수정 파일
+app/api/branch/regulations/[id]/route.ts
+
+## 수정 내용
+
+아래 코드로 전체 교체한다.
+
+```typescript
+import { NextRequest, NextResponse } from 'next/server'
+import { auth } from '@/auth'
+import { prisma } from '@/lib/prisma'
+
+export async function DELETE(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const session = await auth()
+  if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const user = session.user as { role?: string }
+  if (user.role !== 'ADMIN') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
+  const { id } = await params
+
+  await prisma.regulationContent.update({
+    where: { id },
+    data: { isActive: false },
+  })
+  return NextResponse.json({ ok: true })
+}
+```
+
+## 변경 요약
+- `{ params }: { params: { id: string } }` → `{ params }: { params: Promise<{ id: string }> }`
+- `params.id` → `const { id } = await params`

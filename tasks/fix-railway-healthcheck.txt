@@ -1,0 +1,74 @@
+# Railway 헬스체크 수정 — /api/health 엔드포인트 추가
+
+## 원인
+- `/` 경로는 Auth 미들웨어가 /login으로 리다이렉트
+- Railway 헬스체크가 이 리다이렉트를 "service unavailable"로 판정
+- 해결: 인증 완전 우회하는 /api/health 전용 엔드포인트 생성
+
+## 1단계: 헬스체크 API 라우트 생성
+
+파일 생성: src/app/api/health/route.ts
+
+```typescript
+export async function GET() {
+  return Response.json({ ok: true }, { status: 200 });
+}
+```
+
+## 2단계: 미들웨어에서 /api/health 제외
+
+미들웨어 파일 찾기:
+```bash
+find src -name "middleware.ts" -o -name "middleware.tsx" | head -5
+ls middleware.ts 2>/dev/null
+```
+
+미들웨어 파일(middleware.ts 또는 src/middleware.ts)에서
+matcher 설정에 /api/health 제외 추가:
+
+### 패턴 A — matcher 배열 방식
+```typescript
+export const config = {
+  matcher: [
+    '/((?!api/health|_next/static|_next/image|favicon.ico).*)',
+  ],
+};
+```
+
+### 패턴 B — 조기 리턴 방식 (matcher 없는 경우)
+미들웨어 함수 최상단에 추가:
+```typescript
+export function middleware(request: NextRequest) {
+  // 헬스체크 경로는 인증 없이 통과
+  if (request.nextUrl.pathname === '/api/health') {
+    return NextResponse.next();
+  }
+  
+  // ... 기존 미들웨어 로직 ...
+}
+```
+
+## 3단계: package.json start 스크립트 원복 (이전 변경 취소)
+
+```json
+"start": "next start"
+```
+(Next.js는 PORT 환경변수를 자동으로 읽으므로 -p 불필요)
+
+## 4단계: 커밋
+
+```bash
+git add -A
+git commit -m "fix: Railway 헬스체크용 /api/health 엔드포인트 추가, 미들웨어 제외 처리"
+git push origin main
+```
+
+## 5단계: Railway 헬스체크 경로 변경
+
+배포 완료 후 Railway 대시보드:
+Settings → Deploy → Health Check Path
+→ /api/health 로 변경 후 저장
+
+## 확인
+배포 후 로그에서:
+"Attempt #1 failed" 없이 바로 헬스체크 통과되면 완료.

@@ -1,0 +1,158 @@
+## 세션 6B — 상담관리 필터 추가 + 경로 수정
+
+### 수정 대상 파일 (2개)
+- `app/consultation/page.tsx`
+- `app/api/consultation/route.ts`
+
+---
+
+## [파일 1] app/consultation/page.tsx
+
+### 수정 1 — TF 드롭다운 필터 state 추가
+
+아래 줄:
+```typescript
+const [filterStatus, setFilterStatus] = useState("");
+const [filterCaseType, setFilterCaseType] = useState("");
+const [filterManagerId, setFilterManagerId] = useState("");
+const [filterDateFrom, setFilterDateFrom] = useState("");
+const [filterDateTo, setFilterDateTo] = useState("");
+const [search, setSearch] = useState("");
+```
+를 다음으로 교체:
+```typescript
+const [filterStatus, setFilterStatus] = useState("");
+const [filterCaseType, setFilterCaseType] = useState("");
+const [filterManagerId, setFilterManagerId] = useState("");
+const [filterTf, setFilterTf] = useState("");
+const [filterRoute, setFilterRoute] = useState("");
+const [filterDateFrom, setFilterDateFrom] = useState("");
+const [filterDateTo, setFilterDateTo] = useState("");
+const [search, setSearch] = useState("");
+```
+
+---
+
+### 수정 2 — TF 상수 import 추가
+
+파일 최상단 import 블록에 추가:
+```typescript
+import { TF_BY_BRANCH } from "@/lib/constants/tf";
+```
+
+---
+
+### 수정 3 — 더보상TF 목록 상수 추가 (ConsultationPage 컴포넌트 바로 위)
+
+```typescript
+// 상담관리는 더보상TF만 표시 (이산TF 제외)
+const THEBOSANG_TF_LIST: string[] = Object.entries(TF_BY_BRANCH)
+  .flatMap(([, tfs]) => tfs)
+  .filter((tf) => !tf.startsWith("이산"));
+```
+
+---
+
+### 수정 4 — fetchItems URL 파라미터에 tfName, routeMain 추가
+
+fetchItems 함수 내:
+```typescript
+if (filterManagerId) p.set("managerId", filterManagerId);
+if (filterDateFrom) p.set("dateFrom", filterDateFrom);
+```
+를 다음으로 교체:
+```typescript
+if (filterManagerId) p.set("managerId", filterManagerId);
+if (filterTf) p.set("tfName", filterTf);
+if (filterRoute) p.set("routeMain", filterRoute);
+if (filterDateFrom) p.set("dateFrom", filterDateFrom);
+```
+
+---
+
+### 수정 5 — useCallback 의존성 배열에 filterTf, filterRoute 추가
+
+```typescript
+}, [filterStatus, filterCaseType, filterManagerId, filterDateFrom, filterDateTo, search, page]);
+```
+를 다음으로 교체:
+```typescript
+}, [filterStatus, filterCaseType, filterManagerId, filterTf, filterRoute, filterDateFrom, filterDateTo, search, page]);
+```
+
+---
+
+### 수정 6 — Filters UI에 TF·경로 드롭다운 추가
+
+필터 영역 내 담당자 필터 `<div>` 블록 바로 다음에 아래 두 블록 삽입:
+
+```tsx
+<div>
+  <label style={{ fontSize: 11, color: "#6b7280", fontWeight: 700, display: "block", marginBottom: 4 }}>TF</label>
+  <select
+    value={filterTf}
+    onChange={(e) => { setFilterTf(e.target.value); setPage(1); }}
+    style={{ border: "1px solid #e5e7eb", borderRadius: 6, padding: "6px 10px", fontSize: 12, color: "#374151", background: "#f9fafb" }}
+  >
+    <option value="">전체</option>
+    {THEBOSANG_TF_LIST.map((tf) => <option key={tf} value={tf}>{tf}</option>)}
+  </select>
+</div>
+<div>
+  <label style={{ fontSize: 11, color: "#6b7280", fontWeight: 700, display: "block", marginBottom: 4 }}>상담경로</label>
+  <select
+    value={filterRoute}
+    onChange={(e) => { setFilterRoute(e.target.value); setPage(1); }}
+    style={{ border: "1px solid #e5e7eb", borderRadius: 6, padding: "6px 10px", fontSize: 12, color: "#374151", background: "#f9fafb" }}
+  >
+    <option value="">전체</option>
+    {ROUTE_MAIN_OPTIONS.map((r) => <option key={r} value={r}>{r}</option>)}
+  </select>
+</div>
+```
+
+---
+
+### 수정 7 — 재해자 등록하기 경로 수정
+
+모달 내:
+```typescript
+onClick={() => router.push(`/cases/new?from=consultation&id=${initial.id}`)}
+```
+를 다음으로 교체:
+```typescript
+onClick={() => router.push(`/patients/new?from=consultation&id=${initial.id}`)}
+```
+
+---
+
+## [파일 2] app/api/consultation/route.ts
+
+### 수정 — GET 핸들러에 tfName, routeMain 파라미터 추가
+
+```typescript
+const search = searchParams.get("search");
+```
+바로 다음에 추가:
+```typescript
+const tfName = searchParams.get("tfName");
+const routeMain = searchParams.get("routeMain");
+```
+
+그리고:
+```typescript
+if (managerId) where.managerId = managerId;
+```
+바로 다음에 추가:
+```typescript
+if (tfName) where.tfName = tfName;
+if (routeMain) where.routeMain = routeMain;
+```
+
+---
+
+### 최종 확인
+- 상담관리 페이지 필터 영역에 TF 드롭다운(더보상TF만), 상담경로 드롭다운이 표시되는지 확인
+- TF 필터 선택 시 해당 TF 상담만 조회되는지 확인
+- 상담경로 필터 선택 시 해당 경로 상담만 조회되는지 확인
+- 모달에서 "재해자 등록하기" 클릭 시 /patients/new로 이동하는지 확인

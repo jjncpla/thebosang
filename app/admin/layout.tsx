@@ -23,10 +23,9 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       {/* 탭 네비게이션 */}
       <div style={{ background: "#fff", borderBottom: "1px solid #e5e7eb" }}>
         <div style={{ maxWidth: 1100, margin: "0 auto", display: "flex", gap: 0 }}>
-          <NavTab href="/admin/accounts" label="계정 관리" />
           <NavTab href="/admin/notices" label="공지사항 관리" />
           <NavTab href="/admin/import" label="데이터 임포트" />
-          <NavTab href="/admin/contacts" label="임직원 인사카드" />
+          <NavTab href="/admin/contacts" label="인사카드 / 계정관리" />
         </div>
       </div>
 

@@ -1,0 +1,295 @@
+## 세션 타입: 기능 개발 세션
+## 작업 개요
+관리자 페이지(/admin)의 '계정관리' 탭과 '임직원 인사카드' 탭을 하나로 통합한다.
+임직원 인사카드(Contact) 명단을 기준으로, 각 직원의 계정(User) 유무를 표시하고
+계정 생성/수정/삭제를 인사카드 내에서 직접 할 수 있게 만든다.
+
+---
+
+## 수술적 수정 원칙
+- 기존 ContactsTab 컴포넌트를 확장하여 계정 관리 기능 통합
+- 기존 Contact CRUD 기능(추가/수정/삭제/검색/필터) 100% 보존
+- User 모델은 auth.prisma (별도 DB), Contact 모델은 schema.prisma (메인 DB) — FK 연결 불가, 이름+이메일 기반 매칭
+- 기존 스타일(인라인 스타일) 유지
+
+---
+
+## Step 0: 현재 파일 구조 파악 (반드시 먼저 실행)
+
+```bash
+# 관리자 페이지 메인 파일
+cat app/admin/page.tsx | head -80
+
+# 탭 목록 확인
+grep -n "tab\|Tab\|계정\|인사카드\|contacts\|import\|공지" app/admin/page.tsx | head -30
+
+# ContactsTab 파일 위치 및 내용
+find . -name "ContactsTab*" -not -path "*/node_modules/*"
+cat app/admin/_components/ContactsTab.tsx | head -50
+
+# 계정관리 탭 코드 위치 (admin page 내에 인라인인지, 별도 컴포넌트인지)
+grep -n "계정 관리\|계정관리\|users\|User\|fetchUsers\|handleCreateUser" app/admin/page.tsx | head -30
+
+# User 모델 확인
+grep -A 20 "model User" prisma/auth.prisma
+
+# Contact 모델 확인
+grep -A 25 "model Contact" prisma/schema.prisma
+
+# 현재 계정 생성 API 확인
+find . -path "*/api/admin/users*" -not -path "*/node_modules/*"
+find . -path "*/api/users*" -not -path "*/node_modules/*"
+ls app/api/admin/ 2>/dev/null
+```
+
+---
+
+## Step 1: Contact 모델에 userId 필드 추가
+
+### 1-1. schema.prisma Contact 모델에 필드 추가
+
+```prisma
+model Contact {
+  // 기존 필드 모두 유지...
+  userId      String?   // auth DB의 User.id (FK 아님, 문자열 참조)
+}
+```
+
+### 1-2. 스키마 반영 (1회용 init API 방식)
+
+`app/api/init-contact-userid/route.ts` 생성:
+
+```typescript
+import { NextResponse } from 'next/server'
+import { prisma } from '@/lib/prisma'
+
+export async function GET() {
+  try {
+    // userId 컬럼 추가 (이미 있으면 무시)
+    await prisma.$executeRawUnsafe(`
+      ALTER TABLE "contacts" ADD COLUMN IF NOT EXISTS "userId" TEXT;
+    `)
+    return NextResponse.json({ ok: true, message: 'Contact.userId 컬럼 추가 완료' })
+  } catch (e: any) {
+    return NextResponse.json({ ok: false, error: e.message }, { status: 500 })
+  }
+}
+```
+
+배포 후 호출 → 확인 → API 파일 삭제 → 재배포.
+
+---
+
+## Step 2: 기존 User ↔ Contact 자동 매칭 API
+
+`app/api/admin/match-contacts-users/route.ts` 생성:
+
+```typescript
+import { NextResponse } from 'next/server'
+import { prisma } from '@/lib/prisma'
+import { authPrisma } from '@/lib/auth-prisma'  // auth DB 클라이언트 (파일명 확인 필요)
+
+export async function POST() {
+  try {
+    // 1) 모든 User 가져오기
+    const users = await authPrisma.user.findMany({
+      select: { id: true, name: true, email: true }
+    })
+
+    // 2) 모든 Contact 가져오기 (userId가 아직 null인 것만)
+    const contacts = await prisma.contact.findMany({
+      where: { userId: null },
+      select: { id: true, name: true, email: true }
+    })
+
+    let matched = 0
+    for (const contact of contacts) {
+      // 이름 기준 매칭 (동명이인 주의: 이름+이메일 또는 이름만)
+      const matchedUser = users.find(u => 
+        u.name === contact.name && 
+        (contact.email ? u.email?.includes(contact.email.split('@')[0]) : true)
+      ) || users.find(u => u.name === contact.name)
+
+      if (matchedUser) {
+        await prisma.contact.update({
+          where: { id: contact.id },
+          data: { userId: matchedUser.id }
+        })
+        matched++
+      }
+    }
+
+    return NextResponse.json({ ok: true, matched, totalContacts: contacts.length, totalUsers: users.length })
+  } catch (e: any) {
+    return NextResponse.json({ ok: false, error: e.message }, { status: 500 })
+  }
+}
+```
+
+**주의**: `authPrisma` import 경로는 Step 0에서 확인한 auth DB 클라이언트 경로에 맞출 것.
+확인 방법:
+```bash
+grep -r "authPrisma\|auth.*prisma\|PrismaClient.*auth\|DATABASE_AUTH" lib/ --include="*.ts" | head -10
+grep -r "from.*prisma" app/api/admin/ --include="*.ts" | head -10
+```
+
+---
+
+## Step 3: Contact API에 User 정보 포함
+
+### 3-1. `/api/contacts/route.ts` GET 핸들러 수정
+
+기존 응답에 각 Contact의 연결된 User 계정 정보를 추가한다.
+
+Contact 응답 후, userId가 있는 Contact들의 userId 목록을 모아서 auth DB에서 User 정보를 일괄 조회한다.
+
+```typescript
+// 기존 contacts 조회 코드 아래에 추가:
+
+// userId가 있는 Contact의 User 정보 조회
+const userIds = contacts.filter(c => c.userId).map(c => c.userId!)
+let userMap: Record<string, any> = {}
+
+if (userIds.length > 0) {
+  const users = await authPrisma.user.findMany({
+    where: { id: { in: userIds } },
+    select: { id: true, email: true, name: true, role: true, createdAt: true }
+  })
+  userMap = Object.fromEntries(users.map(u => [u.id, u]))
+}
+
+// contacts에 user 정보 병합
+const enrichedContacts = contacts.map(c => ({
+  ...c,
+  user: c.userId ? (userMap[c.userId] || null) : null,
+}))
+
+// 기존 응답의 contacts를 enrichedContacts로 교체
+return NextResponse.json({ contacts: enrichedContacts, offices })
+```
+
+---
+
+## Step 4: ContactsTab 컴포넌트에 계정 관리 기능 통합
+
+### 4-1. Contact 테이블에 계정 상태 컬럼 추가
+
+기존 테이블 헤더에 '계정 상태' 컬럼을 추가한다.
+기존 컬럼 순서: 이름 | 직군 | 지사 | 직위 | 휴대폰 | 사무실 | 이메일 | 입사일 | 퇴사일 | 관리
+
+**변경 후** 컬럼 순서: 이름 | 직군 | 지사 | 직위 | 휴대폰 | 이메일 | 입사일 | 계정 상태 | 관리
+
+'계정 상태' 컬럼 표시:
+- 계정 있음: `✅ 활성` (녹색 텍스트) + 권한 표시 (예: `STAFF`)
+- 계정 없음: `⬜ 미생성` (회색 텍스트) + [계정 생성] 버튼
+
+### 4-2. 계정 생성 기능 (Contact 행에서 바로)
+
+[계정 생성] 버튼 클릭 시 모달 표시:
+- 이름: Contact.name (자동 입력, 수정 불가)
+- 이메일: Contact.email || 자동 생성 (이니셜+번호@thebosang.kr)
+- 비밀번호: 기본값 '1234' (표시)
+- 권한: 드롭다운 (ADMIN / SENIOR_MANAGER / SITE_MANAGER / STAFF / READONLY)
+  - SENIOR_MANAGER 선택 시: 권역 드롭다운 추가
+  - SITE_MANAGER 선택 시: 지사 자동 입력 (Contact.branch)
+- [생성] 버튼 → `/api/admin/users` POST
+- 생성 성공 시: Contact.userId 자동 업데이트 → 테이블 새로고침
+
+### 4-3. 계정 수정 기능 (계정 있는 행에서)
+
+'✅ 활성' 텍스트 클릭 시 계정 수정 모달:
+- 이름 (읽기 전용)
+- 이메일 (읽기 전용)
+- 권한 변경 드롭다운
+- 비밀번호 초기화 버튼 (1234로 리셋)
+- [저장] 버튼 → `/api/admin/users/[userId]` PUT
+- [계정 삭제] 버튼 → `/api/admin/users/[userId]` DELETE → Contact.userId null로 업데이트
+
+### 4-4. 계정 일괄 생성 기능
+
+Contact 목록 상단에 [미생성 계정 일괄 생성] 버튼 추가:
+- 클릭 시 확인 모달: "계정이 없는 더보상 소속 외근직 N명의 계정을 일괄 생성합니다. 초기 비밀번호: 1234"
+- 대상: firmType='TBOSANG' && userId=null && jobGrade='외근직'
+- 이메일 자동 생성 규칙: 이니셜3자리+입사순번@thebosang.kr (기존 로직과 동일)
+
+### 4-5. 검색/필터 확장
+
+기존 검색(이름/지사)에 계정 상태 필터 추가:
+```
+[전체] [계정 있음] [계정 없음]
+```
+토글 버튼 또는 드롭다운으로 구현.
+
+---
+
+## Step 5: 기존 '계정관리' 탭 제거 (또는 통합)
+
+### 5-1. admin/page.tsx 탭 목록에서 '계정관리' 탭 제거
+
+기존 탭 배열에서 계정관리 항목을 제거하고, '임직원 인사카드' 탭의 라벨을 **'인사카드 / 계정관리'**로 변경한다.
+
+**주의**: 기존 계정관리 탭 코드(인라인 함수, 상태 등)는 삭제하되, 계정 CRUD API 엔드포인트는 그대로 유지할 것 (ContactsTab에서 동일 API 호출).
+
+### 5-2. 임직원 인사카드 탭명 변경
+
+```
+기존: '임직원 인사카드'
+변경: '인사카드 / 계정관리'
+```
+
+---
+
+## Step 6: 자동 매칭 실행 (1회성)
+
+배포 후 브라우저 DevTools에서:
+```javascript
+fetch('/api/admin/match-contacts-users', { method: 'POST' })
+  .then(r => r.json())
+  .then(console.log)
+```
+
+결과의 `matched` 수 확인 후, 매칭되지 않은 Contact는 수동으로 계정 생성하면 됨.
+
+---
+
+## 주의사항
+
+1. **이중 DB 구조**: User는 authPrisma (DATABASE_AUTH_URL), Contact는 prisma (DATABASE_URL). 
+   - 두 DB 간 JOIN 불가 → 서버에서 각각 조회 후 메모리에서 병합
+   - Step 0에서 auth DB 클라이언트 import 경로 반드시 확인
+
+2. **기존 기능 보존**: 
+   - Contact CRUD (추가/수정/삭제/검색/필터) 전부 유지
+   - 계정 CRUD API 엔드포인트 유지
+   - ContactSelector / BranchSelector 공유 컴포넌트 영향 없음
+
+3. **동명이인 처리**: 자동 매칭 시 이름이 같은 경우 이메일까지 비교. 수동 매칭도 가능하도록 UI에서 드롭다운 선택 지원.
+
+4. **이산(ISAN) 탭**: 이산 소속 Contact는 계정 생성 대상이 아님. 이산 탭에서는 계정 관련 컬럼/버튼 비표시 처리.
+   - 단, 향후 READONLY 계정 생성이 필요할 수 있으므로 코드 구조상 확장 가능하게 둘 것
+   - 이산 직원의 이메일 형식: `xxx@isan.kr` (더보상과 다름)
+
+5. **스키마 변경 절차**: Railway에서는 `prisma db push` 직접 실행 불가 → init API 방식 사용 (Step 1-2).
+
+---
+
+## 최종 결과물
+
+- `/admin` 페이지 탭: 공지사항 | **인사카드 / 계정관리** | 데이터 임포트 | 지사 실적 관리
+- 인사카드 / 계정관리 탭:
+  - 더보상/이산 서브탭 (기존 유지)
+  - Contact 목록 테이블에 '계정 상태' 컬럼 추가
+  - 계정 생성/수정/삭제를 Contact 행에서 직접 처리
+  - 계정 상태 필터 (전체/계정 있음/계정 없음)
+  - [미생성 계정 일괄 생성] 버튼
+
+---
+
+## 배포 순서
+
+1. `prisma/schema.prisma` Contact 모델 수정 + `npx prisma generate`
+2. init API 생성 → 커밋 → push → Railway 배포 → init API 호출 → 확인
+3. match API + Contact API 수정 + ContactsTab 수정 → 커밋 → push
+4. init API 삭제 → 커밋 → push
+5. 브라우저에서 match API 호출 (기존 데이터 매칭)
+6. `/admin` 접속 → '인사카드 / 계정관리' 탭 확인

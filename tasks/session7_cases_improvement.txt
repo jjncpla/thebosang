@@ -1,0 +1,120 @@
+## 세션 7 — 사건목록 개선 (Claude Code 직접 실행)
+
+아래 작업을 순서대로 실행해줘. 각 단계마다 파일을 직접 읽고 수정해.
+
+---
+
+## STEP 1. 진행상황(status) 한글 레이블 상수 확인 및 보완
+
+`lib/constants/case.ts` 파일을 읽어서 확인해.
+`CASE_STATUS_LABELS` 상수가 없으면 아래 내용을 추가해:
+
+```typescript
+export const CASE_STATUS_LABELS: Record<string, string> = {
+  CONSULTING:              "상담 중",
+  CONTRACTED:              "약정완료",
+  DOC_COLLECTING:          "자료수집",
+  SUBMITTED:               "접수완료",
+  EXAM_REQUESTED:          "특진요구서수령",
+  EXAM_CLINIC_SELECTED:    "특진병원선택",
+  EXAM_SCHEDULED:          "특진일정확정",
+  IN_EXAM:                 "특진중",
+  EXAM_DONE:               "특진완료",
+  EXPERT_REQUESTED:        "전문조사요구서수령",
+  EXPERT_CLINIC_SELECTED:  "전문조사기관선택",
+  EXPERT_DONE:             "전문조사완료",
+  BANK_REQUESTED:          "통장사본요청",
+  BANK_SUBMITTED:          "통장사본제출",
+  DECISION_RECEIVED:       "결정통지서수령",
+  REVIEWING:               "검토중",
+  INFO_REQUESTED:          "정보공개청구",
+  APPROVED:                "승인",
+  REJECTED:                "불승인",
+  CLOSED:                  "종결",
+  OBJECTION:               "이의제기",
+  WAGE_CORRECTION:         "평균임금정정",
+};
+```
+
+이미 있으면 위 값들과 비교해서 누락된 key만 추가해.
+
+---
+
+## STEP 2. app/cases/page.tsx 수정
+
+파일을 읽은 뒤 아래 수정사항을 적용해.
+
+### 2-1. 진행상황 필터 드롭다운 추가
+
+현재 필터 영역에 진행상황(status) 드롭다운이 없으면 추가해.
+`CASE_STATUS_LABELS`를 import해서 드롭다운 옵션으로 사용해.
+state 이름: `filterStatus` (없으면 추가, 있으면 활용)
+URL 파라미터: `status`
+
+### 2-2. TF 필터 드롭다운 추가
+
+현재 TF 필터가 없으면 추가해.
+`TF_BY_BRANCH`를 `@/lib/constants/tf`에서 import해서 전체 TF 목록 드롭다운으로 표시.
+state 이름: `filterTf`
+URL 파라미터: `tfName`
+
+### 2-3. 진행상황 표시 한글화
+
+테이블 행에서 `item.status`를 그대로 표시하는 부분을 찾아서
+`CASE_STATUS_LABELS[item.status] ?? item.status` 로 교체해.
+
+### 2-4. 상세페이지 링크 일원화
+
+테이블 행 클릭 시 이동하는 경로를 확인해.
+`/cases/[caseId]` 또는 `/patients/[patientId]` 중 어디로 이동하는지 보고,
+`/patients/${item.patientId}` (또는 patient 관련 id 필드) 형태로 통일해.
+단, 클릭된 사건의 caseType을 쿼리파라미터로 전달:
+`/patients/${item.patientId}?tab=${item.caseType}`
+
+item에 patientId 필드가 없으면 API 응답 타입을 확인해서 올바른 필드명 사용해.
+
+---
+
+## STEP 3. app/api/cases/route.ts (또는 cases API) 수정
+
+파일을 읽어서 GET 핸들러에 아래 파라미터 처리가 없으면 추가해:
+- `tfName` → `where.tfName = tfName`
+- `status` → `where.status = status` (이미 있을 수 있음, 없으면 추가)
+
+응답 데이터에 `patientId`가 포함되어 있는지 확인하고,
+없으면 include 또는 select에 추가해.
+
+---
+
+## STEP 4. app/patients/page.tsx 수정
+
+파일을 읽어서 확인해.
+
+### 4-1. TF 필터 추가
+
+현재 TF 필터가 없으면 추가해.
+`TF_BY_BRANCH`를 import해서 전체 TF 목록 드롭다운으로 표시.
+state 이름: `filterTf`
+URL 파라미터: `tfName`
+
+### 4-2. 재해자 등록 버튼 경로 확인
+
+`+ 재해자 등록` 버튼 경로가 `/cases/new`이면 `/patients/new`로 변경.
+
+---
+
+## STEP 5. app/api/patients/route.ts 수정
+
+파일을 읽어서 GET 핸들러에 `tfName` 파라미터 처리가 없으면 추가:
+```typescript
+const tfName = searchParams.get("tfName");
+if (tfName) where.cases = { some: { tfName } };
+```
+
+---
+
+## 주의사항
+- 기존 필터·UI 구조를 유지하면서 수술적으로 추가
+- 전체 재작성 금지
+- 타입 오류 발생 시 해당 필드만 타입 정의에 추가
+- 완료 후 수정된 파일 목록과 변경 내용 요약해줘

@@ -964,6 +964,7 @@ model Contact {
   jobGrade     String   @default("")  // 직군: 외근직 | 내근직 | 노무사 | 등기노무사 | 기타
   hireDate     DateTime?  // 입사일
   leaveDate    DateTime?  // 퇴사일
+  userId       String?    // auth DB의 User.id (FK 아님, 문자열 참조)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 }

@@ -1,0 +1,380 @@
+# TASK-03: 양식 관리 페이지 신규 생성
+# 실행: cat task-03.txt | claude --dangerously-skip-permissions
+
+## 개요
+보험급여 서식을 관리하는 전용 페이지를 신규 생성한다.
+- 경로: /forms
+- 위치: 사건 관리와 동위 (AppShell 메뉴에서 사건 관리 블록 바로 아래)
+- 기능:
+  1. 서식 목록 + 공란 인쇄 (변수 비운 빈 PDF 출력)
+  2. 좌표 에디터 (PDF 미리보기 위에서 클릭 → 좌표 확인, 방향키로 미세 조정)
+
+---
+
+## STEP 1: AppShell.tsx 메뉴 추가
+
+파일: components/AppShell.tsx
+line 28~29 사이 (사건 관리 블록 닫힌 직후, 사건 조회 앞)에 아래 항목 삽입:
+
+```typescript
+{
+  label: '양식 관리',
+  href: '/forms',
+  icon: '📋',  // 기존 아이콘 패턴에 맞게 조정
+},
+```
+
+---
+
+## STEP 2: 페이지 생성 — app/forms/page.tsx
+
+### 전체 구조
+좌우 2패널 레이아웃:
+- 좌측 패널 (width: 320px): 서식 목록 + 공란 인쇄 버튼
+- 우측 패널 (flex: 1): 좌표 에디터
+
+### 서식 목록 정의 (좌측 패널)
+```typescript
+const FORMS = [
+  { type: 'DISABILITY_CLAIM',   label: '장해급여 청구서',                    pages: 2 },
+  { type: 'NOISE_WORK_CONFIRM', label: '소음작업 종사 사실 확인서',           pages: 1 },
+  { type: 'AGENT_APPOINTMENT',  label: '대리인 선임신고서',                   pages: 1 },
+  { type: 'POWER_OF_ATTORNEY',  label: '위임장',                              pages: 1 },
+  { type: 'SPECIAL_CLINIC',     label: '특진의료기관 선택 확인서 (특진)',      pages: 1 },
+  { type: 'EXPERT_CLINIC',      label: '특진의료기관 선택 확인서 (전문조사)', pages: 1 },
+  { type: 'WORK_HISTORY',       label: '직업력 조사 표준문답서',              pages: 3 },
+]
+```
+
+### 좌측 패널 UI
+```tsx
+<div style={{ width: '320px', borderRight: '1px solid #eee', padding: '16px', overflowY: 'auto' }}>
+  <h2 style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '16px' }}>서식 목록</h2>
+  
+  {FORMS.map((form) => (
+    <div
+      key={form.type}
+      onClick={() => setSelectedForm(form.type)}
+      style={{
+        padding: '12px',
+        marginBottom: '8px',
+        borderRadius: '6px',
+        border: `1px solid ${selectedForm === form.type ? '#29ABE2' : '#eee'}`,
+        backgroundColor: selectedForm === form.type ? '#e8f7fd' : '#fafafa',
+        cursor: 'pointer',
+      }}
+    >
+      <div style={{ fontWeight: 'bold', fontSize: '13px' }}>{form.label}</div>
+      <div style={{ fontSize: '11px', color: '#888', marginTop: '2px' }}>{form.pages}페이지</div>
+      
+      {/* 공란 인쇄 버튼 */}
+      <button
+        onClick={(e) => { e.stopPropagation(); handleBlankPrint(form.type, form.label) }}
+        style={{
+          marginTop: '8px',
+          padding: '4px 10px',
+          fontSize: '11px',
+          backgroundColor: '#f0f0f0',
+          border: '1px solid #ddd',
+          borderRadius: '4px',
+          cursor: 'pointer',
+        }}
+      >
+        🖨️ 공란 인쇄
+      </button>
+    </div>
+  ))}
+</div>
+```
+
+### 공란 인쇄 핸들러
+```typescript
+const handleBlankPrint = async (type: string, label: string) => {
+  const res = await fetch(`/api/forms/blank?type=${type}`)
+  if (!res.ok) { alert('공란 인쇄 실패'); return }
+  const blob = await res.blob()
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `[공란]${label}.pdf`
+  a.click()
+  URL.revokeObjectURL(url)
+}
+```
+
+### 우측 패널 — 좌표 에디터
+```tsx
+<div style={{ flex: 1, padding: '16px', display: 'flex', flexDirection: 'column' }}>
+  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
+    <h2 style={{ fontSize: '16px', fontWeight: 'bold' }}>
+      좌표 에디터 {selectedForm ? `— ${FORMS.find(f => f.type === selectedForm)?.label}` : ''}
+    </h2>
+    {selectedForm && (
+      <button onClick={handleLoadCoords} style={{ padding: '4px 10px', fontSize: '12px' }}>
+        좌표 불러오기
+      </button>
+    )}
+  </div>
+
+  {!selectedForm ? (
+    <div style={{ color: '#888', fontSize: '13px' }}>좌측에서 서식을 선택하세요.</div>
+  ) : (
+    <div style={{ display: 'flex', gap: '16px', flex: 1 }}>
+      
+      {/* PDF 미리보기 캔버스 영역 */}
+      <div style={{ flex: 1, position: 'relative', border: '1px solid #ddd', backgroundColor: '#f5f5f5', overflow: 'auto' }}>
+        {/* PDF를 img 태그로 렌더링 — /api/forms/blank?type=XXX&preview=1 → PNG 반환 */}
+        <img
+          src={`/api/forms/blank?type=${selectedForm}&preview=1&page=${previewPage}`}
+          alt="서식 미리보기"
+          style={{ display: 'block', cursor: 'crosshair' }}
+          onClick={handleCanvasClick}
+        />
+        
+        {/* 선택된 필드 오버레이 마커 */}
+        {selectedField && (
+          <div
+            style={{
+              position: 'absolute',
+              left: selectedField.x - 4,
+              top: selectedField.y - 4,
+              width: 8,
+              height: 8,
+              backgroundColor: '#29ABE2',
+              borderRadius: '50%',
+              pointerEvents: 'none',
+            }}
+          />
+        )}
+        
+        {/* 페이지 네비게이션 */}
+        <div style={{ position: 'absolute', bottom: '8px', left: '50%', transform: 'translateX(-50%)', display: 'flex', gap: '8px' }}>
+          <button onClick={() => setPreviewPage(p => Math.max(1, p - 1))} disabled={previewPage <= 1}>◀</button>
+          <span style={{ fontSize: '12px' }}>
+            {previewPage} / {FORMS.find(f => f.type === selectedForm)?.pages ?? 1}
+          </span>
+          <button
+            onClick={() => setPreviewPage(p => Math.min(FORMS.find(f => f.type === selectedForm)?.pages ?? 1, p + 1))}
+            disabled={previewPage >= (FORMS.find(f => f.type === selectedForm)?.pages ?? 1)}
+          >▶</button>
+        </div>
+      </div>
+
+      {/* 우측 좌표 패널 */}
+      <div style={{ width: '260px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+        
+        {/* 클릭한 좌표 표시 */}
+        <div style={{ padding: '10px', backgroundColor: '#f0f0f0', borderRadius: '6px', fontSize: '12px' }}>
+          <div style={{ fontWeight: 'bold', marginBottom: '4px' }}>📍 클릭 좌표</div>
+          <div>x: <strong>{clickedCoord?.x ?? '—'}</strong></div>
+          <div>y: <strong>{clickedCoord?.y ?? '—'}</strong></div>
+          <div style={{ marginTop: '4px', color: '#888', fontSize: '11px' }}>
+            이미지 px 기준 (pdf-lib pt 변환 필요)
+          </div>
+        </div>
+
+        {/* 필드 선택 */}
+        <div>
+          <label style={{ fontSize: '12px', fontWeight: 'bold' }}>필드 선택</label>
+          <select
+            value={selectedField?.key ?? ''}
+            onChange={(e) => handleSelectField(e.target.value)}
+            style={{ width: '100%', padding: '6px', fontSize: '12px', marginTop: '4px' }}
+          >
+            <option value="">-- 필드 선택 --</option>
+            {coordFields[selectedForm]?.map((f) => (
+              <option key={f.key} value={f.key}>{f.label}</option>
+            ))}
+          </select>
+        </div>
+
+        {/* 선택 필드 좌표 수동 입력 */}
+        {selectedField && (
+          <div style={{ padding: '10px', border: '1px solid #ddd', borderRadius: '6px', fontSize: '12px' }}>
+            <div style={{ fontWeight: 'bold', marginBottom: '8px' }}>{selectedField.label}</div>
+            <div style={{ display: 'flex', gap: '8px', marginBottom: '6px' }}>
+              <div>
+                <label>x</label>
+                <input
+                  type="number"
+                  value={selectedField.x}
+                  onChange={(e) => updateFieldCoord('x', Number(e.target.value))}
+                  onKeyDown={handleArrowKey}
+                  style={{ width: '80px', padding: '4px', fontSize: '12px' }}
+                />
+              </div>
+              <div>
+                <label>y</label>
+                <input
+                  type="number"
+                  value={selectedField.y}
+                  onChange={(e) => updateFieldCoord('y', Number(e.target.value))}
+                  onKeyDown={handleArrowKey}
+                  style={{ width: '80px', padding: '4px', fontSize: '12px' }}
+                />
+              </div>
+            </div>
+            <div style={{ fontSize: '11px', color: '#888' }}>
+              방향키: 1px 이동 / Shift+방향키: 5px 이동
+            </div>
+          </div>
+        )}
+
+        {/* 좌표 복사 버튼 */}
+        <button
+          onClick={handleCopyCoords}
+          style={{ padding: '8px', fontSize: '12px', backgroundColor: '#8DC63F', color: 'white', border: 'none', borderRadius: '4px' }}
+        >
+          📋 전체 좌표 복사
+        </button>
+
+        {/* 좌표 출력 텍스트박스 */}
+        <textarea
+          value={coordOutput}
+          readOnly
+          rows={10}
+          style={{ fontSize: '11px', fontFamily: 'monospace', resize: 'vertical', padding: '6px' }}
+          placeholder="좌표 에디터에서 필드를 선택하면 여기에 좌표가 출력됩니다."
+        />
+      </div>
+    </div>
+  )}
+</div>
+```
+
+### State 정의
+```typescript
+const [selectedForm, setSelectedForm] = useState<string | null>(null)
+const [previewPage, setPreviewPage] = useState(1)
+const [clickedCoord, setClickedCoord] = useState<{ x: number; y: number } | null>(null)
+const [selectedField, setSelectedField] = useState<{
+  key: string; label: string; x: number; y: number
+} | null>(null)
+const [coordFields, setCoordFields] = useState<Record<string, { key: string; label: string; x: number; y: number }[]>>({})
+const [coordOutput, setCoordOutput] = useState('')
+```
+
+### 핸들러 구현
+```typescript
+// PDF 미리보기 클릭 → 좌표 기록
+const handleCanvasClick = (e: React.MouseEvent<HTMLImageElement>) => {
+  const rect = e.currentTarget.getBoundingClientRect()
+  const x = Math.round(e.clientX - rect.left)
+  const y = Math.round(e.clientY - rect.top)
+  setClickedCoord({ x, y })
+  // 선택된 필드가 있으면 해당 필드 좌표 업데이트
+  if (selectedField) {
+    updateFieldCoord('x', x)
+    updateFieldCoord('y', y)
+  }
+}
+
+// 방향키로 좌표 미세 조정
+const handleArrowKey = (e: React.KeyboardEvent<HTMLInputElement>) => {
+  if (!selectedField) return
+  const step = e.shiftKey ? 5 : 1
+  if (e.key === 'ArrowLeft')  { e.preventDefault(); updateFieldCoord('x', selectedField.x - step) }
+  if (e.key === 'ArrowRight') { e.preventDefault(); updateFieldCoord('x', selectedField.x + step) }
+  if (e.key === 'ArrowUp')    { e.preventDefault(); updateFieldCoord('y', selectedField.y - step) }
+  if (e.key === 'ArrowDown')  { e.preventDefault(); updateFieldCoord('y', selectedField.y + step) }
+}
+
+// 좌표 업데이트
+const updateFieldCoord = (axis: 'x' | 'y', value: number) => {
+  if (!selectedField || !selectedForm) return
+  const updated = { ...selectedField, [axis]: value }
+  setSelectedField(updated)
+  setCoordFields(prev => ({
+    ...prev,
+    [selectedForm]: prev[selectedForm]?.map(f =>
+      f.key === updated.key ? updated : f
+    ) ?? []
+  }))
+  updateCoordOutput()
+}
+
+// 좌표 전체 출력 (복사용)
+const updateCoordOutput = () => {
+  if (!selectedForm || !coordFields[selectedForm]) return
+  const lines = coordFields[selectedForm].map(f =>
+    `${f.key}: { x: ${f.x}, y: ${f.y} },`
+  ).join('\n')
+  setCoordOutput(lines)
+}
+
+const handleCopyCoords = () => {
+  navigator.clipboard.writeText(coordOutput)
+  alert('좌표가 클립보드에 복사되었습니다.')
+}
+```
+
+### 서식별 필드 목록 (coordFields 초기값)
+selectedForm 변경 시 해당 서식의 필드 목록을 초기화.
+각 서식별 변수 목록은 task-01에서 구현한 PDF API의 변수 목록과 동일하게 구성.
+초기 x, y 값은 모두 0으로 설정 (실제 좌표는 에디터에서 클릭으로 지정).
+
+예시 (DISABILITY_CLAIM):
+```typescript
+{
+  key: 'name', label: '성명(근로자명)', x: 0, y: 0,
+  key: 'birthY1', label: '생년 1자리(Y1)', x: 0, y: 0,
+  // ... 나머지 변수들
+}
+```
+
+---
+
+## STEP 3: 공란 인쇄 API — app/api/forms/blank/route.ts 신규 생성
+
+```typescript
+// GET /api/forms/blank?type=FORM_TYPE&preview=1(optional)&page=1(optional)
+// - preview=1: PNG 이미지로 반환 (미리보기용)
+// - preview 없음: PDF로 반환 (공란 인쇄용)
+// 공란 PDF: 모든 변수를 빈 문자열로 치환하여 서식 구조만 출력
+```
+
+구현 방식:
+- `/api/cases/[caseId]/forms/route.ts`의 각 서식 생성 함수를 재사용
+- 단, 모든 변수(patient.name, dateFields 등)를 빈 문자열 "" 또는 더미값으로 대체
+- 주민번호 각 자리, 날짜 각 자리 등 단일 문자 필드는 " " (공백 1자)로 대체
+- Content-Type: application/pdf 반환
+
+preview=1 처리:
+- pdf-lib으로 생성한 PDF를 sharp 또는 canvas 라이브러리로 PNG 변환
+- 단, sharp/canvas 설치가 필요하므로: 일단 preview=1 파라미터는 받되
+  PNG 변환 없이 PDF를 그대로 반환하고, 프론트엔드에서 <embed> 또는 <iframe>으로 PDF를 표시하는 방식으로 대체
+- img 태그 대신 아래로 교체:
+
+```tsx
+// 미리보기: img 태그 대신 iframe으로 PDF 직접 표시
+<iframe
+  src={`/api/forms/blank?type=${selectedForm}`}
+  style={{ width: '100%', height: '100%', border: 'none', cursor: 'crosshair' }}
+  title="서식 미리보기"
+/>
+// ※ iframe 위에서 클릭 좌표를 얻는 것은 보안상 제한됨
+// 대신: 좌표 에디터는 "좌표 직접 입력 + 방향키 조정" 방식으로만 동작
+// 클릭 좌표 기능은 향후 개선 과제로 남겨둠
+// 현재는 PDF를 보면서 수동으로 x,y 값을 입력하는 방식 사용
+```
+
+---
+
+## STEP 4: 페이지 접근 권한
+
+app/forms/page.tsx 상단에 서버사이드 또는 클라이언트사이드 권한 체크:
+- ADMIN, 조직관리자만 접근 가능
+- 기존 다른 관리 페이지의 권한 체크 패턴 그대로 따라서 구현
+
+---
+
+## 완료 확인
+
+1. AppShell 메뉴에 "양식 관리" 항목이 사건 관리 블록 아래에 보임
+2. /forms 접속 시 좌측 서식 목록, 우측 에디터 레이아웃 렌더링
+3. "공란 인쇄" 버튼 클릭 시 변수 없는 빈 PDF 다운로드
+4. 서식 선택 시 우측에 PDF iframe 미리보기 표시
+5. 좌표 x,y 수동 입력 및 방향키 조정 동작
+6. "전체 좌표 복사" 버튼 클릭 시 클립보드에 좌표 텍스트 복사
+7. TypeScript 컴파일 에러 없음
+

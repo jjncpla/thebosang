@@ -1,0 +1,168 @@
+# TASK-10: 소음작업 종사 사실 확인서 필드 정비
+# 실행: cat task-10.txt | claude --dangerously-skip-permissions
+
+## 개요
+소음작업 종사 사실 확인서(NOISE_WORK_CONFIRM) 관련 필드를 정비한다.
+1. 주민번호 뒷자리 7~13 개별 필드 추가
+2. 재해일 y1~d2 필드 제거 (해당 서식에 재해발생일 없음)
+3. 재직/퇴직 체크 필드 추가
+4. 별지사용 체크 필드 추가
+
+---
+
+## STEP 1: app/forms/page.tsx — FORM_FIELDS.NOISE_WORK_CONFIRM 교체
+
+현재 배열을 아래로 전체 교체 (x,y는 모두 0으로 초기화):
+
+```typescript
+NOISE_WORK_CONFIRM: [
+  { key: 'name', label: '성명', x: 0, y: 0 },
+  // 주민번호 앞 6자리
+  { key: 'jumin1', label: '주민번호 1', x: 0, y: 0 },
+  { key: 'jumin2', label: '주민번호 2', x: 0, y: 0 },
+  { key: 'jumin3', label: '주민번호 3', x: 0, y: 0 },
+  { key: 'jumin4', label: '주민번호 4', x: 0, y: 0 },
+  { key: 'jumin5', label: '주민번호 5', x: 0, y: 0 },
+  { key: 'jumin6', label: '주민번호 6', x: 0, y: 0 },
+  // 주민번호 뒷 7자리
+  { key: 'jumin7',  label: '주민번호 7',  x: 0, y: 0 },
+  { key: 'jumin8',  label: '주민번호 8',  x: 0, y: 0 },
+  { key: 'jumin9',  label: '주민번호 9',  x: 0, y: 0 },
+  { key: 'jumin10', label: '주민번호 10', x: 0, y: 0 },
+  { key: 'jumin11', label: '주민번호 11', x: 0, y: 0 },
+  { key: 'jumin12', label: '주민번호 12', x: 0, y: 0 },
+  { key: 'jumin13', label: '주민번호 13', x: 0, y: 0 },
+  // 기타 정보
+  { key: 'address', label: '주소', x: 0, y: 0 },
+  { key: 'phone', label: '연락처', x: 0, y: 0 },
+  { key: 'jobType', label: '직종', x: 0, y: 0 },
+  // 재직/퇴직 체크
+  { key: 'checkEmployed', label: '재직 체크', x: 0, y: 0 },
+  { key: 'checkRetired', label: '퇴직 체크', x: 0, y: 0 },
+  // 사업장
+  { key: 'workplaceName', label: '사업장명', x: 0, y: 0 },
+  // 날짜 및 서명
+  { key: 'todayYear', label: '오늘 연도', x: 0, y: 0 },
+  { key: 'todayMonth', label: '오늘 월', x: 0, y: 0 },
+  { key: 'todayDay', label: '오늘 일', x: 0, y: 0 },
+  { key: 'ptName', label: '청구인 성명', x: 0, y: 0 },
+  { key: 'ptPhone', label: '청구인 연락처', x: 0, y: 0 },
+  { key: 'mgrName', label: '대리인 성명', x: 0, y: 0 },
+  { key: 'mgrTel', label: '대리인 Tel', x: 0, y: 0 },
+  { key: 'kwc', label: '관할공단', x: 0, y: 0 },
+  // 소음사업장 직력 (최대 5행)
+  { key: 'noise1company', label: '소음직력1 사업장', x: 0, y: 0 },
+  { key: 'noise1period',  label: '소음직력1 기간',   x: 0, y: 0 },
+  { key: 'noise1job',     label: '소음직력1 직종',   x: 0, y: 0 },
+  { key: 'noise2company', label: '소음직력2 사업장', x: 0, y: 0 },
+  { key: 'noise2period',  label: '소음직력2 기간',   x: 0, y: 0 },
+  { key: 'noise2job',     label: '소음직력2 직종',   x: 0, y: 0 },
+  { key: 'noise3company', label: '소음직력3 사업장', x: 0, y: 0 },
+  { key: 'noise3period',  label: '소음직력3 기간',   x: 0, y: 0 },
+  { key: 'noise3job',     label: '소음직력3 직종',   x: 0, y: 0 },
+  { key: 'noise4company', label: '소음직력4 사업장', x: 0, y: 0 },
+  { key: 'noise4period',  label: '소음직력4 기간',   x: 0, y: 0 },
+  { key: 'noise4job',     label: '소음직력4 직종',   x: 0, y: 0 },
+  { key: 'noise5company', label: '소음직력5 사업장', x: 0, y: 0 },
+  { key: 'noise5period',  label: '소음직력5 기간',   x: 0, y: 0 },
+  { key: 'noise5job',     label: '소음직력5 직종',   x: 0, y: 0 },
+  // 별지사용
+  { key: 'appendixCheck', label: '별지사용 체크', x: 0, y: 0 },
+],
+```
+
+---
+
+## STEP 2: app/api/cases/[caseId]/forms/route.ts — NOISE_WORK_CONFIRM 케이스 교체
+
+case 'NOISE_WORK_CONFIRM': {
+  const pdfDoc = await loadBlankForm('noise_work_confirm.pdf')
+  const font = await loadKoreanFont(pdfDoc)
+  const page = pdfDoc.getPages()[0]
+
+  const jf = parseJumin(patient.ssn ?? '')
+  const today = parseDateFields(new Date())
+  const manager = caseData.caseManager
+  const noiseJobs = ((detail?.workHistory ?? []) as any[]).filter((w: any) => w.noiseExposure)
+
+  // 성명
+  drawText(page, patient.name ?? '', 0, 0, font, 9)
+
+  // 주민번호 전체 13자리 개별
+  drawText(page, jf['1']  ?? '', 0, 0, font, 9)
+  drawText(page, jf['2']  ?? '', 0, 0, font, 9)
+  drawText(page, jf['3']  ?? '', 0, 0, font, 9)
+  drawText(page, jf['4']  ?? '', 0, 0, font, 9)
+  drawText(page, jf['5']  ?? '', 0, 0, font, 9)
+  drawText(page, jf['6']  ?? '', 0, 0, font, 9)
+  drawText(page, jf['7']  ?? '', 0, 0, font, 9)
+  drawText(page, jf['8']  ?? '', 0, 0, font, 9)
+  drawText(page, jf['9']  ?? '', 0, 0, font, 9)
+  drawText(page, jf['10'] ?? '', 0, 0, font, 9)
+  drawText(page, jf['11'] ?? '', 0, 0, font, 9)
+  drawText(page, jf['12'] ?? '', 0, 0, font, 9)
+  drawText(page, jf['13'] ?? '', 0, 0, font, 9)
+
+  // 주소
+  drawText(page, patient.address ?? '', 0, 0, font, 8)
+
+  // 연락처
+  drawText(page, patient.phone ?? '', 0, 0, font, 9)
+
+  // 직종 (workHistory 마지막 항목)
+  const allJobs = (detail?.workHistory ?? []) as any[]
+  const lastJob = allJobs[allJobs.length - 1]
+  drawText(page, lastJob?.jobType ?? '', 0, 0, font, 8)
+
+  // 재직/퇴직 체크 (기본: 퇴직)
+  drawText(page, '', 0, 0, font, 9)  // 재직 체크 (빈칸)
+  drawText(page, '√', 0, 0, font, 9) // 퇴직 체크 (기본값)
+
+  // 사업장명
+  drawText(page, caseData.workplaceName ?? '', 0, 0, font, 8)
+
+  // 오늘 날짜
+  drawText(page, today.연도, 0, 0, font, 9)
+  drawText(page, today.월자, 0, 0, font, 9)
+  drawText(page, today.일자, 0, 0, font, 9)
+
+  // 청구인
+  drawText(page, patient.name ?? '', 0, 0, font, 9)
+  drawText(page, patient.phone ?? '', 0, 0, font, 9)
+
+  // 대리인
+  drawText(page, manager?.name ?? '', 0, 0, font, 9)
+  drawText(page, manager?.officeTel ?? '', 0, 0, font, 9)
+
+  // 관할공단
+  drawText(page, caseData.kwcOfficeName ?? '', 0, 0, font, 9)
+
+  // 소음사업장 직력 (최대 5행)
+  const rowCount = Math.min(noiseJobs.length, 5)
+  for (let i = 0; i < 5; i++) {
+    const job = noiseJobs[i]
+    if (job) {
+      const period = `${job.startYear}.${String(job.startMonth).padStart(2,'0')}~${job.endYear}.${String(job.endMonth).padStart(2,'0')}`
+      drawText(page, job.company ?? '', 0, 0, font, 7)
+      drawText(page, period, 0, 0, font, 7)
+      drawText(page, job.jobType ?? '', 0, 0, font, 7)
+    }
+  }
+
+  // 별지사용 체크 (noiseJobs 5개 초과 시 자동 체크)
+  drawText(page, noiseJobs.length > 5 ? '√' : '', 0, 0, font, 9)
+
+  const pdfBytes = await pdfDoc.save()
+  pdfBytes_result = pdfBytes
+  break
+}
+
+※ 위 코드에서 pdfBytes_result 대신 기존 switch 구조의 결과 반환 패턴 그대로 따를 것.
+※ 좌표는 모두 0,0 — /forms 에디터에서 조정 예정.
+
+---
+
+## 완료 확인
+1. /forms 에서 소음작업확인서 선택 시 새 필드 목록(주민번호1~13, 재직/퇴직체크, 별지사용 등) 표시
+2. TypeScript 컴파일 에러 없음
+

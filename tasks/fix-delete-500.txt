@@ -1,0 +1,120 @@
+아래 두 API 라우트의 500 에러를 진단하고 수정해줘.
+
+## 에러 현상
+1. DELETE /api/admin/delete-tf → 500
+2. DELETE /api/cases/bulk-delete → 500
+
+---
+
+## Step 1: 라우트 파일 위치 확인
+
+다음 경로들을 차례로 cat으로 읽어줘:
+- app/api/admin/delete-tf/route.ts (없으면 route.js)
+- app/api/cases/bulk-delete/route.ts (없으면 route.js)
+
+없으면 find로 찾아줘:
+find app/api -name "*.ts" | grep -E "(delete-tf|bulk-delete)"
+
+---
+
+## Step 2: 에러 원인 파악
+
+각 라우트 파일을 읽고, Prisma delete/deleteMany 호출 부분을 확인.
+Railway 로그에서 실제 에러 메시지를 볼 수 없으니 코드에서 다음을 체크:
+1. 삭제 대상에 연결된 하위 테이블이 있는데 cascade 없이 삭제 시도하는지
+2. try-catch가 없거나 에러 핸들링이 부족한지
+3. 요청 바디 파싱 문제인지
+
+---
+
+## Step 3: schema.prisma에서 관련 모델 확인
+
+prisma/schema.prisma에서 TF 관련 모델과 Case 모델의 관계(onDelete 설정)를 확인해줘.
+
+grep -A 20 "model.*TF\|tfId\|tfName\|teamField" prisma/schema.prisma | head -80
+grep -A 5 "onDelete" prisma/schema.prisma
+
+---
+
+## Step 4: 수정
+
+### delete-tf 수정 방향:
+TF 삭제 시 연결된 하위 레코드(Cases, Users 등)가 있으면:
+- 옵션A: 먼저 연결 해제(tfId를 null로 업데이트) 후 삭제
+- 옵션B: 연결된 데이터가 있으면 에러 메시지 반환 (삭제 거부)
+
+더보상 맥락상 TF에 사건이 묶여 있으므로, 옵션B가 더 안전함:
+```typescript
+// 수정 예시
+export async function DELETE(req: Request) {
+  try {
+    const { tfId } = await req.json(); // 또는 searchParams
+    
+    // 연결된 사건 수 확인
+    const caseCount = await prisma.case.count({ where: { tfId } });
+    if (caseCount > 0) {
+      return NextResponse.json(
+        { error: `해당 TF에 연결된 사건이 ${caseCount}건 있어 삭제할 수 없습니다.` },
+        { status: 400 }
+      );
+    }
+    
+    await prisma.tF.delete({ where: { id: tfId } }); // 실제 모델명으로 수정
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error('delete-tf error:', error);
+    return NextResponse.json({ error: String(error) }, { status: 500 });
+  }
+}
+```
+
+### bulk-delete 수정 방향:
+Case 삭제 시 연결된 하위 레코드(ObjectionReview, ObjectionCase, WageReviewData, PDF 등)를 먼저 삭제해야 함.
+삭제 순서: 가장 하위 테이블 → 상위 순으로.
+
+```typescript
+// 수정 예시 (실제 모델명은 schema 보고 맞춰줘)
+export async function DELETE(req: Request) {
+  try {
+    const { caseIds }: { caseIds: string[] } = await req.json();
+    
+    if (!caseIds || caseIds.length === 0) {
+      return NextResponse.json({ error: '삭제할 사건을 선택해주세요.' }, { status: 400 });
+    }
+    
+    // 트랜잭션으로 하위→상위 순서 삭제
+    await prisma.$transaction(async (tx) => {
+      // 1. 가장 하위부터 삭제 (schema 보고 실제 모델명 확인)
+      // ObjectionCase 관련 하위 테이블이 있으면 먼저
+      await tx.wageReviewData?.deleteMany({ where: { objectionCase: { caseId: { in: caseIds } } } }).catch(() => {});
+      await tx.objectionCase?.deleteMany({ where: { caseId: { in: caseIds } } }).catch(() => {});
+      await tx.objectionReview?.deleteMany({ where: { caseId: { in: caseIds } } }).catch(() => {});
+      // 필요시 추가 (CaseStatusUpdate, Notification 등)
+      
+      // 마지막에 Case 삭제
+      await tx.case.deleteMany({ where: { id: { in: caseIds } } });
+    });
+    
+    return NextResponse.json({ success: true, deleted: caseIds.length });
+  } catch (error) {
+    console.error('bulk-delete error:', error);
+    return NextResponse.json({ error: String(error) }, { status: 500 });
+  }
+}
+```
+
+---
+
+## Step 5: 검증
+
+수정 후:
+1. schema.prisma의 실제 모델명과 관계를 반드시 확인하고 코드 맞춰줘
+2. try-catch와 에러 메시지 반환이 제대로 됐는지 확인
+3. 수정된 파일 전체를 보여줘 (확인용)
+
+---
+
+## 주의사항
+- 파일 전체 재작성 금지. 수술적 수정만.
+- 실제 Prisma 모델명은 schema.prisma 확인 후 정확히 사용.
+- 모르는 모델명 추측해서 쓰지 말 것.

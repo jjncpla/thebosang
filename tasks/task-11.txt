@@ -1,0 +1,389 @@
+# TASK-11: 소음작업확인서~직업력문답서 전체 좌표 반영 (5개 서식)
+# 실행: cat task-11.txt | claude --dangerously-skip-permissions
+
+## 원칙
+- forms/page.tsx FORM_FIELDS + route.ts drawText 두 파일 동시 수정
+- x:0, y:0 필드는 FORM_FIELDS에서 삭제 + route.ts에서도 해당 drawText 제거
+- 수술적 수정. 다른 서식 케이스 절대 건드리지 말 것
+
+---
+
+## 1. NOISE_WORK_CONFIRM
+
+### forms/page.tsx FORM_FIELDS.NOISE_WORK_CONFIRM 전체 교체:
+```typescript
+NOISE_WORK_CONFIRM: [
+  { key: 'name',          label: '성명',           x: 270, y: 693 },
+  { key: 'jumin1',        label: '주민번호 1',      x: 278, y: 670 },
+  { key: 'jumin2',        label: '주민번호 2',      x: 295, y: 670 },
+  { key: 'jumin3',        label: '주민번호 3',      x: 312, y: 670 },
+  { key: 'jumin4',        label: '주민번호 4',      x: 329, y: 670 },
+  { key: 'jumin5',        label: '주민번호 5',      x: 346, y: 670 },
+  { key: 'jumin6',        label: '주민번호 6',      x: 363, y: 670 },
+  { key: 'jumin7',        label: '주민번호 7',      x: 389, y: 670 },
+  { key: 'jumin8',        label: '주민번호 8',      x: 406, y: 670 },
+  { key: 'jumin9',        label: '주민번호 9',      x: 422, y: 670 },
+  { key: 'jumin10',       label: '주민번호 10',     x: 440, y: 670 },
+  { key: 'jumin11',       label: '주민번호 11',     x: 456, y: 670 },
+  { key: 'jumin12',       label: '주민번호 12',     x: 474, y: 670 },
+  { key: 'jumin13',       label: '주민번호 13',     x: 491, y: 670 },
+  { key: 'address',       label: '주소',            x: 164, y: 645 },
+  { key: 'checkEmployed', label: '재직 체크',       x: 316, y: 620 },
+  { key: 'checkRetired',  label: '퇴직 체크',       x: 401, y: 620 },
+  { key: 'todayYear',     label: '오늘 연도',       x: 204, y: 143 },
+  { key: 'todayMonth',    label: '오늘 월',         x: 275, y: 143 },
+  { key: 'todayDay',      label: '오늘 일',         x: 331, y: 143 },
+  { key: 'ptName',        label: '청구인 성명',     x: 268, y: 118 },
+  { key: 'ptPhone',       label: '청구인 연락처',   x: 431, y: 118 },
+  { key: 'mgrName',       label: '대리인 성명',     x: 268, y: 106 },
+  { key: 'mgrTel',        label: '대리인 Tel',      x: 431, y: 106 },
+  { key: 'appendixCheck', label: '별지사용 체크',   x: 367, y: 374 },
+],
+```
+
+### route.ts NOISE_WORK_CONFIRM 케이스 교체:
+```typescript
+case 'NOISE_WORK_CONFIRM': {
+  const pdfDoc = await loadBlankForm('noise_work_confirm.pdf')
+  const font = await loadKoreanFont(pdfDoc)
+  const page = pdfDoc.getPages()[0]
+  const jf = parseJumin(patient.ssn ?? '')
+  const today = parseDateFields(new Date())
+  const manager = caseData.caseManager
+  const noiseJobs = ((detail?.workHistory ?? []) as any[]).filter((w: any) => w.noiseExposure)
+
+  drawText(page, patient.name ?? '',    270, 693, font, 9)
+  drawText(page, jf['1']  ?? '',        278, 670, font, 9)
+  drawText(page, jf['2']  ?? '',        295, 670, font, 9)
+  drawText(page, jf['3']  ?? '',        312, 670, font, 9)
+  drawText(page, jf['4']  ?? '',        329, 670, font, 9)
+  drawText(page, jf['5']  ?? '',        346, 670, font, 9)
+  drawText(page, jf['6']  ?? '',        363, 670, font, 9)
+  drawText(page, jf['7']  ?? '',        389, 670, font, 9)
+  drawText(page, jf['8']  ?? '',        406, 670, font, 9)
+  drawText(page, jf['9']  ?? '',        422, 670, font, 9)
+  drawText(page, jf['10'] ?? '',        440, 670, font, 9)
+  drawText(page, jf['11'] ?? '',        456, 670, font, 9)
+  drawText(page, jf['12'] ?? '',        474, 670, font, 9)
+  drawText(page, jf['13'] ?? '',        491, 670, font, 9)
+  drawText(page, patient.address ?? '', 164, 645, font, 8)
+  // 재직/퇴직 체크 (기본: 퇴직)
+  drawText(page, '',  316, 620, font, 9)  // 재직
+  drawText(page, '√', 401, 620, font, 9)  // 퇴직
+  drawText(page, today.연도, 204, 143, font, 9)
+  drawText(page, today.월자, 275, 143, font, 9)
+  drawText(page, today.일자, 331, 143, font, 9)
+  drawText(page, patient.name ?? '',      268, 118, font, 9)
+  drawText(page, patient.phone ?? '',     431, 118, font, 9)
+  drawText(page, manager?.name ?? '',     268, 106, font, 9)
+  drawText(page, manager?.officeTel ?? '',431, 106, font, 9)
+  // 별지사용 (소음직력 5개 초과 시 자동)
+  drawText(page, noiseJobs.length > 5 ? '√' : '', 367, 374, font, 9)
+  break
+}
+```
+
+---
+
+## 2. AGENT_APPOINTMENT
+
+### forms/page.tsx FORM_FIELDS.AGENT_APPOINTMENT 전체 교체:
+```typescript
+AGENT_APPOINTMENT: [
+  { key: 'caseTitle',   label: '사건명',           x: 184, y: 664 },
+  { key: 'name',        label: '성명 (근로자)',     x: 193, y: 629 },
+  { key: 'birthDate',   label: '생년월일',          x: 452, y: 629 },
+  { key: 'address',     label: '주소 (근로자)',     x: 186, y: 599 },
+  { key: 'phone',       label: '연락처 (근로자)',   x: 372, y: 574 },
+  { key: 'mgrBranch',   label: '상호 (지사명)',     x: 222, y: 505 },
+  { key: 'mgrLicense',  label: '등록번호',          x: 470, y: 505 },
+  { key: 'mgrName',     label: '대리인 성명',       x: 250, y: 460 },
+  { key: 'mgrJobTitle', label: '대리인 직책',       x: 477, y: 460 },
+  { key: 'mgrAddress',  label: '대리인 주소',       x: 186, y: 425 },
+  { key: 'mgrHP',       label: '대리인 H.P',        x: 227, y: 400 },
+  { key: 'mgrTel',      label: '대리인 Tel',        x: 342, y: 400 },
+  { key: 'mgrFax',      label: '대리인 Fax',        x: 450, y: 391 },
+  { key: 'scope',       label: '대리의 범위',       x: 271, y: 356 },
+  { key: 'injDate',     label: '선임일 (재해일)',   x: 199, y: 315 },
+  { key: 'todayYear',   label: '오늘 연도',         x: 340, y: 203 },
+  { key: 'todayMonth',  label: '오늘 월',           x: 412, y: 203 },
+  { key: 'todayDay',    label: '오늘 일',           x: 461, y: 203 },
+  { key: 'ptName',      label: '신고인 성명',       x: 367, y: 173 },
+  { key: 'kwc',         label: '관할공단',          x: 346, y: 140 },
+],
+```
+
+### route.ts AGENT_APPOINTMENT 케이스 교체:
+```typescript
+case 'AGENT_APPOINTMENT': {
+  const pdfDoc = await loadBlankForm('agent_appointment.pdf')
+  const font = await loadKoreanFont(pdfDoc)
+  const page = pdfDoc.getPages()[0]
+  const today = parseDateFields(new Date())
+  const manager = caseData.caseManager
+  const bf = parseBirthDate(patient.ssn ?? '')
+  const df = parseDateFields(detail?.firstExamDate ?? null)
+
+  drawText(page, '장해급여 청구(소음성 난청)',                    184, 664, font, 9)
+  drawText(page, patient.name ?? '',                              193, 629, font, 9)
+  drawText(page, `${bf.Y1}${bf.Y2}${bf.Y3}${bf.Y4}.${bf.M1}${bf.M2}.${bf.D1}${bf.D2}`, 452, 629, font, 9)
+  drawText(page, patient.address ?? '',                           186, 599, font, 8)
+  drawText(page, patient.phone ?? '',                             372, 574, font, 9)
+  drawText(page, `노무법인 더보상 ${manager?.branchName ?? ''}`,  222, 505, font, 9)
+  drawText(page, manager?.licenseNo ?? '',                        470, 505, font, 9)
+  drawText(page, `공인노무사 ${manager?.name ?? ''}`,             250, 460, font, 9)
+  drawText(page, manager?.jobTitle ?? '',                         477, 460, font, 9)
+  drawText(page, manager?.officeAddress ?? '',                    186, 425, font, 8)
+  drawText(page, manager?.officeTel ?? '',                        227, 400, font, 9)
+  drawText(page, manager?.officeTel ?? '',                        342, 400, font, 9)
+  drawText(page, manager?.officeFax ?? '',                        450, 391, font, 9)
+  drawText(page, '소음성 난청 장해급여 청구에 관한 사항 일체',    271, 356, font, 9)
+  drawText(page, `${df.연도}.${df.월자}.${df.일자}`,             199, 315, font, 9)
+  drawText(page, today.연도, 340, 203, font, 9)
+  drawText(page, today.월자, 412, 203, font, 9)
+  drawText(page, today.일자, 461, 203, font, 9)
+  drawText(page, patient.name ?? '', 367, 173, font, 9)
+  drawText(page, caseData.kwcOfficeName ?? '', 346, 140, font, 9)
+  break
+}
+```
+
+---
+
+## 3. POWER_OF_ATTORNEY
+
+### forms/page.tsx FORM_FIELDS.POWER_OF_ATTORNEY 전체 교체:
+```typescript
+POWER_OF_ATTORNEY: [
+  { key: 'mgrBranch',   label: '법인명 (지사)',     x: 240, y: 657 },
+  { key: 'mgrAddress',  label: '소재지',            x: 240, y: 638 },
+  { key: 'mgrTel',      label: '전화',              x: 240, y: 620 },
+  { key: 'mgrFax',      label: 'FAX',               x: 240, y: 602 },
+  { key: 'mgrLicense',  label: '등록번호',          x: 295, y: 585 },
+  { key: 'mgrName',     label: '성명 (노무사)',     x: 233, y: 567 },
+  { key: 'todayYear',   label: '오늘 연도',         x: 345, y: 280 },
+  { key: 'todayMonth',  label: '오늘 월',           x: 409, y: 280 },
+  { key: 'todayDay',    label: '오늘 일',           x: 468, y: 280 },
+  { key: 'name',        label: '성명 (근로자)',     x: 285, y: 234 },
+  { key: 'ssn',         label: '주민번호',          x: 285, y: 206 },
+  { key: 'address',     label: '주소 (근로자)',     x: 285, y: 176 },
+],
+```
+
+### route.ts POWER_OF_ATTORNEY 케이스 교체:
+```typescript
+case 'POWER_OF_ATTORNEY': {
+  const pdfDoc = await loadBlankForm('power_of_attorney.pdf')
+  const font = await loadKoreanFont(pdfDoc)
+  const page = pdfDoc.getPages()[0]
+  const today = parseDateFields(new Date())
+  const manager = caseData.caseManager
+
+  drawText(page, `노무법인 더보상 ${manager?.branchName ?? ''}`, 240, 657, font, 9)
+  drawText(page, manager?.officeAddress ?? '', 240, 638, font, 8)
+  drawText(page, manager?.officeTel ?? '',     240, 620, font, 9)
+  drawText(page, manager?.officeFax ?? '',     240, 602, font, 9)
+  drawText(page, `제 ${manager?.licenseNo ?? ''}호`, 295, 585, font, 9)
+  drawText(page, `공인노무사 ${manager?.name ?? ''}`, 233, 567, font, 9)
+  drawText(page, today.연도, 345, 280, font, 10)
+  drawText(page, today.월자, 409, 280, font, 10)
+  drawText(page, today.일자, 468, 280, font, 10)
+  drawText(page, patient.name ?? '',  285, 234, font, 10)
+  drawText(page, patient.ssn ?? '',   285, 206, font, 9)
+  drawText(page, patient.address ?? '', 285, 176, font, 9)
+  break
+}
+```
+
+---
+
+## 4. SPECIAL_CLINIC
+
+### forms/page.tsx FORM_FIELDS.SPECIAL_CLINIC 전체 교체:
+```typescript
+SPECIAL_CLINIC: [
+  { key: 'name',       label: '성명',            x:  93, y: 676 },
+  { key: 'ssn1',       label: '주민번호 1',       x: 173, y: 676 },
+  { key: 'ssn2',       label: '주민번호 2',       x: 190, y: 676 },
+  { key: 'ssn3',       label: '주민번호 3',       x: 206, y: 676 },
+  { key: 'ssn4',       label: '주민번호 4',       x: 223, y: 676 },
+  { key: 'ssn5',       label: '주민번호 5',       x: 240, y: 676 },
+  { key: 'ssn6',       label: '주민번호 6',       x: 257, y: 676 },
+  { key: 'ssn7',       label: '주민번호 7',       x: 276, y: 676 },
+  { key: 'ssn8',       label: '주민번호 8',       x:   0, y:   0 },
+  { key: 'ssn9',       label: '주민번호 9',       x:   0, y:   0 },
+  { key: 'ssn10',      label: '주민번호 10',      x:   0, y:   0 },
+  { key: 'ssn11',      label: '주민번호 11',      x:   0, y:   0 },
+  { key: 'ssn12',      label: '주민번호 12',      x:   0, y:   0 },
+  { key: 'ssn13',      label: '주민번호 13',      x:   0, y:   0 },
+  { key: 'injY1',      label: '재해일 y1',        x: 399, y: 676 },
+  { key: 'injY2',      label: '재해일 y2',        x: 416, y: 676 },
+  { key: 'injY3',      label: '재해일 y3',        x: 432, y: 676 },
+  { key: 'injY4',      label: '재해일 y4',        x: 450, y: 676 },
+  { key: 'injM1',      label: '재해월 m1',        x: 474, y: 676 },
+  { key: 'injM2',      label: '재해월 m2',        x: 491, y: 676 },
+  { key: 'injD1',      label: '재해일 d1',        x: 515, y: 676 },
+  { key: 'injD2',      label: '재해일 d2',        x: 533, y: 676 },
+  { key: 'address',    label: '주소',             x: 148, y: 642 },
+  { key: 'phone',      label: '연락처',           x: 465, y: 640 },
+  { key: 'clinicName', label: '특진의료기관명',   x: 171, y: 524 },
+  { key: 'clinicAddr', label: '특진의료기관 주소',x: 364, y: 524 },
+  { key: 'clinic2Name',label: '특진의료기관2명',  x:   0, y:   0 },
+  { key: 'clinic2Addr',label: '특진의료기관2주소',x:   0, y:   0 },
+  { key: 'clinic3Name',label: '특진의료기관3명',  x:   0, y:   0 },
+  { key: 'clinic3Addr',label: '특진의료기관3주소',x:   0, y:   0 },
+  { key: 'todayYear',  label: '오늘 연도',        x: 338, y: 195 },
+  { key: 'todayMonth', label: '오늘 월',          x: 385, y: 195 },
+  { key: 'todayDay',   label: '오늘 일',          x: 418, y: 195 },
+  { key: 'ptName',     label: '작성인 성명',      x: 174, y: 182 },
+  { key: 'ptPhone',    label: '작성인 연락처',    x: 503, y: 182 },
+  { key: 'mgrName',    label: '대리인 성명',      x: 174, y: 165 },
+  { key: 'mgrTel',     label: '대리인 Tel',       x: 503, y: 164 },
+  { key: 'kwc',        label: '관할공단',         x: 133, y:  69 },
+],
+```
+
+※ ssn8~13, clinic2,3 필드는 x:0,y:0 — 배열엔 있되 에디터에서 나중에 좌표 지정 예정
+
+### route.ts SPECIAL_CLINIC 케이스 교체:
+```typescript
+case 'SPECIAL_CLINIC': {
+  const pdfDoc = await loadBlankForm('special_clinic.pdf')
+  const font = await loadKoreanFont(pdfDoc)
+  const page = pdfDoc.getPages()[0]
+  const jf = parseJumin(patient.ssn ?? '')
+  const df = parseDateFields(detail?.firstExamDate ?? null)
+  const today = parseDateFields(new Date())
+  const manager = caseData.caseManager
+
+  drawText(page, patient.name ?? '', 93, 676, font, 9)
+  // 주민번호 1~7 (좌표 확정)
+  drawText(page, jf['1'] ?? '', 173, 676, font, 9)
+  drawText(page, jf['2'] ?? '', 190, 676, font, 9)
+  drawText(page, jf['3'] ?? '', 206, 676, font, 9)
+  drawText(page, jf['4'] ?? '', 223, 676, font, 9)
+  drawText(page, jf['5'] ?? '', 240, 676, font, 9)
+  drawText(page, jf['6'] ?? '', 257, 676, font, 9)
+  drawText(page, jf['7'] ?? '', 276, 676, font, 9)
+  // 주민번호 8~13 (좌표 미정 — 추후 반영)
+  // drawText(page, jf['8']~jf['13'], 0, 0, font, 9)
+
+  // 재해일
+  drawText(page, df.y1, 399, 676, font, 9)
+  drawText(page, df.y2, 416, 676, font, 9)
+  drawText(page, df.y3, 432, 676, font, 9)
+  drawText(page, df.y4, 450, 676, font, 9)
+  drawText(page, df.m1, 474, 676, font, 9)
+  drawText(page, df.m2, 491, 676, font, 9)
+  drawText(page, df.d1, 515, 676, font, 9)
+  drawText(page, df.d2, 533, 676, font, 9)
+
+  drawText(page, patient.address ?? '', 148, 642, font, 8)
+  drawText(page, patient.phone ?? '',   465, 640, font, 9)
+
+  // 특진 사유 (고정 텍스트)
+  drawText(page, '소음성 난청(특별진찰)', 148, 572, font, 9)
+  drawText(page, `- 대리인 Tel: ${manager?.officeTel ?? ''}  Fax: ${manager?.officeFax ?? ''}`, 148, 560, font, 8)
+
+  // 특진의료기관 1행
+  drawText(page, detail?.specialClinic ?? '', 171, 524, font, 9)
+  // 특진의료기관 주소 (special_hospitals.json 조회 — 일단 빈칸)
+  // drawText(page, clinicAddr, 364, 524, font, 8)
+  drawText(page, '√', 530, 524, font, 9)  // 1행 체크
+
+  drawText(page, today.연도, 338, 195, font, 9)
+  drawText(page, today.월자, 385, 195, font, 9)
+  drawText(page, today.일자, 418, 195, font, 9)
+  drawText(page, patient.name ?? '',       174, 182, font, 9)
+  drawText(page, patient.phone ?? '',      503, 182, font, 9)
+  drawText(page, manager?.name ?? '',      174, 165, font, 9)
+  drawText(page, manager?.officeTel ?? '', 503, 164, font, 9)
+  drawText(page, caseData.kwcOfficeName ?? '', 133, 69, font, 9)
+  break
+}
+```
+
+---
+
+## 5. EXPERT_CLINIC
+
+### forms/page.tsx FORM_FIELDS.EXPERT_CLINIC:
+SPECIAL_CLINIC 배열과 동일하게 교체 (key/label/x/y 전부 동일)
+
+### route.ts EXPERT_CLINIC 케이스 교체:
+SPECIAL_CLINIC과 동일. 아래만 다름:
+```typescript
+const pdfDoc = await loadBlankForm('expert_clinic.pdf')
+// 특진 사유
+drawText(page, '소음성 난청(업무관련성 평가)', 148, 572, font, 9)
+drawText(page, `- 대리인 H.P: ${manager?.officeTel ?? ''}  Tel: ${manager?.officeTel ?? ''}  Fax: ${manager?.officeFax ?? ''}`, 148, 560, font, 8)
+// 전문조사기관
+drawText(page, detail?.expertClinic ?? '', 171, 524, font, 9)
+```
+
+---
+
+## 6. WORK_HISTORY
+
+### forms/page.tsx FORM_FIELDS.WORK_HISTORY 전체 교체:
+```typescript
+WORK_HISTORY: [
+  { key: 'name',       label: '성명 (p1)',         x: 172, y: 638 },
+  { key: 'phone',      label: '연락처 (p1)',        x: 174, y: 609 },
+  { key: 'address',    label: '주소 (p1)',          x: 174, y: 582 },
+  { key: 'totalDur',   label: '합계 근무기간 (p2)', x: 109, y: 687 },
+  { key: 'todayYear',  label: '오늘 연도 (p3)',     x: 219, y: 309 },
+  { key: 'todayMonth', label: '오늘 월 (p3)',       x: 282, y: 308 },
+  { key: 'todayDay',   label: '오늘 일 (p3)',       x: 329, y: 308 },
+  { key: 'ptName',     label: '청구인 성명 (p3)',   x: 283, y: 267 },
+  { key: 'ptPhone',    label: '청구인 연락처 (p3)', x: 485, y: 267 },
+  { key: 'mgrName',    label: '대리인 성명 (p3)',   x: 283, y: 222 },
+  { key: 'mgrTel',     label: '대리인 Tel (p3)',    x: 485, y: 222 },
+],
+```
+
+### route.ts WORK_HISTORY 케이스 교체:
+```typescript
+case 'WORK_HISTORY': {
+  const pdfDoc = await loadBlankForm('work_history.pdf')
+  const font = await loadKoreanFont(pdfDoc)
+  const today = parseDateFields(new Date())
+  const manager = caseData.caseManager
+  const allJobs = (detail?.workHistory ?? []) as any[]
+
+  // 1페이지
+  const page1 = pdfDoc.getPages()[0]
+  drawText(page1, patient.name ?? '',    172, 638, font, 9)
+  drawText(page1, patient.phone ?? '',   174, 609, font, 9)
+  drawText(page1, patient.address ?? '', 174, 582, font, 8)
+
+  // 2페이지 — 사업장 근무력 조사표
+  const page2 = pdfDoc.getPages()[1]
+
+  // 총 근무기간 계산
+  const totalMonths = allJobs.reduce((acc: number, j: any) => {
+    return acc + (j.endYear - j.startYear) * 12 + ((j.endMonth ?? 0) - (j.startMonth ?? 0))
+  }, 0)
+  const totalYears = Math.floor(totalMonths / 12)
+  const totalRem = totalMonths % 12
+  drawText(page2, `총 약 ${totalYears}년 ${totalRem}개월`, 109, 687, font, 8)
+
+  // 3페이지
+  const page3 = pdfDoc.getPages()[2]
+  drawText(page3, today.연도, 219, 309, font, 9)
+  drawText(page3, today.월자, 282, 308, font, 9)
+  drawText(page3, today.일자, 329, 308, font, 9)
+  drawText(page3, patient.name ?? '',       283, 267, font, 9)
+  drawText(page3, patient.phone ?? '',      485, 267, font, 9)
+  drawText(page3, `공인노무사 ${manager?.name ?? ''}`, 283, 222, font, 9)
+  drawText(page3, manager?.officeTel ?? '', 485, 222, font, 9)
+  break
+}
+```
+
+---
+
+## 완료 확인
+1. /forms 에서 각 서식 선택 시 새 필드 목록 표시
+2. TypeScript 컴파일 에러 없음
+

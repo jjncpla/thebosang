@@ -1,0 +1,386 @@
+# TBSS 세션 2 개발 지시서
+# 작성일: 2026-03-17
+# 대상: Claude Code (bypass 모드)
+
+## 작업 전 확인사항
+- 기획서: thebosang_기획서.md 참조
+- 수술적 수정 원칙: 기존 파일 전체 재작성 금지, 필요한 부분만 추가/수정
+- 기존 스타일(Tailwind/인라인 혼재) 그대로 유지
+
+---
+
+## TASK 1: schema.prisma 추가 — 이의제기 관련 모델
+
+파일: prisma/schema.prisma 끝에 추가 (기존 내용 건드리지 말 것)
+
+```prisma
+// ─────────────────────────────────────────────
+// 이의제기 기일 관리 (심사/재심사 청구 및 결과)
+// ─────────────────────────────────────────────
+model ObjectionCase {
+  id                    String    @id @default(cuid())
+  reviewId              String?   // ObjectionReview FK (최초총현황과 연결)
+  review                ObjectionReview? @relation(fields: [reviewId], references: [id])
+  caseId                String?   // Case FK
+  tfName                String    // TF명 (예: 울산동부TF)
+  patientName           String
+  caseType              String    // 소음성 난청 / COPD / 근골격계 등
+  approvalStatus        String    // 승인 / 불승인 / 일부승인
+  decisionDate          DateTime? // 처분일(안날) — 제척기간 기산일
+  // 심사청구
+  examClaimDate         DateTime? // 심사청구일
+  examResult            String?   // 기각 / 인용 / 취하 / null(진행중)
+  examResultDate        DateTime? // 심사 결정 송달일
+  // 재심사청구
+  reExamClaimDate       DateTime? // 재심사청구일
+  reExamResult          String?   // 기각 / 인용 / 취하 / null(진행중)
+  reExamResultDate      DateTime? // 재심사 결정 송달일
+  // 업무상질병판정위원회 해당 여부 (질판위 거친 경우 심사 건너뛰고 재심사부터 가능)
+  isQualityReview       Boolean   @default(false)
+  // 담당자
+  managerId             String?
+  manager               User?     @relation("ObjectionManager", fields: [managerId], references: [id])
+  // 진행 상태
+  progressStatus        String    // 진행중 / 종결 / 송무인계 / 검토중
+  memo                  String?
+  // 소송 인계 관련
+  litigationHandover    Boolean   @default(false) // 송무 인계 여부
+  litigationMemo        String?
+  // 재처분 필요 여부 (제척 도과 시 자동 계산)
+  needsReDecision       Boolean   @default(false)
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+}
+
+// ─────────────────────────────────────────────
+// 평균임금 데이터 검토 (정보공개청구 후 입력)
+// ─────────────────────────────────────────────
+model WageReviewData {
+  id                    String    @id @default(cuid())
+  caseId                String?   // Case FK
+  tfName                String
+  patientName           String
+  caseType              String
+  decisionDate          DateTime?
+  hasInfoDisclosure     Boolean   @default(false) // 정공 여부
+  retirementDate        DateTime? // 퇴직일자
+  diagnosisDate         DateTime? // 산정사유발생일(진단일)
+  hasNationalDisability Boolean   @default(false) // 국가장애여부
+  disabilityGrade       String?   // 급수
+  workerType            String?   // 일용 / 상용
+  // 임금 산정 결과
+  comparisonWage        String?   // 비교임금 (실임금/동종임금/특례 등)
+  appliedWage           String?   // 적용임금 유형
+  workplaceName         String?   // 적용사업장명
+  occupation1           String?   // 직종1
+  occupation1Years      String?   // 직종1 직력
+  occupation2           String?   // 직종2
+  occupation2Years      String?
+  occupation3           String?   // 직종3
+  occupation3Years      String?
+  // 실제임금
+  baseAvgWage           Float?    // 최초산출평균임금
+  basisNote             String?   // 산정 근거
+  hasCommuteCoef        Boolean?  // 통상근로계수 적용여부
+  changeRate            Float?    // 증감률
+  finalAvgWage          Float?    // 적용평균임금
+  // 동종근로자/임금구조 임금
+  statWageGender        String?   // 성별
+  statWageSize          String?   // 규모
+  statWageIndustry      String?   // 업종
+  statWageOccupation    String?   // 직종
+  statWageQuarter       String?   // 적용분기
+  statWageBase          Float?    // 최초산정임금
+  statWageChangeRate    Float?    // 증감률
+  statWageFinal         Float?    // 적용평균임금
+  // 최종 산정
+  finalSelectedWage     Float?    // 최종 채택 평균임금
+  // 검토 결과
+  reviewManagerName     String?   // 검토 담당자 (자유텍스트)
+  reviewResult          String?   // 종결 / 평정진행 등
+  reviewDetail          String?   // 상세 쟁점
+  progressNote          String?   // 진행경과
+  claimDate             DateTime? // 평정/적사변 청구일
+  decisionResultDate    DateTime? // 결정일
+  additionalReview      String?   // 추가 검토
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+}
+```
+
+ObjectionReview 모델에 relation 추가도 필요:
+```
+objectionCases ObjectionCase[]
+```
+User 모델에도 추가:
+```
+objectionCases ObjectionCase[] @relation("ObjectionManager")
+```
+
+추가 후 `npx prisma db push` 실행.
+
+---
+
+## TASK 2: 이의제기 관리 — 최초총현황 + 평임 데이터 페이지
+
+### 파일 생성
+- `app/objection/review/page.tsx` — 최초총현황 + 평임 데이터 통합 페이지
+- `app/api/objection/review/route.ts` — GET/POST
+- `app/api/objection/review/[id]/route.ts` — PATCH/DELETE
+- `app/api/objection/wage-review/route.ts` — 평임 데이터 GET/POST
+- `app/api/objection/wage-review/[id]/route.ts` — PATCH
+
+### 페이지 구조
+
+#### 상단 탭 2개
+- [최초총현황] 탭 (기본 선택)
+- [평균임금 데이터 검토] 탭
+
+#### [최초총현황] 탭
+
+**상단 필터**
+- TF 선택 버튼: 전체 / 울산TF / 울산동부TF / 울산남부TF / 울산북부TF (하드코딩, 추후 DB화)
+- 사건진행여부 필터: 전체 / 검토중 / 이의제기 진행 / 송무 검토 / 송무 인계 / 평정청구 진행 / 종결
+- 검색: 성명
+
+**테이블 컬럼**
+승인여부(badge) | TF | 성명 | 사건분류 | 처분일 | 제척도래일(처분일+90일 자동계산) | 사건진행여부 | 정공여부 | 관리
+
+- 제척도래일 = 처분일 + 90일
+- 제척도래일이 오늘보다 지난 건: 행 전체 빨간색 배경
+- 제척도래일까지 7일 이내인 건: 행 전체 노란색 배경 + ⚠️ 아이콘
+
+**우측 상단 요약 카드**
+- 이의제기 진행 중: N건
+- 재처분 필요(제척도과): N건
+- 송무 인계: N건
+- 평정청구 진행: N건
+
+**행 클릭 → 수정 모달**
+모달 필드:
+- 승인여부: select (승인 / 불승인 / 일부승인)
+- TF: select (하드코딩 목록)
+- 성명 (텍스트)
+- 사건분류 (텍스트)
+- 처분일: 날짜 picker
+- 사건진행여부: select
+  - 종결 / 검토중 / 이의제기 진행 / 송무 검토 / 송무 인계 / 평정청구 진행
+  - "이의제기 진행" 선택 시: [기일관리 페이지에서 확인] 링크 표시
+  - "송무 인계" 선택 시: [소송인계 사건으로 이동] 링크 표시 (추후 구현)
+  - "평정청구 진행" 선택 시: [평균임금 데이터 검토] 탭으로 이동 링크 표시
+- 정공 여부: toggle
+- 메모: textarea
+- [등록] 버튼
+
+#### [평균임금 데이터 검토] 탭
+
+**설명 문구 표시**: "정보공개청구를 통해 수령한 평균임금 산정내역서의 내용을 직접 입력하는 탭입니다."
+
+**필터**
+- TF 선택 / 검토결과 필터 / 성명 검색
+
+**테이블 컬럼**
+TF | 성명 | 사건분류 | 처분일 | 퇴직일 | 적용임금유형 | 최종평균임금 | 검토결과 | 검토담당자 | 관리
+
+**등록/수정 모달**: WageReviewData 모델의 전체 필드를 섹션별로 구분하여 표시
+- 기본 정보 섹션: TF, 성명, 사건분류, 처분일, 퇴직일, 진단일, 국가장애여부, 급수, 일용/상용
+- 직종 정보 섹션: 직종1/직력, 직종2/직력, 직종3/직력
+- 실제임금 섹션: 최초산출평균임금, 산정근거, 통상근로계수 여부, 증감률, 적용평균임금
+- 동종/통계임금 섹션: 성별, 규모, 업종, 직종, 적용분기, 최초산정임금, 증감률, 적용평균임금
+- 최종 산정 섹션: 최종 채택 평균임금
+- 검토 결과 섹션: 검토담당자(텍스트), 검토결과, 상세쟁점, 진행경과, 청구일, 결정일
+
+---
+
+## TASK 3: 이의제기 관리 — 기일 관리 페이지
+
+### 파일 생성
+- `app/objection/deadline/page.tsx` — 기일 관리 메인 페이지
+- `app/api/objection/cases/route.ts` — GET/POST
+- `app/api/objection/cases/[id]/route.ts` — PATCH/DELETE
+
+### 페이지 구조
+
+#### 상단 지표 카드 (4개)
+- 진행 중: N건
+- 오늘 기준 제척 임박(7일 이내): N건 (노란색)
+- 제척 도과 / 재처분 필요: N건 (빨간색)
+- 송무 인계: N건
+
+#### 상단 필터
+- 지사 선택 → 담당 TF 자동 연동
+  - 울산지사: 울산TF / 이산울산북부TF
+  - 울산동부지사: 울산동부TF / 이산울산동부TF
+  - 울산남부지사: 울산남부TF / 이산울산남부TF
+  (위 매핑은 하드코딩, 추후 DB화)
+- 진행상태 필터: 전체 / 진행중 / 종결 / 송무인계
+- 검색: 성명
+
+#### 테이블 컬럼
+승인여부 | TF | 성명 | 사건분류 | 처분일 | 제척도래일 | 심사청구일 | 심사결과 | 심사송달일 | 재심사청구일 | 재심사결과 | 재심사송달일 | 담당자 | 진행상태 | 관리
+
+**색상 규칙:**
+- 행별로 가장 최근 송달일 기준 계산:
+  - 송달일로부터 90일(제척기간) 이미 도과: 행 전체 빨간색
+  - 송달일로부터 제척기간 7일 이내: 행 전체 노란색 + ⚠️
+  - 정상: 기본 배경
+
+**제척기간 계산 로직:**
+- 심사 결과가 있으면 → 심사송달일 기준으로 90일
+- 재심사 결과가 있으면 → 재심사송달일 기준으로 90일
+- 아무 결과도 없으면 → 처분일 기준 90일
+
+**업무상질병판정위원회 해당 사건:**
+- isQualityReview = true인 경우: 심사청구 없이 재심사청구부터 가능
+- UI에서 해당 사건은 "질판위" 뱃지 표시
+
+#### 등록/수정 모달
+- 승인여부: select
+- TF: select
+- 성명, 사건분류 (텍스트)
+- 처분일: 날짜 picker
+- 질판위 해당 여부: toggle (true면 심사청구 입력란 비활성화 가능)
+- 심사청구일: 날짜 picker
+- 심사결과: select (기각 / 인용 / 취하 / 진행중)
+- 심사송달일: 날짜 picker (심사결과가 기각/인용인 경우만 활성화)
+- 재심사청구일: 날짜 picker
+- 재심사결과: select (기각 / 인용 / 취하 / 진행중)
+- 재심사송달일: 날짜 picker
+- 담당자: User 목록 select
+- 진행상태: select (진행중 / 종결 / 송무인계 / 검토중)
+- 메모: textarea
+
+#### 재처분 필요 사건 집계 패널
+페이지 우측 또는 하단에 별도 카드로 표시:
+- 제척 도과로 재처분이 필요한 사건 목록 (빨간색 행에 해당하는 건들)
+- 각 건마다 [처분일 업데이트] 버튼 → 클릭 시 처분일 수정 모달 오픈
+
+#### 소송 인계 섹션
+페이지 내 탭 또는 하단 섹션으로:
+- progressStatus = "송무인계"인 건들만 모아서 표시
+- 컬럼: TF / 성명 / 사건분류 / 처분일 / 심사결과 / 재심사결과 / 소송인계메모
+
+---
+
+## TASK 4: 이유서·의견서 작성 페이지 골격
+
+### 파일 생성
+- `app/objection/document/page.tsx` — 이유서/의견서 작성 골격 페이지
+
+### 페이지 구조
+
+#### 상단: 사건 선택
+- ObjectionCase 목록에서 검색 (성명 또는 TF로)
+- 선택하면 해당 재해자 기본 정보가 자동 로드
+
+#### 서식 선택 패널 (좌측)
+6개 서식 버튼 (현재는 [생성] 버튼만, 기능은 추후 구현):
+1. 청구서식 표지
+   - 하위: 심사청구 / 재심사청구 / 감사원심사청구 / 행정심판청구 (radio 선택)
+2. 이유서
+3. 대리인선임신고서
+4. 위임장
+5. 신분증
+   - 재해자 신분증: DB 등록 이미지 있으면 미리보기, 없으면 [파일 첨부] 버튼
+   - 대리인 신분증: "추후 일괄 DB 등록 예정" 안내 문구
+6. 이유서 첨부자료
+
+각 서식 버튼 클릭 시 → [PDF 생성] 버튼 표시 (클릭하면 "준비 중인 기능입니다" toast 메시지)
+
+#### 재해자 정보 요약 카드 (우측 상단)
+사건 선택 시 표시:
+- 성명 / 사건분류 / 처분일 / 심사청구일 / 재심사청구일 / 담당자
+
+#### 메모 공간 (우측 하단)
+- 자유 텍스트 textarea (이유서 작성 메모용)
+- 저장 버튼
+
+---
+
+## TASK 5: 사건 목록 — 상병 선택 UI 개선
+
+### 대상 파일
+기존 `app/cases/page.tsx` (또는 해당 경로 확인)
+
+### 추가할 UI: 사람 형상 + 상병군 선택
+
+기존 사건 목록 필터 영역에 "상병으로 보기" 토글 버튼 추가.
+토글 ON 시: 테이블 위에 상병 선택 패널이 펼쳐짐.
+
+#### 상병 선택 패널 구조
+
+**기획사건 (고정 버튼 3개)**
+- [소음성난청] [COPD] [진폐증]
+- 클릭 시 해당 상병의 사건만 필터링
+
+**일반산재 — 사람 형상 SVG**
+간단한 사람 실루엣(앞면) SVG를 직접 그려서:
+- 머리
+- 경추/목
+- 어깨 (좌/우)
+- 상완 (좌/우)
+- 흉부
+- 요추/허리
+- 골반
+- 고관절 (좌/우)
+- 슬관절 (좌/우 — 무릎)
+- 족관절/발목 (좌/우)
+
+각 부위는 클릭 가능한 영역으로 구성. 클릭 시 해당 부위가 하이라이트(파란색).
+하이라이트된 부위 아래에 해당 부위의 상병 목록 체크박스로 표시:
+
+부위별 상병 목록 (하드코딩):
+- 경추: 추간판탈출증, 협착증, 경추 골절
+- 어깨: 회전근개파열, 충돌증후군, 관절와순손상, 석회화건염
+- 상완/팔꿈치: 외측상과염, 내측상과염, 주관절 골절
+- 흉추: 추간판탈출증, 압박골절
+- 요추: 추간판탈출증, 협착증, 척추전방전위증, 골절
+- 골반/고관절: 고관절 골절, 대퇴골두무혈성괴사, 골관절염
+- 슬관절: 골관절염, 반월상연골판손상, 인공관절, 전방십자인대손상
+- 족관절/발: 족저근막염, 골절, 연골손상
+
+직업성 암:
+- [폐암] [방광암] [혈액암] [중피종] [기타] 버튼으로 표시
+
+선택된 상병/부위는 기존 필터에 반영되어 사건 목록 필터링.
+
+---
+
+## TASK 6: 메뉴 네비게이션 업데이트
+
+### 대상 파일
+기존 사이드바/네비게이션 컴포넌트 파일 확인 후 수정.
+
+추가할 메뉴 항목 (기존 구조 유지하면서 추가):
+```
+사건 관리
+  ├── 상담 관리  → /consultation
+  ├── 사건 목록  → /cases (기존)
+  └── 사건 상세  → /cases/[id] (기존)
+
+사건 조회  → /inquiry
+
+이의제기 관리
+  ├── 최초총현황·평임검토  → /objection/review
+  ├── 기일 관리  → /objection/deadline
+  └── 이유서·의견서  → /objection/document
+
+TF 업무
+  └── 담당TF 모니터링  → /tf-monitor (기존 또는 세션1에서 생성된 경로)
+```
+
+---
+
+## 작업 순서 권고
+1. TASK 1: schema.prisma + db push
+2. TASK 2: 최초총현황·평임 페이지
+3. TASK 3: 기일관리 페이지
+4. TASK 4: 이유서 골격 페이지
+5. TASK 5: 사건 목록 상병 UI
+6. TASK 6: 메뉴 업데이트
+
+## 완료 후 보고 항목
+- 각 TASK 완료 여부
+- db push 결과
+- 생성/수정된 파일 목록
+- 오류 발생 시 내용
