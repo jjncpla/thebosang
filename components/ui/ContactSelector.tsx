@@ -11,12 +11,13 @@ interface Contact {
   mobile: string
   officePhone: string
   email: string
+  userId?: string | null
 }
 
 interface ContactSelectorProps {
   value: string
   phoneValue?: string
-  onChange: (name: string, mobile: string) => void
+  onChange: (name: string, mobile: string, userId?: string | null) => void
   placeholder?: string
   firmType?: 'TBOSANG' | 'ISAN'
   branch?: string
@@ -61,7 +62,7 @@ export default function ContactSelector({
   }, [query, firmType, branch])
 
   const select = (c: Contact) => {
-    onChange(c.name, c.mobile)
+    onChange(c.name, c.mobile, c.userId)
     setQuery(c.name)
     setOpen(false)
   }

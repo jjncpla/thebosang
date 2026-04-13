@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { CASE_TYPE_LABELS } from "@/lib/constants/case";
+import ContactSelector from "@/components/ui/ContactSelector";
 
 type WageReviewData = {
   id: string;
@@ -341,7 +342,12 @@ export default function WageReviewDetailPage() {
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px 16px" }}>
           <div>
             <label style={labelStyle}>검토 담당자</label>
-            <input style={inputStyle} value={form.reviewManagerName ?? ""} onChange={e => set("reviewManagerName", e.target.value)} placeholder="담당자명" />
+            <ContactSelector
+              value={form.reviewManagerName ?? ""}
+              onChange={(name) => set("reviewManagerName", name)}
+              placeholder="담당자 이름 검색"
+              firmType="TBOSANG"
+            />
           </div>
           <div>
             <label style={labelStyle}>검토 결과</label>

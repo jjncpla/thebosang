@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { TF_BY_BRANCH } from "@/lib/constants/tf";
+import ContactSelector from "@/components/ui/ContactSelector";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -16,6 +17,7 @@ type Consultation = {
   caseTypes: string[];
   manager: Manager | null;
   managerId: string | null;
+  managerName: string | null;
   routeMain: string | null;
   routeSub: string | null;
   routeDetail: string | null;
@@ -117,7 +119,7 @@ type FormData = {
   ssn: string;
   address: string;
   caseTypes: string[];
-  managerId: string;
+  managerName: string;
   routeMain: string;
   routeSub: string;
   routeDetail: string;
@@ -134,7 +136,7 @@ const emptyForm: FormData = {
   ssn: "",
   address: "",
   caseTypes: [],
-  managerId: "",
+  managerName: "",
   routeMain: "",
   routeSub: "",
   routeDetail: "",
@@ -165,7 +167,7 @@ function ConsultationModal({
       ssn: initial.ssn ?? "",
       address: initial.address ?? "",
       caseTypes: initial.caseTypes,
-      managerId: initial.managerId ?? "",
+      managerName: initial.managerName ?? initial.manager?.name ?? "",
       routeMain: initial.routeMain ?? "",
       routeSub: initial.routeSub ?? "",
       routeDetail: initial.routeDetail ?? "",
@@ -264,10 +266,12 @@ function ConsultationModal({
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px 16px", marginTop: 14 }}>
           <div>
             <label style={labelStyle}>담당자</label>
-            <select style={{ ...inputStyle }} value={form.managerId} onChange={(e) => set("managerId", e.target.value)}>
-              <option value="">선택 안 함</option>
-              {managers.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
-            </select>
+            <ContactSelector
+              value={form.managerName}
+              onChange={(name) => set("managerName", name)}
+              placeholder="담당자 이름 검색"
+              firmType="TBOSANG"
+            />
           </div>
           <div>
             <label style={labelStyle}>방문(연락)일자</label>
@@ -657,7 +661,7 @@ export default function ConsultationPage() {
                 <td style={{ padding: "12px 14px", cursor: "pointer" }} onClick={() => { setEditTarget(item); setModalOpen(true); }}>
                   {item.caseTypes.length > 0 ? item.caseTypes.map((t) => <CaseTypeBadge key={t} type={t} />) : <span style={{ color: "#9ca3af" }}>-</span>}
                 </td>
-                <td style={{ padding: "12px 14px", color: "#374151", cursor: "pointer" }} onClick={() => { setEditTarget(item); setModalOpen(true); }}>{item.manager?.name ?? "-"}</td>
+                <td style={{ padding: "12px 14px", color: "#374151", cursor: "pointer" }} onClick={() => { setEditTarget(item); setModalOpen(true); }}>{item.managerName || item.manager?.name || "-"}</td>
                 <td style={{ padding: "12px 14px", color: "#6b7280", fontSize: 12, cursor: "pointer" }} onClick={() => { setEditTarget(item); setModalOpen(true); }}>
                   {[item.routeMain, item.routeSub, item.routeDetail].filter(Boolean).join(" / ") || "-"}
                 </td>

@@ -63,7 +63,7 @@ export async function POST(req: NextRequest) {
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await req.json();
-  const { name, phone, ssn, address, caseTypes, managerId, routeMain, routeSub, routeDetail, visitDate, status, memo, progressNote, reminderDate, branchName, tfName } = body;
+  const { name, phone, ssn, address, caseTypes, managerId, managerName, routeMain, routeSub, routeDetail, visitDate, status, memo, progressNote, reminderDate, branchName, tfName } = body;
 
   if (!name || !phone) {
     return NextResponse.json({ error: "성명과 연락처는 필수입니다." }, { status: 400 });
@@ -77,6 +77,7 @@ export async function POST(req: NextRequest) {
       address: address || null,
       caseTypes: caseTypes || [],
       managerId: managerId || null,
+      managerName: managerName || null,
       routeMain: routeMain || null,
       routeSub: routeSub || null,
       routeDetail: routeDetail || null,

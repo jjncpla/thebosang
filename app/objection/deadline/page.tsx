@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { CASE_TYPE_LABELS } from "@/lib/constants/case";
+import ContactSelector from "@/components/ui/ContactSelector";
 
 const BRANCH_TF_MAP: Record<string, string[]> = {
   "울산지사": ["울산TF", "이산울산북부TF"],
@@ -260,7 +261,7 @@ function CaseModal({ initial, managers, onClose, onSave }: {
         </div>
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px 14px", marginTop: 12 }}>
-          <div><label style={labelStyle}>담당자</label><select style={inputStyle} value={form.managerId ?? ""} onChange={e => set("managerId", e.target.value)}><option value="">선택 안 함</option>{managers.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}</select></div>
+          <div><label style={labelStyle}>담당자</label><ContactSelector value={form.manager?.name ?? ""} onChange={(name, mobile, userId) => set("managerId", userId ?? "")} placeholder="담당자 이름 검색" firmType="TBOSANG" /></div>
           <div><label style={labelStyle}>진행상태</label><select style={inputStyle} value={form.progressStatus ?? ""} onChange={e => set("progressStatus", e.target.value)}>{PROGRESS_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}</select></div>
         </div>
 

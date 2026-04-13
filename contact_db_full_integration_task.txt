@@ -1,0 +1,234 @@
+## 세션 타입: 기능 개발 세션
+## 작업 개요
+임직원 인사카드(Contact DB)를 아직 연동되지 않은 전체 페이지의 담당자 필드에 연결한다.
+ContactSelector / BranchSelector 공유 컴포넌트를 활용하여 텍스트 입력 또는 단순 User select를 교체한다.
+
+---
+
+## 수술적 수정 원칙
+- 기존 파일 전체 재작성 금지 — 해당 input/select 요소만 교체
+- 기존 저장된 데이터(문자열) 호환성 유지 — Contact.id FK가 아닌 이름 문자열 그대로 저장
+- 기존 API 응답 구조 변경 최소화
+
+---
+
+## Step 0: 현재 연동 상태 전수 조사 (반드시 먼저 실행)
+
+```bash
+# 1. ContactSelector 이미 사용 중인 파일 (이미 연동 완료)
+grep -rl "ContactSelector" app --include="*.tsx" | grep -v node_modules
+
+# 2. BranchSelector 이미 사용 중인 파일 (이미 연동 완료)
+grep -rl "BranchSelector" app --include="*.tsx" | grep -v node_modules
+
+# 3. 담당자 관련 텍스트 입력 필드 (연동 대상)
+grep -rn "담당자\|담당 노무사\|reviewManager\|managerName\|attendedStaff\|salesManager\|caseManager" \
+  app --include="*.tsx" | grep -v node_modules | grep -v "ContactSelector" | head -50
+
+# 4. User 목록 select (연동 대상 — Contact 기반으로 교체)
+grep -rn "users\.map\|userList\|managers\.map\|fetchUsers\|/api/users" \
+  app --include="*.tsx" | grep -v node_modules | head -30
+
+# 5. 각 대상 페이지 파일 존재 확인
+ls -la app/consultation/page.tsx 2>/dev/null
+ls -la app/objection/review/page.tsx 2>/dev/null
+ls -la app/objection/deadline/page.tsx 2>/dev/null
+ls -la app/objection/wage-review/*/page.tsx 2>/dev/null
+ls -la app/objection/document/page.tsx 2>/dev/null
+ls -la app/inquiry/page.tsx 2>/dev/null
+ls -la app/tf-monitor/page.tsx 2>/dev/null
+ls -la app/todo/page.tsx 2>/dev/null
+
+# 6. ContactSelector/BranchSelector 컴포넌트 경로 확인
+find . -name "ContactSelector*" -not -path "*/node_modules/*"
+find . -name "BranchSelector*" -not -path "*/node_modules/*"
+```
+
+Step 0 결과에 따라 아래 각 작업의 대상 파일과 필드명을 정확히 맞춘다.
+파일이 존재하지 않는 페이지는 건너뛴다.
+
+---
+
+## 작업 1: 상담관리 (/consultation)
+
+대상 파일: `app/consultation/page.tsx`
+
+### 1-1. 담당자 필드
+현재: User 목록 select (users.map으로 렌더링) 또는 텍스트 입력
+변경: ContactSelector로 교체
+
+```tsx
+import ContactSelector from '@/components/ui/ContactSelector'
+// 또는 Step 0에서 확인한 실제 경로
+
+// 기존 User select 또는 텍스트 input을 찾아서 아래로 교체:
+<ContactSelector
+  value={formData.managerName || ''}
+  onChange={(name, mobile) => setFormData(p => ({ ...p, managerName: name }))}
+  placeholder="담당자 이름 검색"
+  firmType="TBOSANG"
+/>
+```
+
+**주의**: 실제 필드명은 Step 0에서 확인한 것으로 교체. `managerName`이 아닌 `userId`를 저장하는 구조면, 
+ContactSelector onChange에서 선택된 Contact의 userId를 같이 세팅:
+```tsx
+onChange={(name, mobile) => {
+  // Contact 전체 데이터가 필요하면 ContactSelector를 확장하거나, name으로 조회
+  setFormData(p => ({ ...p, managerName: name }))
+}}
+```
+
+---
+
+## 작업 2: 처분검토 (/objection/review)
+
+대상 파일: `app/objection/review/page.tsx`
+
+### 2-1. reviewManagerName (검토 담당자) 필드
+현재: 텍스트 input
+변경: ContactSelector로 교체
+
+등록/수정 모달에서 해당 input을 찾아서:
+```tsx
+<ContactSelector
+  value={formData.reviewManagerName || ''}
+  onChange={(name, mobile) => setFormData(p => ({ ...p, reviewManagerName: name }))}
+  placeholder="검토 담당자 검색"
+  firmType="TBOSANG"
+/>
+```
+
+---
+
+## 작업 3: 기일관리 (/objection/deadline)
+
+대상 파일: `app/objection/deadline/page.tsx`
+
+### 3-1. 담당자 필드
+현재: User 목록 select
+변경: ContactSelector로 교체
+
+등록/수정 모달에서 User select를 찾아서:
+```tsx
+<ContactSelector
+  value={formData.managerName || ''}
+  onChange={(name, mobile) => setFormData(p => ({ ...p, managerName: name }))}
+  placeholder="담당자 검색"
+  firmType="TBOSANG"
+/>
+```
+
+---
+
+## 작업 4: 평임검토 상세 (/objection/wage-review/[id])
+
+대상 파일: `app/objection/wage-review/[id]/page.tsx` (경로 Step 0에서 확인)
+
+### 4-1. reviewManagerName 필드
+현재: 텍스트 input
+변경: ContactSelector로 교체
+
+```tsx
+<ContactSelector
+  value={data.reviewManagerName || ''}
+  onChange={(name, mobile) => setData(p => ({ ...p, reviewManagerName: name }))}
+  placeholder="검토 담당자 검색"
+  firmType="TBOSANG"
+/>
+```
+
+---
+
+## 작업 5: 사건조회 (/inquiry) — 담당자 표시 보강
+
+대상 파일: `app/inquiry/page.tsx`
+
+### 5-1. 검색 결과 담당자 표시
+현재: salesManagerId/caseManagerId → User.name 표시
+보강: 담당자 옆에 연락처(Contact.mobile) 표시 추가
+
+API(`app/api/inquiry/route.ts`)에서 담당자 조회 시 Contact도 같이 조회:
+```typescript
+// 기존 User.name 표시하는 부분에 Contact.mobile도 같이 반환
+// Contact에서 name으로 조회하여 mobile 포함
+```
+
+이 작업은 **표시(display) 보강**이므로, API 응답에 mobile 필드 추가 + UI에 전화번호 표시만 하면 됨.
+기존 검색 로직은 건드리지 않는다.
+
+---
+
+## 작업 6: TO-DO LIST (/todo) — 담당자 표시
+
+대상 파일: `app/todo/page.tsx`
+
+### 6-1. 담당자 지정 필드가 있는 경우
+현재: User select 또는 텍스트
+변경: ContactSelector로 교체 (작업 1~4와 동일 패턴)
+
+**Step 0에서 todo 페이지에 담당자 입력 필드가 있는지 먼저 확인**.
+없으면 이 작업은 스킵.
+
+---
+
+## 작업 7: TF 모니터링 (/tf-monitor) — DB 반영 시 재해자 검색
+
+대상 파일: `app/tf-monitor/page.tsx`
+
+### 7-1. [DB 반영] 팝업의 재해자 검색
+현재: 자체 검색 구현 (Patient name 검색)
+이 부분은 Patient 검색이므로 Contact 연동 대상 아님 → **스킵**.
+
+다만 TF 모니터링에 "담당자" 표시가 있는 경우, Contact.mobile 추가 표시 고려.
+Step 0에서 확인 후 판단.
+
+---
+
+## 작업 8: 사건 상세 내 담당자 FK 보강 (cases/[caseId])
+
+대상 파일: `app/cases/[caseId]/page.tsx` (또는 하위 컴포넌트)
+
+### 8-1. 현재 ContactSelector 연동 상태 확인
+Step 0 결과에서 이미 ContactSelector가 적용되어 있으면 → **스킵**.
+
+적용 안 된 담당자 필드가 있으면:
+- salesManager (영업담당자)
+- caseManager (실무담당자)  
+- branchManager (지사장)
+- attendedStaff (특진 수행자)
+
+각각 ContactSelector로 교체.
+
+---
+
+## 최종 확인 사항
+
+모든 작업 완료 후:
+```bash
+# ContactSelector 사용 파일 전수 확인 (연동 완료 목록)
+grep -rl "ContactSelector" app --include="*.tsx" | grep -v node_modules | sort
+
+# 남은 텍스트 입력 담당자 필드 확인 (0건이어야 함)
+grep -rn "type=\"text\"" app --include="*.tsx" | grep -i "manager\|담당\|staff" | grep -v node_modules | grep -v ContactSelector
+```
+
+---
+
+## 배포
+
+```bash
+git add -A
+git commit -m "feat: Contact DB 전체 페이지 연동 — 담당자 필드 ContactSelector 교체"
+git push origin main
+```
+
+---
+
+## 주의사항
+
+1. **ContactSelector import 경로**: Step 0에서 확인한 실제 경로 사용 (예: `@/components/ui/ContactSelector` 또는 다른 경로)
+2. **필드명 정확히 확인**: 각 페이지마다 담당자 필드명이 다름 (managerName, reviewManagerName, staffName 등). Step 0 grep 결과로 정확한 필드명 파악 후 교체.
+3. **User FK 저장 구조인 경우**: 일부 페이지는 userId(FK)를 저장하는 구조일 수 있음. 이 경우 ContactSelector 선택 → Contact.userId → User FK로 저장하는 로직 필요. Contact에 userId가 없으면 이름 문자열로 저장.
+4. **기존 데이터 호환**: 이미 저장된 텍스트 데이터는 그대로 유지. ContactSelector는 초기값으로 기존 문자열을 표시하므로 호환됨.
+5. **파일 없으면 스킵**: Step 0에서 파일 존재하지 않는 페이지는 건너뛴다. 강제 생성하지 않는다.
