@@ -982,6 +982,8 @@ model Branch {
   firmType        String   @default("TBOSANG")
   isActive        Boolean  @default(true)
   displayOrder    Int      @default(0)
+  bizNumber       String?  // 사업자등록번호
+  bankAccount     String?  // 계좌번호 + 예금주
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 

@@ -18,6 +18,8 @@ interface Branch {
   firmType: string
   isActive: boolean
   displayOrder: number
+  bizNumber: string | null
+  bankAccount: string | null
   staffCount?: number
 }
 
@@ -36,6 +38,7 @@ const EMPTY_FORM = {
   name: '', shortName: '', address: '', phone: '', fax: '',
   region: '', assignedTFs: [] as string[], branchManagerId: '',
   firmType: 'TBOSANG', isActive: true, displayOrder: 0,
+  bizNumber: '', bankAccount: '',
 }
 
 export default function BranchesPage() {
@@ -78,6 +81,7 @@ export default function BranchesPage() {
       phone: b.phone || '', fax: b.fax || '', region: b.region || '',
       assignedTFs: b.assignedTFs || [], branchManagerId: b.branchManagerId || '',
       firmType: b.firmType, isActive: b.isActive, displayOrder: b.displayOrder,
+      bizNumber: b.bizNumber || '', bankAccount: b.bankAccount || '',
     })
     setTfInput('')
     setModalOpen(true)
@@ -278,6 +282,7 @@ export default function BranchesPage() {
                 { key: 'shortName', label: '약칭' },
                 { key: 'phone', label: '전화번호' },
                 { key: 'fax', label: '팩스' },
+                { key: 'bizNumber', label: '사업자등록번호' },
               ].map(({ key, label }) => (
                 <div key={key}>
                   <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#475569', marginBottom: 4 }}>{label}</label>
@@ -286,6 +291,14 @@ export default function BranchesPage() {
                     style={{ width: '100%', padding: '7px 10px', border: '1px solid #cbd5e1', borderRadius: 6, fontSize: 13, boxSizing: 'border-box' as const }} />
                 </div>
               ))}
+            </div>
+
+            <div style={{ marginTop: 10 }}>
+              <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#475569', marginBottom: 4 }}>계좌번호 (예금주 포함)</label>
+              <input type="text" value={form.bankAccount || ''}
+                onChange={e => setForm((p: any) => ({ ...p, bankAccount: e.target.value }))}
+                placeholder="예: 농협 301-0000-0000-00 노무법인 더보상"
+                style={{ width: '100%', padding: '7px 10px', border: '1px solid #cbd5e1', borderRadius: 6, fontSize: 13, boxSizing: 'border-box' as const }} />
             </div>
 
             <div style={{ marginTop: 10 }}>
