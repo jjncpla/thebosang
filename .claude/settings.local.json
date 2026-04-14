@@ -81,7 +81,8 @@
       "Bash(find /c/Users/jjakg/thebosang/app -type f -path *branch* -name *.tsx)",
       "Bash(wc:*)",
       "Skill(claude-api)",
-      "Bash(npx tsx:*)"
+      "Bash(npx tsx:*)",
+      "Bash(kill %1)"
     ]
   },
   "enableAllProjectMcpServers": true,
