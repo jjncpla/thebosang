@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
     const pdfDoc = await PDFDocument.load(pdfBytes)
     pdfDoc.registerFontkit(fontkit)
 
-    const fontPath = path.join(process.cwd(), 'public', 'fonts', 'NotoSansKR-Regular.ttf')
+    const fontPath = path.join(process.cwd(), 'public', 'fonts', 'NotoSansKR-Regular.otf')
     const fontBytes = fs.readFileSync(fontPath)
     const font = await pdfDoc.embedFont(fontBytes)
 
