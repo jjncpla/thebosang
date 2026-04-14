@@ -15,7 +15,7 @@ type MenuItem = {
 };
 
 const MENU_ITEMS: MenuItem[] = [
-  { id: "todo", label: "To Do List", icon: "☑", path: "/" },
+  { id: "todo", label: "To Do List", icon: "☑", path: "/todo" },
   {
     id: "cases",
     label: "사건 관리",
