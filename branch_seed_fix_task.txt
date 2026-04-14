@@ -1,0 +1,226 @@
+## 세션 타입: 기능 개발 세션
+## 작업 개요
+1. init-branch API의 시드 데이터를 Contact.branch 형식("노무법인 더보상 X지사")으로 수정
+2. lib/constants/tf.ts의 TF_BY_BRANCH 키도 동일 형식으로 업데이트
+3. REGION_BRANCHES도 동일 형식으로 업데이트
+4. 배포 후 init-branch 호출 → 삭제 → 재배포
+
+---
+
+## 수술적 수정 원칙
+- 기존 파일 전체 재작성 금지 — 해당 상수만 교체
+- TF 배열 값(더보상울산TF 등)은 변경하지 않음 — 키(지사명)만 변경
+
+---
+
+## Step 0: 파일 위치 확인
+
+```bash
+cat app/api/init-branch/route.ts 2>/dev/null | head -10
+# 이미 삭제됐으면 신규 생성 필요
+ls app/api/init-branch/ 2>/dev/null
+
+cat lib/constants/tf.ts | head -5
+cat lib/constants/regions.ts | head -5
+```
+
+---
+
+## Step 1: init-branch API 재생성 (시드 데이터 수정)
+
+`app/api/init-branch/route.ts` 생성 (기존 파일 없으면 신규, 있으면 교체):
+
+```typescript
+import { NextResponse } from 'next/server'
+import { prisma } from '@/lib/prisma'
+
+export async function GET() {
+  try {
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS "branches" (
+        "id" TEXT NOT NULL PRIMARY KEY,
+        "name" TEXT NOT NULL UNIQUE,
+        "shortName" TEXT,
+        "address" TEXT,
+        "phone" TEXT,
+        "fax" TEXT,
+        "region" TEXT,
+        "assignedTFs" JSONB,
+        "branchManagerId" TEXT,
+        "firmType" TEXT NOT NULL DEFAULT 'TBOSANG',
+        "isActive" BOOLEAN NOT NULL DEFAULT true,
+        "displayOrder" INTEGER NOT NULL DEFAULT 0,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+    `)
+
+    const branches = [
+      // ── 부울경남권역 ──
+      { name: '노무법인 더보상 울산지사', shortName: '울산', region: '부울경남권역', assignedTFs: '["더보상울산TF","이산울산동부TF","이산울산남부TF","이산울산북부TF"]', displayOrder: 1 },
+      { name: '노무법인 더보상 울산동부지사', shortName: '울산동부', region: '부울경남권역', assignedTFs: '["더보상울동TF","이산양산TF"]', displayOrder: 2 },
+      { name: '노무법인 더보상 부산경남지사', shortName: '부산경남', region: '부울경남권역', assignedTFs: '["더보상부경TF","이산부산서부TF","이산부산북부TF","이산김해TF"]', displayOrder: 3 },
+      { name: '노무법인 더보상 부산중부지사', shortName: '부산중부', region: '부울경남권역', assignedTFs: '["더보상부중TF","이산부산지역본부TF"]', displayOrder: 4 },
+      { name: '노무법인 더보상 경남창원지사', shortName: '경남창원', region: '부울경남권역', assignedTFs: '["더보상창원TF","이산창원TF"]', displayOrder: 5 },
+      { name: '노무법인 더보상 경북포항지사', shortName: '경북포항', region: '부울경남권역', assignedTFs: '["더보상포항TF","이산포항TF"]', displayOrder: 6 },
+      // ── 대구경북권역 ──
+      { name: '노무법인 더보상 경북구미지사', shortName: '경북구미', region: '대구경북권역', assignedTFs: '["더보상구미TF","이산구미TF","이산문경TF"]', displayOrder: 7 },
+      { name: '노무법인 더보상 대구지사', shortName: '대구', region: '대구경북권역', assignedTFs: '["더보상대구TF","이산대구달서TF","이산대구수성TF"]', displayOrder: 8 },
+      // ── 전라권역 ──
+      { name: '노무법인 더보상 전북익산지사', shortName: '전북익산', region: '전라권역', assignedTFs: '["더보상익산TF","이산전북TF","이산전주TF"]', displayOrder: 9 },
+      { name: '노무법인 더보상 전남여수지사', shortName: '전남여수', region: '전라권역', assignedTFs: '["더보상여수TF","이산전남TF","이산광주TF","이산여수TF"]', displayOrder: 10 },
+      { name: '노무법인 더보상 전남순천지사', shortName: '전남순천', region: '전라권역', assignedTFs: '["더보상순천TF","이산진주TF","이산순천TF"]', displayOrder: 11 },
+      // ── 수도권역 ──
+      { name: '노무법인 더보상 서울북부지사', shortName: '서울북부', region: '수도권역', assignedTFs: '["더보상직업병상담소TF"]', displayOrder: 12 },
+      { name: '노무법인 더보상 경기안산지사', shortName: '경기안산', region: '수도권역', assignedTFs: '["더보상안산TF","이산영서TF","이산용인TF"]', displayOrder: 13 },
+      { name: '노무법인 더보상 경기의정부지사', shortName: '경기의정부', region: '수도권역', assignedTFs: '["더보상의정부TF","이산의정부TF","이산성남TF"]', displayOrder: 14 },
+      { name: '노무법인 더보상 경기수원지사', shortName: '경기수원', region: '수도권역', assignedTFs: '["더보상수원TF","이산수원TF","이산평택TF"]', displayOrder: 15 },
+      { name: '노무법인 더보상 경인지사', shortName: '경인', region: '수도권역', assignedTFs: '["더보상경인TF","이산인천TF","이산인천북부TF"]', displayOrder: 16 },
+      { name: '노무법인 더보상 서울구로지사', shortName: '서울구로', region: '수도권역', assignedTFs: '["더보상구로TF","이산부천TF"]', displayOrder: 17 },
+      { name: '노무법인 더보상 강원동해지사', shortName: '강원동해', region: '수도권역', assignedTFs: '["더보상동해TF","이산영동TF"]', displayOrder: 18 },
+      // ── 충청권역 ──
+      { name: '노무법인 더보상 대전지사', shortName: '대전', region: '충청권역', assignedTFs: '["더보상대전TF","이산청주TF","이산충주TF"]', displayOrder: 19 },
+      // ── 본사/특수 조직 ──
+      { name: '노무법인 더보상', shortName: '본사', region: '수도권역', assignedTFs: '["이산제주TF","이산마곡TF"]', displayOrder: 20 },
+      { name: '노무법인 더보상 산재연구원', shortName: '산재연구원', region: '수도권역', assignedTFs: '["이산서울지역본부TF","이산서울동부TF"]', displayOrder: 21 },
+    ]
+
+    let inserted = 0
+    let skipped = 0
+    for (const b of branches) {
+      try {
+        await prisma.$executeRawUnsafe(`
+          INSERT INTO "branches" ("id", "name", "shortName", "region", "assignedTFs", "firmType", "displayOrder", "isActive", "updatedAt")
+          VALUES (gen_random_uuid()::text, $1, $2, $3, $4::jsonb, 'TBOSANG', $5, true, CURRENT_TIMESTAMP)
+          ON CONFLICT ("name") DO UPDATE SET
+            "shortName" = $2, "region" = $3, "assignedTFs" = $4::jsonb, "displayOrder" = $5, "updatedAt" = CURRENT_TIMESTAMP
+        `, b.name, b.shortName, b.region, b.assignedTFs, b.displayOrder)
+        inserted++
+      } catch (e: any) {
+        console.error('Branch seed error:', b.name, e.message)
+        skipped++
+      }
+    }
+
+    return NextResponse.json({ ok: true, message: 'Branch 시드 완료', inserted, skipped, total: branches.length })
+  } catch (e: any) {
+    return NextResponse.json({ ok: false, error: e.message }, { status: 500 })
+  }
+}
+```
+
+---
+
+## Step 2: lib/constants/tf.ts TF_BY_BRANCH 키 업데이트
+
+기존 TF_BY_BRANCH 객체의 **키만** "노무법인 더보상 X지사" 형식으로 변경한다.
+**TF 배열 값은 절대 변경하지 않는다.**
+
+교체 매핑:
+```
+"더보상 울산지사"       → "노무법인 더보상 울산지사"
+"더보상 울산동부지사"   → "노무법인 더보상 울산동부지사"
+"더보상 부산경남지사"   → "노무법인 더보상 부산경남지사"
+"더보상 부산중부지사"   → "노무법인 더보상 부산중부지사"
+"더보상 경남창원지사"   → "노무법인 더보상 경남창원지사"
+"더보상 경북포항지사"   → "노무법인 더보상 경북포항지사"
+"더보상 경북구미지사"   → "노무법인 더보상 경북구미지사"
+"더보상 대구지사"       → "노무법인 더보상 대구지사"
+"더보상 서울북부지사"   → "노무법인 더보상 서울북부지사"
+"더보상 강원동해지사"   → "노무법인 더보상 강원동해지사"
+"더보상 경기안산지사"   → "노무법인 더보상 경기안산지사"
+"더보상 경기의정부지사" → "노무법인 더보상 경기의정부지사"
+"더보상 대전지사"       → "노무법인 더보상 대전지사"
+"더보상 경기수원지사"   → "노무법인 더보상 경기수원지사"
+"더보상 경인지사"       → "노무법인 더보상 경인지사"
+"더보상 서울구로지사"   → "노무법인 더보상 서울구로지사"
+"더보상 서울본사"       → "노무법인 더보상"
+"더보상 산재연구원"     → "노무법인 더보상 산재연구원"
+"더보상 전북익산지사"   → "노무법인 더보상 전북익산지사"
+"더보상 전남여수지사"   → "노무법인 더보상 전남여수지사"
+"더보상 전남순천지사"   → "노무법인 더보상 전남순천지사"
+```
+
+TF_TO_BRANCH, ALL_TF_LIST 등 파생 상수는 TF_BY_BRANCH에서 자동 생성되므로 별도 수정 불필요.
+
+---
+
+## Step 3: lib/constants/regions.ts REGION_BRANCHES 업데이트
+
+기존 REGION_BRANCHES 객체의 **값(지사명 배열)** 을 Contact.branch 형식으로 변경.
+**기존 권역명(키)은 유지하되**, 조사 결과 기반으로 정확한 권역 매핑 적용.
+
+현재 regions.ts의 REGION_BRANCHES를 아래로 교체:
+
+```typescript
+export const REGION_BRANCHES: Record<string, string[]> = {
+  '부울경남권역': [
+    '노무법인 더보상 울산지사',
+    '노무법인 더보상 울산동부지사',
+    '노무법인 더보상 부산경남지사',
+    '노무법인 더보상 부산중부지사',
+    '노무법인 더보상 경남창원지사',
+    '노무법인 더보상 경북포항지사',
+  ],
+  '대구경북권역': [
+    '노무법인 더보상 경북구미지사',
+    '노무법인 더보상 대구지사',
+  ],
+  '전라권역': [
+    '노무법인 더보상 전북익산지사',
+    '노무법인 더보상 전남여수지사',
+    '노무법인 더보상 전남순천지사',
+  ],
+  '충청권역': [
+    '노무법인 더보상 대전지사',
+  ],
+}
+// 수도권역: 위에 포함되지 않은 나머지 지사
+```
+
+getRegionBranches, canAccessBranch 함수는 기존 로직 유지 (REGION_BRANCHES 값만 바뀌므로 자동 반영).
+
+---
+
+## Step 4: BRANCH_GROUPS 참조 코드 업데이트 확인
+
+```bash
+# BRANCH_GROUPS나 기존 "더보상 울산지사" 형식을 사용하는 파일 확인
+grep -rn '"더보상 ' app --include="*.tsx" --include="*.ts" | grep -v node_modules | grep -v '.next' | head -20
+```
+
+위 결과에 나오는 파일들에서 지사명 문자열이 하드코딩되어 있으면 "노무법인 더보상 X지사" 형식으로 교체.
+단, deadline/page.tsx의 branchGroups는 이제 /api/branches/all-tfs에서 DB 로딩하므로 하드코딩 기본값만 교체하면 됨.
+
+---
+
+## Step 5: middleware에 init-branch 경로 인증 제외
+
+middleware.ts에서 `/api/init-branch` 경로를 인증 체크에서 제외해줘.
+(기존에 init-contact-userid 등 추가했던 것과 동일한 방식)
+
+---
+
+## Step 6: 커밋 → push
+
+```bash
+git add -A
+git commit -m "feat: Branch 시드 데이터 수정 — Contact.branch 형식 통일 + TF_BY_BRANCH/REGION_BRANCHES 키 업데이트"
+git push origin main
+```
+
+---
+
+## 배포 후 조치
+
+1. Railway 빌드 완료 후: `GET https://thebosang-production.up.railway.app/api/init-branch`
+2. `{"ok":true, "inserted":21}` 확인
+3. init-branch API 삭제 → 커밋 → push
+4. `/admin` → 지사 관리 탭에서 21개 지사 + 소속 인원 카운트 확인
+
+---
+
+## 주의사항
+- TF 배열 값(더보상울산TF 등)은 변경 금지 — Case.tfName 에 이미 저장된 값과 일치해야 함
+- TF_BY_BRANCH 키만 변경 — 파생 상수(TF_TO_BRANCH, ALL_TF_LIST)는 자동 재계산됨
+- Branch.name = Contact.branch 정확 일치 필수 — 소속 인원 쿼리 기준
