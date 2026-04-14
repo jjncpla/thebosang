@@ -5,6 +5,15 @@ import fs from 'fs'
 import path from 'path'
 import { auth } from '@/auth'
 import { FORM_FIELDS, FORM_PDF_MAP } from '@/lib/formFields'
+import { prisma } from '@/lib/prisma'
+
+async function getFormFields(formKey: string) {
+  const config = await prisma.systemConfig.findUnique({
+    where: { key: `form_coords_${formKey}` },
+  })
+  if (config) return JSON.parse(config.value)
+  return FORM_FIELDS[formKey] ?? []
+}
 
 export const runtime = 'nodejs'
 
@@ -36,7 +45,7 @@ export async function POST(req: NextRequest) {
     const fontBytes = fs.readFileSync(fontPath)
     const font = await pdfDoc.embedFont(fontBytes)
 
-    const formFields = FORM_FIELDS[formKey] ?? []
+    const formFields = await getFormFields(formKey)
     const page = pdfDoc.getPages()[0]
 
     for (const field of formFields) {

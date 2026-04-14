@@ -46,8 +46,23 @@ export default function FormsPage() {
   const [coordOutput, setCoordOutput]     = useState("");
   const [testValues, setTestValues]       = useState<Record<string, string>>({});
   const [testLoading, setTestLoading]     = useState(false);
+  const [saving, setSaving]               = useState(false);
+  const [saveMsg, setSaveMsg]             = useState('');
 
-  useEffect(() => { setTestValues({}); }, [selectedForm]);
+  useEffect(() => { setTestValues({}); setSaveMsg(''); }, [selectedForm]);
+
+  // 서식 선택 시 DB 저장 좌표 로드 (있으면 formFields.ts 기본값 덮어씀)
+  useEffect(() => {
+    if (!selectedForm) return;
+    fetch(`/api/forms/coordinates?type=${selectedForm}`)
+      .then(r => r.json())
+      .then(data => {
+        if (data.fields) {
+          setCoordFields(prev => ({ ...prev, [selectedForm]: data.fields }));
+        }
+      })
+      .catch(() => {});
+  }, [selectedForm]);
 
   // PNG 미리보기 상태
   const [imgSize, setImgSize]             = useState<{ w: number; h: number } | null>(null);
@@ -138,6 +153,30 @@ export default function FormsPage() {
   const handleCopyCoords = () => {
     navigator.clipboard.writeText(coordOutput);
     alert("좌표가 클립보드에 복사되었습니다.");
+  };
+
+  const handleSaveCoordinates = async () => {
+    if (!selectedForm) return;
+    const currentFields = coordFields[selectedForm] ?? [];
+    setSaving(true);
+    setSaveMsg('');
+    try {
+      const res = await fetch('/api/forms/coordinates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ formKey: selectedForm, fields: currentFields }),
+      });
+      if (res.ok) {
+        setSaveMsg('✅ 저장 완료');
+        setTimeout(() => setSaveMsg(''), 3000);
+      } else {
+        setSaveMsg('❌ 저장 실패');
+      }
+    } catch {
+      setSaveMsg('❌ 저장 실패');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleTestGenerate = async () => {
@@ -428,6 +467,20 @@ export default function FormsPage() {
               >
                 📋 전체 좌표 복사
               </button>
+
+              {/* 좌표 DB 저장 */}
+              <button
+                onClick={handleSaveCoordinates}
+                disabled={saving}
+                style={{ padding: "7px 10px", fontSize: 12, backgroundColor: "#006838", color: "white", border: "none", borderRadius: 4, cursor: saving ? "not-allowed" : "pointer", fontWeight: 600, opacity: saving ? 0.7 : 1 }}
+              >
+                {saving ? "저장 중..." : "💾 좌표 DB 저장"}
+              </button>
+              {saveMsg && (
+                <div style={{ fontSize: 11, textAlign: "center", color: saveMsg.startsWith("✅") ? "#006838" : "#dc2626" }}>
+                  {saveMsg}
+                </div>
+              )}
 
               {/* 좌표 출력 */}
               <textarea
