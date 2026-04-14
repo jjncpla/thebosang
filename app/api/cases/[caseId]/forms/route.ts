@@ -434,10 +434,10 @@ export async function GET(
         };
         const resultLabel = statusLabel[(caseData as any).status ?? ""] ?? "진행 중";
 
-        drawText(page, `노무법인 더보상 ${manager?.branchName ?? ""}`, 120.5, 703, font, 9);
-        drawText(page, patient.name ?? "",  120.5, 673, font, 9);
+        drawText(page, `노무법인 더보상 ${manager?.branchName ?? ""}`, 120.5, 695, font, 9);
+        drawText(page, patient.name ?? "",  185, 673, font, 9);
         drawText(page, `${bf.Y1}${bf.Y2}${bf.Y3}${bf.Y4}.${bf.M1}${bf.M2}.${bf.D1}${bf.D2}`, 421, 673, font, 9);
-        drawText(page, patient.address ?? "", 120.5, 643, font, 8);
+        drawText(page, patient.address ?? "", 120.5, 638, font, 8);
         drawText(page, `${df.연도}.${df.월자}.${df.일자}`, 140, 608, font, 9);
         drawText(page, contractAmount, 160, 583, font, 9);
         drawText(page, advanceAmount,  360, 583, font, 9);
