@@ -76,7 +76,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
           decisionDate: item.decisionDate,
           examClaimDeadline,
           approvalStatus: item.approvalStatus,
-          progressStatus: "진행중",
+          progressStatus: "접수대기",
         }
       });
     }
