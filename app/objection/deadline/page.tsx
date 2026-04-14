@@ -338,7 +338,7 @@ export default function ObjectionDeadlinePage() {
   const [litigationItems, setLitigationItems] = useState<ObjectionCase[]>([]);
   const [wageItems, setWageItems] = useState<WageItem[]>([]);
   const [managers, setManagers] = useState<Manager[]>([]);
-  const [branchGroups, setBranchGroups] = useState<Record<string, { label: string; tfNames: string[] }>>(branchGroups);
+  const [branchGroups, setBranchGroups] = useState<Record<string, { label: string; tfNames: string[] }>>({});
 
   // 이의제기 탭 filters
   const [filterBranch, setFilterBranch] = useState("");
