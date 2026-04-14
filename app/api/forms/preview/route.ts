@@ -11,13 +11,23 @@ export const runtime = "nodejs";
 const execAsync = promisify(exec);
 
 const FILE_MAP: Record<string, string> = {
-  DISABILITY_CLAIM:   "disability_claim.pdf",
-  NOISE_WORK_CONFIRM: "noise_work_confirm.pdf",
-  AGENT_APPOINTMENT:  "agent_appointment.pdf",
-  POWER_OF_ATTORNEY:  "power_of_attorney.pdf",
-  SPECIAL_CLINIC:     "special_clinic.pdf",
-  EXPERT_CLINIC:      "expert_clinic.pdf",
-  WORK_HISTORY:       "work_history.pdf",
+  DISABILITY_CLAIM:      "disability_claim.pdf",
+  NOISE_WORK_CONFIRM:    "noise_work_confirm.pdf",
+  AGENT_APPOINTMENT:     "agent_appointment.pdf",
+  POWER_OF_ATTORNEY:     "power_of_attorney.pdf",
+  SPECIAL_CLINIC:        "special_clinic.pdf",
+  EXPERT_CLINIC:         "expert_clinic.pdf",
+  WORK_HISTORY:          "work_history.pdf",
+  INFO_DISCLOSURE:       "info_disclosure.pdf",
+  LABOR_ATTORNEY_RECORD: "labor_attorney_record.pdf",
+  THIRD_PARTY_INFO:      "third_party_info.pdf",
+  MEDICAL_BENEFIT:       "medical_benefit.pdf",
+  SICK_LEAVE_BENEFIT:    "sick_leave_benefit.pdf",
+  INFO_DISCLOSURE_PROXY: "info_disclosure_proxy.pdf",
+  PENSION_CHOICE:        "pension_choice.pdf",
+  BEREAVED_CLAIM:        "bereaved_claim.pdf",
+  EX_WORKER_HEALTH_EXAM: "ex_worker_health_exam.pdf",
+  DUST_WORK_CONFIRM:     "dust_work_confirm.pdf",
 };
 
 export async function GET(req: NextRequest) {
