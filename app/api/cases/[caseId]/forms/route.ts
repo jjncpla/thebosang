@@ -417,17 +417,30 @@ export async function GET(
         const pdfDoc = await loadBlankForm("labor_attorney_record.pdf");
         const font = await loadKoreanFont(pdfDoc);
         const page = pdfDoc.getPages()[0];
-        const bf = parseBirthDate(patient.ssn ?? "");
-        const df = parseDateFields(detail?.firstExamDate ?? null);
+
+        const CASE_TYPE_KO: Record<string, string> = {
+          HEARING_LOSS:         "소음성 난청",
+          COPD:                 "COPD(만성폐쇄성폐질환)",
+          PNEUMOCONIOSIS:       "진폐",
+          MUSCULOSKELETAL:      "근골격계",
+          OCCUPATIONAL_ACCIDENT:"업무상 사고",
+          OCCUPATIONAL_CANCER:  "직업성 암",
+          BEREAVED:             "유족급여",
+          OTHER:                "기타",
+        };
+
+        const ssn = patient.ssn ?? "";
+        const birthDateStr = ssn.length >= 6
+          ? `${ssn.slice(0, 2)}.${ssn.slice(2, 4)}.${ssn.slice(4, 6)}`
+          : "";
+
+        const cdf = parseDateFields(caseData.contractDate ?? new Date());
+        const contractDateStr = `${cdf.연도}.${cdf.월자}.${cdf.일자}`;
 
         const contractAmount = req.nextUrl.searchParams.get("contractAmount") ?? "";
         const advanceAmount  = req.nextUrl.searchParams.get("advanceAmount") ?? "";
 
-        const caseTypeLabel: Record<string, string> = {
-          HEARING_LOSS: "소음성 난청", PNEUMOCONIOSIS: "진폐최초", COPD: "COPD",
-          GENERAL: "일반산재", DISABILITY: "장해급여", MEDICAL: "요양급여",
-        };
-        const caseDesc = caseTypeLabel[caseData.caseType ?? ""] ?? caseData.caseType ?? "";
+        const caseDesc = CASE_TYPE_KO[caseData.caseType ?? ""] ?? caseData.caseType ?? "";
 
         const statusLabel: Record<string, string> = {
           APPROVED: "승인", REJECTED: "불승인", CLOSED: "종결",
@@ -435,14 +448,14 @@ export async function GET(
         const resultLabel = statusLabel[(caseData as any).status ?? ""] ?? "진행 중";
 
         drawText(page, `노무법인 더보상 ${manager?.branchName ?? ""}`, 120.5, 695, font, 9);
-        drawText(page, patient.name ?? "",  185, 673, font, 9);
-        drawText(page, `${bf.Y1}${bf.Y2}${bf.Y3}${bf.Y4}.${bf.M1}${bf.M2}.${bf.D1}${bf.D2}`, 421, 673, font, 9);
+        drawText(page, patient.name ?? "",  120.5, 673, font, 9);
+        drawText(page, birthDateStr,        421,   673, font, 9);
         drawText(page, patient.address ?? "", 120.5, 638, font, 8);
-        drawText(page, `${df.연도}.${df.월자}.${df.일자}`, 140, 608, font, 9);
-        drawText(page, contractAmount, 160, 583, font, 9);
-        drawText(page, advanceAmount,  360, 583, font, 9);
-        drawText(page, caseDesc,       60.8, 524, font, 9);
-        drawText(page, resultLabel,    60.8, 364, font, 9);
+        drawText(page, contractDateStr,     140,   608, font, 9);
+        drawText(page, contractAmount,      230,   583, font, 9);
+        drawText(page, advanceAmount,       430,   583, font, 9);
+        drawText(page, caseDesc,            60.8,  524, font, 9);
+        drawText(page, resultLabel,         60.8,  364, font, 9);
 
         pdfBytes = await pdfDoc.save();
         break;
