@@ -448,14 +448,14 @@ export async function GET(
         const resultLabel = statusLabel[(caseData as any).status ?? ""] ?? "진행 중";
 
         drawText(page, `노무법인 더보상 ${manager?.branchName ?? ""}`, 120.5, 695, font, 9);
-        drawText(page, patient.name ?? "",  120.5, 673, font, 9);
-        drawText(page, birthDateStr,        421,   673, font, 9);
-        drawText(page, patient.address ?? "", 120.5, 638, font, 8);
-        drawText(page, contractDateStr,     140,   608, font, 9);
-        drawText(page, contractAmount,      230,   583, font, 9);
-        drawText(page, advanceAmount,       430,   583, font, 9);
-        drawText(page, caseDesc,            60.8,  524, font, 9);
-        drawText(page, resultLabel,         60.8,  364, font, 9);
+        drawText(page, patient.name ?? "",    132.5, 670, font, 9);
+        drawText(page, birthDateStr,          399,   671, font, 9);
+        drawText(page, patient.address ?? "", 149,   642, font, 8);
+        drawText(page, contractDateStr,       163,   609, font, 9);
+        drawText(page, contractAmount,        268,   581, font, 9);
+        drawText(page, advanceAmount,         493,   580, font, 9);
+        drawText(page, caseDesc,              67,    516, font, 9);
+        drawText(page, resultLabel,           66,    366, font, 9);
 
         pdfBytes = await pdfDoc.save();
         break;
