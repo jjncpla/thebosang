@@ -513,6 +513,7 @@ model User {
   regionName    String?   // 담당 권역 (SENIOR_MANAGER 전용): "전라권역" | "대구경북권역" | "부울경남권역" | "수도권역"
   department    String?   // 부서
   jobTitle      String?   // 직책
+  personalId    String?   // 공인노무사 주민등록번호 (정보공개청구서 등 대리인 기재용)
 
   salesCases     Case[]          @relation("SalesManager")
   managedCases   Case[]          @relation("CaseManager")

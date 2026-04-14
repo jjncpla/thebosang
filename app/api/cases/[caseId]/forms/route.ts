@@ -383,28 +383,31 @@ export async function GET(
         const font = await loadKoreanFont(pdfDoc);
         const page = pdfDoc.getPages()[0];
 
-        // 청구인 정보 (노무사)
-        drawText(page, manager?.name ?? "",          0, 0, font, 9);  // 청구인 성명
-        drawText(page, manager?.officeAddress ?? "",  0, 0, font, 8);  // 주소
-        drawText(page, manager?.officeTel ?? "",      0, 0, font, 9);  // 전화
-        drawText(page, manager?.officeFax ?? "",      0, 0, font, 9);  // 팩스
+        const content = req.nextUrl.searchParams.get("content") ??
+          `${patient.name}(${patient.ssn ?? ""})님의 장해 등급 결정 관련 일체의 서류(장해진단서, 자문의 소견서, 특진 및 의무기록자료 일체)`;
 
-        // 청구 내용: content 파라미터로 전달받음
-        const content = req.nextUrl.searchParams.get("content") ?? "";
-        const contentX = 0;
-        const contentY = 0;
+        const claimantName = `${patient.name}의 대리인 공인노무사 ${manager?.name ?? ""}`;
+        const agentSsn = (manager as any)?.personalId ?? "";
+        const FIRM_BIZ_REG_NO = process.env.FIRM_BIZ_REG_NO ?? "391-85-01751";
+
+        drawText(page, claimantName,             108, 711, font, 9);
+        drawText(page, agentSsn,                 338, 711, font, 9);
+        drawText(page, manager?.officeAddress ?? "", 108, 686, font, 8);
+        drawText(page, FIRM_BIZ_REG_NO,          338, 686, font, 9);
+        drawText(page, manager?.officeTel ?? "", 108, 649, font, 9);
+        drawText(page, manager?.officeFax ?? "", 225, 649, font, 9);
+        drawText(page, (manager as any)?.email ?? "", 338, 649, font, 9);
+
         const lines = content.split("\n");
         lines.forEach((line, i) => {
-          drawText(page, line, contentX, contentY - i * 12, font, 8);
+          drawText(page, line, 108, 561 - i * 12, font, 8);
         });
 
-        // 날짜
-        drawText(page, today.연도, 0, 0, font, 9);
-        drawText(page, today.월자, 0, 0, font, 9);
-        drawText(page, today.일자, 0, 0, font, 9);
-
-        // 관할공단
-        drawText(page, caseData.kwcOfficeName ?? "", 0, 0, font, 9);
+        drawText(page, today.연도, 384, 321, font, 10);
+        drawText(page, today.월자, 430, 321, font, 10);
+        drawText(page, today.일자, 470, 321, font, 10);
+        drawText(page, `공인노무사 ${manager?.name ?? ""}`, 108, 304, font, 9);
+        drawText(page, `근로복지공단 ${caseData.kwcOfficeName ?? ""}지사장 귀하`, 200, 286, font, 9);
 
         pdfBytes = await pdfDoc.save();
         break;
@@ -417,23 +420,251 @@ export async function GET(
         const bf = parseBirthDate(patient.ssn ?? "");
         const df = parseDateFields(detail?.firstExamDate ?? null);
 
-        // 업무 의뢰인
-        drawText(page, `노무법인 더보상 ${manager?.branchName ?? ""}`, 0, 0, font, 9); // 상호
-        drawText(page, patient.name ?? "",                              0, 0, font, 9); // 성명(대표자)
-        drawText(page, `${bf.Y1}${bf.Y2}${bf.Y3}${bf.Y4}.${bf.M1}${bf.M2}.${bf.D1}${bf.D2}`, 0, 0, font, 9); // 생년월일
-        drawText(page, patient.address ?? "",                           0, 0, font, 8); // 주소
-        drawText(page, `${df.연도}.${df.월자}.${df.일자}`,             0, 0, font, 9); // 직무위촉연월일
+        const contractAmount = req.nextUrl.searchParams.get("contractAmount") ?? "";
+        const advanceAmount  = req.nextUrl.searchParams.get("advanceAmount") ?? "";
 
-        // 수수료 (빈칸 — 수동 입력)
-        drawText(page, "", 0, 0, font, 9); // 계약금
-        drawText(page, "", 0, 0, font, 9); // 착수금
+        const caseTypeLabel: Record<string, string> = {
+          HEARING_LOSS: "소음성 난청", PNEUMOCONIOSIS: "진폐최초", COPD: "COPD",
+          GENERAL: "일반산재", DISABILITY: "장해급여", MEDICAL: "요양급여",
+        };
+        const caseDesc = caseTypeLabel[caseData.caseType ?? ""] ?? caseData.caseType ?? "";
 
-        // 직무 요지 (고정 텍스트)
-        drawText(page, "산업재해보상보험법에 의한 보험급여 청구 및 이의제기에 관한 사항 일체", 0, 0, font, 8);
+        const statusLabel: Record<string, string> = {
+          APPROVED: "승인", REJECTED: "불승인", CLOSED: "종결",
+        };
+        const resultLabel = statusLabel[(caseData as any).status ?? ""] ?? "진행 중";
 
-        // 처리 결과, 특기사항 (빈칸)
-        drawText(page, "", 0, 0, font, 9); // 처리 결과
-        drawText(page, "", 0, 0, font, 9); // 특기사항
+        drawText(page, `노무법인 더보상 ${manager?.branchName ?? ""}`, 120.5, 703, font, 9);
+        drawText(page, patient.name ?? "",  120.5, 673, font, 9);
+        drawText(page, `${bf.Y1}${bf.Y2}${bf.Y3}${bf.Y4}.${bf.M1}${bf.M2}.${bf.D1}${bf.D2}`, 421, 673, font, 9);
+        drawText(page, patient.address ?? "", 120.5, 643, font, 8);
+        drawText(page, `${df.연도}.${df.월자}.${df.일자}`, 140, 608, font, 9);
+        drawText(page, contractAmount, 160, 583, font, 9);
+        drawText(page, advanceAmount,  360, 583, font, 9);
+        drawText(page, caseDesc,       60.8, 524, font, 9);
+        drawText(page, resultLabel,    60.8, 364, font, 9);
+
+        pdfBytes = await pdfDoc.save();
+        break;
+      }
+
+      case "THIRD_PARTY_INFO": {
+        const pdfDoc = await loadBlankForm("third_party_info.pdf");
+        const font = await loadKoreanFont(pdfDoc);
+        const page = pdfDoc.getPages()[0];
+
+        drawText(page, today.연도, 245, 99,  font, 10);
+        drawText(page, today.월자, 287, 99,  font, 10);
+        drawText(page, today.일자, 325, 99,  font, 10);
+        drawText(page, patient.ssn ?? "", 100, 79, font, 9);
+        drawText(page, patient.name ?? "", 250, 79, font, 9);
+        drawText(page, "○", 365, 126, font, 10);
+
+        pdfBytes = await pdfDoc.save();
+        break;
+      }
+
+      case "MEDICAL_BENEFIT": {
+        const pdfDoc = await loadBlankForm("medical_benefit.pdf");
+        const font = await loadKoreanFont(pdfDoc);
+        const page = pdfDoc.getPages()[0];
+        const bf = parseBirthDate(patient.ssn ?? "");
+        const df = parseDateFields(detail?.firstExamDate ? new Date(detail.firstExamDate) : null);
+        const lastJob = workHistory[workHistory.length - 1] ?? null;
+
+        drawText(page, patient.name ?? "",     65,  684, font, 9);
+        drawText(page, patient.ssn ?? "",      331, 686, font, 9);
+        drawText(page, patient.address ?? "",  66,  650, font, 8);
+        drawText(page, patient.phone ?? "",    353, 665, font, 9);
+        drawText(page, df.연도,   100, 626, font, 9);
+        drawText(page, df.월자,   150, 626, font, 9);
+        drawText(page, df.일자,   196, 626, font, 9);
+        drawText(page, "[√]",    254, 347, font, 9);
+        drawText(page, lastJob?.company ?? "",  130, 479, font, 9);
+        drawText(page, "",                      106, 436, font, 9);
+        drawText(page, today.연도, 236, 86, font, 9);
+        drawText(page, today.월자, 280, 86, font, 9);
+        drawText(page, today.일자, 310, 86, font, 9);
+        drawText(page, patient.name ?? "",       340, 70, font, 9);
+        drawText(page, `공인노무사 ${manager?.name ?? ""}`, 340, 54, font, 9);
+        drawText(page, `근로복지공단 ${caseData.kwcOfficeName ?? ""}지사장 귀하`, 200, 40, font, 9);
+
+        pdfBytes = await pdfDoc.save();
+        break;
+      }
+
+      case "SICK_LEAVE_BENEFIT": {
+        const pdfDoc = await loadBlankForm("sick_leave_benefit.pdf");
+        const font = await loadKoreanFont(pdfDoc);
+        const page = pdfDoc.getPages()[0];
+        const bf = parseBirthDate(patient.ssn ?? "");
+        const df = parseDateFields(detail?.firstExamDate ? new Date(detail.firstExamDate) : null);
+
+        const claimStartYear  = req.nextUrl.searchParams.get("claimStartYear") ?? "";
+        const claimStartMonth = req.nextUrl.searchParams.get("claimStartMonth") ?? "";
+        const claimStartDay   = req.nextUrl.searchParams.get("claimStartDay") ?? "";
+        const claimEndYear    = req.nextUrl.searchParams.get("claimEndYear") ?? "";
+        const claimEndMonth   = req.nextUrl.searchParams.get("claimEndMonth") ?? "";
+        const claimEndDay     = req.nextUrl.searchParams.get("claimEndDay") ?? "";
+
+        const bankStr = detail ? `${detail.bankName ?? ""} ${detail.bankAccount ?? ""}`.trim() : "";
+
+        drawText(page, patient.name ?? "",    150, 688, font, 9);
+        drawText(page, bf.Y3 + bf.Y4,         220, 688, font, 9);
+        drawText(page, bf.M1 + bf.M2,         268, 688, font, 9);
+        drawText(page, bf.D1 + bf.D2,         308, 688, font, 9);
+        drawText(page, df.연도, 130, 640, font, 9);
+        drawText(page, df.월자, 175, 640, font, 9);
+        drawText(page, df.일자, 210, 640, font, 9);
+        drawText(page, bankStr, 95, 583, font, 9);
+        drawText(page, detail?.bankAccountHolder ?? "", 380, 583, font, 9);
+        drawText(page, claimStartYear,  95,  518, font, 9);
+        drawText(page, claimStartMonth, 140, 518, font, 9);
+        drawText(page, claimStartDay,   178, 518, font, 9);
+        drawText(page, claimEndYear,    260, 518, font, 9);
+        drawText(page, claimEndMonth,   305, 518, font, 9);
+        drawText(page, claimEndDay,     343, 518, font, 9);
+        drawText(page, today.연도, 230, 271, font, 9);
+        drawText(page, today.월자, 270, 271, font, 9);
+        drawText(page, today.일자, 305, 271, font, 9);
+        drawText(page, patient.name ?? "",       195, 255, font, 9);
+        drawText(page, patient.phone ?? "",      340, 255, font, 9);
+        drawText(page, `공인노무사 ${manager?.name ?? ""}`, 195, 239, font, 9);
+        drawText(page, manager?.officeTel ?? "", 340, 239, font, 9);
+        drawText(page, `근로복지공단 ${caseData.kwcOfficeName ?? ""}지사장 귀하`, 205, 125, font, 9);
+
+        pdfBytes = await pdfDoc.save();
+        break;
+      }
+
+      case "INFO_DISCLOSURE_PROXY": {
+        const pdfDoc = await loadBlankForm("info_disclosure_proxy.pdf");
+        const font = await loadKoreanFont(pdfDoc);
+        const page = pdfDoc.getPages()[0];
+        const agentSsn = (manager as any)?.personalId ?? "";
+
+        drawText(page, patient.name ?? "",       112, 732, font, 9);
+        drawText(page, patient.ssn ?? "",        342, 732, font, 9);
+        drawText(page, patient.address ?? "",    112, 698, font, 8);
+        drawText(page, `공인노무사 ${manager?.name ?? ""}`, 112, 660, font, 9);
+        drawText(page, agentSsn,                 342, 660, font, 9);
+        drawText(page, manager?.officeAddress ?? "", 112, 643, font, 8);
+        drawText(page, today.연도, 350, 142, font, 10);
+        drawText(page, today.월자, 395, 142, font, 10);
+        drawText(page, today.일자, 430, 142, font, 10);
+        drawText(page, patient.name ?? "",       333, 110, font, 9);
+
+        pdfBytes = await pdfDoc.save();
+        break;
+      }
+
+      case "PENSION_CHOICE": {
+        const pdfDoc = await loadBlankForm("pension_choice.pdf");
+        const font = await loadKoreanFont(pdfDoc);
+        const page = pdfDoc.getPages()[0];
+
+        drawText(page, today.연도, 236, 93, font, 10);
+        drawText(page, today.월자, 282, 93, font, 10);
+        drawText(page, today.일자, 318, 93, font, 10);
+        drawText(page, patient.name ?? "", 310, 78, font, 9);
+
+        pdfBytes = await pdfDoc.save();
+        break;
+      }
+
+      case "BEREAVED_CLAIM": {
+        const pdfDoc = await loadBlankForm("bereaved_claim.pdf");
+        const font = await loadKoreanFont(pdfDoc);
+        const page = pdfDoc.getPages()[0];
+        const bf = parseBirthDate(patient.ssn ?? "");
+        const df = parseDateFields(detail?.firstExamDate ? new Date(detail.firstExamDate) : null);
+        const lastJob = workHistory[workHistory.length - 1] ?? null;
+        const funeralDate = req.nextUrl.searchParams.get("funeralDate") ?? "";
+        const bankStr = detail ? `${detail.bankName ?? ""} ${detail.bankAccount ?? ""}`.trim() : "";
+
+        drawText(page, lastJob?.company ?? "",   355, 694, font, 9);
+        drawText(page, "",                        437, 684, font, 9);
+        drawText(page, `亡 ${patient.name ?? ""}`, 156, 656, font, 9);
+        drawText(page, patient.ssn ?? "",         310, 656, font, 9);
+        drawText(page, patient.address ?? "",     156, 628, font, 8);
+        drawText(page, lastJob?.jobType ?? "",    437, 618, font, 9);
+        drawText(page, df.연도, 168, 596, font, 9);
+        drawText(page, df.월자, 215, 596, font, 9);
+        drawText(page, df.일자, 255, 596, font, 9);
+        drawText(page, funeralDate, 430, 466, font, 9);
+        drawText(page, bankStr, 150, 356, font, 9);
+        drawText(page, detail?.bankAccountHolder ?? "", 390, 356, font, 9);
+        drawText(page, today.연도, 160, 131, font, 9);
+        drawText(page, today.월자, 200, 131, font, 9);
+        drawText(page, today.일자, 235, 131, font, 9);
+        drawText(page, patient.name ?? "",       130, 115, font, 9);
+        drawText(page, `공인노무사 ${manager?.name ?? ""}`, 130, 99, font, 9);
+        drawText(page, `근로복지공단 ${caseData.kwcOfficeName ?? ""}지사장 귀하`, 209, 83, font, 9);
+
+        pdfBytes = await pdfDoc.save();
+        break;
+      }
+
+      case "EX_WORKER_HEALTH_EXAM": {
+        const pdfDoc = await loadBlankForm("ex_worker_health_exam.pdf");
+        const font = await loadKoreanFont(pdfDoc);
+        const page = pdfDoc.getPages()[0];
+        const lastJob  = workHistory[0] ?? null;
+        const firstJob = workHistory[workHistory.length - 1] ?? null;
+        const workStart = firstJob ? `${firstJob.startYear}년 ${firstJob.startMonth}월부터` : "";
+        const workEnd   = lastJob  ? `${lastJob.endYear}년 ${lastJob.endMonth}월까지` : "";
+
+        drawText(page, patient.name ?? "",     108, 705, font, 9);
+        drawText(page, patient.ssn ?? "",      338, 705, font, 9);
+        drawText(page, patient.address ?? "",  108, 681, font, 8);
+        drawText(page, patient.phone ?? "",    338, 681, font, 9);
+        drawText(page, workStart,              108, 626, font, 9);
+        drawText(page, workEnd,                200, 626, font, 9);
+        drawText(page, lastJob?.company ?? "", 108, 596, font, 9);
+        drawText(page, "",                     108, 566, font, 9);
+        drawText(page, today.연도, 350, 231, font, 10);
+        drawText(page, today.월자, 390, 231, font, 10);
+        drawText(page, today.일자, 425, 231, font, 10);
+        drawText(page, patient.name ?? "", 300, 201, font, 9);
+        drawText(page, `근로복지공단 ${caseData.kwcOfficeName ?? ""}이사장 귀하`, 100, 151, font, 9);
+
+        pdfBytes = await pdfDoc.save();
+        break;
+      }
+
+      case "DUST_WORK_CONFIRM": {
+        const pdfDoc = await loadBlankForm("dust_work_confirm.pdf");
+        const font = await loadKoreanFont(pdfDoc);
+        const page = pdfDoc.getPages()[0];
+
+        const fmtStart = (j: WorkHistoryItem) => `${j.startYear}년 ${j.startMonth}월부터`;
+        const fmtEnd   = (j: WorkHistoryItem) => `${j.endYear}년 ${j.endMonth}월까지`;
+
+        drawText(page, patient.name ?? "", 108, 766, font, 9);
+        drawText(page, patient.ssn ?? "",  108, 746, font, 9);
+
+        const rows: { y: number; ys: number; ye: number }[] = [
+          { y: 696, ys: 703, ye: 686 },
+          { y: 611, ys: 619, ye: 601 },
+          { y: 530, ys: 538, ye: 520 },
+          { y: 450, ys: 458, ye: 440 },
+          { y: 370, ys: 378, ye: 360 },
+        ];
+
+        rows.forEach((r, i) => {
+          const j = workHistory[i];
+          if (!j) return;
+          drawText(page, j.company,    85,  r.y,  font, 8);
+          drawText(page, j.jobType,    175, r.y,  font, 8);
+          drawText(page, j.department, 265, r.y,  font, 8);
+          drawText(page, fmtStart(j),  345, r.ys, font, 8);
+          drawText(page, fmtEnd(j),    345, r.ye, font, 8);
+        });
+
+        drawText(page, today.연도, 340, 161, font, 10);
+        drawText(page, today.월자, 380, 161, font, 10);
+        drawText(page, today.일자, 415, 161, font, 10);
+        drawText(page, patient.name ?? "", 300, 143, font, 9);
 
         pdfBytes = await pdfDoc.save();
         break;
