@@ -31,3 +31,21 @@ export const TF_TO_BRANCH: Record<string, string> = Object.entries(TF_BY_BRANCH)
   },
   {} as Record<string, string>
 );
+
+// DB에서 TF-지사 매핑 로드 (서버 컴포넌트/API용) — 실패 시 하드코딩 fallback
+export async function loadTfByBranch(): Promise<Record<string, string[]>> {
+  try {
+    const { prisma } = await import('@/lib/prisma')
+    const branches = await (prisma as any).branch.findMany({
+      where: { isActive: true },
+      orderBy: { displayOrder: 'asc' },
+    })
+    const map: Record<string, string[]> = {}
+    branches.forEach((b: any) => {
+      map[b.name] = (b.assignedTFs as string[]) || []
+    })
+    return Object.keys(map).length > 0 ? map : TF_BY_BRANCH
+  } catch {
+    return TF_BY_BRANCH
+  }
+}

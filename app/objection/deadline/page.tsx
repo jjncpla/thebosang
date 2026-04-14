@@ -17,7 +17,7 @@ const BRANCH_TF_MAP: Record<string, string[]> = {
 
 const TF_OPTIONS = Object.values(BRANCH_TF_MAP).flat();
 
-const BRANCH_GROUPS: Record<string, { label: string; tfNames: string[] }> = {
+const branchGroups: Record<string, { label: string; tfNames: string[] }> = {
   ulsan: {
     label: '울산지사',
     tfNames: ['울산', '울산 '],
@@ -338,6 +338,7 @@ export default function ObjectionDeadlinePage() {
   const [litigationItems, setLitigationItems] = useState<ObjectionCase[]>([]);
   const [wageItems, setWageItems] = useState<WageItem[]>([]);
   const [managers, setManagers] = useState<Manager[]>([]);
+  const [branchGroups, setBranchGroups] = useState<Record<string, { label: string; tfNames: string[] }>>(branchGroups);
 
   // 이의제기 탭 filters
   const [filterBranch, setFilterBranch] = useState("");
@@ -386,6 +387,22 @@ export default function ObjectionDeadlinePage() {
     fetch("/api/users").then(r => r.json()).then(d => setManagers(Array.isArray(d) ? d : []));
   }, []);
 
+  // Branch DB에서 지사-TF 매핑 로드 (fallback: 하드코딩 branchGroups)
+  useEffect(() => {
+    fetch('/api/branches/all-tfs')
+      .then(r => r.json())
+      .then(data => {
+        if (data.branches?.length > 0) {
+          const groups: Record<string, { label: string; tfNames: string[] }> = {}
+          data.branches.forEach((b: any) => {
+            groups[b.name] = { label: b.name, tfNames: (b.assignedTFs as string[]) || [] }
+          })
+          setBranchGroups(groups)
+        }
+      })
+      .catch(() => { /* fallback to branchGroups */ })
+  }, []);
+
   useEffect(() => { fetchItems(); }, [fetchItems]);
   useEffect(() => { fetchLitigation(); }, [fetchLitigation]);
   useEffect(() => { fetchWage(); }, [fetchWage]);
@@ -427,13 +444,13 @@ export default function ObjectionDeadlinePage() {
 
   // 지사 선택 시 관할 TF 목록 (통합 그룹은 포함된 지사들의 TF 합산)
   const availableTfs = (() => {
-    if (!filterBranch || !BRANCH_GROUPS[filterBranch]) return TF_OPTIONS;
-    const branchLabel = BRANCH_GROUPS[filterBranch].label;
+    if (!filterBranch || !branchGroups[filterBranch]) return TF_OPTIONS;
+    const branchLabel = branchGroups[filterBranch].label;
     if (BRANCH_TF_MAP[branchLabel]) return BRANCH_TF_MAP[branchLabel];
     // 통합 그룹: BRANCH_TF_MAP에서 tfNames에 매칭되는 지사들의 TF를 합산
     const matchedTfs = new Set<string>();
     for (const [branchName, tfs] of Object.entries(BRANCH_TF_MAP)) {
-      if (BRANCH_GROUPS[filterBranch].tfNames.some(tn => branchName.includes(tn.trim()))) {
+      if (branchGroups[filterBranch].tfNames.some(tn => branchName.includes(tn.trim()))) {
         tfs.forEach(tf => matchedTfs.add(tf));
       }
     }
@@ -441,8 +458,8 @@ export default function ObjectionDeadlinePage() {
   })();
 
   // 이의제기 탭 stats (종결 건은 별도 집계, 다른 카드에서 제외)
-  const branchItems = filterBranch && BRANCH_GROUPS[filterBranch]
-    ? items.filter(i => BRANCH_GROUPS[filterBranch].tfNames.includes(i.tfName.trim()))
+  const branchItems = filterBranch && branchGroups[filterBranch]
+    ? items.filter(i => branchGroups[filterBranch].tfNames.includes(i.tfName.trim()))
     : items;
   // TF 필터 적용
   const tfFiltered = filterTf ? branchItems.filter(i => i.tfName.trim() === filterTf) : branchItems;
@@ -579,7 +596,7 @@ export default function ObjectionDeadlinePage() {
               <div style={{ fontSize: 11, color: "#6b7280", fontWeight: 700, marginBottom: 4 }}>지사</div>
               <select value={filterBranch} onChange={e => { setFilterBranch(e.target.value); setFilterTf(""); }} style={inputStyle}>
                 <option value="">전체</option>
-                {Object.entries(BRANCH_GROUPS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+                {Object.entries(branchGroups).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
               </select>
             </div>
             <div>

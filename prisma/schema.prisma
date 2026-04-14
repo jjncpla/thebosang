@@ -969,6 +969,25 @@ model Contact {
   updatedAt    DateTime @updatedAt
 }
 
+model Branch {
+  id              String   @id @default(cuid())
+  name            String   @unique
+  shortName       String?
+  address         String?
+  phone           String?
+  fax             String?
+  region          String?
+  assignedTFs     Json?
+  branchManagerId String?
+  firmType        String   @default("TBOSANG")
+  isActive        Boolean  @default(true)
+  displayOrder    Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@map("branches")
+}
+
 model IsanOffice {
   id      String @id @default(cuid())
   name    String
