@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
+import { FORM_FIELDS, type FieldEntry } from "@/lib/formFields";
 
 const FORMS = [
   { type: "DISABILITY_CLAIM",   label: "장해급여 청구서",                    pages: 1 },
@@ -24,7 +25,7 @@ const FORMS = [
   { type: "DUST_WORK_CONFIRM",      label: "분진작업종사사실확인서",      pages: 1, badge: "진폐 전용" },
 ];
 
-const FORM_FIELDS: Record<string, { key: string; label: string; x: number; y: number }[]> = {
+const _FORM_FIELDS_PLACEHOLDER_START = {
   DISABILITY_CLAIM: [
     { key: "name",          label: "성명 (근로자명)",    x: 157, y: 670 },
     { key: "birthY1",       label: "생년 Y1",            x: 286, y: 671 },
@@ -391,9 +392,7 @@ const FORM_FIELDS: Record<string, { key: string; label: string; x: number; y: nu
     { key: "submitDay",   label: "일",                  x: 415, y: 161 },
     { key: "ptSign",      label: "근로자명서명",        x: 300, y: 143 },
   ],
-};
-
-type FieldEntry = { key: string; label: string; x: number; y: number };
+}
 
 // pdf-lib pt 좌표계 (좌하단 원점, A4=595×841)
 const PDF_W = 595;
@@ -413,6 +412,8 @@ export default function FormsPage() {
   const [selectedField, setSelectedField] = useState<FieldEntry | null>(null);
   const [coordFields, setCoordFields]     = useState<Record<string, FieldEntry[]>>({});
   const [coordOutput, setCoordOutput]     = useState("");
+  const [testValues, setTestValues]       = useState<Record<string, string>>({});
+  const [testGenerating, setTestGenerating] = useState(false);
 
   // PNG 미리보기 상태
   const [imgSize, setImgSize]             = useState<{ w: number; h: number } | null>(null);
@@ -503,6 +504,28 @@ export default function FormsPage() {
   const handleCopyCoords = () => {
     navigator.clipboard.writeText(coordOutput);
     alert("좌표가 클립보드에 복사되었습니다.");
+  };
+
+  const handleTestGenerate = async () => {
+    if (!selectedForm) return;
+    setTestGenerating(true);
+    try {
+      const res = await fetch("/api/forms/test-generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ formKey: selectedForm, fields: testValues }),
+      });
+      if (!res.ok) { const d = await res.json(); alert(`오류: ${d.error}`); return; }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = `test_${selectedForm}.pdf`; a.click();
+      URL.revokeObjectURL(url);
+    } catch (e: any) {
+      alert(`오류: ${e.message}`);
+    } finally {
+      setTestGenerating(false);
+    }
   };
 
   const handleBlankPrint = async (type: string, label: string) => {
@@ -790,6 +813,32 @@ export default function FormsPage() {
                 <div>4. 방향키(Shift: 5pt) 미세 조정</div>
                 <div>5. 전체 좌표 복사 → PDF API에 적용</div>
                 <div style={{ marginTop: 4, color: "#d97706" }}>※ 좌하단 원점, A4 = 595×841pt</div>
+              </div>
+
+              {/* 테스트 PDF 생성 패널 */}
+              <div style={{ border: "1px solid #e5e7eb", borderRadius: 6, padding: 10, background: "#fffbf0" }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: "#92400e", marginBottom: 8 }}>🧪 테스트 PDF 생성</div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 4, maxHeight: 280, overflowY: "auto" }}>
+                  {(FORM_FIELDS[selectedForm] ?? []).map((f) => (
+                    <div key={f.key}>
+                      <label style={{ fontSize: 10, color: "#666", display: "block", marginBottom: 1 }}>{f.label}</label>
+                      <input
+                        type="text"
+                        placeholder={f.label}
+                        value={testValues[f.key] ?? ""}
+                        onChange={(e) => setTestValues(prev => ({ ...prev, [f.key]: e.target.value }))}
+                        style={{ width: "100%", padding: "3px 6px", fontSize: 11, border: "1px solid #d1d5db", borderRadius: 3, boxSizing: "border-box" }}
+                      />
+                    </div>
+                  ))}
+                </div>
+                <button
+                  onClick={handleTestGenerate}
+                  disabled={testGenerating}
+                  style={{ marginTop: 8, width: "100%", padding: "6px", fontSize: 12, fontWeight: 700, background: "#d97706", color: "#fff", border: "none", borderRadius: 4, cursor: "pointer" }}
+                >
+                  {testGenerating ? "생성 중…" : "테스트 PDF 생성"}
+                </button>
               </div>
             </div>
           </div>

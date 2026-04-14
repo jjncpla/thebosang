@@ -7,6 +7,7 @@ type SignupRequest = {
   jobTitle: string | null; message: string | null; status: string; createdAt: string;
 };
 type User = { id: string; email: string; name: string; role: string; createdAt: string };
+type UserDetail = { personalId?: string | null };
 
 const ROLES = ["ADMIN", "STAFF", "READONLY"];
 
@@ -28,6 +29,11 @@ export default function AccountsPage() {
   // 계정 직접 생성 폼
   const [form, setForm] = useState({ name: "", email: "", password: "", role: "STAFF" });
   const [adding, setAdding] = useState(false);
+
+  // personalId 편집 모달 상태
+  const [pidUser, setPidUser] = useState<User | null>(null);
+  const [pidValue, setPidValue] = useState("");
+  const [pidSaving, setPidSaving] = useState(false);
 
   // 승인 모달 상태
   const [approveReq, setApproveReq] = useState<SignupRequest | null>(null);
@@ -116,6 +122,31 @@ export default function AccountsPage() {
       setError(d.error ?? "계정 생성 실패");
     }
     setAdding(false);
+  }
+
+  async function openPidModal(user: User) {
+    setPidUser(user);
+    // 현재 저장된 personalId 조회
+    const res = await fetch(`/api/admin/users/${user.id}`);
+    if (res.ok) {
+      const d: UserDetail = await res.json();
+      setPidValue(d.personalId ?? "");
+    } else {
+      setPidValue("");
+    }
+  }
+
+  async function handleSavePid() {
+    if (!pidUser) return;
+    setPidSaving(true);
+    await fetch(`/api/admin/users/${pidUser.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ personalId: pidValue }),
+    });
+    setPidSaving(false);
+    setPidUser(null);
+    setPidValue("");
   }
 
   async function handleRoleChange(id: string, role: string) {
@@ -224,7 +255,7 @@ export default function AccountsPage() {
           <div style={s.tableWrap}>
             <table style={s.table}>
               <thead>
-                <tr>{["이름", "이메일", "권한", "가입일", ""].map(h => <th key={h} style={s.th}>{h}</th>)}</tr>
+                <tr>{["이름", "이메일", "권한", "가입일", "노무사 정보", ""].map(h => <th key={h} style={s.th}>{h}</th>)}</tr>
               </thead>
               <tbody>
                 {users.filter(u => !searchQuery || u.name?.includes(searchQuery) || u.email?.includes(searchQuery)).map(u => (
@@ -238,6 +269,11 @@ export default function AccountsPage() {
                     </td>
                     <td style={s.td}>{new Date(u.createdAt).toLocaleDateString("ko-KR")}</td>
                     <td style={s.td}>
+                      <button onClick={() => openPidModal(u)} style={{ padding: "3px 8px", fontSize: 11, background: "#eff6ff", color: "#1d4ed8", border: "1px solid #bfdbfe", borderRadius: 4, cursor: "pointer" }}>
+                        주민번호 등록
+                      </button>
+                    </td>
+                    <td style={s.td}>
                       <button onClick={() => handleDeleteUser(u.id, u.name)} style={s.delBtn}>삭제</button>
                     </td>
                   </tr>
@@ -247,6 +283,36 @@ export default function AccountsPage() {
           </div>
         )}
       </div>
+
+      {/* personalId 편집 모달 */}
+      {pidUser && (
+        <div style={s.overlay}>
+          <div style={s.modal}>
+            <h3 style={s.modalTitle}>주민번호 등록 (서식 자동생성용)</h3>
+            <p style={s.modalDesc}>
+              <b>{pidUser.name}</b> ({pidUser.email})<br/>
+              <span style={{ fontSize: 11, color: "#6b7280" }}>공인노무사 주민번호는 정보공개청구서 등 서식 자동생성 시 사용됩니다.</span>
+            </p>
+            <div>
+              <label style={s.label}>주민등록번호</label>
+              <input
+                type="text"
+                value={pidValue}
+                onChange={e => setPidValue(e.target.value)}
+                style={s.modalInp}
+                placeholder="예: 920109-1113615"
+                maxLength={14}
+              />
+            </div>
+            <div style={{ display: "flex", gap: 8, marginTop: 18, justifyContent: "flex-end" }}>
+              <button onClick={() => { setPidUser(null); setPidValue(""); }} style={s.cancelBtn}>취소</button>
+              <button onClick={handleSavePid} disabled={pidSaving} style={{ ...s.approveBtn, background: "#1d4ed8" }}>
+                {pidSaving ? "저장 중…" : "저장"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 승인 모달 */}
       {approveReq && (
