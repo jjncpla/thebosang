@@ -90,10 +90,11 @@ model Case {
   objectionReviews ObjectionReview[]
   objectionCases   ObjectionCase[]
 
-  messages  Message[]
-  timelines TimelineEvent[]
-  todos     Todo[]
-  files     CaseFile[]
+  messages    Message[]
+  timelines   TimelineEvent[]
+  todos       Todo[]
+  files       CaseFile[]
+  attachments CaseAttachment[]
 }
 
 model HearingLossDetail {
@@ -526,6 +527,7 @@ model User {
   workOrders          WorkOrder[]          @relation("WorkOrderAuthor")
   outdoorPerformances OutdoorPerformance[]
   indoorWorkloads     IndoorWorkload[]
+  uploadedAttachments CaseAttachment[]
 }
 
 model SignupRequest {
@@ -1073,4 +1075,23 @@ model BranchIncentiveUsage {
   amount      Int
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+}
+
+model CaseAttachment {
+  id            String   @id @default(cuid())
+  caseId        String
+  case          Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  fileName      String          // 원본 파일명
+  fileSize      Int             // 바이트 단위
+  mimeType      String
+  fileData      Bytes           // 실제 파일 바이너리
+  category      String?         // SENT(발신) / RECEIVED(수신) / INTERNAL(내부) / OTHER(기타)
+  description   String?
+  uploadedById  String?
+  uploadedBy    User?    @relation(fields: [uploadedById], references: [id])
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([caseId])
+  @@index([caseId, category])
 }

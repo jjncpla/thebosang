@@ -5,6 +5,7 @@ import { useRouter, useParams, useSearchParams } from "next/navigation";
 import { CASE_TYPE_LABELS, DISPOSAL_TYPE, GRADE_TYPE, STATUS_BY_CASE_TYPE, HEARING_LOSS_STATUS, CASE_STATUS_LABELS, CASE_STATUS_COLORS } from "@/lib/constants/case";
 import ContactSelector from "@/components/ui/ContactSelector";
 import BranchSelector from "@/components/ui/BranchSelector";
+import CaseAttachments from "@/components/CaseAttachments";
 import { OCC_DISEASE_COMMITTEES } from "@/constants/occDiseaseCommittees";
 import firstVisitHospitalsData from "@/data/first_visit_hospitals.json";
 import specialHospitalsData from "@/data/special_hospitals.json";
@@ -1935,7 +1936,7 @@ function CaseTabContent({ caseItem, onCaseUpdated }: { caseItem: CaseData; onCas
 }
 
 /* ── 왼쪽 사이드바 ── */
-function PatientSidebar({ patient, onUpdated }: { patient: PatientData; onUpdated: (p: PatientData) => void }) {
+function PatientSidebar({ patient, onUpdated, activeCaseId }: { patient: PatientData; onUpdated: (p: PatientData) => void; activeCaseId?: string }) {
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({ name: patient.name, phone: patient.phone ?? "", address: patient.address ?? "" });
   const [saving, setSaving] = useState(false);
@@ -2033,6 +2034,9 @@ function PatientSidebar({ patient, onUpdated }: { patient: PatientData; onUpdate
           />
         </div>
       </div>
+
+      {/* 첨부파일 */}
+      {activeCaseId && <CaseAttachments caseId={activeCaseId} />}
     </div>
   );
 }
@@ -2185,7 +2189,7 @@ function PatientPageInner() {
       {/* 메인 레이아웃 */}
       <div style={{ display: "flex", gap: 20, padding: 20, alignItems: "flex-start" }}>
         {/* 왼쪽 사이드바 */}
-        <PatientSidebar patient={patient} onUpdated={setPatient} />
+        <PatientSidebar patient={patient} onUpdated={setPatient} activeCaseId={activeCaseItem?.id} />
 
         {/* 오른쪽 패널 */}
         <div style={{ flex: 1, minWidth: 0 }}>
