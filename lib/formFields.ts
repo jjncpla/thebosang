@@ -221,7 +221,7 @@ export const FORM_FIELDS: Record<string, FieldEntry[]> = {
   LABOR_ATTORNEY_RECORD: [
     { key: "branchName",     label: "상호(지사명)",    x: 120.5, y: 695 },
     { key: "ptName",         label: "성명(대표자)",    x: 185,   y: 673 },
-    { key: "birthDate",      label: "생년월일",        x: 421,   y: 673 },
+    { key: "birthDate",      label: "생년월일",        x: 421,   y: 665 },
     { key: "address",        label: "주소",            x: 120.5, y: 638 },
     { key: "commissionDate", label: "직무위촉연월일",  x: 140,   y: 608 },
     { key: "feeContract",    label: "수수료 계약금",   x: 160,   y: 583 },
