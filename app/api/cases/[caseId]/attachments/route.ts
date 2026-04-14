@@ -15,15 +15,16 @@ const MAX_SIZE = 10 * 1024 * 1024 // 10MB
 
 export async function GET(
   request: Request,
-  { params }: { params: { caseId: string } }
+  { params }: { params: Promise<{ caseId: string }> }
 ) {
   const session = await auth()
   if (!session) return NextResponse.json({ error: '로그인 필요' }, { status: 401 })
 
+  const { caseId } = await params
   const { searchParams } = new URL(request.url)
   const category = searchParams.get('category')
 
-  const where: any = { caseId: params.caseId }
+  const where: any = { caseId }
   if (category) where.category = category
 
   const attachments = await (prisma as any).caseAttachment.findMany({
@@ -41,11 +42,12 @@ export async function GET(
 
 export async function POST(
   request: Request,
-  { params }: { params: { caseId: string } }
+  { params }: { params: Promise<{ caseId: string }> }
 ) {
   const session = await auth()
   if (!session) return NextResponse.json({ error: '로그인 필요' }, { status: 401 })
 
+  const { caseId } = await params
   try {
     const formData = await request.formData()
     const file = formData.get('file') as File | null
@@ -64,7 +66,7 @@ export async function POST(
 
     const attachment = await (prisma as any).caseAttachment.create({
       data: {
-        caseId: params.caseId,
+        caseId,
         fileName: file.name,
         fileSize: file.size,
         mimeType: file.type,

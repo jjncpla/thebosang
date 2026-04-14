@@ -4,15 +4,16 @@ import { auth } from '@/auth'
 
 export async function GET(
   _request: Request,
-  { params }: { params: { caseId: string; attachmentId: string } }
+  { params }: { params: Promise<{ caseId: string; attachmentId: string }> }
 ) {
   const session = await auth()
   if (!session) return NextResponse.json({ error: '로그인 필요' }, { status: 401 })
 
+  const { caseId, attachmentId } = await params
   const attachment = await (prisma as any).caseAttachment.findUnique({
-    where: { id: params.attachmentId },
+    where: { id: attachmentId },
   })
-  if (!attachment || attachment.caseId !== params.caseId) {
+  if (!attachment || attachment.caseId !== caseId) {
     return NextResponse.json({ error: '파일 없음' }, { status: 404 })
   }
 
