@@ -1,3 +1,36 @@
+## 세션 타입: 기능 개발 세션
+## 작업 개요
+Branch 모델에 사업자등록번호/계좌 필드 추가 + 엑셀에서 추출한 상세 데이터로 기존 21개 지사 업데이트 + 누락 조직 4개 추가
+
+---
+
+## 수술적 수정 원칙
+- 기존 Branch 데이터(name, region, assignedTFs 등) 변경 금지 — 신규 필드만 UPDATE
+- prisma/schema.prisma Branch 모델에 필드 추가만
+
+---
+
+## Step 1: Branch 모델 필드 추가
+
+prisma/schema.prisma의 Branch 모델에 아래 필드 추가:
+
+```prisma
+model Branch {
+  // 기존 필드 유지...
+  bizNumber     String?   // 사업자등록번호
+  bankAccount   String?   // 계좌번호 + 예금주
+}
+```
+
+`npx prisma generate` 실행.
+
+---
+
+## Step 2: init-branch-detail API 생성
+
+`app/api/init-branch-detail/route.ts` 생성:
+
+```typescript
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 
@@ -51,7 +84,7 @@ export async function GET() {
       }
     }
 
-    // 3) 누락 조직 추가
+    // 3) 누락 조직 추가 (지사가 아닌 특수 조직)
     const extras = [
       { name: '더보상 직업병 상담소', shortName: '직업병상담소', region: '수도권역', bizNumber: '783-85-02186', phone: '02-435-1568', fax: '0505-365-6237', bankAccount: '농협 301-0332-0345-51 더보상 직업병 상담소', address: '서울특별시 중랑구 사가정로49길 49 (면목동)', assignedTFs: '[]', displayOrder: 22 },
       { name: '노무법인 더보상 재해보상법률원', shortName: '재해보상법률원', region: '수도권역', bizNumber: '', phone: '', fax: '02-573-1566', bankAccount: '', address: '서울특별시 서초구 마방로2길 82, 3층 (양재동, 태성빌딩)', assignedTFs: '[]', displayOrder: 23 },
@@ -79,3 +112,37 @@ export async function GET() {
     return NextResponse.json({ ok: false, error: e.message }, { status: 500 })
   }
 }
+```
+
+---
+
+## Step 3: middleware에 init-branch-detail 경로 인증 제외
+
+middleware.ts에서 `/api/init-branch-detail` 경로 추가.
+
+---
+
+## Step 4: 지사 관리 UI에 신규 필드 표시
+
+지사 관리 탭 (또는 BranchesTab 컴포넌트)에서:
+- 테이블에 전화번호, 주소 컬럼이 이미 있으면 그대로
+- 수정 모달에 사업자등록번호, 계좌번호 필드 추가
+
+---
+
+## Step 5: 커밋 → push
+
+```bash
+git add -A
+git commit -m "feat: Branch 상세 데이터 시드 — 사업자번호/전화/팩스/계좌/주소 + 특수조직 4개 추가"
+git push origin main
+```
+
+---
+
+## 배포 후 조치
+
+1. `GET https://thebosang-production.up.railway.app/api/init-branch-detail`
+2. `{"ok":true, "updated":21, "inserted":4}` 확인
+3. init API 삭제 → 커밋 → push
+4. `/admin` → 지사 관리에서 전화번호/주소 표시 확인
