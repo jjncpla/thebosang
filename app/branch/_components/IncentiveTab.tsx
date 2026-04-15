@@ -36,6 +36,7 @@ interface UsageRecord {
 interface StaffRosterItem {
   id: string
   staffName: string
+  staffType?: string
   startYear: number
   startMonth: number
   endYear: number | null
@@ -65,9 +66,17 @@ export default function IncentiveTab() {
   const [branch, setBranch] = useState('울산지사')
 
   const [records, setRecords] = useState<SettlementWithAlloc[]>([])
+  const [staffRoster, setStaffRoster] = useState<StaffRosterItem[]>([])
   const [staffList, setStaffList] = useState<string[]>([])
   const [usages, setUsages] = useState<UsageRecord[]>([])
   const [loading, setLoading] = useState(false)
+
+  // 엑셀 임포트 상태
+  const [importModalOpen, setImportModalOpen] = useState(false)
+  const [importFile, setImportFile] = useState<File | null>(null)
+  const [importLoading, setImportLoading] = useState(false)
+  const [previewResult, setPreviewResult] = useState<any>(null)
+  const [importResult, setImportResult] = useState<any>(null)
 
   // 인라인 편집 상태
   const [editingRecordId, setEditingRecordId] = useState<string | null>(null)
@@ -101,6 +110,7 @@ export default function IncentiveTab() {
       if (Array.isArray(recordsData)) setRecords(recordsData)
       if (Array.isArray(usagesData)) setUsages(usagesData)
       if (Array.isArray(rosterData)) {
+        setStaffRoster(rosterData)
         setStaffList(rosterData.map((r: StaffRosterItem) => r.staffName))
       }
     } catch (e) {
@@ -226,6 +236,40 @@ export default function IncentiveTab() {
     }
   }
 
+  // ── 엑셀 임포트 미리보기
+  const handleImportPreview = async () => {
+    if (!importFile) return
+    setImportLoading(true)
+    try {
+      const fd = new FormData()
+      fd.append('file', importFile)
+      fd.append('branchName', branch)
+      fd.append('year', String(year))
+      fd.append('quarter', String(quarter))
+      fd.append('dryRun', 'true')
+      const res = await fetch('/api/branch/incentive/import-excel', { method: 'POST', body: fd })
+      setPreviewResult(await res.json())
+    } finally { setImportLoading(false) }
+  }
+
+  // ── 엑셀 임포트 실행
+  const handleImportConfirm = async () => {
+    if (!importFile) return
+    setImportLoading(true)
+    try {
+      const fd = new FormData()
+      fd.append('file', importFile)
+      fd.append('branchName', branch)
+      fd.append('year', String(year))
+      fd.append('quarter', String(quarter))
+      fd.append('dryRun', 'false')
+      const res = await fetch('/api/branch/incentive/import-excel', { method: 'POST', body: fd })
+      const data = await res.json()
+      setImportResult(data)
+      if (data.ok) loadData()
+    } finally { setImportLoading(false) }
+  }
+
   // ── 직원별 인센티브 합계
   const staffIncentiveTotals = useMemo(() => {
     const totals: Record<string, number> = {}
@@ -298,6 +342,13 @@ export default function IncentiveTab() {
             <option key={b} value={b}>{b}</option>
           ))}
         </select>
+        <span className="text-gray-300">|</span>
+        <button
+          onClick={() => { setImportModalOpen(true); setPreviewResult(null); setImportResult(null); setImportFile(null) }}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 font-medium"
+        >
+          엑셀 임포트
+        </button>
       </div>
 
       {loading ? (
@@ -390,8 +441,9 @@ export default function IncentiveTab() {
                                 {/* 직원 추가 드롭다운 */}
                                 {(() => {
                                   const assignedNames = editAllocations.map(a => a.staffName)
-                                  const available = staffList.filter(s => !assignedNames.includes(s))
-                                  if (available.length === 0) return null
+                                  const availableExternal = staffRoster.filter(r => r.staffType !== 'INTERNAL' && !assignedNames.includes(r.staffName))
+                                  const availableInternal = staffRoster.filter(r => r.staffType === 'INTERNAL' && !assignedNames.includes(r.staffName))
+                                  if (availableExternal.length === 0 && availableInternal.length === 0) return null
                                   return (
                                     <select
                                       key={`add-staff-${editAllocations.length}`}
@@ -404,7 +456,16 @@ export default function IncentiveTab() {
                                       style={{ fontSize: 11, padding: '2px 4px', border: '1px solid #e2e8f0', borderRadius: 4, color: '#64748b' }}
                                     >
                                       <option value="" disabled>+ 직원 추가</option>
-                                      {available.map(s => <option key={s} value={s}>{s}</option>)}
+                                      {availableExternal.length > 0 && (
+                                        <optgroup label="외근직">
+                                          {availableExternal.map(r => <option key={r.staffName} value={r.staffName}>{r.staffName}</option>)}
+                                        </optgroup>
+                                      )}
+                                      {availableInternal.length > 0 && (
+                                        <optgroup label="내근직">
+                                          {availableInternal.map(r => <option key={r.staffName} value={r.staffName}>{r.staffName}</option>)}
+                                        </optgroup>
+                                      )}
                                     </select>
                                   )
                                 })()}
@@ -547,9 +608,10 @@ export default function IncentiveTab() {
                   </tr>
                 </thead>
                 <tbody>
-                  {staffList.map(s => {
+                  {staffRoster.filter(r => r.staffType !== 'INTERNAL').map(r => {
+                    const s = r.staffName
                     const personalTotal = staffIncentiveTotals[s] || 0
-                    const total = personalTotal // 자차보조금 미포함 (향후 추가)
+                    const total = personalTotal
                     const rounded = Math.ceil(total / 100000) * 100000
 
                     return (
@@ -559,6 +621,26 @@ export default function IncentiveTab() {
                         <td className={`${cellCls} text-center text-gray-300`}>-</td>
                         <td className={`${cellCls} text-right`}>{fmt(total)}</td>
                         <td className={`${cellCls} text-right font-bold text-sky-700`}>{fmt(rounded)}</td>
+                        <td className={`${cellCls} text-center text-gray-300`}>-</td>
+                        <td className={`${cellCls} text-center text-gray-300`}>-</td>
+                      </tr>
+                    )
+                  })}
+                  {staffRoster.filter(r => r.staffType === 'INTERNAL' && (staffIncentiveTotals[r.staffName] || 0) > 0).map(r => {
+                    const s = r.staffName
+                    const personalTotal = staffIncentiveTotals[s] || 0
+                    const total = personalTotal
+                    const rounded = Math.ceil(total / 100000) * 100000
+
+                    return (
+                      <tr key={s} className="hover:bg-gray-50 bg-blue-50/40">
+                        <td className={`${cellCls} text-center font-medium`}>
+                          {s}<span className="ml-1 text-xs text-blue-500 font-normal">(내근)</span>
+                        </td>
+                        <td className={`${cellCls} text-right`}>{fmt(personalTotal)}</td>
+                        <td className={`${cellCls} text-center text-gray-300`}>-</td>
+                        <td className={`${cellCls} text-right`}>{fmt(total)}</td>
+                        <td className={`${cellCls} text-right font-bold text-blue-600`}>{fmt(rounded)}</td>
                         <td className={`${cellCls} text-center text-gray-300`}>-</td>
                         <td className={`${cellCls} text-center text-gray-300`}>-</td>
                       </tr>
@@ -703,6 +785,61 @@ export default function IncentiveTab() {
             </div>
           </div>
         </>
+      )}
+
+      {/* ── 엑셀 임포트 모달 */}
+      {importModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-md">
+            <h3 className="text-lg font-bold mb-4">월말보고 엑셀 임포트</h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">엑셀 파일 선택</label>
+                <input type="file" accept=".xlsx,.xls"
+                  onChange={e => { setImportFile(e.target.files?.[0] || null); setPreviewResult(null); setImportResult(null) }}
+                  className="block w-full text-sm text-gray-500 file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-sm file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100" />
+              </div>
+              <div className="text-xs text-gray-500">
+                대상: <strong>{branch}</strong> · {year}년 {quarter}분기 (<strong>{quarter}분기</strong> 시트 사용)
+              </div>
+
+              {previewResult && !previewResult.error && (
+                <div className="bg-gray-50 rounded-lg p-3 text-sm space-y-1">
+                  <p className="font-semibold">미리보기 결과</p>
+                  <p>파싱 건수: <strong>{previewResult.parsedCount}건</strong></p>
+                  <p>배분 직원: {previewResult.allStaff?.join(', ')}</p>
+                </div>
+              )}
+              {previewResult?.error && (
+                <div className="bg-red-50 rounded-lg p-3 text-sm text-red-600">{previewResult.error}</div>
+              )}
+              {importResult && (
+                <div className={`rounded-lg p-3 text-sm ${importResult.ok ? 'bg-emerald-50 text-emerald-800' : 'bg-red-50 text-red-600'}`}>
+                  {importResult.ok ? (
+                    <div className="space-y-0.5">
+                      <p className="font-semibold">임포트 완료</p>
+                      <p>신규 생성: {importResult.created}건 / 업데이트: {importResult.updated}건</p>
+                      {importResult.errors?.length > 0 && <p className="text-red-500">오류: {importResult.errors[0]}</p>}
+                    </div>
+                  ) : <p>{importResult.error}</p>}
+                </div>
+              )}
+            </div>
+
+            <div className="flex gap-2 mt-6">
+              <button onClick={handleImportPreview} disabled={!importFile || importLoading}
+                className="flex-1 py-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-sm font-medium disabled:opacity-40">
+                {importLoading && !importResult ? '파싱 중...' : '미리보기'}
+              </button>
+              <button onClick={handleImportConfirm} disabled={!previewResult || previewResult?.error || importLoading || !!importResult}
+                className="flex-1 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium disabled:opacity-40">
+                {importLoading && importResult === null ? '임포트 중...' : '임포트 실행'}
+              </button>
+              <button onClick={() => setImportModalOpen(false)}
+                className="px-4 py-2 rounded-lg border border-gray-200 hover:bg-gray-50 text-sm">닫기</button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

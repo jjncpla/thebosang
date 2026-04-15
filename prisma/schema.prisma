@@ -925,6 +925,7 @@ model StaffRoster {
   id           String   @id @default(cuid())
   branchName   String
   staffName    String
+  staffType    String   @default("EXTERNAL")   // EXTERNAL=외근직, INTERNAL=내근직
   startYear    Int
   startMonth   Int
   endYear      Int?

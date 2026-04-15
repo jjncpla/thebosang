@@ -16,6 +16,7 @@ export async function GET(req: NextRequest) {
 
   const all = await prisma.staffRoster.findMany({
     where: { branchName },
+    select: { id: true, staffName: true, staffType: true, startYear: true, startMonth: true, endYear: true, endMonth: true },
     orderBy: [{ startYear: 'asc' }, { startMonth: 'asc' }, { staffName: 'asc' }],
   })
 

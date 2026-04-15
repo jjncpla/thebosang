@@ -82,7 +82,15 @@
       "Bash(wc:*)",
       "Skill(claude-api)",
       "Bash(npx tsx:*)",
-      "Bash(kill %1)"
+      "Bash(npx --yes sharp-cli -i public/logo.jpg -o app/favicon.ico -- resize 32 32)",
+      "Bash(echo \"exit: $?\")",
+      "Bash(npx --yes sharp-cli -i public/logo.jpg -o app/icon.png -- resize 64 64)",
+      "Bash(npx --yes sharp-cli -i public/logo.jpg -o app/apple-icon.png -- resize 180 180)",
+      "Bash(npx --yes sharp-cli -i public/logo.jpg -o app/favicon.ico -- resize 32 32 -- png)",
+      "Bash(npx --yes sharp-cli -i public/logo.jpg -o app/favicon.png -- resize 32 32)",
+      "Bash(dir \"C:/Users/jjakg/thebosang/0. 노무법인 더보상 울산동부지사_전체TF/\")",
+      "Bash(git fetch:*)",
+      "Bash(git stash:*)"
     ]
   },
   "enableAllProjectMcpServers": true,
