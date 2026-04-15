@@ -9,6 +9,8 @@ export async function GET(req: NextRequest) {
   const search = sp.get("search") ?? "";
   const salesRoute = sp.get("salesRoute") ?? "";
   const isOneStop = sp.get("isOneStop") ?? "";
+  const salesManagerId = sp.get("salesManagerId") ?? "";
+  const caseManagerId = sp.get("caseManagerId") ?? "";
   const contractDateFrom = sp.get("contractDate_from") ?? "";
   const contractDateTo = sp.get("contractDate_to") ?? "";
   const receptionDateFrom = sp.get("receptionDate_from") ?? "";
@@ -78,10 +80,14 @@ export async function GET(req: NextRequest) {
           },
         }),
         ...(hasHlFilter && { hearingLoss: hlWhere }),
+        ...(salesManagerId && { salesManagerId }),
+        ...(caseManagerId && { caseManagerId }),
       },
       orderBy: { createdAt: "desc" },
       include: {
         patient: { select: { id: true, name: true, ssn: true, phone: true } },
+        salesManager: { select: { id: true, name: true } },
+        caseManager: { select: { id: true, name: true } },
         hearingLoss: true,
         copd: { select: { id: true } },
         pneumoconiosis: { select: { id: true } },
@@ -92,7 +98,14 @@ export async function GET(req: NextRequest) {
       },
     });
 
-    return NextResponse.json(cases);
+    // Flatten manager names for list display
+    const result = cases.map((c) => ({
+      ...c,
+      salesManager: c.salesManager?.name ?? null,
+      caseManager: c.caseManager?.name ?? null,
+    }));
+
+    return NextResponse.json(result);
   } catch (err) {
     console.error("[GET /api/cases]", err);
     return NextResponse.json({ error: "조회 오류" }, { status: 500 });

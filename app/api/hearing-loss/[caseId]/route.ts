@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/auth'
 import { prisma } from '@/lib/prisma'
+import { inferNextStatus, HL_DETAIL_RULES } from '@/lib/status-transition'
 
 // GET: 특정 사건의 소음성 난청 상세 정보 조회
 export async function GET(
@@ -80,10 +81,27 @@ export async function PATCH(
     const { caseId } = await params
     const body = await request.json()
 
+    // 현재 Case 상태 조회
+    const currentCase = await prisma.case.findUnique({
+      where: { id: caseId },
+      select: { status: true },
+    })
+
     const detail = await prisma.hearingLossDetail.update({
       where: { caseId },
       data: body
     })
+
+    // 자동 상태 전이 체크
+    if (currentCase) {
+      const nextStatus = inferNextStatus(currentCase.status, body, HL_DETAIL_RULES)
+      if (nextStatus) {
+        await prisma.case.update({
+          where: { id: caseId },
+          data: { status: nextStatus },
+        })
+      }
+    }
 
     return NextResponse.json(detail)
   } catch (error) {

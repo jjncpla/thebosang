@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { inferNextStatus, CASE_FIELD_RULES } from "@/lib/status-transition";
 
 export async function GET(
   _req: NextRequest,
@@ -27,12 +28,15 @@ export async function GET(
     });
     if (!c) return NextResponse.json({ error: "없음" }, { status: 404 });
 
-    // BasicInfoTab 호환을 위해 manager 이름을 flat string으로 변환
+    // BasicInfoTab 호환: manager 이름 flat + ID도 포함
     return NextResponse.json({
       ...c,
       salesManager: c.salesManager?.name ?? null,
       caseManager: c.caseManager?.name ?? null,
       branchManager: c.branchManager?.name ?? null,
+      salesManagerUserId: c.salesManager?.id ?? null,
+      caseManagerUserId: c.caseManager?.id ?? null,
+      branchManagerUserId: c.branchManager?.id ?? null,
     });
   } catch (err) {
     console.error("[GET /api/cases/[caseId]]", err);
@@ -50,7 +54,17 @@ export async function PATCH(
     const {
       caseType: newCaseType, tfName, branch, subAgent,
       salesRoute, contractDate, receptionDate, isOneStop, status, memo,
+      salesManagerId, caseManagerId, branchManagerId,
     } = body;
+
+    // 자동 전이: 사용자가 직접 status를 보내지 않은 경우만
+    let autoStatus: string | null = null;
+    if (status === undefined) {
+      const current = await prisma.case.findUnique({ where: { id: caseId }, select: { status: true } });
+      if (current) {
+        autoStatus = inferNextStatus(current.status, body, CASE_FIELD_RULES);
+      }
+    }
 
     const workHistoryData: Record<string, unknown> = {}
     if (body.workHistory !== undefined) workHistoryData.workHistory = body.workHistory
@@ -72,9 +86,12 @@ export async function PATCH(
         ...(contractDate !== undefined && { contractDate: contractDate ? new Date(contractDate) : null }),
         ...(receptionDate !== undefined && { receptionDate: receptionDate ? new Date(receptionDate) : null }),
         ...(isOneStop !== undefined && { isOneStop }),
-        ...(status !== undefined && { status }),
+        ...(status !== undefined ? { status } : autoStatus ? { status: autoStatus } : {}),
         ...(memo !== undefined && { memo }),
         ...(body.kwcOfficeName !== undefined && { kwcOfficeName: body.kwcOfficeName || null }),
+        ...(salesManagerId !== undefined && { salesManagerId: salesManagerId || null }),
+        ...(caseManagerId !== undefined && { caseManagerId: caseManagerId || null }),
+        ...(branchManagerId !== undefined && { branchManagerId: branchManagerId || null }),
         ...workHistoryData,
       },
       include: {
@@ -99,6 +116,9 @@ export async function PATCH(
       salesManager: updated.salesManager?.name ?? null,
       caseManager: updated.caseManager?.name ?? null,
       branchManager: updated.branchManager?.name ?? null,
+      salesManagerUserId: updated.salesManager?.id ?? null,
+      caseManagerUserId: updated.caseManager?.id ?? null,
+      branchManagerUserId: updated.branchManager?.id ?? null,
     });
   } catch (err) {
     console.error("[PATCH /api/cases/[caseId]]", err);
