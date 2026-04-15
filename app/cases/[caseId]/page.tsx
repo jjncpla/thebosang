@@ -141,6 +141,12 @@ type CaseData = {
   branchManager: string | null;
   salesManager: string | null;
   caseManager: string | null;
+  salesManagerId: string | null;
+  caseManagerId: string | null;
+  branchManagerId: string | null;
+  salesManagerUserId?: string | null;
+  caseManagerUserId?: string | null;
+  branchManagerUserId?: string | null;
   salesRoute: string | null;
   contractDate: string | null;
   receptionDate: string | null;
@@ -1506,6 +1512,9 @@ function BasicInfoTab({ caseData, onUpdated }: { caseData: CaseData; onUpdated: 
     branchManager: caseData.branchManager ?? "",
     salesManager: caseData.salesManager ?? "",
     caseManager: caseData.caseManager ?? "",
+    salesManagerId: caseData.salesManagerUserId ?? caseData.salesManagerId ?? null as string | null,
+    caseManagerId: caseData.caseManagerUserId ?? caseData.caseManagerId ?? null as string | null,
+    branchManagerId: caseData.branchManagerUserId ?? caseData.branchManagerId ?? null as string | null,
     salesRoute: caseData.salesRoute ?? "",
     contractDate: toInputDate(caseData.contractDate),
     receptionDate: toInputDate(caseData.receptionDate),
@@ -1617,7 +1626,7 @@ function BasicInfoTab({ caseData, onUpdated }: { caseData: CaseData; onUpdated: 
           <label style={{ fontSize: 12, color: "#6b7280" }}>영업담당자</label>
           <ContactSelector
             value={form.salesManager}
-            onChange={(name, mobile) => setForm({ ...form, salesManager: name })}
+            onChange={(name, mobile, userId) => setForm({ ...form, salesManager: name, salesManagerId: userId ?? null })}
             placeholder="영업담당자 이름 검색"
           />
         </div>
@@ -1625,7 +1634,7 @@ function BasicInfoTab({ caseData, onUpdated }: { caseData: CaseData; onUpdated: 
           <label style={{ fontSize: 12, color: "#6b7280" }}>실무담당자</label>
           <ContactSelector
             value={form.caseManager}
-            onChange={(name, mobile) => setForm({ ...form, caseManager: name })}
+            onChange={(name, mobile, userId) => setForm({ ...form, caseManager: name, caseManagerId: userId ?? null })}
             placeholder="실무담당자 이름 검색"
           />
         </div>
