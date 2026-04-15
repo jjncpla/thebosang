@@ -71,6 +71,16 @@ export default function IncentiveTab() {
   const [usages, setUsages] = useState<UsageRecord[]>([])
   const [loading, setLoading] = useState(false)
 
+  // 섹션 접기/펼치기
+  const [openSections, setOpenSections] = useState({
+    distribution: true,
+    summary: true,
+    branch: true,
+  })
+  const toggleSection = (key: keyof typeof openSections) => {
+    setOpenSections(prev => ({ ...prev, [key]: !prev[key] }))
+  }
+
   // 엑셀 임포트 상태
   const [importModalOpen, setImportModalOpen] = useState(false)
   const [importFile, setImportFile] = useState<File | null>(null)
@@ -359,10 +369,14 @@ export default function IncentiveTab() {
               섹션 1: 정산 인센티브 배분 내역 (메인 테이블)
           ══════════════════════════════════════════════════════════ */}
           <div>
-            <h3 className="text-sm font-bold text-gray-800 mb-2">
-              📊 정산 인센티브 배분 내역 ({year}년 {quarter}분기 · {branch})
-            </h3>
-            {records.length === 0 ? (
+            <button
+              onClick={() => toggleSection('distribution')}
+              className="flex items-center justify-between w-full text-left cursor-pointer select-none py-1 hover:opacity-70 transition-opacity mb-2"
+            >
+              <span className="text-sm font-bold text-gray-800">📊 정산 인센티브 배분 내역 ({year}년 {quarter}분기 · {branch})</span>
+              <span className="ml-auto text-gray-400 text-sm">{openSections.distribution ? '▲ 접기' : '▼ 펼치기'}</span>
+            </button>
+            {!openSections.distribution ? null : records.length === 0 ? (
               <div className="text-center py-6 text-gray-400 text-sm border rounded">
                 해당 기간 더보상 TF 정산 데이터가 없습니다.
               </div>
@@ -597,10 +611,14 @@ export default function IncentiveTab() {
               섹션 2: 인센티브 합계 요약
           ══════════════════════════════════════════════════════════ */}
           <div>
-            <h3 className="text-sm font-bold text-gray-800 mb-2">
-              📋 인센티브 합계 요약
-            </h3>
-            <div className="overflow-x-auto">
+            <button
+              onClick={() => toggleSection('summary')}
+              className="flex items-center justify-between w-full text-left cursor-pointer select-none py-1 hover:opacity-70 transition-opacity mb-2"
+            >
+              <span className="text-sm font-bold text-gray-800">📋 인센티브 합계 요약</span>
+              <span className="ml-auto text-gray-400 text-sm">{openSections.summary ? '▲ 접기' : '▼ 펼치기'}</span>
+            </button>
+            {openSections.summary && <><div className="overflow-x-auto">
               <table className="w-full border-collapse text-xs">
                 <thead>
                   <tr>
@@ -697,16 +715,21 @@ export default function IncentiveTab() {
             <p className="text-[10px] text-gray-400 mt-1">
               * 자차보조금, 분기평가, 반기평가 항목은 향후 업데이트 예정
             </p>
+            </>}
           </div>
 
           {/* ══════════════════════════════════════════════════════════
               섹션 3: 지사 인센티브 관리
           ══════════════════════════════════════════════════════════ */}
           <div>
-            <h3 className="text-sm font-bold text-gray-800 mb-2">
-              🏢 지사 인센티브 관리
-            </h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <button
+              onClick={() => toggleSection('branch')}
+              className="flex items-center justify-between w-full text-left cursor-pointer select-none py-1 hover:opacity-70 transition-opacity mb-2"
+            >
+              <span className="text-sm font-bold text-gray-800">🏢 지사 인센티브 관리</span>
+              <span className="ml-auto text-gray-400 text-sm">{openSections.branch ? '▲ 접기' : '▼ 펼치기'}</span>
+            </button>
+            {openSections.branch && <><div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {/* 좌측: 미배분액 */}
               <div className="border rounded-lg p-4">
                 <div className="text-xs text-gray-500 mb-1">지사인센 미배분액 누적</div>
@@ -809,6 +832,7 @@ export default function IncentiveTab() {
                 {fmt(balance)}원
               </span>
             </div>
+            </>}
           </div>
         </>
       )}
