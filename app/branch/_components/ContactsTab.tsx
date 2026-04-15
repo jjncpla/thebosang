@@ -442,7 +442,7 @@ export default function ContactsTab() {
               <select value={accountForm.role} onChange={e => setAccountForm(p => ({ ...p, role: e.target.value }))}
                 style={{ width: '100%', padding: '8px 10px', border: '1px solid #cbd5e1', borderRadius: 6, fontSize: 13 }}>
                 <option value="ADMIN">ADMIN (관리자)</option>
-                <option value="ORG_MANAGER">조직관리자</option>
+                <option value="MANAGER">조직관리자</option>
                 <option value="STAFF">STAFF (직원)</option>
                 <option value="READONLY">READONLY (이산계정)</option>
               </select>
@@ -475,7 +475,7 @@ export default function ContactsTab() {
               <select value={accountForm.role} onChange={e => setAccountForm(p => ({ ...p, role: e.target.value }))}
                 style={{ width: '100%', padding: '8px 10px', border: '1px solid #cbd5e1', borderRadius: 6, fontSize: 13 }}>
                 <option value="ADMIN">ADMIN (관리자)</option>
-                <option value="ORG_MANAGER">조직관리자</option>
+                <option value="MANAGER">조직관리자</option>
                 <option value="STAFF">STAFF (직원)</option>
                 <option value="READONLY">READONLY (이산계정)</option>
               </select>
