@@ -652,7 +652,7 @@ export default function IncentiveTab() {
                       </tr>
                     )
                   })}
-                  {staffRoster.filter(r => r.staffType === 'ATTORNEY' && (staffIncentiveTotals[r.staffName] || 0) > 0).map(r => {
+                  {staffRoster.filter(r => r.staffType === 'ATTORNEY').map(r => {
                     const s = r.staffName
                     const personalTotal = staffIncentiveTotals[s] || 0
                     const total = personalTotal
