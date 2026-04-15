@@ -441,9 +441,10 @@ export default function IncentiveTab() {
                                 {/* 직원 추가 드롭다운 */}
                                 {(() => {
                                   const assignedNames = editAllocations.map(a => a.staffName)
-                                  const availableExternal = staffRoster.filter(r => r.staffType !== 'INTERNAL' && !assignedNames.includes(r.staffName))
+                                  const availableExternal = staffRoster.filter(r => (!r.staffType || r.staffType === 'EXTERNAL') && !assignedNames.includes(r.staffName))
                                   const availableInternal = staffRoster.filter(r => r.staffType === 'INTERNAL' && !assignedNames.includes(r.staffName))
-                                  if (availableExternal.length === 0 && availableInternal.length === 0) return null
+                                  const availableAttorney = staffRoster.filter(r => r.staffType === 'ATTORNEY' && !assignedNames.includes(r.staffName))
+                                  if (availableExternal.length === 0 && availableInternal.length === 0 && availableAttorney.length === 0) return null
                                   return (
                                     <select
                                       key={`add-staff-${editAllocations.length}`}
@@ -464,6 +465,11 @@ export default function IncentiveTab() {
                                       {availableInternal.length > 0 && (
                                         <optgroup label="내근직">
                                           {availableInternal.map(r => <option key={r.staffName} value={r.staffName}>{r.staffName}</option>)}
+                                        </optgroup>
+                                      )}
+                                      {availableAttorney.length > 0 && (
+                                        <optgroup label="노무사">
+                                          {availableAttorney.map(r => <option key={r.staffName} value={r.staffName}>{r.staffName} (노무사)</option>)}
                                         </optgroup>
                                       )}
                                     </select>
@@ -608,7 +614,7 @@ export default function IncentiveTab() {
                   </tr>
                 </thead>
                 <tbody>
-                  {staffRoster.filter(r => r.staffType !== 'INTERNAL').map(r => {
+                  {staffRoster.filter(r => !r.staffType || r.staffType === 'EXTERNAL').map(r => {
                     const s = r.staffName
                     const personalTotal = staffIncentiveTotals[s] || 0
                     const total = personalTotal
@@ -641,6 +647,26 @@ export default function IncentiveTab() {
                         <td className={`${cellCls} text-center text-gray-300`}>-</td>
                         <td className={`${cellCls} text-right`}>{fmt(total)}</td>
                         <td className={`${cellCls} text-right font-bold text-blue-600`}>{fmt(rounded)}</td>
+                        <td className={`${cellCls} text-center text-gray-300`}>-</td>
+                        <td className={`${cellCls} text-center text-gray-300`}>-</td>
+                      </tr>
+                    )
+                  })}
+                  {staffRoster.filter(r => r.staffType === 'ATTORNEY' && (staffIncentiveTotals[r.staffName] || 0) > 0).map(r => {
+                    const s = r.staffName
+                    const personalTotal = staffIncentiveTotals[s] || 0
+                    const total = personalTotal
+                    const rounded = Math.ceil(total / 100000) * 100000
+
+                    return (
+                      <tr key={s} className="hover:bg-gray-50 bg-purple-50/30">
+                        <td className={`${cellCls} text-center font-medium`}>
+                          {s}<span className="ml-1 text-xs text-purple-500 font-normal">(노무사)</span>
+                        </td>
+                        <td className={`${cellCls} text-right`}>{fmt(personalTotal)}</td>
+                        <td className={`${cellCls} text-center text-gray-300`}>-</td>
+                        <td className={`${cellCls} text-right`}>{fmt(total)}</td>
+                        <td className={`${cellCls} text-right font-bold text-purple-600`}>{fmt(rounded)}</td>
                         <td className={`${cellCls} text-center text-gray-300`}>-</td>
                         <td className={`${cellCls} text-center text-gray-300`}>-</td>
                       </tr>
