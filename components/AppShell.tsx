@@ -56,7 +56,7 @@ const MENU_ITEMS: MenuItem[] = [
   { id: "law", label: "법령 및 규정", icon: "📜", path: "/law" },
   { id: "issues", label: "주요 쟁점 사항", icon: "💡", path: "/issues" },
   { id: "branch", label: "지사장 관리·운영", icon: "🏢", path: "/branch", restricted: "org" },
-  { id: "admin", label: "관리자 페이지", icon: "⚙", path: "/admin/users", restricted: "admin" },
+  { id: "admin", label: "관리자 페이지", icon: "⚙", path: "/admin", restricted: "admin" },
 ];
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
