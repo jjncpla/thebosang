@@ -441,9 +441,10 @@ export default function ContactsTab() {
               <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#475569', marginBottom: 4 }}>권한</label>
               <select value={accountForm.role} onChange={e => setAccountForm(p => ({ ...p, role: e.target.value }))}
                 style={{ width: '100%', padding: '8px 10px', border: '1px solid #cbd5e1', borderRadius: 6, fontSize: 13 }}>
-                <option value="ADMIN">ADMIN</option>
-                <option value="STAFF">STAFF</option>
-                <option value="READONLY">READONLY</option>
+                <option value="ADMIN">ADMIN (관리자)</option>
+                <option value="ORG_MANAGER">조직관리자</option>
+                <option value="STAFF">STAFF (직원)</option>
+                <option value="READONLY">READONLY (이산계정)</option>
               </select>
             </div>
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
@@ -473,30 +474,30 @@ export default function ContactsTab() {
               <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#475569', marginBottom: 4 }}>권한</label>
               <select value={accountForm.role} onChange={e => setAccountForm(p => ({ ...p, role: e.target.value }))}
                 style={{ width: '100%', padding: '8px 10px', border: '1px solid #cbd5e1', borderRadius: 6, fontSize: 13 }}>
-                <option value="ADMIN">ADMIN</option>
-                <option value="STAFF">STAFF</option>
-                <option value="READONLY">READONLY</option>
+                <option value="ADMIN">ADMIN (관리자)</option>
+                <option value="ORG_MANAGER">조직관리자</option>
+                <option value="STAFF">STAFF (직원)</option>
+                <option value="READONLY">READONLY (이산계정)</option>
               </select>
             </div>
-            <div style={{ display: 'flex', gap: 8, justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'nowrap' }}>
               <button onClick={handleDeleteAccount} disabled={accountSubmitting}
-                style={{ padding: '8px 16px', backgroundColor: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
+                style={{ padding: '8px 14px', backgroundColor: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap' }}>
                 계정 삭제
               </button>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <button onClick={handleResetPassword} disabled={accountSubmitting}
-                  style={{ padding: '8px 14px', backgroundColor: '#fff7ed', color: '#ea580c', border: '1px solid #fed7aa', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>
-                  비번 초기화(1234)
-                </button>
-                <button onClick={() => setAccountModal(null)} disabled={accountSubmitting}
-                  style={{ padding: '8px 16px', border: '1px solid #cbd5e1', borderRadius: 6, background: '#fff', cursor: 'pointer', fontSize: 13 }}>
-                  취소
-                </button>
-                <button onClick={handleUpdateAccountRole} disabled={accountSubmitting}
-                  style={{ padding: '8px 20px', backgroundColor: '#29ABE2', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
-                  {accountSubmitting ? '저장 중...' : '저장'}
-                </button>
-              </div>
+              <button onClick={handleResetPassword} disabled={accountSubmitting}
+                style={{ padding: '8px 14px', backgroundColor: '#fff7ed', color: '#ea580c', border: '1px solid #fed7aa', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap' }}>
+                비번 초기화(1234)
+              </button>
+              <div style={{ flex: 1 }} />
+              <button onClick={() => setAccountModal(null)} disabled={accountSubmitting}
+                style={{ padding: '8px 16px', border: '1px solid #cbd5e1', borderRadius: 6, background: '#fff', cursor: 'pointer', fontSize: 13, whiteSpace: 'nowrap' }}>
+                취소
+              </button>
+              <button onClick={handleUpdateAccountRole} disabled={accountSubmitting}
+                style={{ padding: '8px 20px', backgroundColor: '#29ABE2', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap' }}>
+                {accountSubmitting ? '저장 중...' : '저장'}
+              </button>
             </div>
           </div>
         </div>

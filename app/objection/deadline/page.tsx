@@ -4,18 +4,9 @@ import { useCallback, useEffect, useState } from "react";
 import { CASE_TYPE_LABELS } from "@/lib/constants/case";
 import ContactSelector from "@/components/ui/ContactSelector";
 
-const BRANCH_TF_MAP: Record<string, string[]> = {
-  "울산지사": ["울산TF", "이산울산북부TF"],
-  "울산동부지사": ["울산동부TF", "이산울산동부TF"],
-  "울산남부지사": ["울산남부TF", "이산울산남부TF"],
-  "부산경남지사": ["부산경남TF"],
-  "서울북부지사": ["서울북부TF"],
-  "경기안산지사": ["경기안산TF"],
-  "전북익산지사": ["전북익산TF"],
-  "경북구미지사": ["경북구미TF"],
-};
-
-const TF_OPTIONS = Object.values(BRANCH_TF_MAP).flat();
+// TF 목록은 Branch DB에서 동적으로 로드 (아래 fetchTfData 참조)
+// 폴백용 기본값
+const DEFAULT_TF_OPTIONS = ["울산TF", "이산울산북부TF", "울산동부TF", "이산울산동부TF", "울산남부TF", "이산울산남부TF", "부산경남TF", "서울북부TF", "경기안산TF", "전북익산TF", "경북구미TF"];
 
 const branchGroups: Record<string, { label: string; tfNames: string[] }> = {
   ulsan: {
@@ -137,11 +128,12 @@ function ApprovalBadge({ status }: { status: string }) {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type CaseForm = Record<string, any>;
 
-function CaseModal({ initial, managers, onClose, onSave }: {
+function CaseModal({ initial, managers, onClose, onSave, tfOptions }: {
   initial: ObjectionCase | null;
   managers: Manager[];
   onClose: () => void;
   onSave: (form: CaseForm, id?: string) => Promise<void>;
+  tfOptions: string[];
 }) {
   const [form, setForm] = useState<CaseForm>(() =>
     initial ? {
@@ -231,7 +223,7 @@ function CaseModal({ initial, managers, onClose, onSave }: {
         </div>
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px 14px" }}>
-          <div><label style={labelStyle}>TF</label><select style={inputStyle} value={form.tfName ?? ""} onChange={e => set("tfName", e.target.value)}><option value="">선택</option>{TF_OPTIONS.map(t => <option key={t} value={t}>{t}</option>)}</select></div>
+          <div><label style={labelStyle}>TF</label><select style={inputStyle} value={form.tfName ?? ""} onChange={e => set("tfName", e.target.value)}><option value="">선택</option>{tfOptions.map(t => <option key={t} value={t}>{t}</option>)}</select></div>
           <div><label style={labelStyle}>성명</label><input style={inputStyle} value={form.patientName ?? ""} onChange={e => set("patientName", e.target.value)} /></div>
           <div><label style={labelStyle}>사건분류</label><select style={inputStyle} value={form.caseType ?? ""} onChange={e => set("caseType", e.target.value)}><option value="">선택</option>{Object.entries(CASE_TYPE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
           <div><label style={labelStyle}>승인여부</label><select style={inputStyle} value={form.approvalStatus ?? ""} onChange={e => set("approvalStatus", e.target.value)}>{APPROVAL_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}</select></div>
@@ -246,7 +238,7 @@ function CaseModal({ initial, managers, onClose, onSave }: {
           <div style={{ fontSize: 11, fontWeight: 700, color: "#0369a1", marginBottom: 10 }}>심사청구</div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "8px 12px" }}>
             <div><label style={labelStyle}>심사청구일</label><input type="date" style={inputStyle} value={form.examClaimDate ?? ""} onChange={e => set("examClaimDate", e.target.value)} /></div>
-            <div><label style={labelStyle}>심사결과</label><select style={inputStyle} value={form.examResult ?? ""} onChange={e => set("examResult", e.target.value)}><option value="">진행중</option>{EXAM_RESULT_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}</select></div>
+            <div><label style={labelStyle}>심사결과</label><select style={inputStyle} value={form.examResult ?? ""} onChange={e => set("examResult", e.target.value)}><option value="">{form.examClaimDate ? "진행중" : "접수대기"}</option>{EXAM_RESULT_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}</select></div>
             <div><label style={labelStyle}>심사송달일</label><input type="date" style={inputStyle} value={form.examResultDate ?? ""} onChange={e => set("examResultDate", e.target.value)} /></div>
           </div>
         </div>
@@ -255,7 +247,7 @@ function CaseModal({ initial, managers, onClose, onSave }: {
           <div style={{ fontSize: 11, fontWeight: 700, color: "#7c3aed", marginBottom: 10 }}>재심사청구</div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "8px 12px" }}>
             <div><label style={labelStyle}>재심사청구일</label><input type="date" style={inputStyle} value={form.reExamClaimDate ?? ""} onChange={e => set("reExamClaimDate", e.target.value)} /></div>
-            <div><label style={labelStyle}>재심사결과</label><select style={inputStyle} value={form.reExamResult ?? ""} onChange={e => set("reExamResult", e.target.value)}><option value="">진행중</option>{EXAM_RESULT_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}</select></div>
+            <div><label style={labelStyle}>재심사결과</label><select style={inputStyle} value={form.reExamResult ?? ""} onChange={e => set("reExamResult", e.target.value)}><option value="">{form.reExamClaimDate ? "진행중" : "접수대기"}</option>{EXAM_RESULT_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}</select></div>
             <div><label style={labelStyle}>재심사송달일</label><input type="date" style={inputStyle} value={form.reExamResultDate ?? ""} onChange={e => set("reExamResultDate", e.target.value)} /></div>
           </div>
         </div>
@@ -442,19 +434,17 @@ export default function ObjectionDeadlinePage() {
 
   const now = new Date();
 
-  // 지사 선택 시 관할 TF 목록 (통합 그룹은 포함된 지사들의 TF 합산)
+  // Branch DB에서 로드한 전체 TF 목록
+  const TF_OPTIONS = (() => {
+    const allTfs = Object.values(branchGroups).flatMap(g => g.tfNames);
+    return allTfs.length > 0 ? [...new Set(allTfs)] : DEFAULT_TF_OPTIONS;
+  })();
+
+  // 지사 선택 시 관할 TF 목록
   const availableTfs = (() => {
     if (!filterBranch || !branchGroups[filterBranch]) return TF_OPTIONS;
-    const branchLabel = branchGroups[filterBranch].label;
-    if (BRANCH_TF_MAP[branchLabel]) return BRANCH_TF_MAP[branchLabel];
-    // 통합 그룹: BRANCH_TF_MAP에서 tfNames에 매칭되는 지사들의 TF를 합산
-    const matchedTfs = new Set<string>();
-    for (const [branchName, tfs] of Object.entries(BRANCH_TF_MAP)) {
-      if (branchGroups[filterBranch].tfNames.some(tn => branchName.includes(tn.trim()))) {
-        tfs.forEach(tf => matchedTfs.add(tf));
-      }
-    }
-    return matchedTfs.size > 0 ? Array.from(matchedTfs) : TF_OPTIONS;
+    const tfs = branchGroups[filterBranch].tfNames;
+    return tfs.length > 0 ? tfs : TF_OPTIONS;
   })();
 
   // 이의제기 탭 stats (종결 건은 별도 집계, 다른 카드에서 제외)
@@ -532,7 +522,7 @@ export default function ObjectionDeadlinePage() {
 
   return (
     <div style={{ padding: 24, minHeight: "100%", background: "#f1f5f9", fontFamily: "'Malgun Gothic','Apple SD Gothic Neo','Segoe UI',sans-serif" }}>
-      {modal && <CaseModal initial={target} managers={managers} onClose={() => { setModal(false); setTarget(null); }} onSave={handleSave} />}
+      {modal && <CaseModal initial={target} managers={managers} onClose={() => { setModal(false); setTarget(null); }} onSave={handleSave} tfOptions={TF_OPTIONS} />}
       {wageModal && <WageDateModal item={wageModal} onClose={() => setWageModal(null)} onSave={handleWageDateSave} />}
 
       {/* Header */}
@@ -666,10 +656,10 @@ export default function ObjectionDeadlinePage() {
                           {deadline ? formatDate(deadline.toISOString()) : "-"}{diff !== null && diff <= 7 && diff >= 0 && " ⚠️"}{diff !== null && diff < 0 && " 🔴"}
                         </td>
                         <td style={{ padding: "8px 10px", fontFamily: "monospace", fontSize: 11, color: "#6b7280" }}>{formatDate(item.examClaimDate)}</td>
-                        <td style={{ padding: "8px 10px", color: "#374151" }}>{item.examResult ?? "진행중"}</td>
+                        <td style={{ padding: "8px 10px", color: "#374151" }}>{item.examResult ?? (item.examClaimDate ? "진행중" : "접수대기")}</td>
                         <td style={{ padding: "8px 10px", fontFamily: "monospace", fontSize: 11, color: "#6b7280" }}>{formatDate(item.examResultDate)}</td>
                         <td style={{ padding: "8px 10px", fontFamily: "monospace", fontSize: 11, color: "#6b7280" }}>{formatDate(item.reExamClaimDate)}</td>
-                        <td style={{ padding: "8px 10px", color: "#374151" }}>{item.reExamResult ?? "-"}</td>
+                        <td style={{ padding: "8px 10px", color: "#374151" }}>{item.reExamResult ?? (item.reExamClaimDate ? "진행중" : "접수대기")}</td>
                         <td style={{ padding: "8px 10px", fontFamily: "monospace", fontSize: 11, color: "#6b7280" }}>{formatDate(item.reExamResultDate)}</td>
                         <td style={{ padding: "8px 10px", color: "#374151" }}>{item.manager?.name ?? "-"}</td>
                         <td style={{ padding: "8px 10px" }}>
