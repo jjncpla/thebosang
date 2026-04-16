@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { TF_BY_BRANCH } from "@/lib/constants/tf";
+import { useBranches } from "@/lib/hooks/useBranches";
 import ContactSelector from "@/components/ui/ContactSelector";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -342,14 +342,14 @@ function ConsultationModal({
   );
 }
 
-// 상담관리는 더보상TF만 표시 (이산TF 제외)
-const THEBOSANG_TF_LIST: string[] = Object.entries(TF_BY_BRANCH)
-  .flatMap(([, tfs]) => tfs)
-  .filter((tf) => !tf.startsWith("이산"));
-
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function ConsultationPage() {
+  const { tfByBranch: TF_BY_BRANCH } = useBranches();
+  // 상담관리는 더보상TF만 표시 (이산TF 제외)
+  const THEBOSANG_TF_LIST: string[] = Object.entries(TF_BY_BRANCH)
+    .flatMap(([, tfs]) => tfs)
+    .filter((tf) => !tf.startsWith("이산"));
   const [items, setItems] = useState<Consultation[]>([]);
   const [stats, setStats] = useState<Stats>({ total: 0, contract: 0, waiting: 0, closed: 0 });
   const [managers, setManagers] = useState<Manager[]>([]);

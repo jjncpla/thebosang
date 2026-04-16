@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { CASE_TYPE_LABELS } from "@/lib/constants/case";
-import { TF_BY_BRANCH } from "@/lib/constants/tf";
+import { useBranches } from "@/lib/hooks/useBranches";
 
 type PatientListItem = {
   id: string;
@@ -41,6 +41,7 @@ const CASE_TYPE_COLORS: Record<string, { bg: string; color: string; border: stri
 };
 
 export default function PatientsPage() {
+  const { tfByBranch: TF_BY_BRANCH } = useBranches();
   const router = useRouter();
   const { data: session, status } = useSession();
   const role = (session?.user as { role?: string })?.role ?? "";

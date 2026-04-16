@@ -1,18 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-
-const BRANCH_TF_MAP: Record<string, string[]> = {
-  "울산지사": ["더보상울산TF", "이산울산북부TF"],
-  "울산동부지사": ["더보상울산동부TF", "이산울산동부TF"],
-  "울산남부지사": ["더보상울산남부TF", "이산울산남부TF"],
-  "부산경남지사": ["더보상부산경남TF"],
-  "서울북부지사": ["더보상서울북부TF"],
-  "경기안산지사": ["더보상경기안산TF"],
-  "전북익산지사": ["더보상전북익산TF"],
-  "경북구미지사": ["더보상경북구미TF"],
-};
-const BRANCH_LIST = Object.keys(BRANCH_TF_MAP);
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useBranches } from "@/lib/hooks/useBranches";
 
 type MsgCategory = "상담문의" | "문서수신" | "업무완료" | "일정안내" | "기타";
 
@@ -181,9 +170,29 @@ function LinkCasePopup({
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function TFMonitorPage() {
+  const { shortBranchNames, tfByBranch, loading: branchLoading } = useBranches();
+  // shortName → fullName 매핑으로 TF 조회
+  const BRANCH_TF_MAP = useMemo(() => {
+    const map: Record<string, string[]> = {};
+    for (const [fullName, tfs] of Object.entries(tfByBranch)) {
+      const short = fullName.replace('노무법인 더보상 ', '').replace('노무법인 더보상', '본사');
+      map[short] = tfs;
+    }
+    return map;
+  }, [tfByBranch]);
+  const BRANCH_LIST = useMemo(() => shortBranchNames.filter(b => (BRANCH_TF_MAP[b] || []).length > 0), [shortBranchNames, BRANCH_TF_MAP]);
+
   const today = new Date();
-  const [selectedBranch, setSelectedBranch] = useState(BRANCH_LIST[0]);
-  const [selectedTf, setSelectedTf] = useState(BRANCH_TF_MAP[BRANCH_LIST[0]][0]);
+  const [selectedBranch, setSelectedBranch] = useState('');
+  const [selectedTf, setSelectedTf] = useState('');
+
+  // BRANCH_LIST 로드되면 초기값 세팅
+  useEffect(() => {
+    if (BRANCH_LIST.length > 0 && !selectedBranch) {
+      setSelectedBranch(BRANCH_LIST[0]);
+      setSelectedTf((BRANCH_TF_MAP[BRANCH_LIST[0]] || [])[0] || '');
+    }
+  }, [BRANCH_LIST, BRANCH_TF_MAP, selectedBranch]);
   const [year, setYear] = useState(today.getFullYear());
   const [month, setMonth] = useState(today.getMonth());
   const [selectedDay, setSelectedDay] = useState<number | null>(today.getDate());

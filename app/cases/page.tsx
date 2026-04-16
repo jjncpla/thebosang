@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CASE_TYPE_LABELS, CASE_STATUS_LABELS, CASE_STATUS_COLORS, DEFAULT_STATUS_COLOR } from "@/lib/constants/case";
-import { TF_BY_BRANCH } from "@/lib/constants/tf";
+import { useBranches } from "@/lib/hooks/useBranches";
 import {
   FILTER_DEFINITIONS_BY_TYPE,
   FilterField,
@@ -102,6 +102,7 @@ function StatusBadge({ status }: { status: string }) {
 // ─── Jurisdiction Modal ───────────────────────────────────────────────────────
 
 function JurisdictionModal({ onClose }: { onClose: () => void }) {
+  const { tfByBranch: TF_BY_BRANCH } = useBranches();
   return (
     <>
       <div
@@ -677,6 +678,7 @@ function UnscheduledExamPanel({ onNavigate }: { onNavigate: (caseId: string) => 
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function CasesPage() {
+  const { tfByBranch: TF_BY_BRANCH } = useBranches();
   const router = useRouter();
   const [cases, setCases] = useState<Case[]>([]);
   const [loading, setLoading] = useState(false);

@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import { CASE_TYPES, QUARTER_MONTHS } from '../_constants/performance'
 import { REGION_BRANCHES } from '@/lib/constants/regions'
 import EvaluationSubTab from './EvaluationSubTab'
+import { useBranches } from '@/lib/hooks/useBranches'
 
 // ─── 타입 ────────────────────────────────────────────────────────
 interface StaffRosterItem {
@@ -66,6 +67,7 @@ const ALL_MONTHS = [1,2,3,4,5,6,7,8,9,10,11,12] as const
 
 // ─── 메인 컴포넌트 ────────────────────────────────────────────────
 export default function PerformanceTab() {
+  const { shortBranchNames, regionBranches: dbRegionBranches } = useBranches()
   const currentYear = new Date().getFullYear()
   const [subTab, setSubTab]     = useState<'sales' | 'settlement' | 'evaluation'>('sales')
   const [year, setYear]         = useState(currentYear)
@@ -314,27 +316,31 @@ export default function PerformanceTab() {
   }, [subTab, loadSettlements])
 
   // 현재 지사가 속한 권역 찾기
-  const ALL_BRANCHES = ['울산지사','부산경남지사','서울북부지사','경기안산지사','전북익산지사',
-    '경북구미지사','경기의정부지사','강원동해지사','전남여수지사','대구지사',
-    '부산중부지사','경기수원지사']
+  const ALL_BRANCHES = shortBranchNames
+
+  // DB regionBranches → shortName 기반으로 매핑
+  const effectiveRegionBranches = useMemo(() => {
+    if (Object.keys(dbRegionBranches).length > 0) return dbRegionBranches
+    return REGION_BRANCHES
+  }, [dbRegionBranches])
 
   const currentRegion = useMemo(() => {
-    for (const [region, branches] of Object.entries(REGION_BRANCHES)) {
+    for (const [region, branches] of Object.entries(effectiveRegionBranches)) {
       if (branches.some(b => b === branch || b.includes(branch) || branch.includes(b.replace('노무법인 더보상 ', '')))) {
         return region
       }
     }
     return '수도권역'
-  }, [branch])
+  }, [branch, effectiveRegionBranches])
 
   const regionBranches = useMemo(() => {
     if (currentRegion === '수도권역') {
-      const assigned = Object.values(REGION_BRANCHES).flat()
+      const assigned = Object.values(effectiveRegionBranches).flat()
       return ALL_BRANCHES.filter(b => !assigned.some(rb => rb === b || rb.includes(b) || b.includes(rb.replace('노무법인 더보상 ', ''))))
     }
-    const rbs = REGION_BRANCHES[currentRegion] || []
+    const rbs = effectiveRegionBranches[currentRegion] || []
     return ALL_BRANCHES.filter(b => rbs.some(rb => rb === b || rb.includes(b) || b.includes(rb.replace('노무법인 더보상 ', ''))))
-  }, [currentRegion])
+  }, [currentRegion, ALL_BRANCHES, effectiveRegionBranches])
 
   // 권역별/전체 집계용 데이터 로딩
   useEffect(() => {

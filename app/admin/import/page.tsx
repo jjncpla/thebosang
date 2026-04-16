@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import * as XLSX from "xlsx";
-import { TF_BY_BRANCH, TF_TO_BRANCH } from "@/lib/constants/tf";
+import { useBranches } from "@/lib/hooks/useBranches";
 
 const BATCH_SIZE = 50;
 
@@ -64,6 +64,7 @@ function ConfirmModal({ message, onConfirm, onCancel, confirming }: {
 }
 
 export default function ImportPage() {
+  const { tfByBranch: TF_BY_BRANCH, tfToBranch: TF_TO_BRANCH } = useBranches();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const [dragging, setDragging] = useState(false);

@@ -3,11 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CASE_TYPE_LABELS } from "@/lib/constants/case";
-import { TF_BY_BRANCH } from "@/lib/constants/tf";
-
-const BRANCH_TF_MAP = TF_BY_BRANCH;
-const BRANCH_LIST = Object.keys(TF_BY_BRANCH);
-const ALL_TF_OPTIONS = Object.values(TF_BY_BRANCH).flat();
+import { useBranches } from "@/lib/hooks/useBranches";
 const APPROVAL_OPTIONS = ["승인", "불승인", "일부승인"];
 const PROGRESS_OPTIONS = ["종결", "검토중", "이의제기 진행", "송무 검토", "송무 인계", "평정청구 진행"];
 const PROGRESS_FILTER_OPTIONS = ["미검토", "검토중", "이의제기 진행", "송무 인계", "평정청구 진행"];
@@ -116,6 +112,7 @@ function ReviewModal({ initial, onClose, onSave }: {
   onClose: () => void;
   onSave: (form: ReviewForm, id?: string) => Promise<void>;
 }) {
+  const { tfByBranch: BRANCH_TF_MAP } = useBranches();
   const router = useRouter();
   const [form, setForm] = useState<ReviewForm>(() =>
     initial ? { tfName: initial.tfName, patientName: initial.patientName, caseType: initial.caseType, approvalStatus: initial.approvalStatus, progressStatus: initial.progressStatus, decisionDate: toInputDate(initial.decisionDate), hasInfoDisclosure: initial.hasInfoDisclosure, memo: initial.memo ?? "" }
@@ -210,6 +207,7 @@ function BranchTfFilter({
   progressOptions: string[];
   progressLabel: string;
 }) {
+  const { tfByBranch: BRANCH_TF_MAP, branchNames: BRANCH_LIST, allTFs: ALL_TF_OPTIONS } = useBranches();
   const tfList = filterBranch ? BRANCH_TF_MAP[filterBranch] ?? [] : ALL_TF_OPTIONS;
   return (
     <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "flex-end" }}>
@@ -245,6 +243,8 @@ function BranchTfFilter({
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function ObjectionReviewPage() {
+  const { tfByBranch, branchNames: BRANCH_LIST, allTFs: ALL_TF_OPTIONS } = useBranches();
+  const BRANCH_TF_MAP = tfByBranch;
   const router = useRouter();
   const [tab, setTab] = useState<"review" | "wage">("review");
 

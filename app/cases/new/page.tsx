@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { CASE_TYPE_LABELS } from "@/lib/constants/case";
-import { TF_BY_BRANCH, TF_TO_BRANCH } from "@/lib/constants/tf";
+import { useBranches } from "@/lib/hooks/useBranches";
 import { ALL_STAFF } from "@/lib/constants/staff";
 import ContactSelector from "@/components/ui/ContactSelector";
 
@@ -29,6 +29,7 @@ const inputStyle: React.CSSProperties = {
 };
 
 export default function NewCasePage() {
+  const { tfByBranch: TF_BY_BRANCH, tfToBranch: TF_TO_BRANCH } = useBranches();
   const router = useRouter();
   const [step, setStep] = useState<1 | 2>(1);
   const [searchQuery, setSearchQuery] = useState("");

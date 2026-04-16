@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { QUARTER_MONTHS } from '../_constants/performance'
+import { useBranches } from '@/lib/hooks/useBranches'
 
 // ─── 타입 ────────────────────────────────────────────────────────
 interface Allocation {
@@ -50,14 +51,9 @@ function fmt(n: number) {
 
 const ALL_MONTHS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] as const
 
-const ALL_BRANCHES = [
-  '울산지사', '부산경남지사', '서울북부지사', '경기안산지사', '전북익산지사',
-  '경북구미지사', '경기의정부지사', '강원동해지사', '전남여수지사', '대구지사',
-  '부산중부지사', '경기수원지사',
-]
-
 // ─── 메인 컴포넌트 ────────────────────────────────────────────────
 export default function IncentiveTab() {
+  const { shortBranchNames: ALL_BRANCHES } = useBranches()
   const currentYear = new Date().getFullYear()
   const currentQuarter = Math.ceil((new Date().getMonth() + 1) / 3)
 

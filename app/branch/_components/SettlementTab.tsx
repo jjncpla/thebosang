@@ -1,21 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-
-const BRANCH_LIST = [
-  '울산지사',
-  '부산경남지사',
-  '서울북부지사',
-  '경기안산지사',
-  '전북익산지사',
-  '경북구미지사',
-  '경기의정부지사',
-  '강원동해지사',
-  '전남여수지사',
-  '대구지사',
-  '부산중부지사',
-  '경기수원지사',
-]
+import { useBranches } from '@/lib/hooks/useBranches'
 
 // ─── 타입 ───────────────────────────────────────────────────────
 interface BranchMonthData {
@@ -67,6 +53,7 @@ function parseAmount(s: string) {
 
 // ─── 컴포넌트 ─────────────────────────────────────────────────────
 export default function SettlementTab() {
+  const { shortBranchNames: BRANCH_LIST } = useBranches()
   const currentYear = new Date().getFullYear()
   const [year, setYear] = useState(currentYear)
   const [quarter, setQuarter] = useState(1)
