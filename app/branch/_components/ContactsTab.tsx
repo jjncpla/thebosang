@@ -526,22 +526,25 @@ export default function ContactsTab() {
                 <option value="READONLY">READONLY (이산계정)</option>
               </select>
             </div>
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'nowrap' }}>
+            {/* 위험/비밀번호 액션 버튼 (상단 줄) */}
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12, paddingBottom: 12, borderBottom: '1px solid #f1f5f9' }}>
               <button onClick={handleDeleteAccount} disabled={accountSubmitting}
-                style={{ padding: '8px 14px', backgroundColor: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap' }}>
+                style={{ padding: '7px 12px', backgroundColor: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap' }}>
                 계정 삭제
               </button>
               <button onClick={handleResetPassword} disabled={accountSubmitting}
-                style={{ padding: '8px 14px', backgroundColor: '#fff7ed', color: '#ea580c', border: '1px solid #fed7aa', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap' }}>
+                style={{ padding: '7px 12px', backgroundColor: '#fff7ed', color: '#ea580c', border: '1px solid #fed7aa', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap' }}>
                 비번 초기화(1234)
               </button>
               <button onClick={openPasswordChange} disabled={accountSubmitting}
-                style={{ padding: '8px 14px', backgroundColor: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap' }}>
+                style={{ padding: '7px 12px', backgroundColor: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap' }}>
                 비번 변경
               </button>
-              <div style={{ flex: 1 }} />
+            </div>
+            {/* 저장/취소 (하단 줄) */}
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
               <button onClick={() => setAccountModal(null)} disabled={accountSubmitting}
-                style={{ padding: '8px 16px', border: '1px solid #cbd5e1', borderRadius: 6, background: '#fff', cursor: 'pointer', fontSize: 13, whiteSpace: 'nowrap' }}>
+                style={{ padding: '8px 20px', border: '1px solid #cbd5e1', borderRadius: 6, background: '#fff', cursor: 'pointer', fontSize: 13, whiteSpace: 'nowrap' }}>
                 취소
               </button>
               <button onClick={handleUpdateAccountRole} disabled={accountSubmitting}
