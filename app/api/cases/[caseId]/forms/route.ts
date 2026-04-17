@@ -502,6 +502,34 @@ export async function GET(
         drawText(page, `공인노무사 ${manager?.name ?? ""}`, 340, 54, font, 9);
         drawText(page, `근로복지공단 ${caseData.kwcOfficeName ?? ""}지사장 귀하`, 200, 40, font, 9);
 
+        // 주민번호 13자리 per-digit (좌표 미정 — /forms 에디터에서 지정)
+        const ssnDigits = (patient.ssn ?? "").replace(/[^0-9]/g, "").padEnd(13, " ").split("");
+        drawText(page, ssnDigits[0],  0, 0, font, 9);
+        drawText(page, ssnDigits[1],  0, 0, font, 9);
+        drawText(page, ssnDigits[2],  0, 0, font, 9);
+        drawText(page, ssnDigits[3],  0, 0, font, 9);
+        drawText(page, ssnDigits[4],  0, 0, font, 9);
+        drawText(page, ssnDigits[5],  0, 0, font, 9);
+        drawText(page, ssnDigits[6],  0, 0, font, 9);
+        drawText(page, ssnDigits[7],  0, 0, font, 9);
+        drawText(page, ssnDigits[8],  0, 0, font, 9);
+        drawText(page, ssnDigits[9],  0, 0, font, 9);
+        drawText(page, ssnDigits[10], 0, 0, font, 9);
+        drawText(page, ssnDigits[11], 0, 0, font, 9);
+        drawText(page, ssnDigits[12], 0, 0, font, 9);
+
+        // 재해발생일 8자리 per-digit (좌표 미정 — /forms 에디터에서 지정)
+        const injDate = detail?.firstExamDate ? new Date(detail.firstExamDate) : null;
+        const inj = parseDateFields(injDate);
+        drawText(page, inj.y1, 0, 0, font, 9);
+        drawText(page, inj.y2, 0, 0, font, 9);
+        drawText(page, inj.y3, 0, 0, font, 9);
+        drawText(page, inj.y4, 0, 0, font, 9);
+        drawText(page, inj.m1, 0, 0, font, 9);
+        drawText(page, inj.m2, 0, 0, font, 9);
+        drawText(page, inj.d1, 0, 0, font, 9);
+        drawText(page, inj.d2, 0, 0, font, 9);
+
         pdfBytes = await pdfDoc.save();
         break;
       }
@@ -546,6 +574,31 @@ export async function GET(
         drawText(page, manager?.officeTel ?? "", 340, 239, font, 9);
         drawText(page, `근로복지공단 ${caseData.kwcOfficeName ?? ""}지사장 귀하`, 205, 125, font, 9);
 
+        // 은행명 단독 (좌표 미정 — /forms 에디터에서 지정)
+        drawText(page, detail?.bankName ?? "", 0, 0, font, 9);
+
+        // 생년월일 8자리 per-digit (좌표 미정 — /forms 에디터에서 지정)
+        drawText(page, bf.Y1, 0, 0, font, 9);
+        drawText(page, bf.Y2, 0, 0, font, 9);
+        drawText(page, bf.Y3, 0, 0, font, 9);
+        drawText(page, bf.Y4, 0, 0, font, 9);
+        drawText(page, bf.M1, 0, 0, font, 9);
+        drawText(page, bf.M2, 0, 0, font, 9);
+        drawText(page, bf.D1, 0, 0, font, 9);
+        drawText(page, bf.D2, 0, 0, font, 9);
+
+        // 재해발생일 8자리 per-digit (좌표 미정 — /forms 에디터에서 지정)
+        const injDateSlb = detail?.firstExamDate ? new Date(detail.firstExamDate) : null;
+        const injSlb = parseDateFields(injDateSlb);
+        drawText(page, injSlb.y1, 0, 0, font, 9);
+        drawText(page, injSlb.y2, 0, 0, font, 9);
+        drawText(page, injSlb.y3, 0, 0, font, 9);
+        drawText(page, injSlb.y4, 0, 0, font, 9);
+        drawText(page, injSlb.m1, 0, 0, font, 9);
+        drawText(page, injSlb.m2, 0, 0, font, 9);
+        drawText(page, injSlb.d1, 0, 0, font, 9);
+        drawText(page, injSlb.d2, 0, 0, font, 9);
+
         pdfBytes = await pdfDoc.save();
         break;
       }
@@ -566,6 +619,42 @@ export async function GET(
         drawText(page, today.월자, 395, 142, font, 10);
         drawText(page, today.일자, 430, 142, font, 10);
         drawText(page, patient.name ?? "",       333, 110, font, 9);
+
+        // 청구인 주민번호 13자리 per-digit (좌표 미정 — /forms 에디터에서 지정)
+        const claimantDigits = (patient.ssn ?? "").replace(/[^0-9]/g, "").padEnd(13, " ").split("");
+        drawText(page, claimantDigits[0],  0, 0, font, 9);
+        drawText(page, claimantDigits[1],  0, 0, font, 9);
+        drawText(page, claimantDigits[2],  0, 0, font, 9);
+        drawText(page, claimantDigits[3],  0, 0, font, 9);
+        drawText(page, claimantDigits[4],  0, 0, font, 9);
+        drawText(page, claimantDigits[5],  0, 0, font, 9);
+        drawText(page, claimantDigits[6],  0, 0, font, 9);
+        drawText(page, claimantDigits[7],  0, 0, font, 9);
+        drawText(page, claimantDigits[8],  0, 0, font, 9);
+        drawText(page, claimantDigits[9],  0, 0, font, 9);
+        drawText(page, claimantDigits[10], 0, 0, font, 9);
+        drawText(page, claimantDigits[11], 0, 0, font, 9);
+        drawText(page, claimantDigits[12], 0, 0, font, 9);
+
+        // 수임인 주민번호 13자리 per-digit (좌표 미정 — /forms 에디터에서 지정)
+        const agentDigits = agentSsn.replace(/[^0-9]/g, "").padEnd(13, " ").split("");
+        drawText(page, agentDigits[0],  0, 0, font, 9);
+        drawText(page, agentDigits[1],  0, 0, font, 9);
+        drawText(page, agentDigits[2],  0, 0, font, 9);
+        drawText(page, agentDigits[3],  0, 0, font, 9);
+        drawText(page, agentDigits[4],  0, 0, font, 9);
+        drawText(page, agentDigits[5],  0, 0, font, 9);
+        drawText(page, agentDigits[6],  0, 0, font, 9);
+        drawText(page, agentDigits[7],  0, 0, font, 9);
+        drawText(page, agentDigits[8],  0, 0, font, 9);
+        drawText(page, agentDigits[9],  0, 0, font, 9);
+        drawText(page, agentDigits[10], 0, 0, font, 9);
+        drawText(page, agentDigits[11], 0, 0, font, 9);
+        drawText(page, agentDigits[12], 0, 0, font, 9);
+
+        // 정보 내용 (좌표 미정 — /forms 에디터에서 지정)
+        const infoContent = req.nextUrl.searchParams.get("infoContent") ?? "";
+        drawText(page, infoContent, 0, 0, font, 9);
 
         pdfBytes = await pdfDoc.save();
         break;
@@ -613,6 +702,28 @@ export async function GET(
         drawText(page, patient.name ?? "",       130, 115, font, 9);
         drawText(page, `공인노무사 ${manager?.name ?? ""}`, 130, 99, font, 9);
         drawText(page, `근로복지공단 ${caseData.kwcOfficeName ?? ""}지사장 귀하`, 209, 83, font, 9);
+
+        // 생년월일 8자리 per-digit (좌표 미정 — /forms 에디터에서 지정)
+        drawText(page, bf.Y1, 0, 0, font, 9);
+        drawText(page, bf.Y2, 0, 0, font, 9);
+        drawText(page, bf.Y3, 0, 0, font, 9);
+        drawText(page, bf.Y4, 0, 0, font, 9);
+        drawText(page, bf.M1, 0, 0, font, 9);
+        drawText(page, bf.M2, 0, 0, font, 9);
+        drawText(page, bf.D1, 0, 0, font, 9);
+        drawText(page, bf.D2, 0, 0, font, 9);
+
+        // 재해발생일 8자리 per-digit (좌표 미정 — /forms 에디터에서 지정)
+        const injDateBc = detail?.firstExamDate ? new Date(detail.firstExamDate) : null;
+        const injBc = parseDateFields(injDateBc);
+        drawText(page, injBc.y1, 0, 0, font, 9);
+        drawText(page, injBc.y2, 0, 0, font, 9);
+        drawText(page, injBc.y3, 0, 0, font, 9);
+        drawText(page, injBc.y4, 0, 0, font, 9);
+        drawText(page, injBc.m1, 0, 0, font, 9);
+        drawText(page, injBc.m2, 0, 0, font, 9);
+        drawText(page, injBc.d1, 0, 0, font, 9);
+        drawText(page, injBc.d2, 0, 0, font, 9);
 
         pdfBytes = await pdfDoc.save();
         break;
