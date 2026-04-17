@@ -15,13 +15,17 @@ export async function GET(req: NextRequest) {
   const startMonth = (quarter - 1) * 3 + 1
   const months = [startMonth, startMonth + 1, startMonth + 2]
 
-  // 더보상 TF 사건만 필터 (tfName이 '더보상'으로 시작하는 것)
+  // 더보상 TF 사건 = tfName이 '더보상' 시작 OR isBranchOwned=true
+  // (FILE2 임포트 후엔 isBranchOwned로 정확히 판단 가능. FILE1만 임포트된 상태에선 tfName 기반)
   const records = await prisma.settlementRecord.findMany({
     where: {
       branchName,
       year,
       month: { in: months },
-      tfName: { startsWith: '더보상' },
+      OR: [
+        { tfName: { startsWith: '더보상' } },
+        { isBranchOwned: true },
+      ],
     },
     include: {
       allocations: true,

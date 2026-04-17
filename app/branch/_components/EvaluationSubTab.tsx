@@ -168,6 +168,29 @@ function OutdoorEval({ year, quarter, month, branch, viewMonths }: Props) {
           }
         }
       }
+      // 4. 당 지사 인원이 다른 지사 이산TF를 정산한 건 추가 집계 (cross-branch)
+      //    ※ 지사 소속 외근직 이름 = contacts + salesData keys
+      const localStaffNames = Array.from(new Set([
+        ...Object.keys(salesMap),
+        ...Object.keys(tbSettle),
+        ...Object.keys(isanSettle),
+      ]))
+      if (localStaffNames.length > 0) {
+        const qs = new URLSearchParams({
+          year: String(year),
+          staffNames: localStaffNames.join(','),
+          months: evalMonths.join(','),
+        })
+        const crossRes = await fetch(`/api/branch/evaluation/isan-settlements?${qs}`)
+        if (crossRes.ok) {
+          const cross: Record<string, { count: number; gross: number }> = await crossRes.json()
+          // cross는 전 지사 대상이므로 이미 현재 지사 건을 포함.
+          //  → isanSettle을 cross로 '대체'하되, 당 지사 담당(더보상TF) 건은 cross에서 빠지므로 tbSettle과 충돌 없음
+          for (const [name, v] of Object.entries(cross)) {
+            isanSettle[name] = v
+          }
+        }
+      }
       setTbSettleData(tbSettle)
       setIsanData(isanSettle)
     } catch (e) {

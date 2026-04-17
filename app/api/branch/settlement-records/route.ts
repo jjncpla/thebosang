@@ -29,11 +29,31 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json()
   const { allocations, ...recordData } = body
+  const paymentDate = recordData.paymentDate ? new Date(recordData.paymentDate) : null
+
+  // FILE1 재임포트 보호: (branchName + victimName + paymentDate + grossAmount)로 기존 행 탐지
+  // 이미 있으면 salesStaff/settlementStaff/tfName/caseType 등 원본 필드는 덮지 않고 반환만
+  // (FILE2 임포트가 이후에 reportAssignee·isBranchOwned·allocations만 갱신)
+  const existing = paymentDate && recordData.grossAmount
+    ? await prisma.settlementRecord.findFirst({
+        where: {
+          branchName: recordData.branchName,
+          victimName: recordData.victimName,
+          paymentDate,
+          grossAmount: recordData.grossAmount,
+        },
+        include: { allocations: true },
+      })
+    : null
+
+  if (existing) {
+    return NextResponse.json(existing)
+  }
 
   const record = await prisma.settlementRecord.create({
     data: {
       ...recordData,
-      paymentDate: recordData.paymentDate ? new Date(recordData.paymentDate) : null,
+      paymentDate,
       allocations: allocations?.length > 0
         ? { create: allocations }
         : undefined,

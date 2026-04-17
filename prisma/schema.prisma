@@ -910,6 +910,9 @@ model SettlementRecord {
   isInstallment           Boolean  @default(false)
   totalInstallmentAmount  Int      @default(0)
   paidInstallmentAmount   Int      @default(0)
+  // 월말보고(FILE2) 보조 필드 — 정산내역(FILE1)에서 임포트되는 salesStaffName/settlementStaffName과 별개
+  reportAssignee      String?                // 월말보고 '담당자' 컬럼 원문 (영업담당자 또는 '더보상XX')
+  isBranchOwned       Boolean   @default(false) // 지사 자체 영업 여부 (담당자가 '더보상XX'로 치환된 행)
   memo                String?
   allocations         SettlementAllocation[]
   createdAt           DateTime               @default(now())
@@ -1082,6 +1085,43 @@ model BranchIncentiveUsage {
   amount      Int
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+}
+
+// 분기별 지사 단위 인센티브/평가 요약 (월말보고 '합계' 시트 재현)
+model BranchIncentiveSummary {
+  id                 String   @id @default(cuid())
+  branchName         String
+  year               Int
+  quarter            Int
+  // 지사 단위 금액
+  carryOverAmount    Int      @default(0)   // 전년도 잔여 지사인센티브 이월금
+  unallocatedAmount  Int      @default(0)   // 지사 인센 미배분액 (계산 결과 캐시)
+  // 직원별 요약 (합계 시트의 per-staff 행 복제)
+  staffSummaries     BranchIncentiveStaffSummary[]
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@unique([branchName, year, quarter])
+}
+
+model BranchIncentiveStaffSummary {
+  id                  String   @id @default(cuid())
+  summaryId           String
+  summary             BranchIncentiveSummary @relation(fields: [summaryId], references: [id], onDelete: Cascade)
+  staffName           String
+  personalIncentive   Int      @default(0)   // 개인
+  branchIncentive     Int      @default(0)   // 지사
+  carAllowance        Int      @default(0)   // 자차보조금
+  totalIncentive      Int      @default(0)   // 합계
+  roundedIncentive    Int      @default(0)   // 절사
+  quarterlyGrade      String?                // 외근직 분기평가 (S/A/B/C)
+  semiAnnualGrade     String?                // 내근직 반기평가 (S/A/B/C)
+  gradeReason         String?                // 평가 이유
+  memo                String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@unique([summaryId, staffName])
 }
 
 model CaseAttachment {

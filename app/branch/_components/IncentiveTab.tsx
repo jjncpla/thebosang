@@ -21,10 +21,29 @@ interface SettlementWithAlloc {
   tfName: string | null
   salesStaffName: string | null
   settlementStaffName: string | null
+  reportAssignee: string | null
+  isBranchOwned: boolean
   grossAmount: number
   deduction: number
   memo: string | null
   allocations: Allocation[]
+}
+
+interface StaffSummaryRow {
+  staffName: string
+  personalIncentive: number
+  branchIncentive: number
+  carAllowance: number
+  totalIncentive: number
+  roundedIncentive: number
+  quarterlyGrade: string | null
+  semiAnnualGrade: string | null
+  gradeReason: string | null
+}
+interface IncentiveSummary {
+  id: string
+  carryOverAmount: number
+  staffSummaries: StaffSummaryRow[]
 }
 
 interface UsageRecord {
@@ -65,6 +84,7 @@ export default function IncentiveTab() {
   const [staffRoster, setStaffRoster] = useState<StaffRosterItem[]>([])
   const [staffList, setStaffList] = useState<string[]>([])
   const [usages, setUsages] = useState<UsageRecord[]>([])
+  const [summary, setSummary] = useState<IncentiveSummary | null>(null)
   const [loading, setLoading] = useState(false)
 
   // 섹션 접기/펼치기
@@ -101,16 +121,18 @@ export default function IncentiveTab() {
       const startMonth = (quarter - 1) * 3 + 1
       const endMonth = startMonth + 2
 
-      const [recordsRes, usagesRes, rosterRes] = await Promise.all([
+      const [recordsRes, usagesRes, rosterRes, summaryRes] = await Promise.all([
         fetch(`/api/branch/incentive?branchName=${encodeURIComponent(branch)}&year=${year}&quarter=${quarter}`),
         fetch(`/api/branch/incentive/usage?branchName=${encodeURIComponent(branch)}&year=${year}&quarter=${quarter}`),
         fetch(`/api/branch/staff-roster?branchName=${encodeURIComponent(branch)}&year=${year}&month=${endMonth}`),
+        fetch(`/api/branch/incentive/summary?branchName=${encodeURIComponent(branch)}&year=${year}&quarter=${quarter}`),
       ])
 
-      const [recordsData, usagesData, rosterData] = await Promise.all([
+      const [recordsData, usagesData, rosterData, summaryData] = await Promise.all([
         recordsRes.json(),
         usagesRes.json(),
         rosterRes.json(),
+        summaryRes.json(),
       ])
 
       if (Array.isArray(recordsData)) setRecords(recordsData)
@@ -119,6 +141,7 @@ export default function IncentiveTab() {
         setStaffRoster(rosterData)
         setStaffList(rosterData.map((r: StaffRosterItem) => r.staffName))
       }
+      setSummary(summaryData && summaryData.id ? summaryData : null)
     } catch (e) {
       console.error('데이터 로드 실패:', e)
     } finally {
@@ -291,15 +314,19 @@ export default function IncentiveTab() {
     return totals
   }, [records, staffList])
 
-  // ── 지사 인센 미배분액 계산
+  // ── 지사 인센 미배분액 계산 (isBranchOwned 우선, 없으면 담당자 문자열 힌트)
+  const isBranchCase = (r: SettlementWithAlloc): boolean => {
+    if (r.isBranchOwned) return true
+    if (r.reportAssignee && r.reportAssignee.startsWith('더보상')) return true
+    // FILE2 임포트 전 fallback
+    return (!!r.salesStaffName && r.salesStaffName.startsWith('더보상')) ||
+           (!!r.settlementStaffName && r.settlementStaffName.startsWith('더보상'))
+  }
+
   const branchUnallocated = useMemo(() => {
     let total = 0
     for (const r of records) {
-      // 지사 사건: salesStaffName 또는 settlementStaffName이 '더보상'으로 시작
-      const isBranchCase = (r.salesStaffName && r.salesStaffName.startsWith('더보상')) ||
-        (r.settlementStaffName && r.settlementStaffName.startsWith('더보상'))
-      if (!isBranchCase) continue
-
+      if (!isBranchCase(r)) continue
       const ratioSum = getRatioSum(r)
       if (ratioSum < 100) {
         const unallocRatio = 100 - ratioSum
@@ -314,8 +341,9 @@ export default function IncentiveTab() {
     return usages.reduce((sum, u) => sum + u.amount, 0)
   }, [usages])
 
-  // ── 잔액
-  const balance = branchUnallocated - usageTotal
+  // ── 잔액 = 전년도 이월금 + 미배분액 - 사용액
+  const carryOver = summary?.carryOverAmount ?? 0
+  const balance = carryOver + branchUnallocated - usageTotal
 
   // ── 스타일
   const cellCls = 'border border-gray-200 px-2 py-1 text-sm'
@@ -397,10 +425,11 @@ export default function IncentiveTab() {
                       const base = incentiveBase(r.grossAmount)
                       const ratioSum = getRatioSum(r)
                       const netAmt = Math.floor(r.grossAmount / 1.1)
-                      const isBranchCase = (r.salesStaffName && r.salesStaffName.startsWith('더보상')) ||
-                        (r.settlementStaffName && r.settlementStaffName.startsWith('더보상'))
+                      const isBranch = isBranchCase(r)
                       const isEditing = editingRecordId === r.id
                       const activeAllocs = r.allocations.filter(a => a.ratio > 0)
+                      // 담당자 표시: 월말보고 담당자(reportAssignee) > 영업담당자 > 정산담당자
+                      const displayAssignee = r.reportAssignee || r.salesStaffName || r.settlementStaffName || ''
 
                       return (
                         <tr key={r.id} className="hover:bg-gray-50">
@@ -409,7 +438,8 @@ export default function IncentiveTab() {
                           <td className={`${cellCls} text-center`}>{r.victimName}</td>
                           <td className={`${cellCls} text-center`}>{r.caseType || ''}</td>
                           <td className={`${cellCls} text-center whitespace-nowrap`}>
-                            {r.settlementStaffName || r.salesStaffName || ''}
+                            {displayAssignee}
+                            {isBranch && <span className="ml-1 text-[10px] text-sky-600 font-semibold">(지사)</span>}
                           </td>
                           <td className={`${cellCls} text-right`}>{fmt(netAmt)}</td>
                           <td className={`${cellCls} text-right font-medium`} style={{ color: '#059669' }}>{fmt(base)}</td>
@@ -553,8 +583,8 @@ export default function IncentiveTab() {
                                       fontWeight: ratioSum !== 100 ? 600 : 400,
                                     }}>
                                       합계 {ratioSum}%
-                                      {ratioSum < 100 && isBranchCase && ` (지사인센 ${100 - ratioSum}%)`}
-                                      {ratioSum < 100 && !isBranchCase && ` (미배분 ${100 - ratioSum}%)`}
+                                      {ratioSum < 100 && isBranch && ` (지사인센 ${100 - ratioSum}%)`}
+                                      {ratioSum < 100 && !isBranch && ` (미배분 ${100 - ratioSum}%)`}
                                       {ratioSum > 100 && ' ⚠️ 초과'}
                                     </div>
                                   </div>
@@ -620,6 +650,7 @@ export default function IncentiveTab() {
                   <tr>
                     <th className={thCls}>직원명</th>
                     <th className={thCls}>개인 인센티브 합계</th>
+                    <th className={thCls}>지사 인센티브</th>
                     <th className={thCls}>자차보조금</th>
                     <th className={thCls}>합계</th>
                     <th className={thCls}>절사 (십만원 단위)</th>
@@ -628,88 +659,75 @@ export default function IncentiveTab() {
                   </tr>
                 </thead>
                 <tbody>
-                  {staffRoster.filter(r => !r.staffType || r.staffType === 'EXTERNAL').map(r => {
-                    const s = r.staffName
-                    const personalTotal = staffIncentiveTotals[s] || 0
-                    const total = personalTotal
-                    const rounded = Math.ceil(total / 100000) * 100000
-
+                  {(() => {
+                    // 합계 요약 행 렌더링: BranchIncentiveSummary가 있으면 그 값을 보조로 사용
+                    const sumMap: Record<string, StaffSummaryRow | undefined> = {}
+                    summary?.staffSummaries.forEach(r => { sumMap[r.staffName] = r })
+                    const bucket = (type: 'EXTERNAL' | 'INTERNAL' | 'ATTORNEY') =>
+                      staffRoster.filter(r =>
+                        type === 'EXTERNAL' ? (!r.staffType || r.staffType === 'EXTERNAL')
+                        : r.staffType === type
+                      )
+                    const renderRow = (s: string, kind: 'ext' | 'int' | 'att') => {
+                      const personal = staffIncentiveTotals[s] || 0
+                      const ss = sumMap[s]
+                      const branchInc = ss?.branchIncentive ?? 0
+                      const car = ss?.carAllowance ?? 0
+                      const total = ss?.totalIncentive ?? (personal + branchInc + car)
+                      const rounded = ss?.roundedIncentive ?? (Math.floor(total / 100000) * 100000)
+                      const roundedCls = kind === 'ext' ? 'text-sky-700' : kind === 'int' ? 'text-blue-600' : 'text-purple-600'
+                      const rowCls = kind === 'ext' ? '' : kind === 'int' ? 'bg-blue-50/40' : 'bg-purple-50/30'
+                      const tag = kind === 'int' ? '(내근)' : kind === 'att' ? '(노무사)' : ''
+                      return (
+                        <tr key={s} className={`hover:bg-gray-50 ${rowCls}`}>
+                          <td className={`${cellCls} text-center font-medium`}>
+                            {s}{tag && <span className={`ml-1 text-xs font-normal ${kind==='int'?'text-blue-500':'text-purple-500'}`}>{tag}</span>}
+                          </td>
+                          <td className={`${cellCls} text-right`}>{fmt(personal)}</td>
+                          <td className={`${cellCls} text-right`}>{branchInc > 0 ? fmt(branchInc) : <span className="text-gray-300">-</span>}</td>
+                          <td className={`${cellCls} text-right`}>{car > 0 ? fmt(car) : <span className="text-gray-300">-</span>}</td>
+                          <td className={`${cellCls} text-right`}>{fmt(total)}</td>
+                          <td className={`${cellCls} text-right font-bold ${roundedCls}`}>{fmt(rounded)}</td>
+                          <td className={`${cellCls} text-center`}>{ss?.quarterlyGrade || <span className="text-gray-300">-</span>}</td>
+                          <td className={`${cellCls} text-center`}>{ss?.semiAnnualGrade || <span className="text-gray-300">-</span>}</td>
+                        </tr>
+                      )
+                    }
+                    const rows = [
+                      ...bucket('EXTERNAL').map(r => renderRow(r.staffName, 'ext')),
+                      ...bucket('INTERNAL').filter(r => (staffIncentiveTotals[r.staffName] || 0) > 0 || sumMap[r.staffName]).map(r => renderRow(r.staffName, 'int')),
+                      ...bucket('ATTORNEY').map(r => renderRow(r.staffName, 'att')),
+                    ]
+                    const sumPersonal = Object.values(staffIncentiveTotals).reduce((a, b) => a + b, 0)
+                    const sumBranch = (summary?.staffSummaries || []).reduce((a, s) => a + s.branchIncentive, 0)
+                    const sumCar = (summary?.staffSummaries || []).reduce((a, s) => a + s.carAllowance, 0)
+                    const sumTotal = sumPersonal + sumBranch + sumCar
+                    const sumRounded = staffList.reduce((sum, s) => {
+                      const ss = sumMap[s]
+                      const t = ss?.totalIncentive ?? ((staffIncentiveTotals[s] || 0) + (ss?.branchIncentive ?? 0) + (ss?.carAllowance ?? 0))
+                      return sum + (ss?.roundedIncentive ?? Math.floor(t / 100000) * 100000)
+                    }, 0)
                     return (
-                      <tr key={s} className="hover:bg-gray-50">
-                        <td className={`${cellCls} text-center font-medium`}>{s}</td>
-                        <td className={`${cellCls} text-right`}>{fmt(personalTotal)}</td>
-                        <td className={`${cellCls} text-center text-gray-300`}>-</td>
-                        <td className={`${cellCls} text-right`}>{fmt(total)}</td>
-                        <td className={`${cellCls} text-right font-bold text-sky-700`}>{fmt(rounded)}</td>
-                        <td className={`${cellCls} text-center text-gray-300`}>-</td>
-                        <td className={`${cellCls} text-center text-gray-300`}>-</td>
-                      </tr>
+                      <>
+                        {rows}
+                        <tr className="bg-gray-100 font-medium">
+                          <td className={`${cellCls} text-center`}>합계</td>
+                          <td className={`${cellCls} text-right`}>{fmt(sumPersonal)}</td>
+                          <td className={`${cellCls} text-right`}>{fmt(sumBranch)}</td>
+                          <td className={`${cellCls} text-right`}>{fmt(sumCar)}</td>
+                          <td className={`${cellCls} text-right`}>{fmt(sumTotal)}</td>
+                          <td className={`${cellCls} text-right font-bold`}>{fmt(sumRounded)}</td>
+                          <td className={cellCls}></td>
+                          <td className={cellCls}></td>
+                        </tr>
+                      </>
                     )
-                  })}
-                  {staffRoster.filter(r => r.staffType === 'INTERNAL' && (staffIncentiveTotals[r.staffName] || 0) > 0).map(r => {
-                    const s = r.staffName
-                    const personalTotal = staffIncentiveTotals[s] || 0
-                    const total = personalTotal
-                    const rounded = Math.ceil(total / 100000) * 100000
-
-                    return (
-                      <tr key={s} className="hover:bg-gray-50 bg-blue-50/40">
-                        <td className={`${cellCls} text-center font-medium`}>
-                          {s}<span className="ml-1 text-xs text-blue-500 font-normal">(내근)</span>
-                        </td>
-                        <td className={`${cellCls} text-right`}>{fmt(personalTotal)}</td>
-                        <td className={`${cellCls} text-center text-gray-300`}>-</td>
-                        <td className={`${cellCls} text-right`}>{fmt(total)}</td>
-                        <td className={`${cellCls} text-right font-bold text-blue-600`}>{fmt(rounded)}</td>
-                        <td className={`${cellCls} text-center text-gray-300`}>-</td>
-                        <td className={`${cellCls} text-center text-gray-300`}>-</td>
-                      </tr>
-                    )
-                  })}
-                  {staffRoster.filter(r => r.staffType === 'ATTORNEY').map(r => {
-                    const s = r.staffName
-                    const personalTotal = staffIncentiveTotals[s] || 0
-                    const total = personalTotal
-                    const rounded = Math.ceil(total / 100000) * 100000
-
-                    return (
-                      <tr key={s} className="hover:bg-gray-50 bg-purple-50/30">
-                        <td className={`${cellCls} text-center font-medium`}>
-                          {s}<span className="ml-1 text-xs text-purple-500 font-normal">(노무사)</span>
-                        </td>
-                        <td className={`${cellCls} text-right`}>{fmt(personalTotal)}</td>
-                        <td className={`${cellCls} text-center text-gray-300`}>-</td>
-                        <td className={`${cellCls} text-right`}>{fmt(total)}</td>
-                        <td className={`${cellCls} text-right font-bold text-purple-600`}>{fmt(rounded)}</td>
-                        <td className={`${cellCls} text-center text-gray-300`}>-</td>
-                        <td className={`${cellCls} text-center text-gray-300`}>-</td>
-                      </tr>
-                    )
-                  })}
-                  {/* 합계 행 */}
-                  <tr className="bg-gray-100 font-medium">
-                    <td className={`${cellCls} text-center`}>합계</td>
-                    <td className={`${cellCls} text-right`}>
-                      {fmt(Object.values(staffIncentiveTotals).reduce((s, v) => s + v, 0))}
-                    </td>
-                    <td className={cellCls}></td>
-                    <td className={`${cellCls} text-right`}>
-                      {fmt(Object.values(staffIncentiveTotals).reduce((s, v) => s + v, 0))}
-                    </td>
-                    <td className={`${cellCls} text-right font-bold`}>
-                      {fmt(staffList.reduce((sum, s) => {
-                        const t = staffIncentiveTotals[s] || 0
-                        return sum + Math.ceil(t / 100000) * 100000
-                      }, 0))}
-                    </td>
-                    <td className={cellCls}></td>
-                    <td className={cellCls}></td>
-                  </tr>
+                  })()}
                 </tbody>
               </table>
             </div>
             <p className="text-[10px] text-gray-400 mt-1">
-              * 자차보조금, 분기평가, 반기평가 항목은 향후 업데이트 예정
+              * 지사 인센티브·자차보조금·분기/반기평가는 월말보고 엑셀 &apos;합계&apos; 시트 임포트로 채워집니다.
             </p>
             </>}
           </div>
@@ -725,13 +743,21 @@ export default function IncentiveTab() {
               <span className="text-sm font-bold text-gray-800">🏢 지사 인센티브 관리</span>
               <span className="ml-auto text-gray-400 text-sm">{openSections.branch ? '▲ 접기' : '▼ 펼치기'}</span>
             </button>
-            {openSections.branch && <><div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* 좌측: 미배분액 */}
+            {openSections.branch && <><div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* 전년도 이월금 */}
               <div className="border rounded-lg p-4">
-                <div className="text-xs text-gray-500 mb-1">지사인센 미배분액 누적</div>
+                <div className="text-xs text-gray-500 mb-1">전년도 지사인센 이월금</div>
+                <div className="text-2xl font-bold text-emerald-700">{fmt(carryOver)}원</div>
+                <div className="text-[10px] text-gray-400 mt-1">
+                  월말보고 &apos;합계&apos; 시트 임포트로 자동 반영
+                </div>
+              </div>
+              {/* 미배분액 */}
+              <div className="border rounded-lg p-4">
+                <div className="text-xs text-gray-500 mb-1">당분기 지사인센 미배분액</div>
                 <div className="text-2xl font-bold text-sky-700">{fmt(branchUnallocated)}원</div>
                 <div className="text-[10px] text-gray-400 mt-1">
-                  지사 사건(담당자명 '더보상~') 중 비율합계 &lt; 100% 인 건의 미배분 인센티브 합산
+                  지사 사건(담당자=&apos;더보상~&apos; 또는 isBranchOwned) 중 비율합계 &lt; 100% 의 미배분 인센티브 합산
                 </div>
               </div>
 
@@ -820,7 +846,9 @@ export default function IncentiveTab() {
             {/* 잔액 */}
             <div className="mt-3 p-3 bg-gray-50 rounded-lg text-center">
               <span className="text-sm text-gray-600">지사 인센티브 잔액 = </span>
-              <span className="text-sm text-gray-500">{fmt(branchUnallocated)}원 (미배분)</span>
+              <span className="text-sm text-emerald-700">{fmt(carryOver)}원 (이월)</span>
+              <span className="text-sm text-gray-500"> + </span>
+              <span className="text-sm text-sky-700">{fmt(branchUnallocated)}원 (미배분)</span>
               <span className="text-sm text-gray-500"> - </span>
               <span className="text-sm text-gray-500">{fmt(usageTotal)}원 (사용)</span>
               <span className="text-sm text-gray-500"> = </span>
@@ -853,7 +881,22 @@ export default function IncentiveTab() {
                 <div className="bg-gray-50 rounded-lg p-3 text-sm space-y-1">
                   <p className="font-semibold">미리보기 결과</p>
                   <p>파싱 건수: <strong>{previewResult.parsedCount}건</strong></p>
-                  <p>배분 직원: {previewResult.allStaff?.join(', ')}</p>
+                  <p>매칭 성공: <strong className="text-emerald-600">{previewResult.matchedCount}건</strong></p>
+                  <p>미매칭: <strong className={previewResult.unmatchedCount > 0 ? 'text-amber-600' : ''}>{previewResult.unmatchedCount}건</strong></p>
+                  {previewResult.unmatchedCount > 0 && previewResult.unmatched?.length > 0 && (
+                    <div className="text-xs text-amber-700 bg-amber-50 rounded p-2 mt-1">
+                      <div className="font-medium mb-0.5">매칭되지 않은 행 (먼저 정산내역 탭에서 FILE1 임포트 필요):</div>
+                      <ul className="list-disc list-inside max-h-24 overflow-y-auto">
+                        {previewResult.unmatched.map((u: {month:number;victimName:string}, i: number) => (
+                          <li key={i}>{u.month}월 · {u.victimName}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  <p className="text-xs text-gray-500">감지된 직원: {previewResult.detectedStaff?.join(', ')}</p>
+                  {previewResult.summary?.carryOver > 0 && (
+                    <p className="text-xs">이월금 감지: <strong>{previewResult.summary.carryOver.toLocaleString()}원</strong></p>
+                  )}
                 </div>
               )}
               {previewResult?.error && (
@@ -864,7 +907,11 @@ export default function IncentiveTab() {
                   {importResult.ok ? (
                     <div className="space-y-0.5">
                       <p className="font-semibold">임포트 완료</p>
-                      <p>신규 생성: {importResult.created}건 / 업데이트: {importResult.updated}건</p>
+                      <p>업데이트: {importResult.recordsUpdated}건 / 배분 등록: {importResult.allocationsCreated}건</p>
+                      {importResult.unmatchedCount > 0 && (
+                        <p className="text-amber-700">미매칭: {importResult.unmatchedCount}건 (정산내역 탭 FILE1 임포트 선행 필요)</p>
+                      )}
+                      {importResult.summarySaved && <p className="text-emerald-700">합계 시트 저장됨 ✓</p>}
                       {importResult.errors?.length > 0 && <p className="text-red-500">오류: {importResult.errors[0]}</p>}
                     </div>
                   ) : <p>{importResult.error}</p>}
