@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
   const sentAt = date ? new Date(date * 1000) : new Date();
 
   try {
-    const saved = await prisma.telegramMessage.upsert({
+    const saved = await prisma.tfMessage.upsert({
       where: { tfName_messageId: { tfName, messageId } },
       update: {},
       create: {

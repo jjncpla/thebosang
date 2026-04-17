@@ -14,6 +14,6 @@ export async function GET(req: NextRequest) {
     ...(tfName ? { tfName } : {}),
   };
 
-  const count = await prisma.telegramMessage.count({ where });
+  const count = await prisma.tfMessage.count({ where });
   return NextResponse.json({ count });
 }

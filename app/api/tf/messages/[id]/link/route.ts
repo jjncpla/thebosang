@@ -9,7 +9,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const { id } = await params;
   const { linkedCaseId } = await req.json();
 
-  const updated = await prisma.telegramMessage.update({
+  const updated = await prisma.tfMessage.update({
     where: { id },
     data: {
       linkedCaseId: linkedCaseId || null,

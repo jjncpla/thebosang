@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
   const from = new Date(year, month - 1, 1);
   const to = new Date(year, month, 1);
 
-  const messages = await prisma.telegramMessage.findMany({
+  const messages = await prisma.tfMessage.findMany({
     where: {
       tfName,
       sentAt: { gte: from, lt: to },

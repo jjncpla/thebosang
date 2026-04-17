@@ -95,6 +95,10 @@ model Case {
   todos       Todo[]
   files       CaseFile[]
   attachments CaseAttachment[]
+
+  telegramMessages   TelegramMessage[]
+  caseEvents         CaseEvent[]
+  pendingExamReviews PendingExamReview[]
 }
 
 model HearingLossDetail {
@@ -584,9 +588,9 @@ model Consultation {
 }
 
 // ─────────────────────────────────────────────
-// TF 텔레그램 메시지 (webhook 저장)
+// TF 텔레그램 메시지 (webhook 저장 - 구형, tf-monitor용)
 // ─────────────────────────────────────────────
-model TelegramMessage {
+model TfMessage {
   id          String   @id @default(cuid())
   tfName      String   // 담당 TF명
   messageId   String?  // 텔레그램 메시지 ID (중복 방지)
@@ -600,6 +604,7 @@ model TelegramMessage {
   createdAt   DateTime @default(now())
 
   @@unique([tfName, messageId])
+  @@map("telegram_messages")
 }
 
 // ─────────────────────────────────────────────
@@ -1096,4 +1101,105 @@ model CaseAttachment {
 
   @@index([caseId])
   @@index([caseId, category])
+}
+
+// ─────────────────────────────────────────────
+// Phase 4-2: 텔레그램 메시지 → 사건 DB 자동 매칭
+// ─────────────────────────────────────────────
+
+model TelegramChatRoom {
+  chatId       String   @id
+  chatName     String
+  roomType     String              // 'schedule' | 'tf_work' | 'company_notice'
+  tfName       String?
+  isActive     Boolean  @default(true)
+  registeredAt DateTime @default(now())
+  note         String?
+
+  messages TelegramMessage[]
+
+  @@index([tfName])
+  @@index([roomType])
+}
+
+model TelegramMessage {
+  id             String   @id @default(cuid())
+  telegramMsgId  String
+  chatId         String
+  chatRoom       TelegramChatRoom @relation(fields: [chatId], references: [chatId])
+  senderName     String
+  senderUsername String?
+  messageText    String   @db.Text
+  messageType    String
+  sentAt         DateTime
+  receivedAt     DateTime @default(now())
+
+  matchStatus         String
+  matchedCaseId       String?
+  matchedCase         Case?   @relation(fields: [matchedCaseId], references: [id])
+  matchedPatientId    String?
+  detectedDiseaseType String?
+  matchMethod         String?
+  matchConfidence     Float?
+  matchNote           String?
+
+  caseEvent CaseEvent?
+
+  @@unique([chatId, telegramMsgId])
+  @@index([chatId, sentAt])
+  @@index([matchStatus])
+  @@index([matchedCaseId])
+}
+
+model CaseEvent {
+  id     String @id @default(cuid())
+  caseId String
+  case   Case   @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  eventType    String
+  eventSubtype String?
+  eventDate    DateTime
+  createdBy    String?
+  createdAt    DateTime @default(now())
+
+  title    String
+  content  String   @db.Text
+  metadata Json?
+  hashtags String[]
+
+  telegramMessageId String?         @unique
+  telegramMessage   TelegramMessage? @relation(fields: [telegramMessageId], references: [id])
+
+  pendingExamReview PendingExamReview?
+
+  @@index([caseId, eventDate])
+  @@index([eventType])
+  @@index([eventSubtype])
+}
+
+model PendingExamReview {
+  id          String @id @default(cuid())
+  caseId      String
+  case        Case   @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  caseEventId String? @unique
+  caseEvent   CaseEvent? @relation(fields: [caseEventId], references: [id])
+
+  examType     String
+  hospitalName String?
+  examDate     DateTime?
+  examOrdinal  Int?
+
+  parsedData Json
+
+  status     String    @default("pending")
+  reviewedBy String?
+  reviewedAt DateTime?
+  reviewNote String?
+
+  confirmedHearingLossExamId String?
+
+  createdAt DateTime @default(now())
+
+  @@index([caseId, status])
+  @@index([status, createdAt])
 }
