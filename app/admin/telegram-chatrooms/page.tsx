@@ -13,6 +13,7 @@ interface ChatRoom {
   registeredAt: string
   note: string | null
   lastMessageAt: string | null
+  messageCount: number
 }
 
 const EMPTY_FORM = {
@@ -47,6 +48,10 @@ export default function TelegramChatroomsPage() {
   const [form, setForm] = useState(EMPTY_FORM)
   const [submitting, setSubmitting] = useState(false)
   const [errorMsg, setErrorMsg] = useState('')
+
+  const [deleteTarget, setDeleteTarget] = useState<ChatRoom | null>(null)
+  const [deleting, setDeleting] = useState(false)
+  const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null)
 
   const { allTFs, loading: tfLoading } = useBranches()
   const tbossangTFs = allTFs.filter((tf) => tf.startsWith('더보상'))
@@ -127,6 +132,32 @@ export default function TelegramChatroomsPage() {
       fetchChatrooms()
     } finally {
       setSubmitting(false)
+    }
+  }
+
+  function showToast(msg: string, type: 'success' | 'error') {
+    setToast({ msg, type })
+    setTimeout(() => setToast(null), 3500)
+  }
+
+  async function handleDelete() {
+    if (!deleteTarget) return
+    setDeleting(true)
+    try {
+      const res = await fetch(`/api/admin/telegram-chatrooms/${encodeURIComponent(deleteTarget.chatId)}`, {
+        method: 'DELETE',
+      })
+      const data = await res.json()
+      if (res.ok) {
+        setDeleteTarget(null)
+        showToast('삭제되었습니다.', 'success')
+        fetchChatrooms()
+      } else {
+        setDeleteTarget(null)
+        showToast(data.message || data.error || '삭제 실패', 'error')
+      }
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -232,6 +263,22 @@ export default function TelegramChatroomsPage() {
                       style={{ background: '#f3f4f6', border: 'none', borderRadius: 4, padding: '4px 10px', fontSize: 12, cursor: 'pointer', marginRight: 6 }}
                     >
                       편집
+                    </button>
+                    <button
+                      onClick={() => room.messageCount === 0 && setDeleteTarget(room)}
+                      disabled={room.messageCount > 0}
+                      title={room.messageCount > 0 ? '메시지가 수신된 방은 삭제할 수 없습니다 (비활성화 이용)' : '삭제'}
+                      style={{
+                        background: room.messageCount > 0 ? '#f3f4f6' : '#fee2e2',
+                        color: room.messageCount > 0 ? '#9ca3af' : '#dc2626',
+                        border: 'none',
+                        borderRadius: 4,
+                        padding: '4px 10px',
+                        fontSize: 12,
+                        cursor: room.messageCount > 0 ? 'not-allowed' : 'pointer',
+                      }}
+                    >
+                      삭제
                     </button>
                   </td>
                 </tr>
@@ -363,6 +410,45 @@ export default function TelegramChatroomsPage() {
               </div>
             </form>
           </div>
+        </div>
+      )}
+      {/* 삭제 확인 모달 */}
+      {deleteTarget && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div style={{ background: '#fff', borderRadius: 10, padding: 28, width: 420, maxWidth: '95vw', boxShadow: '0 10px 40px rgba(0,0,0,0.2)' }}>
+            <h3 style={{ fontSize: 16, fontWeight: 700, margin: '0 0 12px', color: '#111827' }}>채팅방 삭제</h3>
+            <p style={{ fontSize: 14, color: '#374151', lineHeight: 1.6, margin: '0 0 20px' }}>
+              <strong>{deleteTarget.chatName}</strong> 채팅방을 삭제합니다.<br />
+              이 작업은 되돌릴 수 없습니다. 계속하시겠어요?
+            </p>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+              <button
+                onClick={() => setDeleteTarget(null)}
+                style={{ border: '1px solid #d1d5db', background: '#fff', borderRadius: 6, padding: '8px 18px', fontSize: 13, cursor: 'pointer' }}
+              >
+                취소
+              </button>
+              <button
+                onClick={handleDelete}
+                disabled={deleting}
+                style={{ background: '#dc2626', color: '#fff', border: 'none', borderRadius: 6, padding: '8px 18px', fontSize: 13, cursor: 'pointer', fontWeight: 600 }}
+              >
+                {deleting ? '삭제 중...' : '삭제'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 토스트 */}
+      {toast && (
+        <div style={{
+          position: 'fixed', bottom: 28, right: 28, zIndex: 2000,
+          background: toast.type === 'success' ? '#10b981' : '#dc2626',
+          color: '#fff', borderRadius: 8, padding: '12px 20px',
+          fontSize: 14, fontWeight: 600, boxShadow: '0 4px 16px rgba(0,0,0,0.18)',
+        }}>
+          {toast.msg}
         </div>
       )}
     </div>

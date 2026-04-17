@@ -19,6 +19,7 @@ export async function GET() {
         orderBy: { sentAt: "desc" },
         take: 1,
       },
+      _count: { select: { messages: true } },
     },
   });
 
@@ -31,6 +32,7 @@ export async function GET() {
     registeredAt: room.registeredAt,
     note: room.note,
     lastMessageAt: room.messages[0]?.sentAt ?? null,
+    messageCount: room._count.messages,
   }));
 
   return NextResponse.json(result);
