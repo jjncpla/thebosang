@@ -51,15 +51,23 @@ export default function FormsPage() {
 
   useEffect(() => { setTestValues({}); setSaveMsg(''); }, [selectedForm]);
 
-  // 서식 선택 시 DB 저장 좌표 로드 (있으면 formFields.ts 기본값 덮어씀)
+  // 서식 선택 시 DB 좌표 로드 — FORM_FIELDS 기준 뼈대에 DB x/y만 override (label 불변)
   useEffect(() => {
     if (!selectedForm) return;
     fetch(`/api/forms/coordinates?type=${selectedForm}`)
       .then(r => r.json())
       .then(data => {
-        if (data.fields) {
-          setCoordFields(prev => ({ ...prev, [selectedForm]: data.fields }));
-        }
+        const baseFields = FORM_FIELDS[selectedForm] ?? [];
+        const dbFields: Array<{ key: string; x: number; y: number }> =
+          Array.isArray(data?.fields) ? data.fields : [];
+        const dbMap = new Map(dbFields.map(f => [f.key, f]));
+
+        const merged = baseFields.map(f => {
+          const saved = dbMap.get(f.key);
+          return saved ? { ...f, x: saved.x, y: saved.y } : { ...f };
+        });
+
+        setCoordFields(prev => ({ ...prev, [selectedForm]: merged }));
       })
       .catch(() => {});
   }, [selectedForm]);
