@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 
@@ -92,6 +92,11 @@ export default function InquiryPage() {
   const [myCaseResults, setMyCaseResults] = useState<PatientResult[]>([]);
   const [myCaseLoading, setMyCaseLoading] = useState(false);
   const [myCaseLoaded, setMyCaseLoaded] = useState(false);
+  // 내 담당사건 탭 필터
+  const [filterStatus, setFilterStatus] = useState("");
+  const [filterCaseType, setFilterCaseType] = useState("");
+  const [filterTf, setFilterTf] = useState("");
+  const [victimQuery, setVictimQuery] = useState("");
 
   const role = (session?.user as { role?: string })?.role ?? "";
   const canViewDetail = role === "ADMIN" || role === "STAFF" || role === "조직관리자";
@@ -133,6 +138,57 @@ export default function InquiryPage() {
       fetchMyCase();
     }
   }, [activeTab]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── 내 담당사건 탭: 필터 옵션 ──
+  const filterOptions = useMemo(() => {
+    const statusSet = new Set<string>();
+    const caseTypeSet = new Set<string>();
+    const tfSet = new Set<string>();
+    for (const p of myCaseResults) {
+      for (const c of p.cases) {
+        if (c.status) statusSet.add(c.status);
+        if (c.caseType) caseTypeSet.add(c.caseType);
+        if (c.tfName) tfSet.add(c.tfName);
+      }
+    }
+    return {
+      statuses: Array.from(statusSet).sort(),
+      caseTypes: Array.from(caseTypeSet).sort(),
+      tfs: Array.from(tfSet).sort(),
+    };
+  }, [myCaseResults]);
+
+  // ── 내 담당사건 탭: 필터 적용 결과 ──
+  const filteredMyCaseResults = useMemo(() => {
+    const q = victimQuery.trim().toLowerCase();
+    const out: PatientResult[] = [];
+    for (const p of myCaseResults) {
+      // 재해자 이름/전화 검색
+      if (q) {
+        const hit =
+          (p.name ?? "").toLowerCase().includes(q) ||
+          (p.phone ?? "").replace(/-/g, "").includes(q.replace(/-/g, ""));
+        if (!hit) continue;
+      }
+      // 사건 필터 (진행상황 / 사건종류 / 해당TF)
+      const matchedCases = p.cases.filter((c) => {
+        if (filterStatus && c.status !== filterStatus) return false;
+        if (filterCaseType && c.caseType !== filterCaseType) return false;
+        if (filterTf && (c.tfName ?? "") !== filterTf) return false;
+        return true;
+      });
+      if (matchedCases.length === 0) continue;
+      out.push({ ...p, cases: matchedCases });
+    }
+    return out;
+  }, [myCaseResults, filterStatus, filterCaseType, filterTf, victimQuery]);
+
+  const resetMyCaseFilters = () => {
+    setFilterStatus("");
+    setFilterCaseType("");
+    setFilterTf("");
+    setVictimQuery("");
+  };
 
   return (
     <div style={{ padding: 24, minHeight: "100%", background: "#f1f5f9", fontFamily: "'Malgun Gothic', 'Apple SD Gothic Neo', 'Segoe UI', sans-serif" }}>
@@ -214,6 +270,150 @@ export default function InquiryPage() {
         </div>
       )}
 
+      {/* 내 담당사건 필터 바 */}
+      {activeTab === "myCase" && !myCaseLoading && myCaseLoaded && myCaseResults.length > 0 && (
+        <div
+          style={{
+            background: "white",
+            borderRadius: 10,
+            border: "1px solid #e5e7eb",
+            padding: "14px 16px",
+            marginBottom: 14,
+            boxShadow: "0 1px 3px rgba(0,0,0,0.05)",
+          }}
+        >
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
+            {/* 진행상황 */}
+            <select
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value)}
+              style={{
+                padding: "7px 10px",
+                border: "1px solid #e5e7eb",
+                borderRadius: 6,
+                fontSize: 13,
+                color: "#374151",
+                background: "#f9fafb",
+                minWidth: 140,
+              }}
+            >
+              <option value="">진행상황 (전체)</option>
+              {filterOptions.statuses.map((s) => (
+                <option key={s} value={s}>
+                  {STATUS_KO[s] ?? s}
+                </option>
+              ))}
+            </select>
+
+            {/* 사건종류 */}
+            <select
+              value={filterCaseType}
+              onChange={(e) => setFilterCaseType(e.target.value)}
+              style={{
+                padding: "7px 10px",
+                border: "1px solid #e5e7eb",
+                borderRadius: 6,
+                fontSize: 13,
+                color: "#374151",
+                background: "#f9fafb",
+                minWidth: 140,
+              }}
+            >
+              <option value="">사건종류 (전체)</option>
+              {filterOptions.caseTypes.map((t) => (
+                <option key={t} value={t}>
+                  {CASE_TYPE_LABELS[t] ?? t}
+                </option>
+              ))}
+            </select>
+
+            {/* 해당 TF */}
+            <select
+              value={filterTf}
+              onChange={(e) => setFilterTf(e.target.value)}
+              style={{
+                padding: "7px 10px",
+                border: "1px solid #e5e7eb",
+                borderRadius: 6,
+                fontSize: 13,
+                color: "#374151",
+                background: "#f9fafb",
+                minWidth: 160,
+              }}
+            >
+              <option value="">해당 TF (전체)</option>
+              {filterOptions.tfs.map((tf) => (
+                <option key={tf} value={tf}>
+                  {tf}
+                </option>
+              ))}
+            </select>
+
+            {/* 재해자 검색 */}
+            <input
+              type="text"
+              value={victimQuery}
+              onChange={(e) => setVictimQuery(e.target.value)}
+              placeholder="재해자 검색 (성명/전화)"
+              style={{
+                flex: 1,
+                minWidth: 180,
+                padding: "7px 12px",
+                border: "1px solid #e5e7eb",
+                borderRadius: 6,
+                fontSize: 13,
+                color: "#111827",
+                background: "#f9fafb",
+              }}
+            />
+
+            {/* 초기화 버튼 */}
+            {(filterStatus || filterCaseType || filterTf || victimQuery) && (
+              <button
+                onClick={resetMyCaseFilters}
+                style={{
+                  background: "#f3f4f6",
+                  color: "#374151",
+                  border: "1px solid #e5e7eb",
+                  borderRadius: 6,
+                  padding: "7px 12px",
+                  fontSize: 12,
+                  cursor: "pointer",
+                }}
+              >
+                초기화
+              </button>
+            )}
+
+            {/* 결과 카운트 */}
+            <span style={{ marginLeft: "auto", fontSize: 12, color: "#6b7280" }}>
+              {filteredMyCaseResults.length} / {myCaseResults.length}명
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* 내 담당사건 필터 적용 후 결과 없음 */}
+      {activeTab === "myCase" &&
+        !myCaseLoading &&
+        myCaseLoaded &&
+        myCaseResults.length > 0 &&
+        filteredMyCaseResults.length === 0 && (
+          <div
+            style={{
+              background: "white",
+              borderRadius: 10,
+              border: "1px solid #e5e7eb",
+              padding: "48px 16px",
+              textAlign: "center",
+              color: "#9ca3af",
+              fontSize: 14,
+            }}
+          >
+            조건에 맞는 사건이 없습니다.
+          </div>
+        )}
+
       {/* Results - 재해자 조회 */}
       {activeTab === "search" && searched && !loading && results.length === 0 && (
         <div style={{ background: "white", borderRadius: 10, border: "1px solid #e5e7eb", padding: "48px 16px", textAlign: "center", color: "#9ca3af", fontSize: 14 }}>
@@ -221,7 +421,7 @@ export default function InquiryPage() {
         </div>
       )}
 
-      {(activeTab === "search" ? results : myCaseResults).map((patient) => (
+      {(activeTab === "search" ? results : filteredMyCaseResults).map((patient) => (
         <div key={patient.id} style={{
           background: "white", borderRadius: 10, border: "1px solid #e5e7eb",
           marginBottom: 16, overflow: "hidden", boxShadow: "0 1px 3px rgba(0,0,0,0.05)",

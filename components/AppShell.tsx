@@ -16,6 +16,8 @@ type MenuItem = {
 
 const MENU_ITEMS: MenuItem[] = [
   { id: "todo", label: "To Do List", icon: "☑", path: "/todo" },
+  { id: "law", label: "법령 및 규정", icon: "📜", path: "/law" },
+  { id: "grade", label: "장해등급·평균임금", icon: "📊", path: "/grade" },
   {
     id: "cases",
     label: "사건 관리",
@@ -48,13 +50,8 @@ const MENU_ITEMS: MenuItem[] = [
     children: [
       { id: "tf-monitor", label: "담당TF 모니터링", path: "/tf-monitor" },
       { id: "tf-special-clinic", label: "통합 캘린더", path: "/tf/special-clinic" },
-      { id: "tf-notice", label: "TF 공지", path: "/tf-notice" },
-      { id: "tf-stats", label: "TF 통계", path: "/tf-stats" },
     ],
   },
-  { id: "grade", label: "장해등급·평균임금", icon: "📊", path: "/grade" },
-  { id: "law", label: "법령 및 규정", icon: "📜", path: "/law" },
-  { id: "issues", label: "주요 쟁점 사항", icon: "💡", path: "/issues" },
   { id: "branch", label: "지사장 관리·운영", icon: "🏢", path: "/branch", restricted: "org" },
   { id: "admin", label: "관리자 페이지", icon: "⚙", path: "/admin", restricted: "admin" },
 ];
@@ -304,7 +301,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                     <div>
                       {item.children.filter((child) => {
                         if (child.id === "patients-list") return role === "ADMIN";
-                        if (child.id === "cases-import") return role === "ADMIN" || role === "SENIOR_MANAGER";
+                        if (child.id === "cases-db") return role === "ADMIN";
+                        if (child.id === "cases-import") return role === "ADMIN";
                         return true;
                       }).map((child) => {
                         const childActive =

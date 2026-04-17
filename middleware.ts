@@ -17,6 +17,17 @@ export default auth((req) => {
     }
   }
 
+  // /cases/db, /cases/import 는 ADMIN 만 접근 가능
+  if (
+    req.nextUrl.pathname.startsWith("/cases/db") ||
+    req.nextUrl.pathname.startsWith("/cases/import")
+  ) {
+    if (req.auth.user?.role !== "ADMIN") {
+      const homeUrl = new URL("/", req.nextUrl.origin);
+      return Response.redirect(homeUrl);
+    }
+  }
+
   // 이산계정: /cases-view와 /api/cases-view만 허용, 나머지 차단
   if (req.auth.user?.role === "이산계정") {
     const allowed = ["/cases-view", "/api/cases-view", "/login", "/api/auth"];
