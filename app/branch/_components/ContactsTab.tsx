@@ -58,6 +58,20 @@ export default function ContactsTab() {
   const [accountForm, setAccountForm] = useState({ email: '', password: '1234', role: 'STAFF' })
   const [accountSubmitting, setAccountSubmitting] = useState(false)
 
+  // 관리자 강제 비밀번호 변경(직접 입력) 모달
+  const [pwChangeModal, setPwChangeModal] = useState<{ userId: string; name: string } | null>(null)
+  const [pwChangeForm, setPwChangeForm] = useState({ newPassword: '', confirmPassword: '' })
+  const [pwChangeSubmitting, setPwChangeSubmitting] = useState(false)
+
+  const pwPolicyError = (pw: string): string | null => {
+    if (!pw) return null
+    if (pw.length < 8) return '8자 이상 입력해주세요.'
+    if (!/[a-zA-Z]/.test(pw)) return '영문자를 1자 이상 포함해주세요.'
+    if (!/[0-9]/.test(pw)) return '숫자를 1자 이상 포함해주세요.'
+    if (/\s/.test(pw)) return '공백은 사용할 수 없습니다.'
+    return null
+  }
+
   const fetchContacts = useCallback(async () => {
     setLoading(true)
     const params = new URLSearchParams({ firmType: activeTab })
@@ -171,10 +185,42 @@ export default function ContactsTab() {
     await fetch(`/api/admin/users/${accountModal.contact.userId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ newPassword: '1234' }),
+      // skipPolicy=true → 기존 1234 초기화 하위 호환 유지
+      body: JSON.stringify({ newPassword: '1234', skipPolicy: true }),
     })
     alert('비밀번호가 1234로 초기화되었습니다.')
     setAccountSubmitting(false)
+  }
+
+  const openPasswordChange = () => {
+    if (!accountModal?.contact.userId) return
+    setPwChangeForm({ newPassword: '', confirmPassword: '' })
+    setPwChangeModal({ userId: accountModal.contact.userId, name: accountModal.contact.name })
+  }
+
+  const handleAdminChangePassword = async () => {
+    if (!pwChangeModal) return
+    const err = pwPolicyError(pwChangeForm.newPassword)
+    if (err) { alert(`비밀번호 규칙: ${err}`); return }
+    if (pwChangeForm.newPassword !== pwChangeForm.confirmPassword) {
+      alert('비밀번호 확인이 일치하지 않습니다.'); return
+    }
+    if (!confirm(`${pwChangeModal.name} 님의 비밀번호를 변경하시겠습니까?\n\n변경 후에는 해당 사용자에게 새 비밀번호를 직접 전달해주세요.`)) return
+    setPwChangeSubmitting(true)
+    const res = await fetch(`/api/admin/users/${pwChangeModal.userId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ newPassword: pwChangeForm.newPassword }),
+    })
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}))
+      alert(`변경 실패: ${data.error || res.statusText}`)
+      setPwChangeSubmitting(false)
+      return
+    }
+    alert(`${pwChangeModal.name} 님의 비밀번호가 변경되었습니다.`)
+    setPwChangeModal(null)
+    setPwChangeSubmitting(false)
   }
 
   const handleDeleteAccount = async () => {
@@ -489,6 +535,10 @@ export default function ContactsTab() {
                 style={{ padding: '8px 14px', backgroundColor: '#fff7ed', color: '#ea580c', border: '1px solid #fed7aa', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap' }}>
                 비번 초기화(1234)
               </button>
+              <button onClick={openPasswordChange} disabled={accountSubmitting}
+                style={{ padding: '8px 14px', backgroundColor: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap' }}>
+                비번 변경
+              </button>
               <div style={{ flex: 1 }} />
               <button onClick={() => setAccountModal(null)} disabled={accountSubmitting}
                 style={{ padding: '8px 16px', border: '1px solid #cbd5e1', borderRadius: 6, background: '#fff', cursor: 'pointer', fontSize: 13, whiteSpace: 'nowrap' }}>
@@ -502,6 +552,53 @@ export default function ContactsTab() {
           </div>
         </div>
       )}
+
+      {/* 관리자 강제 비밀번호 변경 모달 */}
+      {isAdmin && pwChangeModal && (() => {
+        const newErr = pwPolicyError(pwChangeForm.newPassword)
+        const mismatch = pwChangeForm.confirmPassword.length > 0 && pwChangeForm.confirmPassword !== pwChangeForm.newPassword
+        return (
+          <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1002, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div style={{ backgroundColor: '#fff', borderRadius: 12, padding: 28, width: 420, boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
+              <h3 style={{ margin: '0 0 8px', fontSize: 16, fontWeight: 700 }}>비밀번호 변경 (관리자)</h3>
+              <p style={{ margin: '0 0 16px', fontSize: 13, color: '#475569' }}>
+                <b>{pwChangeModal.name}</b> 님의 비밀번호를 직접 변경합니다.
+              </p>
+              <div style={{ background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: 8, padding: '10px 12px', marginBottom: 16, fontSize: 11, color: '#0369a1' }}>
+                비밀번호 규칙: 8자 이상, 영문+숫자 포함, 공백 불가
+              </div>
+              <div style={{ marginBottom: 12 }}>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#475569', marginBottom: 4 }}>새 비밀번호</label>
+                <input type="password" value={pwChangeForm.newPassword}
+                  onChange={e => setPwChangeForm(p => ({ ...p, newPassword: e.target.value }))}
+                  autoComplete="new-password"
+                  placeholder="8자 이상, 영문+숫자"
+                  style={{ width: '100%', padding: '8px 10px', border: `1px solid ${newErr ? '#dc2626' : '#cbd5e1'}`, borderRadius: 6, fontSize: 13, boxSizing: 'border-box' }} />
+                {newErr && <div style={{ marginTop: 4, fontSize: 11, color: '#dc2626' }}>{newErr}</div>}
+              </div>
+              <div style={{ marginBottom: 16 }}>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#475569', marginBottom: 4 }}>새 비밀번호 확인</label>
+                <input type="password" value={pwChangeForm.confirmPassword}
+                  onChange={e => setPwChangeForm(p => ({ ...p, confirmPassword: e.target.value }))}
+                  autoComplete="new-password"
+                  placeholder="동일한 비밀번호 재입력"
+                  style={{ width: '100%', padding: '8px 10px', border: `1px solid ${mismatch ? '#dc2626' : '#cbd5e1'}`, borderRadius: 6, fontSize: 13, boxSizing: 'border-box' }} />
+                {mismatch && <div style={{ marginTop: 4, fontSize: 11, color: '#dc2626' }}>비밀번호가 일치하지 않습니다.</div>}
+              </div>
+              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                <button onClick={() => setPwChangeModal(null)} disabled={pwChangeSubmitting}
+                  style={{ padding: '8px 20px', border: '1px solid #cbd5e1', borderRadius: 6, background: '#fff', cursor: 'pointer', fontSize: 13 }}>
+                  취소
+                </button>
+                <button onClick={handleAdminChangePassword} disabled={pwChangeSubmitting || !!newErr || mismatch || !pwChangeForm.newPassword}
+                  style={{ padding: '8px 20px', backgroundColor: pwChangeSubmitting ? '#94a3b8' : '#29ABE2', color: '#fff', border: 'none', borderRadius: 6, cursor: pwChangeSubmitting ? 'wait' : 'pointer', fontSize: 13, fontWeight: 600 }}>
+                  {pwChangeSubmitting ? '변경 중...' : '비밀번호 변경'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
 
       {/* 추가/수정 모달 */}
       {isAdmin && modalOpen && (

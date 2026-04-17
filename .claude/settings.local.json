@@ -82,15 +82,13 @@
       "Bash(wc:*)",
       "Skill(claude-api)",
       "Bash(npx tsx:*)",
-      "Bash(npx --yes sharp-cli -i public/logo.jpg -o app/favicon.ico -- resize 32 32)",
-      "Bash(echo \"exit: $?\")",
-      "Bash(npx --yes sharp-cli -i public/logo.jpg -o app/icon.png -- resize 64 64)",
-      "Bash(npx --yes sharp-cli -i public/logo.jpg -o app/apple-icon.png -- resize 180 180)",
-      "Bash(npx --yes sharp-cli -i public/logo.jpg -o app/favicon.ico -- resize 32 32 -- png)",
-      "Bash(npx --yes sharp-cli -i public/logo.jpg -o app/favicon.png -- resize 32 32)",
-      "Bash(dir \"C:/Users/jjakg/thebosang/0. 노무법인 더보상 울산동부지사_전체TF/\")",
-      "Bash(git fetch:*)",
-      "Bash(git stash:*)"
+      "Bash(kill %1)",
+      "Bash(mv \"공인노무사업무처리부_공란.pdf\"            \"labor_attorney_record.pdf\")",
+      "Bash(mv \"본인정보 제3자 제공요구서_공란.pdf\"       \"third_party_info.pdf\")",
+      "Bash(mv \"요양급여신청서_공란.pdf\"                  \"medical_benefit.pdf\")",
+      "Bash(mv \"휴업급여신청서_공란.pdf\"                  \"sick_leave_benefit.pdf\")",
+      "Bash(mv \"정보공개청구서_공란.pdf\"                  \"info_disclosure_new.pdf\")",
+      "Bash(git stash *)"
     ]
   },
   "enableAllProjectMcpServers": true,

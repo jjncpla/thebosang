@@ -3,6 +3,7 @@ import { auth } from "@/auth";
 import { authPrisma } from "@/lib/auth-db";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
+import { validatePassword } from "@/lib/password-policy";
 
 async function requireAdmin() {
   const session = await auth();
@@ -24,15 +25,23 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (!await requireAdmin()) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const { id } = await params;
   const body = await req.json();
-  const { role, newPassword, licenseNo, birthDate, officeAddress, officeTel, officeFax, branchName, regionName, department, jobTitle, personalId } = body;
+  const { role, newPassword, skipPolicy, licenseNo, birthDate, officeAddress, officeTel, officeFax, branchName, regionName, department, jobTitle, personalId } = body;
 
   // auth DB: role 업데이트
   if (role !== undefined) {
     await authPrisma.user.update({ where: { id }, data: { role } });
   }
 
-  // auth DB: 비밀번호 초기화
+  // auth DB: 비밀번호 변경
+  // - skipPolicy=true 이면 기존 "1234 초기화" 같은 단순값 허용 (하위 호환)
+  // - 그 외에는 비밀번호 정책(8자+, 영문+숫자) 검증
   if (newPassword !== undefined) {
+    if (!skipPolicy) {
+      const policy = validatePassword(newPassword);
+      if (!policy.ok) {
+        return NextResponse.json({ error: policy.error }, { status: 400 });
+      }
+    }
     const hashed = await bcrypt.hash(newPassword, 12);
     await authPrisma.user.update({ where: { id }, data: { password: hashed } });
   }

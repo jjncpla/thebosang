@@ -166,6 +166,24 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           {getPageTitle()}
         </span>
         <span style={{ color: "#64748b", fontSize: 12 }}>{today}</span>
+        {session?.user && (
+          <button
+            onClick={() => router.push("/mypage/password")}
+            title="비밀번호 변경"
+            style={{
+              background: "#fff",
+              border: "1px solid #cbd5e1",
+              color: "#475569",
+              fontSize: 12,
+              cursor: "pointer",
+              padding: "5px 12px",
+              borderRadius: 6,
+              fontWeight: 600,
+            }}
+          >
+            비밀번호 변경
+          </button>
+        )}
         <button
           onClick={() => signOut({ callbackUrl: `${window.location.origin}/login` })}
           style={{
