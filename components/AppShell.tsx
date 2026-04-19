@@ -15,7 +15,7 @@ type MenuItem = {
 };
 
 const MENU_ITEMS: MenuItem[] = [
-  { id: "todo", label: "To Do List", icon: "☑", path: "/todo" },
+  { id: "todo", label: "To Do List", icon: "☑", path: "/" },
   { id: "law", label: "법령 및 규정", icon: "📜", path: "/law" },
   { id: "grade", label: "장해등급·평균임금", icon: "📊", path: "/grade" },
   {
@@ -252,7 +252,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               : MENU_ITEMS.filter((m) => {
                   if (m.id === "cases-view") return false
                   if (m.restricted === "admin" && role !== "ADMIN") return false
-                  if (m.restricted === "org" && !["ADMIN", "SENIOR_MANAGER", "SITE_MANAGER"].includes(role)) return false
+                  if (m.restricted === "org" && !["ADMIN", "MANAGER", "SENIOR_MANAGER", "SITE_MANAGER"].includes(role)) return false
                   return true
                 })
             ).map((item) => {
@@ -300,7 +300,6 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                   {!collapsed && item.children && isOpen && (
                     <div>
                       {item.children.filter((child) => {
-                        if (child.id === "patients-list") return role === "ADMIN";
                         if (child.id === "cases-db") return role === "ADMIN";
                         if (child.id === "cases-import") return role === "ADMIN";
                         return true;
