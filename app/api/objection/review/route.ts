@@ -66,7 +66,7 @@ export async function POST(req: NextRequest) {
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await req.json();
-  let { tfName, patientName, caseType, approvalStatus, progressStatus, decisionDate, hasInfoDisclosure, memo, caseId } = body;
+  let { tfName, patientName, caseType, approvalStatus, progressStatus, decisionDate, hasInfoDisclosure, infoDisclosureStatus, memo, caseId } = body;
 
   // caseId 제공 시 케이스 데이터 자동 조회 (처분검토 자동 반영용)
   if (caseId && (!tfName || !patientName)) {
@@ -141,7 +141,10 @@ export async function POST(req: NextRequest) {
       approvalStatus,
       progressStatus,
       decisionDate: decisionDate ? new Date(decisionDate) : null,
-      hasInfoDisclosure: !!hasInfoDisclosure,
+      hasInfoDisclosure: infoDisclosureStatus
+        ? ["확보", "평임확보"].includes(infoDisclosureStatus)
+        : !!hasInfoDisclosure,
+      infoDisclosureStatus: infoDisclosureStatus || null,
       memo: memo || null,
       caseId: caseId || null,
     },

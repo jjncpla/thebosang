@@ -8,7 +8,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   const { id } = await params;
   const body = await req.json();
-  const { tfName, patientName, caseType, approvalStatus, progressStatus, decisionDate, hasInfoDisclosure, memo, caseId } = body;
+  const { tfName, patientName, caseType, approvalStatus, progressStatus, decisionDate, hasInfoDisclosure, infoDisclosureStatus, memo, caseId } = body;
 
   const item = await prisma.objectionReview.update({
     where: { id },
@@ -19,7 +19,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       approvalStatus,
       progressStatus,
       decisionDate: decisionDate ? new Date(decisionDate) : null,
-      hasInfoDisclosure: !!hasInfoDisclosure,
+      hasInfoDisclosure: infoDisclosureStatus !== undefined
+        ? ["확보", "평임확보"].includes(infoDisclosureStatus)
+        : !!hasInfoDisclosure,
+      infoDisclosureStatus: infoDisclosureStatus ?? null,
       memo: memo || null,
       caseId: caseId || null,
     },

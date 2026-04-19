@@ -8,6 +8,8 @@ const APPROVAL_OPTIONS = ["승인", "불승인", "일부승인"];
 const PROGRESS_OPTIONS = ["종결", "검토중", "이의제기 진행", "송무 검토", "송무 인계", "평정청구 진행"];
 const PROGRESS_FILTER_OPTIONS = ["미검토", "검토중", "이의제기 진행", "송무 인계", "평정청구 진행"];
 const WAGE_RESULT_OPTIONS = ["종결", "평정청구 진행", "검토중"];
+// 정공(정보공개청구) 상태값 — 엑셀 매크로 입력 기준
+const INFO_DISCLOSURE_OPTIONS = ["요청", "요청중", "확보", "평임확보", "평임 부존재", "불필요"];
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -20,6 +22,7 @@ type ReviewItem = {
   progressStatus: string;
   decisionDate: string | null;
   hasInfoDisclosure: boolean;
+  infoDisclosureStatus: string | null;
   memo: string | null;
   caseId: string | null;
   isAutoFilled?: boolean;
@@ -99,12 +102,12 @@ function ApprovalBadge({ status }: { status: string }) {
 type ReviewForm = {
   tfName: string; patientName: string; caseType: string;
   approvalStatus: string; progressStatus: string;
-  decisionDate: string; hasInfoDisclosure: boolean; memo: string;
+  decisionDate: string; hasInfoDisclosure: boolean; infoDisclosureStatus: string; memo: string;
 };
 const emptyReviewForm: ReviewForm = {
   tfName: "", patientName: "", caseType: "",
   approvalStatus: "불승인", progressStatus: "검토중",
-  decisionDate: "", hasInfoDisclosure: false, memo: "",
+  decisionDate: "", hasInfoDisclosure: false, infoDisclosureStatus: "", memo: "",
 };
 
 function ReviewModal({ initial, onClose, onSave }: {
@@ -115,7 +118,7 @@ function ReviewModal({ initial, onClose, onSave }: {
   const { tfByBranch: BRANCH_TF_MAP } = useBranches();
   const router = useRouter();
   const [form, setForm] = useState<ReviewForm>(() =>
-    initial ? { tfName: initial.tfName, patientName: initial.patientName, caseType: initial.caseType, approvalStatus: initial.approvalStatus, progressStatus: initial.progressStatus, decisionDate: toInputDate(initial.decisionDate), hasInfoDisclosure: initial.hasInfoDisclosure, memo: initial.memo ?? "" }
+    initial ? { tfName: initial.tfName, patientName: initial.patientName, caseType: initial.caseType, approvalStatus: initial.approvalStatus, progressStatus: initial.progressStatus, decisionDate: toInputDate(initial.decisionDate), hasInfoDisclosure: initial.hasInfoDisclosure, infoDisclosureStatus: initial.infoDisclosureStatus ?? "", memo: initial.memo ?? "" }
       : emptyReviewForm
   );
   const [saving, setSaving] = useState(false);
@@ -171,11 +174,23 @@ function ReviewModal({ initial, onClose, onSave }: {
             )}
           </div>
         </div>
-        <div style={{ marginTop: 12, display: "flex", alignItems: "center", gap: 8 }}>
-          <label style={{ fontSize: 13, color: "#374151", cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>
-            <input type="checkbox" checked={form.hasInfoDisclosure} onChange={e => set("hasInfoDisclosure", e.target.checked)} style={{ cursor: "pointer" }} />
-            정공 여부
-          </label>
+        <div style={{ marginTop: 12 }}>
+          <label style={labelStyle}>정공 (정보공개청구)</label>
+          <select
+            style={inputStyle}
+            value={form.infoDisclosureStatus}
+            onChange={e => {
+              const v = e.target.value;
+              set("infoDisclosureStatus", v);
+              set("hasInfoDisclosure", v === "확보" || v === "평임확보");
+            }}
+          >
+            <option value="">(공란 — 해당없음)</option>
+            {INFO_DISCLOSURE_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
+          </select>
+          <span style={{ fontSize: 11, color: "#6b7280", display: "block", marginTop: 4 }}>
+            요청 → 직원에게 정보공개청구 요청 / 확보 → 자료 수령 완료 → 최종 결정 단계
+          </span>
         </div>
         <div style={{ marginTop: 12 }}>
           <label style={labelStyle}>메모</label>
@@ -254,6 +269,7 @@ export default function ObjectionReviewPage() {
   const [filterTf, setFilterTf] = useState("");
   const [filterProgress, setFilterProgress] = useState("");
   const [filterCaseType, setFilterCaseType] = useState("");
+  const [filterInfo, setFilterInfo] = useState(""); // "" | 요청 | 확보 | 확보대기 (요청+요청중)
   const [searchReview, setSearchReview] = useState("");
   const [reviewModal, setReviewModal] = useState(false);
   const [reviewTarget, setReviewTarget] = useState<ReviewItem | null>(null);
@@ -314,8 +330,22 @@ export default function ObjectionReviewPage() {
 
   // 클라이언트 사이드 필터 적용
   const filteredReviews = reviews.filter(r => {
-    if (filterProgress === "미검토") return !r.progressStatus || r.progressStatus === "";
-    if (filterProgress === "송무 인계") return r.progressStatus === "송무 검토" || r.progressStatus === "송무 인계";
+    if (filterProgress === "미검토" && (r.progressStatus && r.progressStatus !== "")) return false;
+    if (filterProgress === "송무 인계" && !(r.progressStatus === "송무 검토" || r.progressStatus === "송무 인계")) return false;
+    if (filterInfo === "요청중" && !(r.infoDisclosureStatus === "요청" || r.infoDisclosureStatus === "요청중")) return false;
+    if (filterInfo === "확보") {
+      const s = r.infoDisclosureStatus;
+      if (!(s === "확보" || s === "평임확보")) return false;
+    }
+    if (filterInfo === "결정대기") {
+      // 검토중 + 정공 확보/평임확보 → 최종 결정 단계
+      const s = r.infoDisclosureStatus;
+      if (r.progressStatus !== "검토중") return false;
+      if (!(s === "확보" || s === "평임확보")) return false;
+    }
+    if (filterInfo === "지사별") {
+      // placeholder: branch selector로 커버되어 이 케이스는 없음
+    }
     return true;
   });
 
@@ -339,6 +369,8 @@ export default function ObjectionReviewPage() {
     ongoing: reviews.filter(r => r.progressStatus === "이의제기 진행").length,
     litigation: reviews.filter(r => r.progressStatus === "송무 검토" || r.progressStatus === "송무 인계").length,
     wage: reviews.filter(r => r.progressStatus === "평정청구 진행").length,
+    infoRequested: reviews.filter(r => r.infoDisclosureStatus === "요청" || r.infoDisclosureStatus === "요청중").length,
+    infoObtained: reviews.filter(r => r.progressStatus === "검토중" && (r.infoDisclosureStatus === "확보" || r.infoDisclosureStatus === "평임확보")).length,
   };
 
   const btnStyle = (active: boolean) => ({
@@ -370,21 +402,34 @@ export default function ObjectionReviewPage() {
         {/* ── 최초총현황 탭 ────────────────────────── */}
         {tab === "review" && (
           <>
-            {/* Stats 5개 */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 10, marginBottom: 16 }}>
+            {/* Stats: 진행상태 5개 + 정공 관련 2개 */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 10, marginBottom: 16 }}>
               {[
-                { label: "미검토", value: stats.unreviewed, color: "#6b7280", filter: "미검토" },
-                { label: "검토중", value: stats.reviewing, color: "#29ABE2", filter: "검토중" },
-                { label: "이의제기 진행", value: stats.ongoing, color: "#d97706", filter: "이의제기 진행" },
-                { label: "송무 인계", value: stats.litigation, color: "#9333ea", filter: "송무 인계" },
-                { label: "평정청구 진행", value: stats.wage, color: "#ea580c", filter: "평정청구 진행" },
-              ].map(s => (
-                <div key={s.label} onClick={() => setFilterProgress(filterProgress === s.filter ? "" : s.filter)}
-                  style={{ background: filterProgress === s.filter ? "#f0f9ff" : "#f8fafc", borderRadius: 8, border: `1px solid ${filterProgress === s.filter ? "#29ABE2" : "#e5e7eb"}`, padding: "12px 14px", cursor: "pointer" }}>
-                  <div style={{ fontSize: 10, color: "#6b7280", fontWeight: 700, marginBottom: 3 }}>{s.label}</div>
-                  <div style={{ fontSize: 22, fontWeight: 800, color: s.color }}>{s.value}</div>
-                </div>
-              ))}
+                { label: "미검토", value: stats.unreviewed, color: "#6b7280", kind: "progress" as const, filter: "미검토" },
+                { label: "검토중", value: stats.reviewing, color: "#29ABE2", kind: "progress" as const, filter: "검토중" },
+                { label: "이의제기 진행", value: stats.ongoing, color: "#d97706", kind: "progress" as const, filter: "이의제기 진행" },
+                { label: "송무 인계", value: stats.litigation, color: "#9333ea", kind: "progress" as const, filter: "송무 인계" },
+                { label: "평정청구 진행", value: stats.wage, color: "#ea580c", kind: "progress" as const, filter: "평정청구 진행" },
+                { label: "정공 요청중", value: stats.infoRequested, color: "#b45309", kind: "info" as const, filter: "요청중" },
+                { label: "결정대기 (검토중+확보)", value: stats.infoObtained, color: "#15803d", kind: "info" as const, filter: "결정대기" },
+              ].map(s => {
+                const active = s.kind === "progress" ? filterProgress === s.filter : filterInfo === s.filter;
+                return (
+                  <div key={s.label} onClick={() => {
+                    if (s.kind === "progress") {
+                      setFilterProgress(filterProgress === s.filter ? "" : s.filter);
+                      setFilterInfo("");
+                    } else {
+                      setFilterInfo(filterInfo === s.filter ? "" : s.filter);
+                      if (s.filter === "결정대기") setFilterProgress(""); // 결정대기는 자체적으로 검토중 포함
+                    }
+                  }}
+                    style={{ background: active ? "#f0f9ff" : "#f8fafc", borderRadius: 8, border: `1px solid ${active ? s.color : "#e5e7eb"}`, padding: "12px 14px", cursor: "pointer" }}>
+                    <div style={{ fontSize: 10, color: "#6b7280", fontWeight: 700, marginBottom: 3 }}>{s.label}</div>
+                    <div style={{ fontSize: 22, fontWeight: 800, color: s.color }}>{s.value}</div>
+                  </div>
+                );
+              })}
             </div>
 
             {/* Filters 3단계 */}
@@ -478,7 +523,52 @@ export default function ObjectionReviewPage() {
                             {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
                           </select>
                         </td>
-                        <td style={{ padding: "10px 12px", color: item.hasInfoDisclosure ? "#15803d" : "#9ca3af" }}>{item.hasInfoDisclosure ? "✓ 있음" : "없음"}</td>
+                        <td style={{ padding: "10px 12px" }} onClick={e => e.stopPropagation()}>
+                          {item.isAutoFilled ? (
+                            <span style={{ color: "#9ca3af", fontSize: 11 }}>-</span>
+                          ) : (
+                            <select
+                              value={item.infoDisclosureStatus ?? ""}
+                              onChange={async (e) => {
+                                const status = e.target.value || null;
+                                await fetch(`/api/objection/review/${item.id}`, {
+                                  method: "PATCH",
+                                  headers: { "Content-Type": "application/json" },
+                                  body: JSON.stringify({
+                                    tfName: item.tfName,
+                                    patientName: item.patientName,
+                                    caseType: item.caseType,
+                                    approvalStatus: item.approvalStatus,
+                                    progressStatus: item.progressStatus,
+                                    decisionDate: item.decisionDate,
+                                    memo: item.memo,
+                                    caseId: item.caseId,
+                                    infoDisclosureStatus: status,
+                                  }),
+                                });
+                                fetchReviews();
+                              }}
+                              style={{
+                                border: "1px solid #e5e7eb",
+                                borderRadius: 6,
+                                padding: "3px 8px",
+                                fontSize: 11,
+                                color: item.infoDisclosureStatus === "확보" || item.infoDisclosureStatus === "평임확보" ? "#15803d"
+                                  : item.infoDisclosureStatus === "요청" || item.infoDisclosureStatus === "요청중" ? "#d97706"
+                                  : "#6b7280",
+                                background: item.infoDisclosureStatus === "확보" || item.infoDisclosureStatus === "평임확보" ? "#f0fdf4"
+                                  : item.infoDisclosureStatus === "요청" || item.infoDisclosureStatus === "요청중" ? "#fffbeb"
+                                  : "#f9fafb",
+                                cursor: "pointer",
+                                minWidth: 96,
+                                fontWeight: item.infoDisclosureStatus ? 600 : 400,
+                              }}
+                            >
+                              <option value="">(공란)</option>
+                              {INFO_DISCLOSURE_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
+                            </select>
+                          )}
+                        </td>
                         <td style={{ padding: "10px 12px" }}>
                           {item.isAutoFilled ? (
                             <button onClick={async e => {

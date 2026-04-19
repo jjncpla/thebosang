@@ -620,7 +620,8 @@ model ObjectionReview {
   decisionDate   DateTime? // 처분일 (제척기간 기산일)
   approvalStatus String    // 승인 / 불승인 / 일부승인
   progressStatus String    // 종결 / 검토중 / 이의제기 진행 / 송무 검토 / 송무 인계 / 평정 청구 진행
-  hasInfoDisclosure Boolean @default(false) // 정공 여부
+  hasInfoDisclosure Boolean @default(false) // 정공 여부 (하위 호환 — 상태값이 있으면 그것을 우선)
+  infoDisclosureStatus String? // 정공 상세상태: 요청 / 요청중 / 확보 / 평임확보 / 평임 부존재 / 불필요
   assignedTo   String?
   assignedUser User?    @relation("ObjectionReviewAssignee", fields: [assignedTo], references: [id])
   memo           String?
