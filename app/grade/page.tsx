@@ -933,34 +933,6 @@ function DataManageSection({
   const [tab, setTab] = useState<"min"|"comp"|"rate"|"con">("min");
   const [year, setYear] = useState(2025);
   const [status, setStatus] = useState("");
-  const [loading, setLoading] = useState(false);
-
-  // ── 자동 업데이트 시도 ──
-  async function tryAutoFetch(type: string) {
-    setLoading(true);
-    setStatus("서버에서 데이터를 조회하는 중...");
-    try {
-      const res = await fetch(`/api/wage-update?type=${type}&year=${year}`);
-      const json = await res.json();
-      if (json.success) {
-        const nd = { ...dynamic };
-        if (type === "minimum_wage") nd.minimumWage = { ...nd.minimumWage, [year]: json.data };
-        if (type === "compensation") nd.compensation = { ...nd.compensation, [year]: json.data };
-        if (type === "wage_rates") {
-          nd.wageRate = { ...nd.wageRate, [year]: json.data.wageRate };
-          nd.cpiRate  = { ...nd.cpiRate,  [year]: json.data.cpiRate };
-        }
-        saveDynamic(nd);
-        setDynamic(nd);
-        setStatus(`✅ ${year}년 데이터를 자동으로 가져왔습니다!`);
-      } else {
-        setStatus(`⚠️ 자동 조회 실패: ${json.message}\n→ 아래 링크에서 확인 후 수동 입력해주세요.`);
-      }
-    } catch {
-      setStatus("⚠️ API 호출 실패. 수동 입력을 이용해주세요.");
-    }
-    setLoading(false);
-  }
 
   // ── 수동 입력 저장 ──
   function saveManual(data: Record<string, number>) {
@@ -1039,9 +1011,9 @@ function DataManageSection({
 
       {/* 탭별 폼 */}
       <div style={{padding:"16px 0"}}>
-        {tab === "min" && <ManualFormMinWage year={year} onSave={saveManual} onAuto={()=>tryAutoFetch("minimum_wage")} loading={loading} />}
-        {tab === "comp" && <ManualFormComp year={year} onSave={saveManual} onAuto={()=>tryAutoFetch("compensation")} loading={loading} />}
-        {tab === "rate" && <ManualFormRate year={year} onSave={saveManual} onAuto={()=>tryAutoFetch("wage_rates")} loading={loading} />}
+        {tab === "min" && <ManualFormMinWage year={year} onSave={saveManual} />}
+        {tab === "comp" && <ManualFormComp year={year} onSave={saveManual} />}
+        {tab === "rate" && <ManualFormRate year={year} onSave={saveManual} />}
         {tab === "con" && <ManualFormConstruction year={year} onSave={saveManual} />}
       </div>
 
@@ -1067,7 +1039,7 @@ function DataManageSection({
 }
 
 /* ── 수동 입력 폼들 ── */
-function ManualFormMinWage({ year, onSave, onAuto, loading }: { year:number; onSave:(d:Record<string,number>)=>void; onAuto:()=>void; loading:boolean }) {
+function ManualFormMinWage({ year, onSave }: { year:number; onSave:(d:Record<string,number>)=>void }) {
   const [v, setV] = useState("");
   return (
     <div style={formBox}>
@@ -1075,14 +1047,13 @@ function ManualFormMinWage({ year, onSave, onAuto, loading }: { year:number; onS
         <input type="number" value={v} onChange={e=>setV(e.target.value)} placeholder="예: 10030" style={inp}/></div>
       <div style={{display:"flex",gap:8,marginTop:8}}>
         <button onClick={()=>{if(v)onSave({"시급":+v})}} style={btnSave} disabled={!v}>💾 수동 저장</button>
-        <button onClick={onAuto} style={btnAuto} disabled={loading}>{loading?"조회 중...":"🔄 자동 업데이트 시도"}</button>
       </div>
       {v && +v > 0 && <div style={{fontSize:13,color:"#6b7280",marginTop:6}}>일급 = {formatWon(+v*8)}, 월급 = {formatWon(+v*209)}</div>}
     </div>
   );
 }
 
-function ManualFormComp({ year, onSave, onAuto, loading }: { year:number; onSave:(d:Record<string,number>)=>void; onAuto:()=>void; loading:boolean }) {
+function ManualFormComp({ year, onSave }: { year:number; onSave:(d:Record<string,number>)=>void }) {
   const [min, setMin] = useState("");
   const [max, setMax] = useState("");
   return (
@@ -1093,13 +1064,12 @@ function ManualFormComp({ year, onSave, onAuto, loading }: { year:number; onSave
         <input type="number" value={max} onChange={e=>setMax(e.target.value)} placeholder="예: 260000" style={inp}/></div>
       <div style={{display:"flex",gap:8,marginTop:8}}>
         <button onClick={()=>{if(min&&max)onSave({"최저":+min,"최고":+max})}} style={btnSave} disabled={!min||!max}>💾 수동 저장</button>
-        <button onClick={onAuto} style={btnAuto} disabled={loading}>{loading?"조회 중...":"🔄 자동 업데이트 시도"}</button>
       </div>
     </div>
   );
 }
 
-function ManualFormRate({ year, onSave, onAuto, loading }: { year:number; onSave:(d:Record<string,number>)=>void; onAuto:()=>void; loading:boolean }) {
+function ManualFormRate({ year, onSave }: { year:number; onSave:(d:Record<string,number>)=>void }) {
   const [wr, setWr] = useState("");
   const [cr, setCr] = useState("");
   return (
@@ -1110,7 +1080,6 @@ function ManualFormRate({ year, onSave, onAuto, loading }: { year:number; onSave
         <input type="number" step="0.01" value={cr} onChange={e=>setCr(e.target.value)} placeholder="예: 2.26" style={inp}/></div>
       <div style={{display:"flex",gap:8,marginTop:8}}>
         <button onClick={()=>{if(wr&&cr)onSave({"임금증가율":+wr,"물가변동률":+cr})}} style={btnSave} disabled={!wr||!cr}>💾 수동 저장</button>
-        <button onClick={onAuto} style={btnAuto} disabled={loading}>{loading?"조회 중...":"🔄 자동 업데이트 시도"}</button>
       </div>
       {wr && cr && <div style={{fontSize:13,color:"#6b7280",marginTop:6}}>곱하기 형태: 임금 {(1+(+wr)/100).toFixed(4)}, 물가 {(1+(+cr)/100).toFixed(4)}</div>}
     </div>
@@ -1554,12 +1523,12 @@ export default function GradePage() {
           {activePage === "평균임금" && (
             <div>
               <div style={subNav}>
-                {([
+                {(([
                   ["minimum","최저임금 조회"],["construction","건설노임단가 조회"],
                   ["compensation","보상기준금액 조회"],["calculator","임금 증감 계산기"],
                   ["stats","📊 임금 산정 계산기"],
-                  ["manage","⚙️ 데이터 관리"],
-                ] as [WageMenu,string][]).map(([k,l])=>(
+                  ...(session?.user?.role === "ADMIN" ? [["manage","⚙️ 데이터 관리"]] : []),
+                ]) as [WageMenu,string][]).map(([k,l])=>(
                   <button key={k} onClick={()=>setWageMenu(k)} style={wageMenu===k?activeSubBtn:subBtn}>{l}</button>
                 ))}
               </div>
@@ -1569,7 +1538,7 @@ export default function GradePage() {
                 {wageMenu==="compensation" && <CompensationSection data={mergedCompensation}/>}
                 {wageMenu==="calculator"   && <WageCalculatorSection wageRate={mergedWageRate} cpiRate={mergedCpiRate}/>}
                 {wageMenu==="stats"        && <StatWageSection/>}
-                {wageMenu==="manage"       && <DataManageSection dynamic={dynamic} setDynamic={setDynamic}/>}
+                {wageMenu==="manage" && session?.user?.role === "ADMIN" && <DataManageSection dynamic={dynamic} setDynamic={setDynamic}/>}
               </div>
             </div>
           )}
