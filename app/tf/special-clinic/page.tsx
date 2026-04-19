@@ -7,12 +7,14 @@ import { getTFColor } from '@/lib/tf-colors'
 // ─── 타입 ────────────────────────────────────────────────────────
 interface Schedule {
   id: string
-  patientName: string
+  patientName: string | null
   tfName: string
-  hospitalName: string
-  clinicType: string
+  hospitalName: string | null
+  clinicType: string | null
   category: string
-  examRound: number
+  examRound: number | null
+  title: string | null
+  content: string | null
   scheduledDate: string | null
   isAllDay: boolean
   scheduledHour: number | null
@@ -37,8 +39,31 @@ function isSameDay(d1: Date, d2: Date) {
 
 const STATUS_LABELS: Record<string, string> = { scheduled: '예정', done: '완료', cancelled: '취소', unknown: '미정' }
 const STATUS_COLORS: Record<string, string> = { scheduled: '#3B82F6', done: '#22C55E', cancelled: '#EF4444', unknown: '#F59E0B' }
-const CATEGORIES = ['특진', '재특진', '회의', '행사', '기타'] as const
-const CATEGORY_COLORS: Record<string, string> = { '특진': '', '재특진': '', '회의': '#9B59B6', '행사': '#E67E22', '기타': '#95A5A6' }
+const CATEGORIES = ['특진', '재특진', '영업', '자료보완', '교육', '회의', '질판위', '상담', '약정', '기타'] as const
+const FREEFORM_CATEGORIES = ['영업', '자료보완', '교육', '회의', '질판위', '상담', '약정', '기타'] as const
+const CATEGORY_COLORS: Record<string, string> = {
+  '특진': '',       // TF 색상 사용
+  '재특진': '',     // TF 색상 사용
+  '영업': '#10B981',
+  '자료보완': '#F59E0B',
+  '교육': '#8B5CF6',
+  '회의': '#9B59B6',
+  '질판위': '#DC2626',
+  '상담': '#0EA5E9',
+  '약정': '#EC4899',
+  '기타': '#95A5A6',
+}
+function isFreeform(category: string) {
+  return (FREEFORM_CATEGORIES as readonly string[]).includes(category)
+}
+function eventColor(s: Schedule) {
+  if (isFreeform(s.category)) return CATEGORY_COLORS[s.category] || '#95A5A6'
+  return getTFColor(s.tfName)
+}
+function eventTitle(s: Schedule) {
+  if (isFreeform(s.category)) return s.title || s.category
+  return s.patientName || ''
+}
 
 // ─── 메인 컴포넌트 ────────────────────────────────────────────────
 export default function SpecialClinicPage() {
@@ -160,16 +185,18 @@ function SpecialClinicCalendar() {
     if (categoryFilter && s.category !== categoryFilter && s.clinicType !== categoryFilter) return false
     if (debouncedQuery) {
       const q = debouncedQuery.toLowerCase()
-      if (![s.patientName, s.hospitalName, s.tfName, s.memo ?? ''].some(f => f.toLowerCase().includes(q))) return false
+      const haystack = [s.patientName, s.hospitalName, s.tfName, s.memo, s.title, s.content].filter(Boolean) as string[]
+      if (!haystack.some(f => f.toLowerCase().includes(q))) return false
     }
     return true
   })
 
   // 검색 결과 (전체 데이터 기반 — 캘린더에 표시되는 건 filteredSchedules)
   const searchResults = debouncedQuery
-    ? schedules.filter(s =>
-        [s.patientName, s.hospitalName, s.tfName, s.memo ?? ''].some(f => f.toLowerCase().includes(debouncedQuery.toLowerCase()))
-      )
+    ? schedules.filter(s => {
+        const haystack = [s.patientName, s.hospitalName, s.tfName, s.memo, s.title, s.content].filter(Boolean) as string[]
+        return haystack.some(f => f.toLowerCase().includes(debouncedQuery.toLowerCase()))
+      })
     : []
 
   // TF 선택 토글
@@ -468,7 +495,10 @@ function SpecialClinicCalendar() {
                           title="이 날 일정 추가"
                         >+</button>
                       </div>
-                      {(isExpanded ? daySchedules : daySchedules.slice(0, maxShow)).map(s => (
+                      {(isExpanded ? daySchedules : daySchedules.slice(0, maxShow)).map(s => {
+                        const free = isFreeform(s.category)
+                        const color = eventColor(s)
+                        return (
                         <button
                           key={s.id}
                           draggable
@@ -477,21 +507,30 @@ function SpecialClinicCalendar() {
                           onClick={(e) => handleEventClick(s, e)}
                           className="w-full text-left mb-0.5 rounded px-1 py-0.5 cursor-pointer transition-all hover:brightness-95"
                           style={{
-                            backgroundColor: getTFColor(s.tfName) + '18',
-                            borderLeft: `3px solid ${getTFColor(s.tfName)}`,
+                            backgroundColor: color + '18',
+                            borderLeft: `3px solid ${color}`,
                             opacity: draggedEventId === s.id ? 0.4 : 1,
                           }}
                         >
                           <div className="flex items-center gap-1">
-                            <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: getTFColor(s.tfName) }} />
-                            <span className="text-[10px] font-medium truncate text-gray-800">{s.patientName}</span>
+                            <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
+                            <span className="text-[10px] font-medium truncate text-gray-800">{eventTitle(s)}</span>
                           </div>
-                          <div className="text-[9px] text-gray-500 truncate pl-2.5">
-                            {s.clinicType} {s.examRound}차 {fmtTime(s.scheduledHour, s.scheduledMinute)}
-                          </div>
-                          <div className="text-[9px] text-gray-400 truncate pl-2.5">{s.hospitalName}</div>
+                          {free ? (
+                            <div className="text-[9px] text-gray-500 truncate pl-2.5">
+                              {s.category}{s.tfName ? ` · ${s.tfName}` : ''} {fmtTime(s.scheduledHour, s.scheduledMinute)}
+                            </div>
+                          ) : (
+                            <>
+                              <div className="text-[9px] text-gray-500 truncate pl-2.5">
+                                {s.clinicType} {s.examRound}차 {fmtTime(s.scheduledHour, s.scheduledMinute)}
+                              </div>
+                              <div className="text-[9px] text-gray-400 truncate pl-2.5">{s.hospitalName}</div>
+                            </>
+                          )}
                         </button>
-                      ))}
+                        )
+                      })}
                       {daySchedules.length > maxShow && (
                         <button
                           onClick={() => toggleExpand(dk)}
@@ -537,7 +576,10 @@ function SpecialClinicCalendar() {
                     {holidayName && <div className="text-[9px] text-red-400">{holidayName}</div>}
                   </div>
                   <div className="flex-1 space-y-0.5 overflow-y-auto">
-                    {wdSchedules.map(s => (
+                    {wdSchedules.map(s => {
+                      const free = isFreeform(s.category)
+                      const color = eventColor(s)
+                      return (
                       <button
                         key={s.id}
                         draggable
@@ -546,26 +588,35 @@ function SpecialClinicCalendar() {
                         onClick={(e) => handleEventClick(s, e)}
                         className="w-full text-left rounded px-1 py-0.5 cursor-pointer transition-all hover:brightness-95"
                         style={{
-                          backgroundColor: getTFColor(s.tfName) + '18',
-                          borderLeft: `3px solid ${getTFColor(s.tfName)}`,
+                          backgroundColor: color + '18',
+                          borderLeft: `3px solid ${color}`,
                           opacity: draggedEventId === s.id ? 0.4 : 1,
                         }}
                       >
                         <div className="flex items-center gap-1">
-                          <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: getTFColor(s.tfName) }} />
-                          <span className="text-[10px] font-medium truncate text-gray-800">{s.patientName}</span>
+                          <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
+                          <span className="text-[10px] font-medium truncate text-gray-800">{eventTitle(s)}</span>
                         </div>
-                        <div className="text-[9px] text-gray-500 pl-2.5">
-                          {s.clinicType} {s.examRound}차
-                        </div>
-                        <div className="text-[9px] text-gray-400 truncate pl-2.5">{s.hospitalName}</div>
+                        {free ? (
+                          <div className="text-[9px] text-gray-500 truncate pl-2.5">
+                            {s.category}{s.tfName ? ` · ${s.tfName}` : ''}
+                          </div>
+                        ) : (
+                          <>
+                            <div className="text-[9px] text-gray-500 pl-2.5">
+                              {s.clinicType} {s.examRound}차
+                            </div>
+                            <div className="text-[9px] text-gray-400 truncate pl-2.5">{s.hospitalName}</div>
+                          </>
+                        )}
                         {!s.isAllDay && s.scheduledHour != null && (
                           <div className="text-[9px] text-sky-600 pl-2.5 font-medium">
                             {fmtTime(s.scheduledHour, s.scheduledMinute)}
                           </div>
                         )}
                       </button>
-                    ))}
+                      )
+                    })}
                   </div>
                 </div>
               )
@@ -600,14 +651,29 @@ function SpecialClinicCalendar() {
               {allDayScheds.length > 0 && (
                 <div className="space-y-2">
                   <div className="text-xs text-gray-400 font-medium">하루종일</div>
-                  {allDayScheds.map(s => (
-                    <div key={s.id} className="rounded-lg p-3 border" style={{ borderLeftWidth: 4, borderLeftColor: getTFColor(s.tfName), backgroundColor: getTFColor(s.tfName) + '08' }}>
+                  {allDayScheds.map(s => {
+                    const free = isFreeform(s.category)
+                    const color = eventColor(s)
+                    return (
+                    <div key={s.id} className="rounded-lg p-3 border" style={{ borderLeftWidth: 4, borderLeftColor: color, backgroundColor: color + '08' }}>
                       <div className="flex items-center gap-2 mb-1">
-                        <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: getTFColor(s.tfName) }} />
-                        <span className="text-xs font-medium" style={{ color: getTFColor(s.tfName) }}>{s.tfName}</span>
+                        <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: color }} />
+                        <span className="text-xs font-medium" style={{ color }}>
+                          {free ? s.category : s.tfName}
+                        </span>
+                        {free && s.tfName && <span className="text-xs text-gray-400">· {s.tfName}</span>}
                       </div>
-                      <div className="text-sm font-bold text-gray-800">{s.patientName} &nbsp;{s.clinicType} {s.examRound}차</div>
-                      <div className="text-xs text-gray-500 mt-0.5">{s.hospitalName}</div>
+                      {free ? (
+                        <>
+                          <div className="text-sm font-bold text-gray-800">{eventTitle(s)}</div>
+                          {s.content && <div className="text-xs text-gray-600 mt-1 whitespace-pre-wrap">{s.content}</div>}
+                        </>
+                      ) : (
+                        <>
+                          <div className="text-sm font-bold text-gray-800">{s.patientName} &nbsp;{s.clinicType} {s.examRound}차</div>
+                          <div className="text-xs text-gray-500 mt-0.5">{s.hospitalName}</div>
+                        </>
+                      )}
                       <div className="flex gap-2 mt-2">
                         {(['scheduled','done','cancelled'] as const).map(st => (
                           <button key={st} onClick={() => handleStatusChange(s.id, st)}
@@ -618,25 +684,41 @@ function SpecialClinicCalendar() {
                         <button onClick={() => handleDelete(s.id)} className="px-1.5 py-0.5 text-[10px] rounded border border-red-200 text-red-500 hover:bg-red-50 ml-auto">삭제</button>
                       </div>
                     </div>
-                  ))}
+                    )
+                  })}
                 </div>
               )}
 
               {timedScheds.length > 0 && (
                 <div className="space-y-2">
                   <div className="text-xs text-gray-400 font-medium">시간 일정</div>
-                  {timedScheds.map(s => (
+                  {timedScheds.map(s => {
+                    const free = isFreeform(s.category)
+                    const color = eventColor(s)
+                    return (
                     <div key={s.id} className="flex gap-3">
                       <div className="text-xs font-medium text-sky-600 w-12 pt-3 text-right flex-shrink-0">
                         {fmtTime(s.scheduledHour, s.scheduledMinute)}
                       </div>
-                      <div className="flex-1 rounded-lg p-3 border" style={{ borderLeftWidth: 4, borderLeftColor: getTFColor(s.tfName), backgroundColor: getTFColor(s.tfName) + '08' }}>
+                      <div className="flex-1 rounded-lg p-3 border" style={{ borderLeftWidth: 4, borderLeftColor: color, backgroundColor: color + '08' }}>
                         <div className="flex items-center gap-2 mb-1">
-                          <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: getTFColor(s.tfName) }} />
-                          <span className="text-xs font-medium" style={{ color: getTFColor(s.tfName) }}>{s.tfName}</span>
+                          <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: color }} />
+                          <span className="text-xs font-medium" style={{ color }}>
+                            {free ? s.category : s.tfName}
+                          </span>
+                          {free && s.tfName && <span className="text-xs text-gray-400">· {s.tfName}</span>}
                         </div>
-                        <div className="text-sm font-bold text-gray-800">{s.patientName} &nbsp;{s.clinicType} {s.examRound}차</div>
-                        <div className="text-xs text-gray-500 mt-0.5">{s.hospitalName}</div>
+                        {free ? (
+                          <>
+                            <div className="text-sm font-bold text-gray-800">{eventTitle(s)}</div>
+                            {s.content && <div className="text-xs text-gray-600 mt-1 whitespace-pre-wrap">{s.content}</div>}
+                          </>
+                        ) : (
+                          <>
+                            <div className="text-sm font-bold text-gray-800">{s.patientName} &nbsp;{s.clinicType} {s.examRound}차</div>
+                            <div className="text-xs text-gray-500 mt-0.5">{s.hospitalName}</div>
+                          </>
+                        )}
                         <div className="flex gap-2 mt-2">
                           {(['scheduled','done','cancelled'] as const).map(st => (
                             <button key={st} onClick={() => handleStatusChange(s.id, st)}
@@ -648,7 +730,8 @@ function SpecialClinicCalendar() {
                         </div>
                       </div>
                     </div>
-                  ))}
+                    )
+                  })}
                 </div>
               )}
             </div>
@@ -688,7 +771,9 @@ function SpecialClinicCalendar() {
             검색 결과: &quot;{debouncedQuery}&quot; — {searchResults.length}건
           </div>
           <div className="max-h-48 overflow-y-auto">
-            {searchResults.map(s => (
+            {searchResults.map(s => {
+              const free = isFreeform(s.category)
+              return (
               <button key={s.id}
                 onClick={() => {
                   if (s.scheduledDate) {
@@ -704,12 +789,22 @@ function SpecialClinicCalendar() {
                 <span className="text-gray-400 min-w-[90px]">
                   {s.scheduledDate ? new Date(s.scheduledDate).toLocaleDateString('ko-KR') : '-'}
                 </span>
-                <span className="font-medium text-gray-800">{s.patientName}</span>
-                <span className="text-gray-500">{s.clinicType} {s.examRound}차</span>
-                <span className="text-gray-400 truncate">{s.hospitalName}</span>
-                <span className="ml-auto text-[10px]" style={{ color: getTFColor(s.tfName) }}>{s.tfName}</span>
+                <span className="font-medium text-gray-800">{eventTitle(s)}</span>
+                {free ? (
+                  <>
+                    <span className="text-gray-500">{s.category}</span>
+                    {s.content && <span className="text-gray-400 truncate">{s.content.slice(0, 40)}</span>}
+                  </>
+                ) : (
+                  <>
+                    <span className="text-gray-500">{s.clinicType} {s.examRound}차</span>
+                    <span className="text-gray-400 truncate">{s.hospitalName}</span>
+                  </>
+                )}
+                <span className="ml-auto text-[10px]" style={{ color: eventColor(s) }}>{s.tfName || s.category}</span>
               </button>
-            ))}
+              )
+            })}
           </div>
         </div>
       )}
@@ -732,17 +827,34 @@ function SpecialClinicCalendar() {
           <div className="p-4 space-y-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <span className="w-3 h-3 rounded-full" style={{ backgroundColor: getTFColor(selected.tfName) }} />
-                <span className="text-xs font-medium" style={{ color: getTFColor(selected.tfName) }}>{selected.tfName}</span>
+                <span className="w-3 h-3 rounded-full" style={{ backgroundColor: eventColor(selected) }} />
+                <span className="text-xs font-medium" style={{ color: eventColor(selected) }}>
+                  {isFreeform(selected.category) ? selected.category : selected.tfName}
+                </span>
+                {isFreeform(selected.category) && selected.tfName && (
+                  <span className="text-xs text-gray-400">· {selected.tfName}</span>
+                )}
               </div>
               <button onClick={() => setSelected(null)} className="text-gray-400 hover:text-gray-600 text-sm">✕</button>
             </div>
 
-            <div className="text-sm font-bold text-gray-800">
-              {selected.patientName} &nbsp;{selected.clinicType} {selected.examRound}차
-            </div>
-
-            <div className="text-xs text-gray-600">{selected.hospitalName}</div>
+            {isFreeform(selected.category) ? (
+              <>
+                <div className="text-sm font-bold text-gray-800">{eventTitle(selected)}</div>
+                {selected.content && (
+                  <div className="text-xs text-gray-700 whitespace-pre-wrap bg-gray-50 rounded p-2 max-h-40 overflow-y-auto">
+                    {selected.content}
+                  </div>
+                )}
+              </>
+            ) : (
+              <>
+                <div className="text-sm font-bold text-gray-800">
+                  {selected.patientName} &nbsp;{selected.clinicType} {selected.examRound}차
+                </div>
+                <div className="text-xs text-gray-600">{selected.hospitalName}</div>
+              </>
+            )}
 
             <div className="text-xs text-gray-600">
               {selected.scheduledDate ? new Date(selected.scheduledDate).toLocaleDateString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit', weekday: 'short' }) : '-'}
@@ -816,10 +928,20 @@ function InputModal({
 }) {
   // 직접 입력
   const [form, setForm] = useState({
-    patientName: '', tfName: '', hospitalName: '', clinicType: '특진',
     category: '특진',
-    examRound: 1, scheduledDate: defaultDate || `${defaultYear}-${pad(defaultMonth)}-01`,
-    scheduledTime: '', memo: '',
+    // 공통
+    tfName: '',
+    scheduledDate: defaultDate || `${defaultYear}-${pad(defaultMonth)}-01`,
+    scheduledTime: '',
+    memo: '',
+    // 특진/재특진 전용
+    patientName: '',
+    hospitalName: '',
+    clinicType: '특진',
+    examRound: 1,
+    // 자유형 전용
+    title: '',
+    content: '',
   })
   const [saving, setSaving] = useState(false)
 
@@ -828,28 +950,52 @@ function InputModal({
   const [parsing, setParsing] = useState(false)
   const [parseResult, setParseResult] = useState<{ parsed: number; saved: number } | null>(null)
 
+  const free = isFreeform(form.category)
+
   async function handleFormSave() {
-    if (!form.patientName || !form.tfName || !form.hospitalName) { alert('필수 항목을 입력하세요'); return }
+    if (free) {
+      if (!form.title.trim()) { alert('제목을 입력하세요'); return }
+    } else {
+      if (!form.patientName || !form.tfName || !form.hospitalName) { alert('필수 항목을 입력하세요'); return }
+    }
     setSaving(true)
     const hasTime = !!form.scheduledTime
     const [h, m] = hasTime ? form.scheduledTime.split(':').map(Number) : [null, null]
+
+    const payload: Record<string, unknown> = {
+      category: form.category,
+      tfName: form.tfName || '',
+      scheduledDate: new Date(form.scheduledDate),
+      isAllDay: !hasTime,
+      scheduledHour: h,
+      scheduledMinute: m ?? 0,
+      status: 'scheduled',
+      memo: form.memo || null,
+    }
+    if (free) {
+      Object.assign(payload, {
+        title: form.title.trim(),
+        content: form.content || null,
+        patientName: null,
+        hospitalName: null,
+        clinicType: null,
+        examRound: null,
+      })
+    } else {
+      Object.assign(payload, {
+        patientName: form.patientName,
+        hospitalName: form.hospitalName,
+        clinicType: form.clinicType,
+        examRound: form.examRound,
+        title: null,
+        content: null,
+      })
+    }
+
     const res = await fetch('/api/tf/special-clinic', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        patientName: form.patientName,
-        tfName: form.tfName,
-        hospitalName: form.hospitalName,
-        clinicType: form.clinicType,
-        category: form.category,
-        examRound: form.examRound,
-        scheduledDate: new Date(form.scheduledDate),
-        isAllDay: !hasTime,
-        scheduledHour: h,
-        scheduledMinute: m ?? 0,
-        status: 'scheduled',
-        memo: form.memo || null,
-      }),
+      body: JSON.stringify(payload),
     })
     setSaving(false)
     if (res.ok) onSaved()
@@ -898,59 +1044,133 @@ function InputModal({
 
         {modalTab === 'form' && (
           <div className="space-y-3">
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="text-xs text-gray-500">환자명 *</label>
-                <input value={form.patientName} onChange={e => setForm(f => ({ ...f, patientName: e.target.value }))} className={inputCls} />
-              </div>
-              <div>
-                <label className="text-xs text-gray-500">TF명 *</label>
-                <input list="tf-list" value={form.tfName} onChange={e => setForm(f => ({ ...f, tfName: e.target.value }))} className={inputCls} />
-                <datalist id="tf-list">
-                  {tfList.map(tf => <option key={tf} value={tf} />)}
-                </datalist>
-              </div>
-              <div className="col-span-2">
-                <label className="text-xs text-gray-500">병원명 *</label>
-                <input value={form.hospitalName} onChange={e => setForm(f => ({ ...f, hospitalName: e.target.value }))} className={inputCls} />
-              </div>
-              <div>
-                <label className="text-xs text-gray-500">유형</label>
-                <div className="flex gap-2 mt-1">
-                  {['특진','재특진'].map(t => (
-                    <label key={t} className="flex items-center gap-1 text-xs">
-                      <input type="radio" name="clinicType" checked={form.clinicType === t}
-                        onChange={() => setForm(f => ({ ...f, clinicType: t }))} />
-                      {t}
-                    </label>
-                  ))}
-                </div>
-              </div>
-              <div>
-                <label className="text-xs text-gray-500">카테고리</label>
-                <select value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))} className={inputCls}>
-                  {['특진','재특진','회의','행사','기타'].map(c => <option key={c} value={c}>{c}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="text-xs text-gray-500">회차</label>
-                <select value={form.examRound} onChange={e => setForm(f => ({ ...f, examRound: Number(e.target.value) }))} className={inputCls}>
-                  {[1,2,3,4,5].map(n => <option key={n} value={n}>{n}차</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="text-xs text-gray-500">날짜</label>
-                <input type="date" value={form.scheduledDate} onChange={e => setForm(f => ({ ...f, scheduledDate: e.target.value }))} className={inputCls} />
-              </div>
-              <div>
-                <label className="text-xs text-gray-500">시간 (선택)</label>
-                <input type="time" value={form.scheduledTime} onChange={e => setForm(f => ({ ...f, scheduledTime: e.target.value }))} className={inputCls} />
-              </div>
-              <div className="col-span-2">
-                <label className="text-xs text-gray-500">메모</label>
-                <textarea value={form.memo} onChange={e => setForm(f => ({ ...f, memo: e.target.value }))} className={`${inputCls} h-16`} />
+            {/* 카테고리 선택 (최상단) */}
+            <div>
+              <label className="text-xs text-gray-500">카테고리 *</label>
+              <div className="flex flex-wrap gap-1 mt-1">
+                {CATEGORIES.map(c => {
+                  const active = form.category === c
+                  const color = CATEGORY_COLORS[c] || '#64748B'
+                  return (
+                    <button
+                      key={c}
+                      type="button"
+                      onClick={() => setForm(f => ({
+                        ...f,
+                        category: c,
+                        // 특진/재특진 선택 시 clinicType도 동기화
+                        clinicType: c === '특진' || c === '재특진' ? c : f.clinicType,
+                      }))}
+                      className="px-2 py-1 text-xs rounded border transition-colors"
+                      style={active
+                        ? { backgroundColor: color, color: '#fff', borderColor: color }
+                        : { borderColor: '#ddd', color: '#555' }}
+                    >
+                      {c}
+                    </button>
+                  )
+                })}
               </div>
             </div>
+
+            {!free && (
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-xs text-gray-500">환자명 *</label>
+                  <input value={form.patientName} onChange={e => setForm(f => ({ ...f, patientName: e.target.value }))} className={inputCls} />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-500">TF명 *</label>
+                  <input list="tf-list" value={form.tfName} onChange={e => setForm(f => ({ ...f, tfName: e.target.value }))} className={inputCls} />
+                  <datalist id="tf-list">
+                    {tfList.map(tf => <option key={tf} value={tf} />)}
+                  </datalist>
+                </div>
+                <div className="col-span-2">
+                  <label className="text-xs text-gray-500">병원명 *</label>
+                  <input value={form.hospitalName} onChange={e => setForm(f => ({ ...f, hospitalName: e.target.value }))} className={inputCls} />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-500">유형</label>
+                  <div className="flex gap-2 mt-1">
+                    {['특진','재특진'].map(t => (
+                      <label key={t} className="flex items-center gap-1 text-xs">
+                        <input type="radio" name="clinicType" checked={form.clinicType === t}
+                          onChange={() => setForm(f => ({ ...f, clinicType: t, category: t }))} />
+                        {t}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <label className="text-xs text-gray-500">회차</label>
+                  <select value={form.examRound} onChange={e => setForm(f => ({ ...f, examRound: Number(e.target.value) }))} className={inputCls}>
+                    {[1,2,3,4,5].map(n => <option key={n} value={n}>{n}차</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs text-gray-500">날짜</label>
+                  <input type="date" value={form.scheduledDate} onChange={e => setForm(f => ({ ...f, scheduledDate: e.target.value }))} className={inputCls} />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-500">시간 (선택)</label>
+                  <input type="time" value={form.scheduledTime} onChange={e => setForm(f => ({ ...f, scheduledTime: e.target.value }))} className={inputCls} />
+                </div>
+                <div className="col-span-2">
+                  <label className="text-xs text-gray-500">메모</label>
+                  <textarea value={form.memo} onChange={e => setForm(f => ({ ...f, memo: e.target.value }))} className={`${inputCls} h-16`} />
+                </div>
+              </div>
+            )}
+
+            {free && (
+              <div className="grid grid-cols-2 gap-2">
+                <div className="col-span-2">
+                  <label className="text-xs text-gray-500">제목 *</label>
+                  <input
+                    value={form.title}
+                    onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
+                    placeholder={`${form.category} 일정 제목을 입력하세요`}
+                    className={inputCls}
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-500">TF명 (선택)</label>
+                  <input
+                    list="tf-list"
+                    value={form.tfName}
+                    onChange={e => setForm(f => ({ ...f, tfName: e.target.value }))}
+                    placeholder="예) 울산TF"
+                    className={inputCls}
+                  />
+                  <datalist id="tf-list">
+                    {tfList.map(tf => <option key={tf} value={tf} />)}
+                  </datalist>
+                </div>
+                <div>
+                  <label className="text-xs text-gray-500">날짜</label>
+                  <input type="date" value={form.scheduledDate} onChange={e => setForm(f => ({ ...f, scheduledDate: e.target.value }))} className={inputCls} />
+                </div>
+                <div className="col-span-2">
+                  <label className="text-xs text-gray-500">시간 (선택)</label>
+                  <input type="time" value={form.scheduledTime} onChange={e => setForm(f => ({ ...f, scheduledTime: e.target.value }))} className={inputCls} />
+                </div>
+                <div className="col-span-2">
+                  <label className="text-xs text-gray-500">내용</label>
+                  <textarea
+                    value={form.content}
+                    onChange={e => setForm(f => ({ ...f, content: e.target.value }))}
+                    placeholder="자유롭게 기술하세요 (향후 카테고리별 전용 필드가 추가될 예정)"
+                    className={`${inputCls} h-28`}
+                  />
+                </div>
+                <div className="col-span-2">
+                  <label className="text-xs text-gray-500">메모 (선택)</label>
+                  <textarea value={form.memo} onChange={e => setForm(f => ({ ...f, memo: e.target.value }))} className={`${inputCls} h-12`} />
+                </div>
+              </div>
+            )}
+
             <div className="flex justify-end">
               <button onClick={handleFormSave} disabled={saving}
                 className="px-4 py-1.5 text-sm bg-sky-500 text-white rounded hover:bg-sky-600 disabled:opacity-50">

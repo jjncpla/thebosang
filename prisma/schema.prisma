@@ -1051,22 +1051,32 @@ model Minutes {
 
 model SpecialClinicSchedule {
   id              String    @id @default(cuid())
-  patientName     String
-  tfName          String
-  hospitalName    String
-  clinicType      String    // "특진" | "재특진"
-  category        String    @default("특진") // "특진" | "재특진" | "회의" | "행사" | "기타"
-  examRound       Int
+  // 공통
+  category        String    @default("특진") // "특진" | "재특진" | "영업" | "자료보완" | "교육" | "회의" | "질판위" | "상담" | "약정" | "기타"
+  tfName          String    @default("")
   scheduledDate   DateTime?
   isAllDay        Boolean   @default(true)
   scheduledHour   Int?
   scheduledMinute Int?      @default(0)
   status          String    @default("scheduled") // "scheduled" | "done" | "cancelled" | "unknown"
+  memo            String?   @db.Text
+
+  // 자유형 카테고리용 (영업, 자료보완, 교육, 회의, 질판위, 상담, 약정, 기타)
+  title           String?
+  content         String?   @db.Text
+
+  // 특진/재특진 전용
+  patientName     String?
+  hospitalName    String?
+  clinicType      String?   // "특진" | "재특진"
+  examRound       Int?
+
+  // 텔레그램 수신
   sender          String?
   sourceDate      DateTime?
   rawMessage      String?   @db.Text
   telegramMsgId   String?
-  memo            String?   @db.Text
+
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
