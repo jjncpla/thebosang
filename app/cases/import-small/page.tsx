@@ -27,6 +27,10 @@ function maskSsn(ssn: string) {
   return ssn.replace(/(\d{6})-?(\d{7})/, '$1-*******')
 }
 
+function buildSig(file: File, tfName: string, branch: string, skipDup: boolean) {
+  return `${file.name}|${file.size}|${file.lastModified}|${tfName}|${branch}|${skipDup ? '1' : '0'}`
+}
+
 export default function ImportSmallPage() {
   const { tfByBranch, tfToBranch, loading: branchesLoading } = useBranches()
   const fileRef = useRef<HTMLInputElement>(null)
@@ -34,39 +38,50 @@ export default function ImportSmallPage() {
   const [branch, setBranch] = useState('')
   const [tfName, setTfName] = useState('')
   const [file, setFile] = useState<File | null>(null)
-  const [dryRun, setDryRun] = useState(true)
   const [skipDuplicates, setSkipDuplicates] = useState(true)
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState<'idle' | 'test' | 'real'>('idle')
   const [result, setResult] = useState<ImportResult | null>(null)
+  const [testedSig, setTestedSig] = useState<string | null>(null)
+  const [confirmReal, setConfirmReal] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const tfList = branch ? tfByBranch[branch] ?? [] : []
   const branchNames = useMemo(() => Object.keys(tfByBranch), [tfByBranch])
 
-  const canSubmit = !!file && !!tfName && !!branch && !loading
+  const canTest = !!file && !!tfName && !!branch && loading === 'idle'
+
+  const currentSig = file && tfName && branch ? buildSig(file, tfName, branch, skipDuplicates) : null
+  const sigMatches = testedSig !== null && currentSig === testedSig
+  const canRealImport =
+    !!result &&
+    result.dryRun === true &&
+    sigMatches &&
+    result.success > 0
 
   const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0]
     setFile(f ?? null)
     setResult(null)
+    setTestedSig(null)
     setError(null)
   }
 
   const handleTfChange = (tf: string) => {
     setTfName(tf)
-    // TF에서 역으로 지사 확인 (지사 선택과 불일치하면 동기화)
     const mapped = tfToBranch[tf]
     if (mapped && mapped !== branch) setBranch(mapped)
+    setResult(null)
+    setTestedSig(null)
   }
 
-  const handleSubmit = async () => {
-    if (!canSubmit) return
-    setLoading(true)
-    setResult(null)
+  const runImport = async (dryRun: boolean) => {
+    if (!file || !tfName || !branch) return
+    setLoading(dryRun ? 'test' : 'real')
     setError(null)
+    if (dryRun) setResult(null)
 
     const fd = new FormData()
-    fd.append('file', file!)
+    fd.append('file', file)
     fd.append('tfName', tfName)
     fd.append('branch', branch)
     fd.append('dryRun', String(dryRun))
@@ -77,13 +92,16 @@ export default function ImportSmallPage() {
       const data = await res.json()
       if (!res.ok) {
         setError(data?.error || '임포트 실패')
-      } else {
-        setResult(data)
+        return
       }
+      setResult(data)
+      if (dryRun) setTestedSig(buildSig(file, tfName, branch, skipDuplicates))
+      else setTestedSig(null) // 실제 임포트 완료 후 재테스트 필요
     } catch {
       setError('네트워크 오류가 발생했습니다.')
     } finally {
-      setLoading(false)
+      setLoading('idle')
+      setConfirmReal(false)
     }
   }
 
@@ -113,7 +131,7 @@ export default function ImportSmallPage() {
             <label className="block text-[11px] text-gray-500 font-semibold mb-1">지사</label>
             <select
               value={branch}
-              onChange={(e) => { setBranch(e.target.value); setTfName('') }}
+              onChange={(e) => { setBranch(e.target.value); setTfName(''); setResult(null); setTestedSig(null) }}
               disabled={branchesLoading}
               className="border rounded-md px-3 py-1.5 text-sm bg-gray-50 min-w-[220px]"
             >
@@ -156,31 +174,25 @@ export default function ImportSmallPage() {
         </div>
       </div>
 
-      {/* Step 3: 옵션 · 실행 */}
+      {/* Step 3: 옵션 · 테스트 실행 */}
       <div className="bg-white border rounded-xl p-4 mb-3 shadow-sm">
-        <div className="text-[11px] font-bold text-gray-500 mb-2">③ 옵션 · 실행</div>
-        <div className="flex flex-wrap gap-5 text-sm mb-3">
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input type="checkbox" checked={dryRun} onChange={(e) => setDryRun(e.target.checked)} />
-            <span className={dryRun ? 'text-orange-600 font-medium' : 'text-gray-600'}>
-              테스트 실행 (저장 안 함)
-            </span>
-          </label>
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input type="checkbox" checked={skipDuplicates} onChange={(e) => setSkipDuplicates(e.target.checked)} />
-            <span className="text-gray-600">같은 재해자의 소음성 난청 사건이 이미 있으면 건너뛰기</span>
-          </label>
-        </div>
+        <div className="text-[11px] font-bold text-gray-500 mb-2">③ 테스트 실행</div>
+        <label className="flex items-center gap-2 cursor-pointer text-sm mb-3">
+          <input
+            type="checkbox"
+            checked={skipDuplicates}
+            onChange={(e) => { setSkipDuplicates(e.target.checked); setTestedSig(null) }}
+          />
+          <span className="text-gray-600">같은 재해자의 소음성 난청 사건이 이미 있으면 건너뛰기 (권장)</span>
+        </label>
         <button
-          onClick={handleSubmit}
-          disabled={!canSubmit}
-          className={`w-full py-2.5 rounded-lg font-semibold text-white text-sm transition-colors disabled:opacity-40 ${
-            dryRun ? 'bg-orange-500 hover:bg-orange-600' : 'bg-[#29ABE2] hover:bg-[#1a9fd4]'
-          }`}
+          onClick={() => runImport(true)}
+          disabled={!canTest}
+          className="w-full py-2.5 rounded-lg font-semibold text-white text-sm bg-orange-500 hover:bg-orange-600 transition-colors disabled:opacity-40"
         >
-          {loading ? '처리 중...' : dryRun ? '테스트 실행' : '실제 임포트'}
+          {loading === 'test' ? '테스트 중...' : '🧪 테스트 실행 (저장 안 함)'}
         </button>
-        {!canSubmit && !loading && (
+        {!canTest && loading === 'idle' && (
           <p className="mt-2 text-[11px] text-gray-400">
             {!branch ? '지사를 선택해주세요.' : !tfName ? 'TF를 선택해주세요.' : !file ? '엑셀 파일을 선택해주세요.' : ''}
           </p>
@@ -196,9 +208,9 @@ export default function ImportSmallPage() {
 
       {/* 결과 */}
       {result && (
-        <div className="mt-4 border rounded-xl overflow-hidden">
+        <div className="mt-4 border rounded-xl overflow-hidden shadow-sm">
           <div className={`px-4 py-3 font-semibold text-sm ${result.dryRun ? 'bg-orange-50 text-orange-700' : 'bg-green-50 text-green-700'}`}>
-            {result.dryRun ? '테스트 결과' : '임포트 완료'}
+            {result.dryRun ? '🧪 테스트 결과' : '✅ 임포트 완료'}
             <span className="ml-2 text-xs text-gray-500">시트: {result.sheet}</span>
           </div>
           <div className="p-4">
@@ -246,8 +258,8 @@ export default function ImportSmallPage() {
             )}
 
             {result.errors.length > 0 && (
-              <div>
-                <p className="text-xs font-semibold text-red-600 mb-1.5">오류 목록</p>
+              <div className="mb-4">
+                <p className="text-xs font-semibold text-red-600 mb-1.5">오류 목록 (이 행들은 저장되지 않습니다)</p>
                 <div className="max-h-48 overflow-y-auto space-y-1">
                   {result.errors.map((e, i) => (
                     <div key={i} className="text-xs text-red-600 bg-red-50 px-2 py-1 rounded">
@@ -255,6 +267,55 @@ export default function ImportSmallPage() {
                     </div>
                   ))}
                 </div>
+              </div>
+            )}
+
+            {/* 테스트 직후 → 실제 임포트 단계 */}
+            {result.dryRun && (
+              <div className="mt-4 pt-4 border-t">
+                {canRealImport ? (
+                  !confirmReal ? (
+                    <button
+                      onClick={() => setConfirmReal(true)}
+                      className="w-full py-2.5 rounded-lg font-semibold text-white text-sm bg-[#29ABE2] hover:bg-[#1a9fd4] transition-colors"
+                    >
+                      ✅ 실제 임포트 실행 ({result.success}건 저장)
+                    </button>
+                  ) : (
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                      <p className="text-sm text-blue-900 font-medium mb-2">
+                        확인: {tfName}에 신규 사건 <b>{result.success}건</b>을 <b>접수 대기</b> 상태로 등록합니다.
+                      </p>
+                      <p className="text-xs text-blue-700 mb-3">
+                        중복 skip {result.skipped}건 · 오류 {result.errors.length}건은 저장되지 않습니다.
+                      </p>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => runImport(false)}
+                          disabled={loading === 'real'}
+                          className="flex-1 py-2 rounded-md font-semibold text-white text-sm bg-[#29ABE2] hover:bg-[#1a9fd4] disabled:opacity-50"
+                        >
+                          {loading === 'real' ? '저장 중...' : '예, 실행합니다'}
+                        </button>
+                        <button
+                          onClick={() => setConfirmReal(false)}
+                          disabled={loading === 'real'}
+                          className="px-4 py-2 rounded-md text-sm border border-gray-300 bg-white hover:bg-gray-50 disabled:opacity-50"
+                        >
+                          취소
+                        </button>
+                      </div>
+                    </div>
+                  )
+                ) : result.success === 0 ? (
+                  <p className="text-xs text-gray-500 text-center">
+                    저장할 신규 건이 없습니다. (전부 중복이거나 오류)
+                  </p>
+                ) : !sigMatches ? (
+                  <p className="text-xs text-orange-600 text-center">
+                    ⚠ 설정이 변경되었습니다. 테스트 실행을 다시 해주세요.
+                  </p>
+                ) : null}
               </div>
             )}
 
