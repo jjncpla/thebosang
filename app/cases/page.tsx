@@ -820,6 +820,13 @@ export default function CasesPage() {
             관할표 보기
           </button>
           <button
+            onClick={() => router.push("/cases/import-small")}
+            style={{ background: "white", color: "#005530", border: "1px solid #00854A", borderRadius: 6, padding: "8px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
+            title="이산 신규 사건(소음성 난청) 소량 엑셀 임포트"
+          >
+            📥 소량 임포트
+          </button>
+          <button
             onClick={() => router.push("/cases/new")}
             style={{ background: "#29ABE2", color: "white", border: "none", borderRadius: 6, padding: "8px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
           >
