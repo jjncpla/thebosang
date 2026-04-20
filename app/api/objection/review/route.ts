@@ -18,45 +18,64 @@ export async function GET(req: NextRequest) {
   if (caseType) where.caseType = caseType;
   if (search) where.patientName = { contains: search, mode: "insensitive" };
 
-  const items = await prisma.objectionReview.findMany({
-    where,
-    orderBy: { createdAt: "desc" },
-  });
+  // 🏎️ 응답 경량화: 페이지 렌더링에 필요한 컬럼만 조회 (memo/updatedAt 제외)
+  const [items, decisionCases] = await Promise.all([
+    prisma.objectionReview.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      select: {
+        id: true,
+        tfName: true,
+        patientName: true,
+        caseType: true,
+        approvalStatus: true,
+        progressStatus: true,
+        decisionDate: true,
+        hasInfoDisclosure: true,
+        infoDisclosureStatus: true,
+        memo: true,
+        caseId: true,
+        assignedTo: true,
+      },
+    }),
+    // DECISION_RECEIVED 상태 사건 자동 인입 (병렬 수행)
+    prisma.case.findMany({
+      where: {
+        status: 'DECISION_RECEIVED',
+        ...(tfName ? { tfName } : {}),
+        ...(caseType ? { caseType } : {}),
+        ...(search ? { patient: { name: { contains: search, mode: "insensitive" as const } } } : {}),
+      },
+      select: {
+        id: true,
+        tfName: true,
+        caseType: true,
+        patient: { select: { name: true } },
+        hearingLoss: { select: { decisionReceivedAt: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    }),
+  ]);
 
-  // DECISION_RECEIVED 상태 사건 자동 인입
-  const existingCaseIds = items.map(r => r.caseId).filter(Boolean) as string[];
-
-  const decisionWhere: Record<string, unknown> = {
-    status: 'DECISION_RECEIVED',
-    ...(existingCaseIds.length > 0 ? { id: { notIn: existingCaseIds } } : {}),
-    ...(tfName ? { tfName } : {}),
-  };
-  if (caseType) decisionWhere.caseType = caseType;
-  if (search) decisionWhere.patient = { name: { contains: search, mode: "insensitive" } };
-
-  const decisionCases = await prisma.case.findMany({
-    where: decisionWhere,
-    include: {
-      patient: { select: { name: true } },
-      hearingLoss: { select: { decisionReceivedAt: true } },
-    },
-    orderBy: { createdAt: 'desc' },
-  });
-
-  const autoItems = decisionCases.map(c => ({
-    id: `auto_${c.id}`,
-    tfName: c.tfName ?? '',
-    patientName: c.patient.name,
-    caseType: c.caseType,
-    approvalStatus: '',
-    progressStatus: '',
-    decisionDate: c.hearingLoss?.decisionReceivedAt?.toISOString() ?? null,
-    hasInfoDisclosure: false,
-    memo: null,
-    caseId: c.id,
-    isAutoFilled: true,
-    assignedTo: null,
-  }));
+  // 이미 처분검토 테이블에 있는 caseId는 제외
+  const existingCaseIds = new Set(items.map(r => r.caseId).filter(Boolean) as string[]);
+  const autoItems = decisionCases
+    .filter(c => !existingCaseIds.has(c.id))
+    .map(c => ({
+      id: `auto_${c.id}`,
+      tfName: c.tfName ?? '',
+      patientName: c.patient.name,
+      caseType: c.caseType,
+      approvalStatus: '',
+      progressStatus: '',
+      decisionDate: c.hearingLoss?.decisionReceivedAt?.toISOString() ?? null,
+      hasInfoDisclosure: false,
+      infoDisclosureStatus: null,
+      memo: null,
+      caseId: c.id,
+      isAutoFilled: true,
+      assignedTo: null,
+    }));
 
   return NextResponse.json([...autoItems, ...items]);
 }

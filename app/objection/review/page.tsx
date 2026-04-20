@@ -271,6 +271,9 @@ export default function ObjectionReviewPage() {
   const [filterCaseType, setFilterCaseType] = useState("");
   const [filterInfo, setFilterInfo] = useState(""); // "" | 요청 | 확보 | 확보대기 (요청+요청중)
   const [searchReview, setSearchReview] = useState("");
+  // 페이지네이션: 기본 200행, 필요시 "더 보기"
+  const PAGE_SIZE = 200;
+  const [pageLimit, setPageLimit] = useState(PAGE_SIZE);
   const [reviewModal, setReviewModal] = useState(false);
   const [reviewTarget, setReviewTarget] = useState<ReviewItem | null>(null);
 
@@ -327,6 +330,9 @@ export default function ObjectionReviewPage() {
 
   useEffect(() => { fetchReviews(); }, [fetchReviews]);
   useEffect(() => { if (tab === "wage") fetchWages(); }, [tab, fetchWages]);
+
+  // 필터 변경 시 페이지 리밋 초기화
+  useEffect(() => { setPageLimit(PAGE_SIZE); }, [filterBranch, filterTf, filterProgress, filterCaseType, filterInfo, searchReview]);
 
   // 클라이언트 사이드 필터 적용
   const filteredReviews = reviews.filter(r => {
@@ -471,7 +477,7 @@ export default function ObjectionReviewPage() {
                   {filteredReviews.length === 0 && (
                     <tr><td colSpan={10} style={{ padding: "40px 16px", textAlign: "center", color: "#9ca3af", fontSize: 13 }}>데이터가 없습니다</td></tr>
                   )}
-                  {filteredReviews.map(item => {
+                  {filteredReviews.slice(0, pageLimit).map(item => {
                     const deadline = addDays(item.decisionDate, 90);
                     const now = new Date();
                     const diff = deadline ? (deadline.getTime() - now.getTime()) / (1000 * 60 * 60 * 24) : null;
@@ -595,6 +601,25 @@ export default function ObjectionReviewPage() {
                 </tbody>
               </table>
             </div>
+            {filteredReviews.length > pageLimit && (
+              <div style={{ padding: "14px 0 4px", textAlign: "center" }}>
+                <span style={{ fontSize: 12, color: "#6b7280", marginRight: 12 }}>
+                  {pageLimit.toLocaleString()} / {filteredReviews.length.toLocaleString()}건 표시
+                </span>
+                <button
+                  onClick={() => setPageLimit(p => p + PAGE_SIZE)}
+                  style={{ padding: "6px 16px", fontSize: 12, borderRadius: 6, border: "1px solid #29ABE2", background: "#eff6ff", color: "#29ABE2", fontWeight: 600, cursor: "pointer", marginRight: 6 }}
+                >
+                  + {PAGE_SIZE}건 더 보기
+                </button>
+                <button
+                  onClick={() => setPageLimit(filteredReviews.length)}
+                  style={{ padding: "6px 16px", fontSize: 12, borderRadius: 6, border: "1px solid #e5e7eb", background: "white", color: "#374151", cursor: "pointer" }}
+                >
+                  전체 보기
+                </button>
+              </div>
+            )}
           </>
         )}
 

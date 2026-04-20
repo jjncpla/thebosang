@@ -629,6 +629,13 @@ model ObjectionReview {
   updatedAt      DateTime  @updatedAt
 
   objectionCases ObjectionCase[]
+
+  @@index([tfName])
+  @@index([progressStatus])
+  @@index([caseType])
+  @@index([patientName])
+  @@index([createdAt])
+  @@index([tfName, progressStatus])
 }
 
 // ─────────────────────────────────────────────
