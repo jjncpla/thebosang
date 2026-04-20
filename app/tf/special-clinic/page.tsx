@@ -99,6 +99,7 @@ function SpecialClinicCalendar() {
   const [selected, setSelected] = useState<Schedule | null>(null)
   const [showModal, setShowModal] = useState(false)
   const [modalTab, setModalTab] = useState<'form' | 'paste'>('form')
+  const [editTarget, setEditTarget] = useState<Schedule | null>(null)
 
   // 캘린더 고도화 상태
   const [viewMode, setViewMode] = useState<'month' | 'week' | 'day'>('month')
@@ -957,22 +958,27 @@ function SpecialClinicCalendar() {
                 className="px-3 py-1 text-xs border border-red-300 text-red-500 rounded hover:bg-red-50">
                 삭제
               </button>
+              <button onClick={() => { setEditTarget(selected); setSelected(null); setShowModal(true); setModalTab('form') }}
+                className="px-3 py-1 text-xs border border-sky-300 text-sky-600 rounded hover:bg-sky-50">
+                수정
+              </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* ── 수동 입력 모달 ── */}
+      {/* ── 수동 입력 / 수정 모달 ── */}
       {showModal && (
         <InputModal
-          onClose={() => { setShowModal(false); setManualDate('') }}
-          onSaved={() => { setShowModal(false); setManualDate(''); load() }}
+          onClose={() => { setShowModal(false); setManualDate(''); setEditTarget(null) }}
+          onSaved={() => { setShowModal(false); setManualDate(''); setEditTarget(null); load() }}
           modalTab={modalTab}
           setModalTab={setModalTab}
           tfList={tfList}
           defaultYear={year}
           defaultMonth={month}
           defaultDate={manualDate}
+          editTarget={editTarget ?? undefined}
         />
       )}
     </div>
@@ -981,7 +987,7 @@ function SpecialClinicCalendar() {
 
 // ─── 수동 입력 모달 ────────────────────────────────────────────────
 function InputModal({
-  onClose, onSaved, modalTab, setModalTab, tfList, defaultYear, defaultMonth, defaultDate,
+  onClose, onSaved, modalTab, setModalTab, tfList, defaultYear, defaultMonth, defaultDate, editTarget,
 }: {
   onClose: () => void
   onSaved: () => void
@@ -991,24 +997,45 @@ function InputModal({
   defaultYear: number
   defaultMonth: number
   defaultDate?: string
+  editTarget?: Schedule
 }) {
-  // 직접 입력
-  const [form, setForm] = useState({
-    category: '특진',
-    // 공통
-    tfName: '',
-    scheduledDate: defaultDate || `${defaultYear}-${pad(defaultMonth)}-01`,
-    scheduledTime: '',
-    memo: '',
-    // 특진/재특진 전용
-    patientName: '',
-    hospitalName: '',
-    clinicType: '특진',
-    examRound: 1,
-    // 자유형 전용
-    title: '',
-    content: '',
-  })
+  // 직접 입력 — 수정 모드일 때 editTarget 값으로 초기화
+  function initForm(target?: Schedule) {
+    if (target) {
+      const d = target.scheduledDate ? new Date(target.scheduledDate) : null
+      const dateStr = d ? `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}` : `${defaultYear}-${pad(defaultMonth)}-01`
+      const timeStr = !target.isAllDay && target.scheduledHour != null
+        ? `${pad(target.scheduledHour)}:${pad(target.scheduledMinute ?? 0)}`
+        : ''
+      return {
+        category: target.category || '특진',
+        tfName: target.tfName || '',
+        scheduledDate: dateStr,
+        scheduledTime: timeStr,
+        memo: target.memo || '',
+        patientName: target.patientName || '',
+        hospitalName: target.hospitalName || '',
+        clinicType: target.clinicType || '특진',
+        examRound: target.examRound ?? 1,
+        title: target.title || '',
+        content: target.content || '',
+      }
+    }
+    return {
+      category: '특진',
+      tfName: '',
+      scheduledDate: defaultDate || `${defaultYear}-${pad(defaultMonth)}-01`,
+      scheduledTime: '',
+      memo: '',
+      patientName: '',
+      hospitalName: '',
+      clinicType: '특진',
+      examRound: 1,
+      title: '',
+      content: '',
+    }
+  }
+  const [form, setForm] = useState(() => initForm(editTarget))
   const [saving, setSaving] = useState(false)
 
   // 텍스트 붙여넣기
@@ -1036,9 +1063,10 @@ function InputModal({
       isAllDay: !hasTime,
       scheduledHour: h,
       scheduledMinute: m ?? 0,
-      status: 'scheduled',
       memo: form.memo || null,
     }
+    if (!editTarget) payload.status = 'scheduled'
+
     if (free) {
       Object.assign(payload, {
         title: form.title.trim(),
@@ -1059,8 +1087,10 @@ function InputModal({
       })
     }
 
-    const res = await fetch('/api/tf/special-clinic', {
-      method: 'POST',
+    const url = editTarget ? `/api/tf/special-clinic/${editTarget.id}` : '/api/tf/special-clinic'
+    const method = editTarget ? 'PUT' : 'POST'
+    const res = await fetch(url, {
+      method,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     })
@@ -1095,19 +1125,21 @@ function InputModal({
       <div className="relative bg-white rounded-xl shadow-xl w-full max-w-lg p-5 space-y-4 max-h-[90vh] overflow-y-auto"
         onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between">
-          <h2 className="text-sm font-bold">일정 등록</h2>
+          <h2 className="text-sm font-bold">{editTarget ? '일정 수정' : '일정 등록'}</h2>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600">✕</button>
         </div>
 
-        {/* 탭 */}
-        <div className="flex gap-1 bg-gray-100 p-1 rounded">
-          {[['form','직접 입력'] as const, ['paste','텍스트 붙여넣기'] as const].map(([id, label]) => (
-            <button key={id} onClick={() => setModalTab(id)}
-              className={`flex-1 py-1 text-xs rounded font-medium ${modalTab === id ? 'bg-white shadow-sm text-gray-800' : 'text-gray-500'}`}>
-              {label}
-            </button>
-          ))}
-        </div>
+        {/* 탭 — 수정 모드에서는 붙여넣기 탭 숨김 */}
+        {!editTarget && (
+          <div className="flex gap-1 bg-gray-100 p-1 rounded">
+            {[['form','직접 입력'] as const, ['paste','텍스트 붙여넣기'] as const].map(([id, label]) => (
+              <button key={id} onClick={() => setModalTab(id)}
+                className={`flex-1 py-1 text-xs rounded font-medium ${modalTab === id ? 'bg-white shadow-sm text-gray-800' : 'text-gray-500'}`}>
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
 
         {modalTab === 'form' && (
           <div className="space-y-3">
@@ -1241,7 +1273,7 @@ function InputModal({
             <div className="flex justify-end">
               <button onClick={handleFormSave} disabled={saving}
                 className="px-4 py-1.5 text-sm bg-sky-500 text-white rounded hover:bg-sky-600 disabled:opacity-50">
-                {saving ? '저장 중...' : '저장'}
+                {saving ? '저장 중...' : editTarget ? '수정 완료' : '저장'}
               </button>
             </div>
           </div>
