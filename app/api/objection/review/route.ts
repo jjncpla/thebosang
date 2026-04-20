@@ -226,8 +226,6 @@ export async function POST(req: NextRequest) {
       '이의제기 진행': 'OBJECTION',
       '평정청구 진행': 'WAGE_CORRECTION',
       '종결': 'CLOSED',
-      '송무 인계': 'CLOSED',
-      '송무 검토': 'CLOSED',
     };
     const newStatus = statusMap[item.progressStatus];
     if (newStatus) {

@@ -92,8 +92,6 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       '이의제기 진행': 'OBJECTION',
       '평정청구 진행': 'WAGE_CORRECTION',
       '종결': 'CLOSED',
-      '송무 인계': 'CLOSED',
-      '송무 검토': 'CLOSED',
     };
     const newStatus = statusMap[item.progressStatus];
     if (newStatus) {
@@ -108,8 +106,6 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const TODO_TRIGGER_STATUS: Record<string, { title: string; type: string }> = {
     "이의제기 진행": { title: "이의제기 이유서 작성 필요", type: "OBJECTION_DEADLINE" },
     "평정청구 진행": { title: "평균임금 정정 청구 서류 준비", type: "WAGE_REQUEST" },
-    "송무 검토":    { title: "송무 검토 필요", type: "GENERAL" },
-    "송무 인계":    { title: "송무 인계 처리 필요", type: "GENERAL" },
   };
 
   if (body.progressStatus && TODO_TRIGGER_STATUS[body.progressStatus]) {

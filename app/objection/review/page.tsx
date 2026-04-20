@@ -5,8 +5,9 @@ import { useRouter } from "next/navigation";
 import { CASE_TYPE_LABELS } from "@/lib/constants/case";
 import { useBranches } from "@/lib/hooks/useBranches";
 const APPROVAL_OPTIONS = ["승인", "불승인", "일부승인"];
-const PROGRESS_OPTIONS = ["종결", "검토중", "이의제기 진행", "송무 검토", "송무 인계", "평정청구 진행"];
-const PROGRESS_FILTER_OPTIONS = ["미검토", "검토중", "이의제기 진행", "송무 인계", "평정청구 진행"];
+// 송무 인계는 기일관리 페이지에서만 관리 — 처분검토에서는 제거
+const PROGRESS_OPTIONS = ["종결", "검토중", "이의제기 진행", "평정청구 진행"];
+const PROGRESS_FILTER_OPTIONS = ["미검토", "검토중", "이의제기 진행", "평정청구 진행"];
 const WAGE_RESULT_OPTIONS = ["종결", "평정청구 진행", "검토중"];
 // 정공(정보공개청구) 상태값 — 엑셀 매크로 입력 기준
 const INFO_DISCLOSURE_OPTIONS = ["요청", "요청중", "확보", "평임확보", "평임 부존재", "불필요"];
@@ -337,7 +338,6 @@ export default function ObjectionReviewPage() {
   // 클라이언트 사이드 필터 적용
   const filteredReviews = reviews.filter(r => {
     if (filterProgress === "미검토" && (r.progressStatus && r.progressStatus !== "")) return false;
-    if (filterProgress === "송무 인계" && !(r.progressStatus === "송무 검토" || r.progressStatus === "송무 인계")) return false;
     if (filterInfo === "요청중" && !(r.infoDisclosureStatus === "요청" || r.infoDisclosureStatus === "요청중")) return false;
     if (filterInfo === "확보") {
       const s = r.infoDisclosureStatus;
@@ -355,7 +355,7 @@ export default function ObjectionReviewPage() {
     return true;
   });
 
-  const AUTO_TODO_STATUSES = ["이의제기 진행", "평정청구 진행", "송무 검토", "송무 인계"];
+  const AUTO_TODO_STATUSES = ["이의제기 진행", "평정청구 진행"];
 
   const handleSaveReview = async (form: ReviewForm, id?: string) => {
     const method = id ? "PATCH" : "POST";
@@ -373,7 +373,7 @@ export default function ObjectionReviewPage() {
     unreviewed: reviews.filter(r => !r.progressStatus || r.progressStatus === "").length,
     reviewing: reviews.filter(r => r.progressStatus === "검토중").length,
     ongoing: reviews.filter(r => r.progressStatus === "이의제기 진행").length,
-    litigation: reviews.filter(r => r.progressStatus === "송무 검토" || r.progressStatus === "송무 인계").length,
+    closed: reviews.filter(r => r.progressStatus === "종결").length,
     wage: reviews.filter(r => r.progressStatus === "평정청구 진행").length,
     infoRequested: reviews.filter(r => r.infoDisclosureStatus === "요청" || r.infoDisclosureStatus === "요청중").length,
     infoObtained: reviews.filter(r => r.progressStatus === "검토중" && (r.infoDisclosureStatus === "확보" || r.infoDisclosureStatus === "평임확보")).length,
@@ -414,8 +414,8 @@ export default function ObjectionReviewPage() {
                 { label: "미검토", value: stats.unreviewed, color: "#6b7280", kind: "progress" as const, filter: "미검토" },
                 { label: "검토중", value: stats.reviewing, color: "#29ABE2", kind: "progress" as const, filter: "검토중" },
                 { label: "이의제기 진행", value: stats.ongoing, color: "#d97706", kind: "progress" as const, filter: "이의제기 진행" },
-                { label: "송무 인계", value: stats.litigation, color: "#9333ea", kind: "progress" as const, filter: "송무 인계" },
                 { label: "평정청구 진행", value: stats.wage, color: "#ea580c", kind: "progress" as const, filter: "평정청구 진행" },
+                { label: "종결", value: stats.closed, color: "#059669", kind: "progress" as const, filter: "종결" },
                 { label: "정공 요청중", value: stats.infoRequested, color: "#b45309", kind: "info" as const, filter: "요청중" },
                 { label: "결정대기 (검토중+확보)", value: stats.infoObtained, color: "#15803d", kind: "info" as const, filter: "결정대기" },
               ].map(s => {
