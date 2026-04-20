@@ -675,7 +675,8 @@ export default function IncentiveTab() {
                 </thead>
                 <tbody>
                   {(() => {
-                    // 합계 요약 행 렌더링: BranchIncentiveSummary가 있으면 그 값을 보조로 사용
+                    // 합계 요약 행 렌더링
+                    // 개인 인센티브: 합계 시트 임포트값(ss.personalIncentive) 우선, 없으면 배분 합산
                     const sumMap: Record<string, StaffSummaryRow | undefined> = {}
                     summary?.staffSummaries.forEach(r => { sumMap[r.staffName] = r })
                     const bucket = (type: 'EXTERNAL' | 'INTERNAL' | 'ATTORNEY') =>
@@ -683,9 +684,13 @@ export default function IncentiveTab() {
                         type === 'EXTERNAL' ? (!r.staffType || r.staffType === 'EXTERNAL')
                         : r.staffType === type
                       )
-                    const renderRow = (s: string, kind: 'ext' | 'int' | 'att') => {
-                      const personal = staffIncentiveTotals[s] || 0
+                    const getPersonal = (s: string) => {
                       const ss = sumMap[s]
+                      return ss?.personalIncentive != null ? ss.personalIncentive : (staffIncentiveTotals[s] || 0)
+                    }
+                    const renderRow = (s: string, kind: 'ext' | 'int' | 'att') => {
+                      const ss = sumMap[s]
+                      const personal = getPersonal(s)
                       const branchInc = ss?.branchIncentive ?? 0
                       const car = ss?.carAllowance ?? 0
                       const total = ss?.totalIncentive ?? (personal + branchInc + car)
@@ -733,15 +738,16 @@ export default function IncentiveTab() {
                         )
                       }),
                     ]
-                    const sumPersonal = Object.values(staffIncentiveTotals).reduce((a, b) => a + b, 0)
+                    // 합계행: 개인 인센도 getPersonal() 기준으로 통일
+                    const allSumStaff = [...staffList, ...allocationOnlyStaff]
+                    const sumPersonal = allSumStaff.reduce((sum, s) => sum + getPersonal(s), 0)
                     const sumBranch = (summary?.staffSummaries || []).reduce((a, s) => a + s.branchIncentive, 0)
                     const sumCar = (summary?.staffSummaries || []).reduce((a, s) => a + s.carAllowance, 0)
                     const sumTotal = sumPersonal + sumBranch + sumCar
-                    // 합계 절사: 명부 직원 + 명부 외 배분 직원 모두 포함
-                    const allSumStaff = [...staffList, ...allocationOnlyStaff]
                     const sumRounded = allSumStaff.reduce((sum, s) => {
                       const ss = sumMap[s]
-                      const t = ss?.totalIncentive ?? ((staffIncentiveTotals[s] || 0) + (ss?.branchIncentive ?? 0) + (ss?.carAllowance ?? 0))
+                      const personal = getPersonal(s)
+                      const t = ss?.totalIncentive ?? (personal + (ss?.branchIncentive ?? 0) + (ss?.carAllowance ?? 0))
                       return sum + (ss?.roundedIncentive ?? Math.floor(t / 100000) * 100000)
                     }, 0)
                     return (
