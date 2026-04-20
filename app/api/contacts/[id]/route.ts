@@ -12,7 +12,7 @@ export async function PUT(
   }
   const { id } = await params
   const body = await request.json()
-  const { hireDate, leaveDate, id: _id, createdAt: _c, updatedAt: _u, ...rest } = body
+  const { hireDate, leaveDate, id: _id, createdAt: _c, updatedAt: _u, user: _user, ...rest } = body
   const contact = await prisma.contact.update({
     where: { id },
     data: {
