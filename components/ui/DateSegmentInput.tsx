@@ -75,6 +75,7 @@ export default function DateSegmentInput({ value, onChange, includeTime = false,
     textAlign: "center", padding: 0, appearance: "none",
     MozAppearance: "textfield" as React.CSSProperties["MozAppearance"],
   };
+  const unit: React.CSSProperties = { color: "#6b7280", fontSize: 12, userSelect: "none" as React.CSSProperties["userSelect"] };
   const sep: React.CSSProperties = { color: "#d1d5db", fontSize: 12, userSelect: "none" as React.CSSProperties["userSelect"], margin: "0 1px" };
 
   return (
@@ -88,6 +89,7 @@ export default function DateSegmentInput({ value, onChange, includeTime = false,
           emit(v, month, day, hour, minute);
         }}
       />
+      <span style={unit}>년</span>
       <span style={sep}>-</span>
       <input
         ref={monthRef} value={month} placeholder="" maxLength={2} type="text" inputMode="numeric"
@@ -104,6 +106,7 @@ export default function DateSegmentInput({ value, onChange, includeTime = false,
           emit(year, clamped, day, hour, minute);
         }}
       />
+      <span style={unit}>월</span>
       <span style={sep}>-</span>
       <input
         ref={dayRef} value={day} placeholder="" maxLength={2} type="text" inputMode="numeric"
@@ -120,6 +123,7 @@ export default function DateSegmentInput({ value, onChange, includeTime = false,
           emit(year, month, clamped, hour, minute);
         }}
       />
+      <span style={unit}>일</span>
       {includeTime && (
         <>
           <span style={{ ...sep, margin: "0 4px" }}>·</span>
@@ -138,6 +142,7 @@ export default function DateSegmentInput({ value, onChange, includeTime = false,
               emit(year, month, day, clamped, minute);
             }}
           />
+          <span style={unit}>시</span>
           <span style={sep}>:</span>
           <input
             ref={minuteRef} value={minute} placeholder="" maxLength={2} type="text" inputMode="numeric"
@@ -154,6 +159,7 @@ export default function DateSegmentInput({ value, onChange, includeTime = false,
               emit(year, month, day, hour, clamped);
             }}
           />
+          <span style={unit}>분</span>
         </>
       )}
     </div>
