@@ -45,11 +45,11 @@ export async function GET(req: NextRequest) {
 
   const contacts = await prisma.contact.findMany({
     where: {
+      firmType: 'TBOSANG',
       OR: [
         { branch: branchName },
         { branch: `노무법인 더보상 ${branchName}` },
       ],
-      NOT: { branch: { contains: '이산' } },
       AND: [
         { OR: [{ hireDate: null }, { hireDate: { lte: targetDateEnd } }] },
         { OR: [{ leaveDate: null }, { leaveDate: { gte: targetDate } }] },
