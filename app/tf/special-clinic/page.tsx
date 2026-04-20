@@ -948,6 +948,7 @@ function InputModal({
 
   // 텍스트 붙여넣기
   const [pasteText, setPasteText] = useState('')
+  const [pasteTfOrg, setPasteTfOrg] = useState<'이산' | '더보상'>('이산')
   const [parsing, setParsing] = useState(false)
   const [parseResult, setParseResult] = useState<{ parsed: number; saved: number } | null>(null)
 
@@ -1009,7 +1010,7 @@ function InputModal({
     const res = await fetch('/api/tf/special-clinic/parse', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text: pasteText }),
+      body: JSON.stringify({ text: pasteText, tfOrg: pasteTfOrg }),
     })
     setParsing(false)
     if (res.ok) {
@@ -1183,6 +1184,23 @@ function InputModal({
 
         {modalTab === 'paste' && (
           <div className="space-y-3">
+            <div className="flex items-center gap-3">
+              <label className="text-xs text-gray-500">조직:</label>
+              {(['이산','더보상'] as const).map(org => (
+                <label key={org} className="flex items-center gap-1 text-xs cursor-pointer">
+                  <input
+                    type="radio"
+                    name="pasteTfOrg"
+                    checked={pasteTfOrg === org}
+                    onChange={() => setPasteTfOrg(org)}
+                  />
+                  {org}TF
+                </label>
+              ))}
+              <span className="text-[10px] text-gray-400 ml-auto">
+                TF명 접두어로 사용됨 (예: {pasteTfOrg}울산TF)
+              </span>
+            </div>
             <textarea
               value={pasteText}
               onChange={e => setPasteText(e.target.value)}

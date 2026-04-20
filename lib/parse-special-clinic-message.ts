@@ -12,11 +12,40 @@ export interface ParsedSchedule {
   memo: string
 }
 
+export type TfOrg = '이산' | '더보상'
+
+export interface ParseOptions {
+  /** TF 조직명. 이산TF 방은 '이산', 더보상 방은 '더보상'. 기본값 '이산'(기존 호환). */
+  tfOrg?: TfOrg
+}
+
+/** 헤더·병원명에서 떼어낼 수식어·업무 키워드 */
+const HOSPITAL_SUFFIX_KEYWORDS = [
+  '재특진', '특진', '난청', '산업성', '진폐',
+  '일정변경', '일정', '변경', '종료', '결과',
+]
+
+function cleanHospitalName(raw: string): string {
+  let s = raw.trim()
+  // 헤더 토큰 중 첫 수식어 키워드 위치에서 잘라내기
+  for (const kw of HOSPITAL_SUFFIX_KEYWORDS) {
+    const idx = s.indexOf(kw)
+    if (idx > 0) {
+      s = s.slice(0, idx).trim()
+    }
+  }
+  // 남은 수식어 제거(혹시 병원명 뒤에 붙은 게 있으면)
+  s = s.replace(/\s*(재특진|특진|난청|산업성|진폐|일정변경|일정|변경|종료|결과)\s*$/g, '').trim()
+  return s
+}
+
 export function parseSpecialClinicMessage(
   text: string,
   sender: string,
-  msgDate: Date
+  msgDate: Date,
+  options: ParseOptions = {}
 ): ParsedSchedule[] {
+  const tfOrg: TfOrg = options.tfOrg ?? '이산'
   const lines = text.split('\n')
   const results: ParsedSchedule[] = []
 
@@ -34,11 +63,8 @@ export function parseSpecialClinicMessage(
       } else if (headerText.includes('특진')) {
         clinicType = '특진'
       }
-      // 병원명: "난청" 이전 텍스트
-      const hospMatch = headerText.match(/^(.+?)\s*난청/)
-      if (hospMatch) {
-        hospitalName = hospMatch[1].trim()
-      }
+      // 병원명: 수식어 키워드 이전 텍스트 (이산 "<부산대 특진 난청>" / 더보상 "<부산의원 난청 특진 일정>" 양쪽 대응)
+      hospitalName = cleanHospitalName(headerText)
       break
     }
   }
@@ -74,7 +100,7 @@ export function parseSpecialClinicMessage(
           if (inner.includes('TF')) {
             // 첫 '/' 이전
             const tfPart = inner.split('/')[0].trim()
-            currentTF = normalizeTfName(tfPart)
+            currentTF = normalizeTfName(tfPart, tfOrg)
             break
           }
         }
@@ -168,12 +194,12 @@ export function parseSpecialClinicMessage(
   return results
 }
 
-function normalizeTfName(name: string): string {
+function normalizeTfName(name: string, tfOrg: TfOrg = '이산'): string {
   const trimmed = name.trim()
   if (trimmed.startsWith('더보상') || trimmed.startsWith('이산')) {
     return trimmed
   }
-  return '이산' + trimmed
+  return tfOrg + trimmed
 }
 
 function parseDate(text: string, msgDate: Date): Date | null {
