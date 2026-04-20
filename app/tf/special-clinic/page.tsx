@@ -39,8 +39,8 @@ function isSameDay(d1: Date, d2: Date) {
 
 const STATUS_LABELS: Record<string, string> = { scheduled: '예정', done: '완료', cancelled: '취소', unknown: '미정' }
 const STATUS_COLORS: Record<string, string> = { scheduled: '#3B82F6', done: '#22C55E', cancelled: '#EF4444', unknown: '#F59E0B' }
-const CATEGORIES = ['특진', '재특진', '영업', '자료보완', '교육', '회의', '질판위', '상담', '약정', '기타'] as const
-const FREEFORM_CATEGORIES = ['영업', '자료보완', '교육', '회의', '질판위', '상담', '약정', '기타'] as const
+const CATEGORIES = ['특진', '재특진', '영업', '자료보완', '교육', '회의', '장해진단', '질판위', '상담', '약정', '기타'] as const
+const FREEFORM_CATEGORIES = ['영업', '자료보완', '교육', '회의', '장해진단', '질판위', '상담', '약정', '기타'] as const
 const CATEGORY_COLORS: Record<string, string> = {
   '특진': '',       // TF 색상 사용
   '재특진': '',     // TF 색상 사용
@@ -48,6 +48,7 @@ const CATEGORY_COLORS: Record<string, string> = {
   '자료보완': '#F59E0B',
   '교육': '#8B5CF6',
   '회의': '#9B59B6',
+  '장해진단': '#0D9488',
   '질판위': '#DC2626',
   '상담': '#0EA5E9',
   '약정': '#EC4899',
