@@ -299,12 +299,19 @@ export default function IncentiveTab() {
     } finally { setImportLoading(false) }
   }
 
-  // ── 직원별 인센티브 합계
+  // ── 직원별 인센티브 합계 (명부 외 배분 직원도 포함)
   const staffIncentiveTotals = useMemo(() => {
-    const totals: Record<string, number> = {}
-    for (const s of staffList) totals[s] = 0
+    // 명부 직원 + 배분 내역에 있는 모든 직원 이름 합산
+    const staffSet = new Set(staffList)
     for (const r of records) {
-      for (const s of staffList) {
+      for (const a of r.allocations) {
+        if (!staffSet.has(a.staffName)) staffSet.add(a.staffName)
+      }
+    }
+    const totals: Record<string, number> = {}
+    for (const s of staffSet) totals[s] = 0
+    for (const r of records) {
+      for (const s of staffSet) {
         const ratio = getStaffRatio(r, s)
         if (ratio > 0) {
           totals[s] += getStaffIncentive(r.grossAmount, ratio)
@@ -313,6 +320,14 @@ export default function IncentiveTab() {
     }
     return totals
   }, [records, staffList])
+
+  // ── 명부에 없지만 배분 내역에 있는 직원 (집계 누락 방지)
+  const allocationOnlyStaff = useMemo(() => {
+    const rosterSet = new Set(staffRoster.map(r => r.staffName))
+    return Object.keys(staffIncentiveTotals).filter(
+      name => !rosterSet.has(name) && (staffIncentiveTotals[name] || 0) > 0
+    )
+  }, [staffIncentiveTotals, staffRoster])
 
   // ── 지사 인센 미배분액 계산 (isBranchOwned 우선, 없으면 담당자 문자열 힌트)
   const isBranchCase = (r: SettlementWithAlloc): boolean => {
@@ -697,12 +712,34 @@ export default function IncentiveTab() {
                       ...bucket('EXTERNAL').map(r => renderRow(r.staffName, 'ext')),
                       ...bucket('INTERNAL').filter(r => (staffIncentiveTotals[r.staffName] || 0) > 0 || sumMap[r.staffName]).map(r => renderRow(r.staffName, 'int')),
                       ...bucket('ATTORNEY').map(r => renderRow(r.staffName, 'att')),
+                      // 명부 외 배분 직원 (배분은 됐으나 직원 명부에 없는 경우)
+                      ...allocationOnlyStaff.map(name => {
+                        const personal = staffIncentiveTotals[name] || 0
+                        const rounded = Math.floor(personal / 100000) * 100000
+                        return (
+                          <tr key={`extra_${name}`} className="bg-orange-50/60 hover:bg-orange-50">
+                            <td className={`${cellCls} text-center font-medium`}>
+                              {name}
+                              <span className="ml-1 text-[10px] text-orange-500 font-normal">⚠️명부외</span>
+                            </td>
+                            <td className={`${cellCls} text-right`}>{fmt(personal)}</td>
+                            <td className={`${cellCls} text-right`}><span className="text-gray-300">-</span></td>
+                            <td className={`${cellCls} text-right`}><span className="text-gray-300">-</span></td>
+                            <td className={`${cellCls} text-right`}>{fmt(personal)}</td>
+                            <td className={`${cellCls} text-right font-bold text-orange-600`}>{fmt(rounded)}</td>
+                            <td className={`${cellCls} text-center`}><span className="text-gray-300">-</span></td>
+                            <td className={`${cellCls} text-center`}><span className="text-gray-300">-</span></td>
+                          </tr>
+                        )
+                      }),
                     ]
                     const sumPersonal = Object.values(staffIncentiveTotals).reduce((a, b) => a + b, 0)
                     const sumBranch = (summary?.staffSummaries || []).reduce((a, s) => a + s.branchIncentive, 0)
                     const sumCar = (summary?.staffSummaries || []).reduce((a, s) => a + s.carAllowance, 0)
                     const sumTotal = sumPersonal + sumBranch + sumCar
-                    const sumRounded = staffList.reduce((sum, s) => {
+                    // 합계 절사: 명부 직원 + 명부 외 배분 직원 모두 포함
+                    const allSumStaff = [...staffList, ...allocationOnlyStaff]
+                    const sumRounded = allSumStaff.reduce((sum, s) => {
                       const ss = sumMap[s]
                       const t = ss?.totalIncentive ?? ((staffIncentiveTotals[s] || 0) + (ss?.branchIncentive ?? 0) + (ss?.carAllowance ?? 0))
                       return sum + (ss?.roundedIncentive ?? Math.floor(t / 100000) * 100000)
@@ -729,6 +766,11 @@ export default function IncentiveTab() {
             <p className="text-[10px] text-gray-400 mt-1">
               * 지사 인센티브·자차보조금·분기/반기평가는 월말보고 엑셀 &apos;합계&apos; 시트 임포트로 채워집니다.
             </p>
+            {allocationOnlyStaff.length > 0 && (
+              <p className="text-[10px] text-orange-500 mt-1">
+                ⚠️ &apos;⚠️명부외&apos; 표시 직원은 배분은 됐으나 직원 명부(실적관리 탭)에 등록되지 않았습니다. 명부에 추가하거나 입사월을 해당 분기 내로 수정해주세요.
+              </p>
+            )}
             </>}
           </div>
 
