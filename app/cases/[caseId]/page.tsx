@@ -5,6 +5,7 @@ import { useRouter, useParams } from "next/navigation";
 import { CASE_TYPE_LABELS, DISPOSAL_TYPE, GRADE_TYPE, STATUS_BY_CASE_TYPE, CASE_STATUS_LABELS, CASE_STATUS_COLORS } from "@/lib/constants/case";
 import ContactSelector from "@/components/ui/ContactSelector";
 import BranchSelector from "@/components/ui/BranchSelector";
+import DateSegmentInput from "@/components/ui/DateSegmentInput";
 import { OCC_DISEASE_COMMITTEES } from "@/constants/occDiseaseCommittees";
 
 const S = { fontFamily: "'Malgun Gothic', 'Apple SD Gothic Neo', 'Segoe UI', sans-serif" };
@@ -617,6 +618,42 @@ function HearingStepBar({ status }: { status: string }) {
   );
 }
 
+// Context lets DField live outside HearingLossTab so React doesn't remount inputs on every render
+const HLDetailContext = React.createContext<{
+  detail: HearingLossDetail;
+  setDetail: React.Dispatch<React.SetStateAction<HearingLossDetail>>;
+} | null>(null);
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+      <label style={{ fontSize: 11, color: "#9ca3af", fontWeight: 600 }}>{label}</label>
+      {children}
+    </div>
+  );
+}
+
+function DField({ label, k, type = "text" }: { label: string; k: keyof HearingLossDetail; type?: string }) {
+  const ctx = React.useContext(HLDetailContext)!;
+  const v = ctx.detail[k];
+  const val = v === null || v === undefined ? "" : String(v);
+  const isDate = type === "date" || type === "datetime-local";
+  return (
+    <Field label={label}>
+      {isDate ? (
+        <DateSegmentInput
+          value={val}
+          onChange={(newVal) => ctx.setDetail((prev) => ({ ...prev, [k]: newVal }))}
+          includeTime={type === "datetime-local"}
+          style={inputStyle}
+        />
+      ) : (
+        <input type={type} style={inputStyle} value={val} onChange={(e) => ctx.setDetail((prev) => ({ ...prev, [k]: e.target.value || null }))} />
+      )}
+    </Field>
+  );
+}
+
 function HearingLossTab({ caseId, initial, status, onStatusChange }: { caseId: string; initial: HearingLossDetail | null; status?: string; onStatusChange?: (s: string) => void }) {
   const [detail, setDetail] = useState<HearingLossDetail>(initial ?? EMPTY_DETAIL);
   const [exams, setExams] = useState<HearingLossExam[]>(initial?.exams ?? []);
@@ -659,25 +696,6 @@ function HearingLossTab({ caseId, initial, status, onStatusChange }: { caseId: s
   const SectionTitle = ({ children }: { children: React.ReactNode }) => (
     <div style={{ fontSize: 13, fontWeight: 700, color: "#374151", padding: "14px 0 8px 0", borderBottom: "2px solid #e5e7eb", marginBottom: 12 }}>{children}</div>
   );
-
-  const Field = ({ label, children }: { label: string; children: React.ReactNode }) => (
-    <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-      <label style={{ fontSize: 11, color: "#9ca3af", fontWeight: 600 }}>{label}</label>
-      {children}
-    </div>
-  );
-
-  const DField = ({ label, k, type = "text" }: { label: string; k: keyof HearingLossDetail; type?: string }) => {
-    let val = d(k);
-    if (type === "datetime-local" && val && val.length > 16) {
-      val = val.slice(0, 16);
-    }
-    return (
-      <Field label={label}>
-        <input type={type} style={inputStyle} value={val} onChange={(e) => setD(k, e.target.value || null)} />
-      </Field>
-    );
-  };
 
   const SaveBar = () => (
     <div style={{ display: "flex", alignItems: "center", gap: 12, paddingTop: 16, borderTop: "1px solid #e5e7eb" }}>
@@ -777,6 +795,7 @@ function HearingLossTab({ caseId, initial, status, onStatusChange }: { caseId: s
   };
 
   return (
+    <HLDetailContext.Provider value={{ detail, setDetail }}>
     <div>
       {status && <HearingStepBar status={status} />}
 
@@ -941,16 +960,7 @@ function HearingLossTab({ caseId, initial, status, onStatusChange }: { caseId: s
               ))}
             </div>
             <SectionTitle>최초특진 검사결과</SectionTitle>
-            {initialExamRounds.map((r) => (
-              <ExamRoundBlock key={r} caseId={caseId} examSet="INITIAL" round={r} label={`${r}차`} exams={exams} setExams={setExams} />
-            ))}
-            <button
-              type="button"
-              onClick={() => setInitialExamRounds((prev) => [...prev, Math.max(...prev) + 1])}
-              style={{ marginTop: 8, marginBottom: 12, fontSize: 12, color: "#0284c7", background: "white", border: "1px solid #bae6fd", borderRadius: 6, padding: "5px 14px", cursor: "pointer" }}
-            >
-              + {Math.max(...initialExamRounds) + 1}차 특진 추가
-            </button>
+            <ExamRoundBlock caseId={caseId} examSet="INITIAL" round={1} label="상세검사결과" exams={exams} setExams={setExams} />
 
             <div style={{ marginBottom: 12 }}>
               <button onClick={() => setShowReExam((v) => !v)} style={{ background: showReExam ? "#eff6ff" : "white", border: "1px solid #d1d5db", borderRadius: 6, padding: "6px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer", color: showReExam ? "#1A95C8" : "#374151" }}>
@@ -962,20 +972,12 @@ function HearingLossTab({ caseId, initial, status, onStatusChange }: { caseId: s
               <>
                 <SectionTitle>재특진 일정 및 참석</SectionTitle>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 12 }}>
-                  <DField label="1차 재특진일정" k="reSpecialExam1Date" type="datetime-local" />
-                  <DField label="1차 연락담당자" k="reSpecialExam1Contact" />
-                  <DField label="1차 참석자" k="reSpecialExam1Attendee" />
-                  <DField label="2차 재특진일정" k="reSpecialExam2Date" type="datetime-local" />
-                  <DField label="2차 연락담당자" k="reSpecialExam2Contact" />
-                  <DField label="2차 참석자" k="reSpecialExam2Attendee" />
-                  <DField label="3차 재특진일정" k="reSpecialExam3Date" type="datetime-local" />
-                  <DField label="3차 연락담당자" k="reSpecialExam3Contact" />
-                  <DField label="3차 참석자" k="reSpecialExam3Attendee" />
+                  <DField label="재특진일정" k="reSpecialExam1Date" type="datetime-local" />
+                  <DField label="연락담당자" k="reSpecialExam1Contact" />
+                  <DField label="참석자" k="reSpecialExam1Attendee" />
                 </div>
                 <SectionTitle>재특진 검사결과</SectionTitle>
-                {([1, 2, 3] as const).map((r) => (
-                  <ExamRoundBlock key={r} caseId={caseId} examSet="RE" round={r} label={`${r}차`} exams={exams} setExams={setExams} />
-                ))}
+                <ExamRoundBlock caseId={caseId} examSet="RE" round={1} label="상세검사결과" exams={exams} setExams={setExams} />
                 <div style={{ marginBottom: 12 }}>
                   <button onClick={() => setShowReReExam((v) => !v)} style={{ background: showReReExam ? "#eff6ff" : "white", border: "1px solid #d1d5db", borderRadius: 6, padding: "6px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer", color: showReReExam ? "#1A95C8" : "#374151" }}>
                     {showReReExam ? "▲ 재재특진 숨기기" : "▼ 재재특진 입력"}
@@ -983,10 +985,8 @@ function HearingLossTab({ caseId, initial, status, onStatusChange }: { caseId: s
                 </div>
                 {showReReExam && (
                   <>
-                    <SectionTitle>재재특진</SectionTitle>
-                    {([1, 2, 3] as const).map((r) => (
-                      <ExamRoundBlock key={r} caseId={caseId} examSet="RE2" round={r} label={`${r}차`} exams={exams} setExams={setExams} />
-                    ))}
+                    <SectionTitle>재재특진 검사결과</SectionTitle>
+                    <ExamRoundBlock caseId={caseId} examSet="RE2" round={1} label="상세검사결과" exams={exams} setExams={setExams} />
                   </>
                 )}
               </>
@@ -1093,6 +1093,7 @@ function HearingLossTab({ caseId, initial, status, onStatusChange }: { caseId: s
       {/* (4) 유족 — 비활성 */}
       <DisabledSection label="(4) 유족" />
     </div>
+    </HLDetailContext.Provider>
   );
 }
 

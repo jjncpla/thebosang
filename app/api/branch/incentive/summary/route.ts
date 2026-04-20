@@ -19,10 +19,11 @@ export async function GET(req: NextRequest) {
   return NextResponse.json(summary)
 }
 
-// PUT: 합계 행·지사 단위 값 수동 수정
+// PUT: 합계 행·지사 단위 값 수동 수정 (ADMIN 전용)
 export async function PUT(req: NextRequest) {
   const session = await auth()
   if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if ((session.user as any).role !== 'ADMIN') return NextResponse.json({ error: '권한 없음' }, { status: 403 })
 
   const body = await req.json()
   const { branchName, year, quarter, carryOverAmount, staffSummaries } = body

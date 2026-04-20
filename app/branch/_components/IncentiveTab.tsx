@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useSession } from 'next-auth/react'
 import { QUARTER_MONTHS } from '../_constants/performance'
 import { useBranches } from '@/lib/hooks/useBranches'
 
@@ -72,6 +73,8 @@ const ALL_MONTHS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] as const
 
 // ─── 메인 컴포넌트 ────────────────────────────────────────────────
 export default function IncentiveTab() {
+  const { data: session } = useSession()
+  const isAdmin = (session?.user as any)?.role === 'ADMIN'
   const { shortBranchNames: ALL_BRANCHES } = useBranches()
   const currentYear = new Date().getFullYear()
   const currentQuarter = Math.ceil((new Date().getMonth() + 1) / 3)
@@ -86,6 +89,30 @@ export default function IncentiveTab() {
   const [usages, setUsages] = useState<UsageRecord[]>([])
   const [summary, setSummary] = useState<IncentiveSummary | null>(null)
   const [loading, setLoading] = useState(false)
+
+  // 더보상 전체 인원 (담당자 검색용)
+  const [tbosangStaff, setTbosangStaff] = useState<string[]>([])
+  useEffect(() => {
+    fetch('/api/contacts?firmType=TBOSANG&namesOnly=true')
+      .then(r => r.ok ? r.json() : [])
+      .then(data => { if (Array.isArray(data)) setTbosangStaff(data) })
+      .catch(() => null)
+  }, [])
+
+  // 현재 records에서 기존 '더보상XX' 코드 수집 (지사 코드 목록)
+  const branchCodes = useMemo(() => {
+    const codes = new Set<string>()
+    for (const r of records) {
+      if (r.reportAssignee?.startsWith('더보상')) codes.add(r.reportAssignee)
+      if (r.salesStaffName?.startsWith('더보상')) codes.add(r.salesStaffName)
+      if (r.settlementStaffName?.startsWith('더보상')) codes.add(r.settlementStaffName)
+    }
+    // ALL_BRANCHES 기반으로 기본 코드도 추가 (더보상+지사명)
+    for (const b of ALL_BRANCHES) {
+      codes.add(`더보상${b}`)
+    }
+    return Array.from(codes).sort()
+  }, [records, ALL_BRANCHES])
 
   // 섹션 접기/펼치기
   const [openSections, setOpenSections] = useState({
@@ -107,6 +134,15 @@ export default function IncentiveTab() {
   // 인라인 편집 상태
   const [editingRecordId, setEditingRecordId] = useState<string | null>(null)
   const [editAllocations, setEditAllocations] = useState<{ staffName: string; ratio: number }[]>([])
+
+  // 담당자 편집 상태
+  const [editingAssigneeId, setEditingAssigneeId] = useState<string | null>(null)
+  const [assigneeSearch, setAssigneeSearch] = useState('')
+
+  // 이월금 편집 상태
+  const [editingCarryOver, setEditingCarryOver] = useState(false)
+  const [carryOverInput, setCarryOverInput] = useState('')
+  const [carryOverSaving, setCarryOverSaving] = useState(false)
 
   // 사용 내역 추가 폼
   const [showAddUsage, setShowAddUsage] = useState(false)
@@ -452,9 +488,115 @@ export default function IncentiveTab() {
                           <td className={`${cellCls} text-center`}>{r.month}월</td>
                           <td className={`${cellCls} text-center`}>{r.victimName}</td>
                           <td className={`${cellCls} text-center`}>{r.caseType || ''}</td>
-                          <td className={`${cellCls} text-center whitespace-nowrap`}>
-                            {displayAssignee}
-                            {isBranch && <span className="ml-1 text-[10px] text-sky-600 font-semibold">(지사)</span>}
+                          <td className={`${cellCls} text-center whitespace-nowrap`} style={{ minWidth: 110 }}>
+                            {editingAssigneeId === r.id ? (
+                              /* 담당자 인라인 검색 편집 */
+                              <div style={{ position: 'relative' }}>
+                                <input
+                                  autoFocus
+                                  value={assigneeSearch}
+                                  onChange={e => setAssigneeSearch(e.target.value)}
+                                  onKeyDown={e => { if (e.key === 'Escape') { setEditingAssigneeId(null); setAssigneeSearch('') } }}
+                                  placeholder="이름 검색..."
+                                  style={{
+                                    width: '100%', padding: '2px 6px', fontSize: 12,
+                                    border: '1px solid #93c5fd', borderRadius: 4, outline: 'none',
+                                  }}
+                                />
+                                {assigneeSearch !== null && (
+                                  <div style={{
+                                    position: 'absolute', top: '100%', left: 0, zIndex: 50,
+                                    background: '#fff', border: '1px solid #e2e8f0', borderRadius: 6,
+                                    boxShadow: '0 4px 12px rgba(0,0,0,0.12)', minWidth: 160, maxHeight: 240, overflowY: 'auto',
+                                  }}>
+                                    {/* 지사 코드 섹션 */}
+                                    {(() => {
+                                      const filtered = branchCodes.filter(c =>
+                                        assigneeSearch === '' ? true : c.includes(assigneeSearch)
+                                      )
+                                      if (filtered.length === 0) return null
+                                      const makeHandler = (name: string) => async (e: React.MouseEvent) => {
+                                        e.preventDefault()
+                                        const res = await fetch(`/api/branch/settlement-records/${r.id}`, {
+                                          method: 'PATCH',
+                                          headers: { 'Content-Type': 'application/json' },
+                                          body: JSON.stringify({ reportAssignee: name }),
+                                        })
+                                        if (res.ok) {
+                                          const updated = await res.json()
+                                          setRecords(prev => prev.map(x => x.id === r.id ? { ...x, reportAssignee: updated.reportAssignee, isBranchOwned: updated.isBranchOwned } : x))
+                                        }
+                                        setEditingAssigneeId(null)
+                                        setAssigneeSearch('')
+                                      }
+                                      return (
+                                        <>
+                                          <div style={{ padding: '3px 10px', fontSize: 10, color: '#94a3b8', fontWeight: 600, background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>지사 코드</div>
+                                          {filtered.slice(0, 10).map(name => (
+                                            <div key={name} onMouseDown={makeHandler(name)}
+                                              style={{ padding: '5px 10px', fontSize: 12, cursor: 'pointer', borderBottom: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', gap: 4 }}
+                                              onMouseEnter={e => (e.currentTarget.style.background = '#fef9c3')}
+                                              onMouseLeave={e => (e.currentTarget.style.background = '')}>
+                                              <span style={{ fontSize: 9, color: '#d97706', fontWeight: 700 }}>지사</span>
+                                              <span>{name}</span>
+                                            </div>
+                                          ))}
+                                        </>
+                                      )
+                                    })()}
+                                    {/* 직원 이름 섹션 */}
+                                    {(() => {
+                                      const filtered = tbosangStaff.filter(n =>
+                                        assigneeSearch === '' ? false : n.includes(assigneeSearch)
+                                      )
+                                      if (filtered.length === 0 && assigneeSearch !== '') return (
+                                        branchCodes.filter(c => c.includes(assigneeSearch)).length === 0
+                                          ? <div style={{ padding: '5px 10px', fontSize: 12, color: '#94a3b8' }}>검색 결과 없음</div>
+                                          : null
+                                      )
+                                      if (filtered.length === 0) return null
+                                      const makeHandler = (name: string) => async (e: React.MouseEvent) => {
+                                        e.preventDefault()
+                                        const res = await fetch(`/api/branch/settlement-records/${r.id}`, {
+                                          method: 'PATCH',
+                                          headers: { 'Content-Type': 'application/json' },
+                                          body: JSON.stringify({ reportAssignee: name }),
+                                        })
+                                        if (res.ok) {
+                                          const updated = await res.json()
+                                          setRecords(prev => prev.map(x => x.id === r.id ? { ...x, reportAssignee: updated.reportAssignee, isBranchOwned: updated.isBranchOwned } : x))
+                                        }
+                                        setEditingAssigneeId(null)
+                                        setAssigneeSearch('')
+                                      }
+                                      return (
+                                        <>
+                                          <div style={{ padding: '3px 10px', fontSize: 10, color: '#94a3b8', fontWeight: 600, background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>직원</div>
+                                          {filtered.slice(0, 15).map(name => (
+                                            <div key={name} onMouseDown={makeHandler(name)}
+                                              style={{ padding: '5px 10px', fontSize: 12, cursor: 'pointer', borderBottom: '1px solid #f1f5f9' }}
+                                              onMouseEnter={e => (e.currentTarget.style.background = '#f0f9ff')}
+                                              onMouseLeave={e => (e.currentTarget.style.background = '')}>
+                                              {name}
+                                            </div>
+                                          ))}
+                                        </>
+                                      )
+                                    })()}
+                                  </div>
+                                )}
+                              </div>
+                            ) : (
+                              <span
+                                onClick={() => { setEditingAssigneeId(r.id); setAssigneeSearch('') }}
+                                title="클릭하여 담당자 수정"
+                                style={{ cursor: 'pointer' }}
+                                className="hover:bg-sky-50 hover:text-sky-700 rounded px-1 transition-colors"
+                              >
+                                {displayAssignee || <span className="text-gray-300">-</span>}
+                                {isBranch && <span className="ml-1 text-[10px] text-sky-600 font-semibold">(지사)</span>}
+                              </span>
+                            )}
                           </td>
                           <td className={`${cellCls} text-right`}>{fmt(netAmt)}</td>
                           <td className={`${cellCls} text-right font-medium`} style={{ color: '#059669' }}>{fmt(base)}</td>
@@ -675,7 +817,8 @@ export default function IncentiveTab() {
                 </thead>
                 <tbody>
                   {(() => {
-                    // 합계 요약 행 렌더링: BranchIncentiveSummary가 있으면 그 값을 보조로 사용
+                    // 합계 요약 행 렌더링
+                    // 개인 인센티브: 합계 시트 임포트값(ss.personalIncentive) 우선, 없으면 배분 합산
                     const sumMap: Record<string, StaffSummaryRow | undefined> = {}
                     summary?.staffSummaries.forEach(r => { sumMap[r.staffName] = r })
                     const bucket = (type: 'EXTERNAL' | 'INTERNAL' | 'ATTORNEY') =>
@@ -683,9 +826,13 @@ export default function IncentiveTab() {
                         type === 'EXTERNAL' ? (!r.staffType || r.staffType === 'EXTERNAL')
                         : r.staffType === type
                       )
-                    const renderRow = (s: string, kind: 'ext' | 'int' | 'att') => {
-                      const personal = staffIncentiveTotals[s] || 0
+                    const getPersonal = (s: string) => {
                       const ss = sumMap[s]
+                      return ss?.personalIncentive != null ? ss.personalIncentive : (staffIncentiveTotals[s] || 0)
+                    }
+                    const renderRow = (s: string, kind: 'ext' | 'int' | 'att') => {
+                      const ss = sumMap[s]
+                      const personal = getPersonal(s)
                       const branchInc = ss?.branchIncentive ?? 0
                       const car = ss?.carAllowance ?? 0
                       const total = ss?.totalIncentive ?? (personal + branchInc + car)
@@ -733,15 +880,16 @@ export default function IncentiveTab() {
                         )
                       }),
                     ]
-                    const sumPersonal = Object.values(staffIncentiveTotals).reduce((a, b) => a + b, 0)
+                    // 합계행: 개인 인센도 getPersonal() 기준으로 통일
+                    const allSumStaff = [...staffList, ...allocationOnlyStaff]
+                    const sumPersonal = allSumStaff.reduce((sum, s) => sum + getPersonal(s), 0)
                     const sumBranch = (summary?.staffSummaries || []).reduce((a, s) => a + s.branchIncentive, 0)
                     const sumCar = (summary?.staffSummaries || []).reduce((a, s) => a + s.carAllowance, 0)
                     const sumTotal = sumPersonal + sumBranch + sumCar
-                    // 합계 절사: 명부 직원 + 명부 외 배분 직원 모두 포함
-                    const allSumStaff = [...staffList, ...allocationOnlyStaff]
                     const sumRounded = allSumStaff.reduce((sum, s) => {
                       const ss = sumMap[s]
-                      const t = ss?.totalIncentive ?? ((staffIncentiveTotals[s] || 0) + (ss?.branchIncentive ?? 0) + (ss?.carAllowance ?? 0))
+                      const personal = getPersonal(s)
+                      const t = ss?.totalIncentive ?? (personal + (ss?.branchIncentive ?? 0) + (ss?.carAllowance ?? 0))
                       return sum + (ss?.roundedIncentive ?? Math.floor(t / 100000) * 100000)
                     }, 0)
                     return (
@@ -789,9 +937,71 @@ export default function IncentiveTab() {
               {/* 전년도 이월금 */}
               <div className="border rounded-lg p-4">
                 <div className="text-xs text-gray-500 mb-1">전년도 지사인센 이월금</div>
-                <div className="text-2xl font-bold text-emerald-700">{fmt(carryOver)}원</div>
+                {editingCarryOver ? (
+                  <div className="flex items-center gap-2 mt-1">
+                    <input
+                      autoFocus
+                      type="number"
+                      value={carryOverInput}
+                      onChange={e => setCarryOverInput(e.target.value)}
+                      onKeyDown={async e => {
+                        if (e.key === 'Escape') { setEditingCarryOver(false); setCarryOverInput('') }
+                        if (e.key === 'Enter') {
+                          setCarryOverSaving(true)
+                          try {
+                            const res = await fetch('/api/branch/incentive/summary', {
+                              method: 'PUT',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ branchName: branch, year, quarter, carryOverAmount: parseInt(carryOverInput) || 0 }),
+                            })
+                            if (res.ok) {
+                              const updated = await res.json()
+                              setSummary(updated)
+                            }
+                          } finally { setCarryOverSaving(false) }
+                          setEditingCarryOver(false)
+                          setCarryOverInput('')
+                        }
+                      }}
+                      placeholder="금액 입력"
+                      className="w-full border border-sky-300 rounded px-2 py-1 text-sm text-right focus:outline-none"
+                    />
+                    <button
+                      disabled={carryOverSaving}
+                      onClick={async () => {
+                        setCarryOverSaving(true)
+                        try {
+                          const res = await fetch('/api/branch/incentive/summary', {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ branchName: branch, year, quarter, carryOverAmount: parseInt(carryOverInput) || 0 }),
+                          })
+                          if (res.ok) {
+                            const updated = await res.json()
+                            setSummary(updated)
+                          }
+                        } finally { setCarryOverSaving(false) }
+                        setEditingCarryOver(false)
+                        setCarryOverInput('')
+                      }}
+                      className="px-2 py-1 text-xs bg-emerald-600 text-white rounded hover:bg-emerald-700 disabled:opacity-50 whitespace-nowrap"
+                    >{carryOverSaving ? '저장중' : '저장'}</button>
+                    <button
+                      onClick={() => { setEditingCarryOver(false); setCarryOverInput('') }}
+                      className="px-2 py-1 text-xs border border-gray-200 rounded hover:bg-gray-50 text-gray-500"
+                    >취소</button>
+                  </div>
+                ) : (
+                  <div
+                    onClick={() => { if (isAdmin) { setEditingCarryOver(true); setCarryOverInput(String(carryOver)) } }}
+                    className={`text-2xl font-bold text-emerald-700 transition-opacity ${isAdmin ? 'cursor-pointer hover:opacity-70' : ''}`}
+                    title={isAdmin ? '클릭하여 수정' : undefined}
+                  >
+                    {fmt(carryOver)}원
+                  </div>
+                )}
                 <div className="text-[10px] text-gray-400 mt-1">
-                  월말보고 &apos;합계&apos; 시트 임포트로 자동 반영
+                  {isAdmin ? '월말보고 \'합계\' 시트 임포트 또는 클릭하여 직접 입력' : '월말보고 \'합계\' 시트 임포트로 자동 반영'}
                 </div>
               </div>
               {/* 미배분액 */}
