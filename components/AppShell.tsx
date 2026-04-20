@@ -56,41 +56,40 @@ const MENU_ITEMS: MenuItem[] = [
   { id: "admin", label: "관리자 페이지", icon: "⚙", path: "/admin", restricted: "admin" },
 ];
 
+function getPageInfo(pathname: string | null): { title: string; section: string } {
+  if (!pathname) return { title: "TBSS", section: "" };
+  for (const item of MENU_ITEMS) {
+    if (item.path && (pathname === item.path || pathname.startsWith(item.path + "/"))) {
+      return { title: item.label, section: item.label };
+    }
+    if (item.children) {
+      for (const child of item.children) {
+        if (pathname === child.path || pathname.startsWith(child.path + "/")) {
+          return { title: child.label, section: item.label };
+        }
+      }
+    }
+  }
+  return { title: "TBSS", section: "" };
+}
+
 export default function AppShell({ children }: { children: React.ReactNode }) {
-  const [collapsed, setCollapsed] = useState(false);
   const [openMenus, setOpenMenus] = useState<Set<string>>(new Set(["cases"]));
-  const [today, setToday] = useState("");
   const pathname = usePathname();
   const router = useRouter();
   const { data: session } = useSession();
 
-  useEffect(() => {
-    const d = new Date();
-    setToday(
-      d.toLocaleDateString("ko-KR", {
-        year: "numeric",
-        month: "long",
-        day: "numeric",
-        weekday: "short",
-      })
-    );
-  }, []);
+  const role = (session?.user as { role?: string })?.role ?? "";
+  const { title, section } = getPageInfo(pathname);
 
-  const getPageTitle = (): string => {
-    if (!pathname) return "TBSS";
+  // Auto-expand active parent menu
+  useEffect(() => {
     for (const item of MENU_ITEMS) {
-      if (item.path && pathname === item.path) return item.label;
-      if (item.children) {
-        for (const child of item.children) {
-          if (pathname === child.path || pathname.startsWith(child.path + "/"))
-            return child.label;
-        }
+      if (item.children?.some((c) => pathname === c.path || pathname?.startsWith(c.path + "/"))) {
+        setOpenMenus((prev) => new Set([...prev, item.id]));
       }
     }
-    return "TBSS";
-  };
-
-  const role = (session?.user as { role?: string })?.role ?? "";
+  }, [pathname]);
 
   const toggleMenu = (id: string) => {
     setOpenMenus((prev) => {
@@ -102,12 +101,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   const handleMenuClick = (item: MenuItem) => {
     if (item.children) {
-      if (collapsed) {
-        setCollapsed(false);
-        setOpenMenus((prev) => new Set([...prev, item.id]));
-      } else {
-        toggleMenu(item.id);
-      }
+      toggleMenu(item.id);
     } else if (item.path) {
       router.push(item.path);
     }
@@ -120,276 +114,178 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     return false;
   };
 
+  const visibleItems =
+    role === "이산계정"
+      ? MENU_ITEMS.filter((m) => m.path === "/cases-view")
+      : MENU_ITEMS.filter((m) => {
+          if (m.id === "cases-view") return false;
+          if (m.restricted === "admin" && role !== "ADMIN") return false;
+          if (
+            m.restricted === "org" &&
+            !["ADMIN", "MANAGER", "SENIOR_MANAGER", "SITE_MANAGER"].includes(role)
+          )
+            return false;
+          return true;
+        });
+
+  const userName = session?.user?.name || session?.user?.email || "";
+  const userInitial = userName.charAt(0).toUpperCase();
+  const userBranch = (session?.user as { branch?: string })?.branch || "";
+
   return (
-    <div
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        height: "100vh",
-        fontFamily: "'Malgun Gothic', 'Apple SD Gothic Neo', 'Segoe UI', sans-serif",
-        background: "#eef6f0",
-      }}
-    >
-      {/* ── Header ── */}
-      <header
-        style={{
-          height: 54,
-          background: "#ffffff",
-          borderBottom: "3px solid #8DC63F",
-          display: "flex",
-          alignItems: "center",
-          padding: "0 16px",
-          gap: 12,
-          flexShrink: 0,
-          zIndex: 50,
-        }}
-      >
-        <button
-          onClick={() => setCollapsed((c) => !c)}
-          style={{
-            background: "none",
-            border: "none",
-            color: "#94a3b8",
-            fontSize: 20,
-            cursor: "pointer",
-            padding: "4px 8px",
-            borderRadius: 6,
-            lineHeight: 1,
-          }}
-        >
-          ☰
-        </button>
-        <span style={{ color: "#006838", fontWeight: 700, fontSize: 15, flex: 1 }}>
-          {getPageTitle()}
-        </span>
-        <span style={{ color: "#64748b", fontSize: 12 }}>{today}</span>
-        {session?.user && (
-          <button
-            onClick={() => router.push("/mypage/password")}
-            title="비밀번호 변경"
-            style={{
-              background: "#fff",
-              border: "1px solid #cbd5e1",
-              color: "#475569",
-              fontSize: 12,
-              cursor: "pointer",
-              padding: "5px 12px",
-              borderRadius: 6,
-              fontWeight: 600,
-            }}
-          >
-            비밀번호 변경
-          </button>
-        )}
-        <button
-          onClick={() => signOut({ callbackUrl: `${window.location.origin}/login` })}
-          style={{
-            background: "#334155",
-            border: "none",
-            color: "#94a3b8",
-            fontSize: 12,
-            cursor: "pointer",
-            padding: "5px 12px",
-            borderRadius: 6,
-          }}
-        >
-          로그아웃
-        </button>
-      </header>
-
-      <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
-        {/* ── Sidebar ── */}
-        <aside
-          style={{
-            width: collapsed ? 60 : 220,
-            transition: "width 0.2s ease",
-            background: "#006838",
-            display: "flex",
-            flexDirection: "column",
-            flexShrink: 0,
-            overflowX: "hidden",
-            overflowY: "auto",
-          }}
-        >
-          {/* Logo */}
-          <div
-            style={{
-              padding: "16px 14px",
-              display: "flex",
-              alignItems: "center",
-              gap: 10,
-              borderBottom: "1px solid rgba(255,255,255,0.08)",
-            }}
-          >
-            <div
-              style={{
-                width: 32,
-                height: 32,
-                background: "#8DC63F",
-                borderRadius: 8,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                color: "white",
-                fontWeight: 900,
-                fontSize: 13,
-                flexShrink: 0,
-              }}
-            >
-              더
-            </div>
-            {!collapsed && (
-              <span style={{ color: "#e2e8f0", fontWeight: 800, fontSize: 14, letterSpacing: 0 }}>
-                노무법인 더보상
-              </span>
-            )}
+    <div className="tbss-app">
+      {/* ── Sidebar ── */}
+      <aside className="sidebar">
+        {/* Brand */}
+        <div className="brand">
+          <div className="mark">
+            노무법인 더보상
+            <span className="en">The Bosang · TBSS</span>
           </div>
+        </div>
 
-          {/* Navigation */}
-          <nav style={{ flex: 1, padding: "8px 0" }}>
-            {(role === "이산계정"
-              ? MENU_ITEMS.filter((m) => m.path === "/cases-view")
-              : MENU_ITEMS.filter((m) => {
-                  if (m.id === "cases-view") return false
-                  if (m.restricted === "admin" && role !== "ADMIN") return false
-                  if (m.restricted === "org" && !["ADMIN", "MANAGER", "SENIOR_MANAGER", "SITE_MANAGER"].includes(role)) return false
-                  return true
-                })
-            ).map((item) => {
-              const active = isActive(item.path, item.children);
-              const isOpen = openMenus.has(item.id);
+        {/* Navigation */}
+        <div className="sec-label">Workspace</div>
+        <nav className="nav">
+          {visibleItems.map((item) => {
+            const active = isActive(item.path, item.children);
+            const isOpen = openMenus.has(item.id);
 
-              return (
-                <div key={item.id}>
-                  <button
-                    onClick={() => handleMenuClick(item)}
-                    title={collapsed ? item.label : undefined}
-                    style={{
-                      width: "100%",
-                      background: active ? "rgba(41,171,226,0.2)" : "none",
-                      border: "none",
-                      borderLeft: active ? "3px solid #29ABE2" : "3px solid transparent",
-                      color: active ? "#a8e6f8" : "rgba(255,255,255,0.85)",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 10,
-                      padding: collapsed ? "10px 0" : "10px 14px",
-                      justifyContent: collapsed ? "center" : "flex-start",
-                      cursor: "pointer",
-                      fontSize: 13,
-                      textAlign: "left",
-                      transition: "background 0.15s",
-                    }}
-                  >
-                    <span style={{ fontSize: 16, flexShrink: 0 }}>{item.icon}</span>
-                    {!collapsed && (
-                      <>
-                        <span style={{ flex: 1, fontWeight: active ? 600 : 400 }}>
-                          {item.label}
-                        </span>
-                        {item.children && (
-                          <span style={{ fontSize: 10, color: "rgba(255,255,255,0.45)" }}>
-                            {isOpen ? "▲" : "▼"}
-                          </span>
-                        )}
-                      </>
-                    )}
-                  </button>
+            return (
+              <div key={item.id}>
+                <button
+                  className={`nav-item${active ? " active" : ""}`}
+                  onClick={() => handleMenuClick(item)}
+                  title={item.label}
+                >
+                  <span style={{ fontSize: 15, lineHeight: 1, flexShrink: 0 }}>{item.icon}</span>
+                  <span style={{ flex: 1 }}>{item.label}</span>
+                  {item.children && (
+                    <span
+                      style={{
+                        fontSize: 9,
+                        opacity: 0.5,
+                        transform: isOpen ? "rotate(90deg)" : "none",
+                        transition: "transform .15s",
+                      }}
+                    >
+                      ▶
+                    </span>
+                  )}
+                </button>
 
-                  {/* Submenu */}
-                  {!collapsed && item.children && isOpen && (
-                    <div>
-                      {item.children.filter((child) => {
+                {item.children && isOpen && (
+                  <div className="nav-sub">
+                    {item.children
+                      .filter((child) => {
                         if (child.id === "cases-db") return role === "ADMIN";
                         if (child.id === "cases-import") return role === "ADMIN";
                         return true;
-                      }).map((child) => {
+                      })
+                      .map((child) => {
                         const childActive =
-                          !!pathname && (pathname === child.path || pathname.startsWith(child.path + "/"));
+                          !!pathname &&
+                          (pathname === child.path || pathname.startsWith(child.path + "/"));
                         return (
                           <button
                             key={child.id}
+                            className={`nav-sub-item${childActive ? " active" : ""}`}
                             onClick={() => router.push(child.path)}
-                            style={{
-                              width: "100%",
-                              background: childActive ? "rgba(41,171,226,0.15)" : "none",
-                              border: "none",
-                              borderLeft: childActive
-                                ? "3px solid #29ABE2"
-                                : "3px solid transparent",
-                              color: childActive ? "#a8e6f8" : "rgba(255,255,255,0.85)",
-                              display: "flex",
-                              alignItems: "center",
-                              padding: "8px 14px 8px 44px",
-                              cursor: "pointer",
-                              fontSize: 12,
-                              textAlign: "left",
-                            }}
                           >
                             {child.label}
                           </button>
                         );
                       })}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </nav>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </nav>
 
-          {/* User info */}
-          {session?.user && (
-            <div
+        {/* User */}
+        {session?.user && (
+          <div className="sidebar-user" style={{ marginTop: "auto", marginBottom: 8 }}>
+            <div className="avatar">{userInitial}</div>
+            <div className="who">
+              <b>{userName}</b>
+              <span>{userBranch}</span>
+            </div>
+          </div>
+        )}
+
+        {/* Footer */}
+        <div className="foot">
+          v2.4.0 · 2026.04
+          <br />
+          문의 : 전산실 내선 208
+        </div>
+      </aside>
+
+      {/* ── Main area ── */}
+      <div className="main-area">
+        {/* Topbar */}
+        <header className="topbar">
+          <div className="crumbs">
+            <span>TBSS</span>
+            {section && (
+              <>
+                <span className="sep">/</span>
+                <span>{section}</span>
+              </>
+            )}
+            {section !== title && (
+              <>
+                <span className="sep">/</span>
+                <span className="cur">{title}</span>
+              </>
+            )}
+          </div>
+
+          <div className="search-box">
+            <span style={{ fontSize: 13, color: "var(--ink-400)" }}>🔍</span>
+            <span>사건번호, 성명, 주민번호로 검색</span>
+            <span
               style={{
-                padding: collapsed ? "12px 0" : "12px 14px",
-                borderTop: "1px solid rgba(255,255,255,0.08)",
-                display: "flex",
-                alignItems: "center",
-                gap: 10,
-                justifyContent: collapsed ? "center" : "flex-start",
+                marginLeft: "auto",
+                fontSize: 11,
+                color: "var(--ink-400)",
+                border: "1px solid var(--paper-line)",
+                padding: "1px 6px",
+                borderRadius: 3,
               }}
             >
-              <div
-                style={{
-                  width: 32,
-                  height: 32,
-                  borderRadius: "50%",
-                  background: "#29ABE2",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  color: "white",
-                  fontSize: 13,
-                  fontWeight: 700,
-                  flexShrink: 0,
-                }}
-              >
-                {(session.user.name || session.user.email || "?").charAt(0).toUpperCase()}
-              </div>
-              {!collapsed && (
-                <div style={{ overflow: "hidden" }}>
-                  <div
-                    style={{
-                      color: "#e2e8f0",
-                      fontSize: 12,
-                      fontWeight: 600,
-                      whiteSpace: "nowrap",
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                    }}
-                  >
-                    {session.user.name || session.user.email}
-                  </div>
-                  <div style={{ color: "#64748b", fontSize: 11 }}>
-                    {(session.user as { branch?: string }).branch || ""}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-        </aside>
+              ⌘K
+            </span>
+          </div>
 
-        {/* ── Main Content ── */}
+          <div className="right">
+            {session?.user && (
+              <div className="user-chip">
+                <div className="avatar">{userInitial}</div>
+                <div className="who">
+                  <b>{userName}</b>
+                  <span>{userBranch || role}</span>
+                </div>
+              </div>
+            )}
+            <button
+              className="btn btn-ghost btn-sm"
+              onClick={() => router.push("/mypage/password")}
+              title="비밀번호 변경"
+            >
+              비밀번호 변경
+            </button>
+            <button
+              className="btn btn-ghost btn-sm"
+              onClick={() => signOut({ callbackUrl: `${window.location.origin}/login` })}
+            >
+              로그아웃
+            </button>
+          </div>
+        </header>
+
+        {/* Content */}
         <main style={{ flex: 1, overflowY: "auto", position: "relative" }}>
           {children}
           <QuickLinks />
