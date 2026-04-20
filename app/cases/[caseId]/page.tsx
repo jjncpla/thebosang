@@ -5,6 +5,7 @@ import { useRouter, useParams } from "next/navigation";
 import { CASE_TYPE_LABELS, DISPOSAL_TYPE, GRADE_TYPE, STATUS_BY_CASE_TYPE, CASE_STATUS_LABELS, CASE_STATUS_COLORS } from "@/lib/constants/case";
 import ContactSelector from "@/components/ui/ContactSelector";
 import BranchSelector from "@/components/ui/BranchSelector";
+import DateSegmentInput from "@/components/ui/DateSegmentInput";
 import { OCC_DISEASE_COMMITTEES } from "@/constants/occDiseaseCommittees";
 
 const S = { fontFamily: "'Malgun Gothic', 'Apple SD Gothic Neo', 'Segoe UI', sans-serif" };
@@ -635,13 +636,20 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 function DField({ label, k, type = "text" }: { label: string; k: keyof HearingLossDetail; type?: string }) {
   const ctx = React.useContext(HLDetailContext)!;
   const v = ctx.detail[k];
-  let val = v === null || v === undefined ? "" : String(v);
-  if (type === "datetime-local" && val && val.length > 16) {
-    val = val.slice(0, 16);
-  }
+  const val = v === null || v === undefined ? "" : String(v);
+  const isDate = type === "date" || type === "datetime-local";
   return (
     <Field label={label}>
-      <input type={type} style={inputStyle} value={val} onChange={(e) => ctx.setDetail((prev) => ({ ...prev, [k]: e.target.value || null }))} />
+      {isDate ? (
+        <DateSegmentInput
+          value={val}
+          onChange={(newVal) => ctx.setDetail((prev) => ({ ...prev, [k]: newVal }))}
+          includeTime={type === "datetime-local"}
+          style={inputStyle}
+        />
+      ) : (
+        <input type={type} style={inputStyle} value={val} onChange={(e) => ctx.setDetail((prev) => ({ ...prev, [k]: e.target.value || null }))} />
+      )}
     </Field>
   );
 }
