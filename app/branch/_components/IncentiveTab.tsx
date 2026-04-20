@@ -136,6 +136,11 @@ export default function IncentiveTab() {
   const [editingAssigneeId, setEditingAssigneeId] = useState<string | null>(null)
   const [assigneeSearch, setAssigneeSearch] = useState('')
 
+  // 이월금 편집 상태
+  const [editingCarryOver, setEditingCarryOver] = useState(false)
+  const [carryOverInput, setCarryOverInput] = useState('')
+  const [carryOverSaving, setCarryOverSaving] = useState(false)
+
   // 사용 내역 추가 폼
   const [showAddUsage, setShowAddUsage] = useState(false)
   const [newUsage, setNewUsage] = useState({ usageDate: '', description: '', amount: '' })
@@ -929,9 +934,71 @@ export default function IncentiveTab() {
               {/* 전년도 이월금 */}
               <div className="border rounded-lg p-4">
                 <div className="text-xs text-gray-500 mb-1">전년도 지사인센 이월금</div>
-                <div className="text-2xl font-bold text-emerald-700">{fmt(carryOver)}원</div>
+                {editingCarryOver ? (
+                  <div className="flex items-center gap-2 mt-1">
+                    <input
+                      autoFocus
+                      type="number"
+                      value={carryOverInput}
+                      onChange={e => setCarryOverInput(e.target.value)}
+                      onKeyDown={async e => {
+                        if (e.key === 'Escape') { setEditingCarryOver(false); setCarryOverInput('') }
+                        if (e.key === 'Enter') {
+                          setCarryOverSaving(true)
+                          try {
+                            const res = await fetch('/api/branch/incentive/summary', {
+                              method: 'PUT',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ branchName: branch, year, quarter, carryOverAmount: parseInt(carryOverInput) || 0 }),
+                            })
+                            if (res.ok) {
+                              const updated = await res.json()
+                              setSummary(updated)
+                            }
+                          } finally { setCarryOverSaving(false) }
+                          setEditingCarryOver(false)
+                          setCarryOverInput('')
+                        }
+                      }}
+                      placeholder="금액 입력"
+                      className="w-full border border-sky-300 rounded px-2 py-1 text-sm text-right focus:outline-none"
+                    />
+                    <button
+                      disabled={carryOverSaving}
+                      onClick={async () => {
+                        setCarryOverSaving(true)
+                        try {
+                          const res = await fetch('/api/branch/incentive/summary', {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ branchName: branch, year, quarter, carryOverAmount: parseInt(carryOverInput) || 0 }),
+                          })
+                          if (res.ok) {
+                            const updated = await res.json()
+                            setSummary(updated)
+                          }
+                        } finally { setCarryOverSaving(false) }
+                        setEditingCarryOver(false)
+                        setCarryOverInput('')
+                      }}
+                      className="px-2 py-1 text-xs bg-emerald-600 text-white rounded hover:bg-emerald-700 disabled:opacity-50 whitespace-nowrap"
+                    >{carryOverSaving ? '저장중' : '저장'}</button>
+                    <button
+                      onClick={() => { setEditingCarryOver(false); setCarryOverInput('') }}
+                      className="px-2 py-1 text-xs border border-gray-200 rounded hover:bg-gray-50 text-gray-500"
+                    >취소</button>
+                  </div>
+                ) : (
+                  <div
+                    onClick={() => { setEditingCarryOver(true); setCarryOverInput(String(carryOver)) }}
+                    className="text-2xl font-bold text-emerald-700 cursor-pointer hover:opacity-70 transition-opacity"
+                    title="클릭하여 수정"
+                  >
+                    {fmt(carryOver)}원
+                  </div>
+                )}
                 <div className="text-[10px] text-gray-400 mt-1">
-                  월말보고 &apos;합계&apos; 시트 임포트로 자동 반영
+                  월말보고 &apos;합계&apos; 시트 임포트 또는 클릭하여 직접 입력
                 </div>
               </div>
               {/* 미배분액 */}
