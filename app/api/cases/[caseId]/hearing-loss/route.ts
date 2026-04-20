@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { syncFromHearingLossDecision } from "@/lib/case-sync";
 
 export async function GET(
   _req: NextRequest,
@@ -50,10 +51,10 @@ export async function PUT(
       }
     }
 
-    // 기존 데이터 조회 (결정수령일 변경 감지용)
+    // 기존 데이터 조회 (결정수령일 / 처분결과 변경 감지용)
     const existingDetail = await prisma.hearingLossDetail.findUnique({
       where: { caseId },
-      select: { decisionReceivedAt: true },
+      select: { decisionReceivedAt: true, decisionType: true },
     });
 
     const detail = await prisma.hearingLossDetail.upsert({
@@ -63,35 +64,17 @@ export async function PUT(
       include: { exams: { orderBy: [{ examSet: "asc" }, { examRound: "asc" }] } },
     });
 
-    // 결정수령일이 새로 입력된 경우 → Case.status 전이 + ObjectionReview 자동 생성
+    // 결정수령일이 새로 입력된 경우 → Case.status DECISION_RECEIVED
     if (detail.decisionReceivedAt && !existingDetail?.decisionReceivedAt) {
       await prisma.case.update({
         where: { id: caseId },
         data: { status: "DECISION_RECEIVED" },
       });
+    }
 
-      const existingReview = await prisma.objectionReview.findFirst({
-        where: { caseId },
-      });
-      if (!existingReview) {
-        const caseInfo = await prisma.case.findUnique({
-          where: { id: caseId },
-          include: { patient: { select: { name: true } } },
-        });
-        if (caseInfo) {
-          await prisma.objectionReview.create({
-            data: {
-              caseId,
-              tfName: caseInfo.tfName ?? "",
-              patientName: caseInfo.patient?.name ?? "",
-              caseType: caseInfo.caseType ?? "",
-              approvalStatus: detail.decisionType === "APPROVED" ? "승인" : "불승인",
-              progressStatus: "",
-              decisionDate: detail.decisionReceivedAt,
-            },
-          });
-        }
-      }
+    // 처분결과(decisionType) 변경 또는 신규 설정 시 → ObjectionReview + Case 싱크
+    if (detail.decisionType && detail.decisionType !== existingDetail?.decisionType) {
+      await syncFromHearingLossDecision(caseId, detail.decisionType, detail.decisionReceivedAt);
     }
 
     return NextResponse.json(detail);
@@ -121,11 +104,20 @@ export async function PATCH(
   // General HearingLossDetail field patch
   const { id: _id, caseId: _cId, createdAt: _ca, updatedAt: _ua, exams: _ex, ...fields } = body;
   if (Object.keys(fields).length > 0) {
+    // 기존 처분결과 조회 (변경 감지)
+    const prev = await prisma.hearingLossDetail.findUnique({
+      where: { caseId },
+      select: { decisionType: true },
+    });
     const updated = await prisma.hearingLossDetail.upsert({
       where: { caseId },
       create: { caseId, ...fields },
       update: fields,
     });
+    // 처분결과가 바뀌었으면 싱크
+    if (updated.decisionType && updated.decisionType !== prev?.decisionType) {
+      await syncFromHearingLossDecision(caseId, updated.decisionType, updated.decisionReceivedAt);
+    }
     return NextResponse.json({ success: true, updated });
   }
 

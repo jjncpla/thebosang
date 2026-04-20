@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
+import { syncFromObjectionCase } from "@/lib/case-sync";
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
@@ -36,6 +37,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     },
     include: { manager: { select: { id: true, name: true } } },
   });
+
+  // ObjectionReview + Case 싱크 (종결·진행 상태 반영)
+  await syncFromObjectionCase(item.id);
 
   return NextResponse.json(item);
 }

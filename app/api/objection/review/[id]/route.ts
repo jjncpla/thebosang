@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
+import { syncFromObjectionReview } from "@/lib/case-sync";
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
@@ -85,22 +86,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }
   }
 
-  // Case.status 자동 전이
-  if (item.caseId) {
-    const statusMap: Record<string, string> = {
-      '검토중': 'REVIEWING',
-      '이의제기 진행': 'OBJECTION',
-      '평정청구 진행': 'WAGE_CORRECTION',
-      '종결': 'CLOSED',
-    };
-    const newStatus = statusMap[item.progressStatus];
-    if (newStatus) {
-      await prisma.case.update({
-        where: { id: item.caseId },
-        data: { status: newStatus },
-      });
-    }
-  }
+  // Case + HearingLossDetail 싱크 (소음성 난청 & 링크된 경우만)
+  await syncFromObjectionReview(item.id);
 
   // progressStatus 변경 시 Todo 자동 생성
   const TODO_TRIGGER_STATUS: Record<string, { title: string; type: string }> = {
