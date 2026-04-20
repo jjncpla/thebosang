@@ -3,6 +3,7 @@
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { getTFColor } from '@/lib/tf-colors'
+import { TF_BY_BRANCH, ALL_TF_LIST } from '@/lib/constants/tf'
 
 // ─── 타입 ────────────────────────────────────────────────────────
 interface Schedule {
@@ -85,13 +86,15 @@ function SpecialClinicCalendar() {
   const [selectedTFs, setSelectedTFs] = useState<string[]>([])
   const [tfPanelOpen, setTfPanelOpen] = useState(false)
   const tfPanelRef = useRef<HTMLDivElement>(null)
+  const [selectedBranch, setSelectedBranch] = useState('')
+  const [branchPanelOpen, setBranchPanelOpen] = useState(false)
+  const branchPanelRef = useRef<HTMLDivElement>(null)
   const [categoryFilter, setCategoryFilter] = useState('')
   const [statusFilter, setStatusFilter] = useState(searchParams?.get('status') || 'all')
   const [searchQuery, setSearchQuery] = useState('')
   const [debouncedQuery, setDebouncedQuery] = useState('')
 
   const [schedules, setSchedules] = useState<Schedule[]>([])
-  const [allTfNames, setAllTfNames] = useState<string[]>([])
   const [loading, setLoading] = useState(false)
   const [selected, setSelected] = useState<Schedule | null>(null)
   const [showModal, setShowModal] = useState(false)
@@ -134,6 +137,15 @@ function SpecialClinicCalendar() {
     return () => document.removeEventListener('mousedown', handleClick)
   }, [tfPanelOpen])
 
+  // 지사 패널 외부 클릭 닫기
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (branchPanelRef.current && !branchPanelRef.current.contains(e.target as Node)) setBranchPanelOpen(false)
+    }
+    if (branchPanelOpen) document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [branchPanelOpen])
+
   // 데이터 로드 (전체 — 프론트에서 필터링)
   const load = useCallback(async () => {
     setLoading(true)
@@ -170,15 +182,29 @@ function SpecialClinicCalendar() {
     return () => document.removeEventListener('mousedown', handleClick)
   }, [selected])
 
-  // TF 목록 (전체 데이터에서 — 필터와 무관하게 모든 TF 표시)
-  useEffect(() => {
-    const qs = new URLSearchParams({ month: `${year}-${pad(month)}` })
-    fetch(`/api/tf/special-clinic?${qs}`)
-      .then(r => r.ok ? r.json() : [])
-      .then((data: Schedule[]) => setAllTfNames([...new Set(data.map(s => s.tfName))].sort()))
-      .catch(() => {})
-  }, [year, month])
-  const tfList = allTfNames
+  // TF 목록 — 전체 TF (더보상TF 포함), 실제 데이터 여부 무관
+  const tfList = ALL_TF_LIST.slice().sort()
+
+  // 지사 목록 (단축명)
+  const BRANCH_SHORT: Record<string, string> = Object.keys(TF_BY_BRANCH).reduce((acc, b) => {
+    const short = b.replace('노무법인 더보상 ', '').replace('노무법인 더보상', '본사')
+    acc[b] = short
+    return acc
+  }, {} as Record<string, string>)
+  const branchList = Object.keys(TF_BY_BRANCH)
+
+  // 지사 선택 핸들러
+  function selectBranch(branch: string) {
+    if (selectedBranch === branch) {
+      setSelectedBranch('')
+      setSelectedTFs([])
+    } else {
+      setSelectedBranch(branch)
+      setSelectedTFs(TF_BY_BRANCH[branch] || [])
+    }
+    setBranchPanelOpen(false)
+  }
+  const branchButtonLabel = selectedBranch ? BRANCH_SHORT[selectedBranch] || selectedBranch : '지사 선택'
 
   // 프론트 필터링 (TF 복수선택 + 카테고리 + 검색)
   const filteredSchedules = schedules.filter(s => {
@@ -392,6 +418,33 @@ function SpecialClinicCalendar() {
 
         <span className="text-gray-300">|</span>
 
+        {/* 지사 선택 드롭다운 */}
+        <div className="relative" ref={branchPanelRef}>
+          <button
+            onClick={() => setBranchPanelOpen(p => !p)}
+            className={`border rounded px-2 py-1 text-xs flex items-center gap-1 hover:bg-gray-50 ${selectedBranch ? 'bg-orange-50 border-orange-300 text-orange-700' : ''}`}
+          >
+            {branchButtonLabel} <span className="text-gray-400">▼</span>
+          </button>
+          {branchPanelOpen && (
+            <div className="absolute top-full mt-1 left-0 bg-white border rounded-lg shadow-lg z-40 w-52 py-1 max-h-72 overflow-y-auto">
+              <div className="px-2 py-1 border-b">
+                <button onClick={() => { setSelectedBranch(''); setSelectedTFs([]); setBranchPanelOpen(false) }} className="text-[10px] text-sky-500 hover:underline">전체 초기화</button>
+              </div>
+              {branchList.map(branch => (
+                <button
+                  key={branch}
+                  onClick={() => selectBranch(branch)}
+                  className={`w-full text-left px-2 py-1.5 text-xs hover:bg-gray-50 flex items-center justify-between ${selectedBranch === branch ? 'bg-orange-50 text-orange-700 font-medium' : ''}`}
+                >
+                  <span>{BRANCH_SHORT[branch]}</span>
+                  <span className="text-gray-400 text-[10px]">{TF_BY_BRANCH[branch].length}개</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
         {/* TF 복수선택 드롭다운 */}
         <div className="relative" ref={tfPanelRef}>
           <button
@@ -401,17 +454,25 @@ function SpecialClinicCalendar() {
             {tfButtonLabel} <span className="text-gray-400">▼</span>
           </button>
           {tfPanelOpen && (
-            <div className="absolute top-full mt-1 left-0 bg-white border rounded-lg shadow-lg z-40 w-48 py-1">
+            <div className="absolute top-full mt-1 left-0 bg-white border rounded-lg shadow-lg z-40 w-52 py-1 max-h-80 overflow-y-auto">
               <div className="flex gap-1 px-2 py-1 border-b">
-                <button onClick={() => setSelectedTFs([])} className="text-[10px] text-sky-500 hover:underline">전체</button>
+                <button onClick={() => { setSelectedTFs([]); setSelectedBranch('') }} className="text-[10px] text-sky-500 hover:underline">전체</button>
                 <button onClick={() => setSelectedTFs([...tfList])} className="text-[10px] text-sky-500 hover:underline">모두 선택</button>
               </div>
-              {tfList.map(tf => (
-                <label key={tf} className="flex items-center gap-2 px-2 py-1 hover:bg-gray-50 cursor-pointer text-xs">
-                  <input type="checkbox" checked={selectedTFs.includes(tf)} onChange={() => toggleTF(tf)} className="rounded" />
-                  <span className="w-2 h-2 rounded-sm flex-shrink-0" style={{ backgroundColor: getTFColor(tf) }} />
-                  {tf}
-                </label>
+              {/* 지사별 그룹 */}
+              {branchList.map(branch => (
+                <div key={branch}>
+                  <div className="px-2 pt-1.5 pb-0.5 text-[10px] text-gray-400 font-medium bg-gray-50 border-b border-gray-100">
+                    {BRANCH_SHORT[branch]}
+                  </div>
+                  {TF_BY_BRANCH[branch].map(tf => (
+                    <label key={tf} className="flex items-center gap-2 px-2 py-1 hover:bg-gray-50 cursor-pointer text-xs">
+                      <input type="checkbox" checked={selectedTFs.includes(tf)} onChange={() => { toggleTF(tf); setSelectedBranch('') }} className="rounded" />
+                      <span className="w-2 h-2 rounded-sm flex-shrink-0" style={{ backgroundColor: getTFColor(tf) }} />
+                      {tf}
+                    </label>
+                  ))}
+                </div>
               ))}
             </div>
           )}
@@ -740,29 +801,33 @@ function SpecialClinicCalendar() {
         })()}
       </div>
 
-      {/* TF 범례 사이드바 */}
-      {tfList.length > 0 && (
-        <div className="w-36 flex-shrink-0">
-          <div className="sticky top-4 border rounded-lg p-3 bg-white">
-            <div className="text-[10px] font-semibold text-gray-500 mb-2">TF 범례</div>
-            <div className="space-y-1.5">
-              {tfList.map(tf => {
-                const isActive = selectedTFs.length === 0 || selectedTFs.includes(tf)
-                return (
-                  <div key={tf}
-                    onClick={() => toggleTF(tf)}
-                    className="flex items-center gap-1.5 cursor-pointer hover:bg-gray-50 rounded px-0.5 -mx-0.5"
-                    style={{ opacity: isActive ? 1 : 0.35 }}
-                  >
-                    <span className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ backgroundColor: getTFColor(tf) }} />
-                    <span className="text-[10px] text-gray-700">{tf}</span>
-                  </div>
-                )
-              })}
+      {/* TF 범례 사이드바 — 이달 실제 일정 있는 TF만 표시 */}
+      {(() => {
+        const activeTfs = [...new Set(schedules.map(s => s.tfName))].sort()
+        if (activeTfs.length === 0) return null
+        return (
+          <div className="w-36 flex-shrink-0">
+            <div className="sticky top-4 border rounded-lg p-3 bg-white">
+              <div className="text-[10px] font-semibold text-gray-500 mb-2">TF 범례</div>
+              <div className="space-y-1.5">
+                {activeTfs.map(tf => {
+                  const isActive = selectedTFs.length === 0 || selectedTFs.includes(tf)
+                  return (
+                    <div key={tf}
+                      onClick={() => { toggleTF(tf); setSelectedBranch('') }}
+                      className="flex items-center gap-1.5 cursor-pointer hover:bg-gray-50 rounded px-0.5 -mx-0.5"
+                      style={{ opacity: isActive ? 1 : 0.35 }}
+                    >
+                      <span className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ backgroundColor: getTFColor(tf) }} />
+                      <span className="text-[10px] text-gray-700">{tf}</span>
+                    </div>
+                  )
+                })}
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )
+      })()}
       </div>{/* flex wrapper end */}
 
       {/* 검색 결과 목록 */}
