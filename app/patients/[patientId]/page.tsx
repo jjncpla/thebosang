@@ -539,6 +539,35 @@ function ExamRoundBlock({
   );
 }
 
+// Context lets DField live outside HearingLossTab so React doesn't remount inputs on every render
+const HLDetailContext = React.createContext<{
+  detail: HearingLossDetail;
+  setDetail: React.Dispatch<React.SetStateAction<HearingLossDetail>>;
+} | null>(null);
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+      <label style={{ fontSize: 11, color: "#9ca3af", fontWeight: 600 }}>{label}</label>
+      {children}
+    </div>
+  );
+}
+
+function DField({ label, k, type = "text" }: { label: string; k: keyof HearingLossDetail; type?: string }) {
+  const ctx = React.useContext(HLDetailContext)!;
+  const v = ctx.detail[k];
+  let val = v === null || v === undefined ? "" : String(v);
+  if (type === "datetime-local" && val && val.length > 16) {
+    val = val.slice(0, 16);
+  }
+  return (
+    <Field label={label}>
+      <input type={type} style={inputStyle} value={val} onChange={(e) => ctx.setDetail((prev) => ({ ...prev, [k]: e.target.value || null }))} />
+    </Field>
+  );
+}
+
 /* ── 난청 상세 탭 ── */
 function HearingLossTab({ caseId, initial }: { caseId: string; initial: HearingLossDetail | null }) {
   const [detail, setDetail] = useState<HearingLossDetail>(initial ?? EMPTY_DETAIL);
@@ -649,23 +678,6 @@ function HearingLossTab({ caseId, initial }: { caseId: string; initial: HearingL
   const SectionTitle = ({ children }: { children: React.ReactNode }) => (
     <div style={{ fontSize: 13, fontWeight: 700, color: "#374151", padding: "14px 0 8px 0", borderBottom: "2px solid #e5e7eb", marginBottom: 12 }}>{children}</div>
   );
-  const Field = ({ label, children }: { label: string; children: React.ReactNode }) => (
-    <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-      <label style={{ fontSize: 11, color: "#9ca3af", fontWeight: 600 }}>{label}</label>
-      {children}
-    </div>
-  );
-  const DField = ({ label, k, type = "text" }: { label: string; k: keyof HearingLossDetail; type?: string }) => {
-    let val = d(k);
-    if (type === "datetime-local" && val && val.length > 16) {
-      val = val.slice(0, 16);
-    }
-    return (
-      <Field label={label}>
-        <input type={type} style={inputStyle} value={val} onChange={(e) => setD(k, e.target.value || null)} />
-      </Field>
-    );
-  };
   const SaveBar = () => (
     <div style={{ display: "flex", alignItems: "center", gap: 12, paddingTop: 16, borderTop: "1px solid #e5e7eb" }}>
       <button onClick={() => saveDetail()} disabled={saving} style={{ background: "#29ABE2", color: "white", border: "none", borderRadius: 6, padding: "8px 20px", fontSize: 13, fontWeight: 600, cursor: "pointer", opacity: saving ? 0.6 : 1 }}>
@@ -677,6 +689,7 @@ function HearingLossTab({ caseId, initial }: { caseId: string; initial: HearingL
 
 
   return (
+    <HLDetailContext.Provider value={{ detail, setDetail }}>
     <div>
       {/* (1) 사건초기 */}
       <div style={secWrap}>
@@ -1060,6 +1073,7 @@ function HearingLossTab({ caseId, initial }: { caseId: string; initial: HearingL
       {/* (4) 유족 — 비활성 */}
       <DisabledSection label="(4) 유족" />
     </div>
+    </HLDetailContext.Provider>
   );
 }
 
