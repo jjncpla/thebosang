@@ -97,7 +97,8 @@ export async function PUT(
     return NextResponse.json(detail);
   } catch (err) {
     console.error("[PUT /api/cases/[caseId]/hearing-loss]", err);
-    return NextResponse.json({ error: "저장 오류" }, { status: 500 });
+    const msg = err instanceof Error ? err.message : "저장 오류";
+    return NextResponse.json({ error: msg }, { status: 500 });
   }
 }
 
