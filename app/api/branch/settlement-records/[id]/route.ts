@@ -2,6 +2,32 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/auth'
 import { prisma } from '@/lib/prisma'
 
+// PATCH: 담당자(reportAssignee) 등 단일 필드 수정
+export async function PATCH(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const session = await auth()
+  if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const { id } = await params
+  const body = await req.json()
+
+  const updateData: Record<string, unknown> = {}
+  if ('reportAssignee' in body) {
+    updateData.reportAssignee = body.reportAssignee || null
+    updateData.isBranchOwned = typeof body.reportAssignee === 'string' && body.reportAssignee.startsWith('더보상')
+  }
+  if ('caseType' in body) updateData.caseType = body.caseType || null
+
+  const record = await prisma.settlementRecord.update({
+    where: { id },
+    data: updateData,
+    include: { allocations: true },
+  })
+  return NextResponse.json(record)
+}
+
 export async function PUT(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
