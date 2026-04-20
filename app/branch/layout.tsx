@@ -5,7 +5,7 @@ export default async function BranchLayout({ children }: { children: React.React
   const session = await auth()
   const userRole = (session?.user as { role?: string })?.role
 
-  const allowedRoles = ["ADMIN", "SENIOR_MANAGER", "SITE_MANAGER"]
+  const allowedRoles = ["ADMIN", "MANAGER", "SENIOR_MANAGER", "SITE_MANAGER"]
   if (!session || !allowedRoles.includes(userRole || "")) {
     redirect("/")
   }
