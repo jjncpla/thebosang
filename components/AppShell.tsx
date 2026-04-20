@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
 import QuickLinks from "./QuickLinks";
@@ -12,6 +12,13 @@ type MenuItem = {
   path?: string;
   children?: { id: string; label: string; path: string }[];
   restricted?: "org" | "admin";
+};
+
+type SearchResult = {
+  id: string;
+  caseType: string;
+  status: string;
+  patient: { id: string; name: string; ssn: string | null } | null;
 };
 
 const MENU_ITEMS: MenuItem[] = [
@@ -75,6 +82,11 @@ function getPageInfo(pathname: string | null): { title: string; section: string 
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const [openMenus, setOpenMenus] = useState<Set<string>>(new Set(["cases"]));
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const searchRef = useRef<HTMLInputElement>(null);
+  const searchBoxRef = useRef<HTMLDivElement>(null);
   const pathname = usePathname();
   const router = useRouter();
   const { data: session } = useSession();
@@ -90,6 +102,60 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       }
     }
   }, [pathname]);
+
+  // ⌘K / Ctrl+K shortcut
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+        e.preventDefault();
+        searchRef.current?.focus();
+        setSearchOpen(true);
+      }
+      if (e.key === "Escape") {
+        setSearchOpen(false);
+        searchRef.current?.blur();
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, []);
+
+  // Click outside to close dropdown
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (searchBoxRef.current && !searchBoxRef.current.contains(e.target as Node)) {
+        setSearchOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  // Debounced search
+  const doSearch = useCallback(async (q: string) => {
+    if (q.trim().length < 2) { setSearchResults([]); return; }
+    try {
+      const res = await fetch(`/api/cases?search=${encodeURIComponent(q)}&limit=8`);
+      if (res.ok) {
+        const data = await res.json();
+        setSearchResults(Array.isArray(data) ? data.slice(0, 8) : []);
+      }
+    } catch { setSearchResults([]); }
+  }, []);
+
+  useEffect(() => {
+    const t = setTimeout(() => doSearch(searchQuery), 250);
+    return () => clearTimeout(t);
+  }, [searchQuery, doSearch]);
+
+  const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter" && searchQuery.trim()) {
+      router.push(`/cases?search=${encodeURIComponent(searchQuery.trim())}`);
+      setSearchOpen(false);
+      setSearchQuery("");
+      searchRef.current?.blur();
+    }
+  };
 
   const toggleMenu = (id: string) => {
     setOpenMenus((prev) => {
@@ -136,8 +202,13 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     <div className="tbss-app">
       {/* ── Sidebar ── */}
       <aside className="sidebar">
-        {/* Brand */}
-        <div className="brand">
+        {/* Brand — click to go home */}
+        <div
+          className="brand"
+          onClick={() => router.push("/")}
+          style={{ cursor: "pointer" }}
+          title="홈으로"
+        >
           <div className="mark">
             노무법인 더보상
             <span className="en">The Bosang · TBSS</span>
@@ -242,21 +313,133 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             )}
           </div>
 
-          <div className="search-box">
-            <span style={{ fontSize: 13, color: "var(--ink-400)" }}>🔍</span>
-            <span>사건번호, 성명, 주민번호로 검색</span>
+          {/* Functional search */}
+          <div ref={searchBoxRef} className="search-box" style={{ position: "relative" }}>
+            <span style={{ fontSize: 13, color: "var(--ink-400)", flexShrink: 0 }}>🔍</span>
+            <input
+              ref={searchRef}
+              type="text"
+              value={searchQuery}
+              onChange={(e) => { setSearchQuery(e.target.value); setSearchOpen(true); }}
+              onFocus={() => setSearchOpen(true)}
+              onKeyDown={handleSearchKeyDown}
+              placeholder="사건번호, 성명, 주민번호로 검색"
+              style={{
+                flex: 1,
+                border: "none",
+                outline: "none",
+                background: "transparent",
+                fontSize: 13,
+                color: "var(--ink-700)",
+                minWidth: 0,
+              }}
+            />
             <span
               style={{
-                marginLeft: "auto",
                 fontSize: 11,
                 color: "var(--ink-400)",
                 border: "1px solid var(--paper-line)",
                 padding: "1px 6px",
                 borderRadius: 3,
+                flexShrink: 0,
+                whiteSpace: "nowrap",
               }}
             >
               ⌘K
             </span>
+
+            {/* Dropdown results */}
+            {searchOpen && searchQuery.trim().length >= 2 && (
+              <div
+                style={{
+                  position: "absolute",
+                  top: "calc(100% + 6px)",
+                  left: 0,
+                  right: 0,
+                  background: "#fff",
+                  border: "1px solid var(--paper-line)",
+                  borderRadius: 8,
+                  boxShadow: "0 8px 24px rgba(0,0,0,.12)",
+                  zIndex: 200,
+                  maxHeight: 320,
+                  overflowY: "auto",
+                }}
+              >
+                {searchResults.length === 0 ? (
+                  <div style={{ padding: "14px 16px", fontSize: 13, color: "var(--ink-400)" }}>
+                    검색 결과가 없습니다.
+                  </div>
+                ) : (
+                  <>
+                    {searchResults.map((c) => (
+                      <button
+                        key={c.id}
+                        onClick={() => {
+                          router.push(`/cases/${c.id}`);
+                          setSearchOpen(false);
+                          setSearchQuery("");
+                        }}
+                        style={{
+                          width: "100%",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 10,
+                          padding: "10px 14px",
+                          background: "none",
+                          border: "none",
+                          borderBottom: "1px solid var(--paper-line)",
+                          cursor: "pointer",
+                          textAlign: "left",
+                          fontSize: 13,
+                          color: "var(--ink-700)",
+                        }}
+                        onMouseEnter={(e) => (e.currentTarget.style.background = "var(--surface)")}
+                        onMouseLeave={(e) => (e.currentTarget.style.background = "none")}
+                      >
+                        <span style={{ fontWeight: 600, color: "var(--ink-900)", flex: 1 }}>
+                          {c.patient?.name ?? "—"}
+                        </span>
+                        <span style={{ fontSize: 11, color: "var(--ink-400)" }}>
+                          {c.patient?.ssn ? c.patient.ssn.replace(/(\d{6})-?(\d{7})/, "$1-*******") : ""}
+                        </span>
+                        <span
+                          style={{
+                            fontSize: 11,
+                            background: "var(--sky-wash)",
+                            color: "var(--sky-ink)",
+                            padding: "2px 6px",
+                            borderRadius: 4,
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          {c.caseType}
+                        </span>
+                      </button>
+                    ))}
+                    <button
+                      onClick={() => {
+                        router.push(`/cases?search=${encodeURIComponent(searchQuery.trim())}`);
+                        setSearchOpen(false);
+                        setSearchQuery("");
+                      }}
+                      style={{
+                        width: "100%",
+                        padding: "10px 14px",
+                        background: "var(--surface)",
+                        border: "none",
+                        cursor: "pointer",
+                        fontSize: 12,
+                        color: "var(--sky-ink)",
+                        fontWeight: 600,
+                        textAlign: "center",
+                      }}
+                    >
+                      전체 결과 보기 →
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="right">
