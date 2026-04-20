@@ -15,7 +15,7 @@ type MenuItem = {
 };
 
 const MENU_ITEMS: MenuItem[] = [
-  { id: "todo", label: "To Do List", icon: "☑", path: "/" },
+  { id: "todo", label: "To Do List", icon: "☑", path: "/todo" },
   { id: "law", label: "법령 및 규정", icon: "📜", path: "/law" },
   { id: "grade", label: "장해등급·평균임금", icon: "📊", path: "/grade" },
   {
