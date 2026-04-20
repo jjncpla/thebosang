@@ -1,16 +1,18 @@
 import { auth } from "@/auth"
 import { prisma } from "@/lib/prisma"
-import { parseSpecialClinicMessage } from "@/lib/parse-special-clinic-message"
+import { parseSpecialClinicMessage, type TfOrg } from "@/lib/parse-special-clinic-message"
 import { NextRequest, NextResponse } from "next/server"
 
 export async function POST(req: NextRequest) {
   const session = await auth()
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-  const { text, sender } = await req.json()
+  const body = await req.json()
+  const { text, sender } = body as { text?: string; sender?: string }
+  const tfOrg: TfOrg = body.tfOrg === '더보상' ? '더보상' : '이산'
   if (!text) return NextResponse.json({ error: "text 필수" }, { status: 400 })
 
-  const parsed = parseSpecialClinicMessage(text, sender || "manual", new Date())
+  const parsed = parseSpecialClinicMessage(text, sender || "manual", new Date(), { tfOrg })
   const saved = []
 
   for (const p of parsed) {
