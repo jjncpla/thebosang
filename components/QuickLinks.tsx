@@ -137,10 +137,10 @@ export default function QuickLinks() {
         onClick={() => setOpen((o) => !o)}
         style={{
           width: 24,
-          background: "#2563eb",
+          background: "var(--deep)",
           border: "none",
           borderRadius: open ? "0" : "6px 0 0 6px",
-          color: "white",
+          color: "rgba(255,255,255,.85)",
           cursor: "pointer",
           display: "flex",
           flexDirection: "column",
@@ -149,8 +149,8 @@ export default function QuickLinks() {
           gap: 2,
           padding: "16px 0",
           writingMode: "vertical-rl",
-          fontSize: 11,
-          fontWeight: 700,
+          fontSize: 10,
+          fontWeight: 600,
           letterSpacing: 2,
         }}
       >
