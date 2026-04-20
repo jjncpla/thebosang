@@ -51,10 +51,16 @@ export async function PUT(
       }
     }
 
-    // datetime-local 입력값 "YYYY-MM-DDTHH:mm" → "YYYY-MM-DDTHH:mm:ss" (Prisma ISO-8601 요구)
+    // 날짜 문자열 정규화 (Prisma DateTime 필드는 완전한 ISO-8601 요구)
     for (const [k, v] of Object.entries(data)) {
-      if (typeof v === "string" && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(v)) {
-        data[k] = v + ":00";
+      if (typeof v === "string") {
+        if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(v)) {
+          // "YYYY-MM-DDTHH:mm" → 초 추가
+          data[k] = v + ":00";
+        } else if (/^\d{4}-\d{2}-\d{2}$/.test(v)) {
+          // "YYYY-MM-DD" (date input) → 시간 추가
+          data[k] = v + "T00:00:00.000Z";
+        }
       }
     }
 
