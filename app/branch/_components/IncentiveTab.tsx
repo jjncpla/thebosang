@@ -90,14 +90,26 @@ export default function IncentiveTab() {
   // 더보상 전체 인원 (담당자 검색용)
   const [tbosangStaff, setTbosangStaff] = useState<string[]>([])
   useEffect(() => {
-    fetch('/api/branch/staff-roster?branchName=전체더보상&year=2099&month=1&allTbosang=true')
-      .catch(() => null)
-    // Contact에서 더보상 전체 인원 로드
     fetch('/api/contacts?firmType=TBOSANG&namesOnly=true')
       .then(r => r.ok ? r.json() : [])
       .then(data => { if (Array.isArray(data)) setTbosangStaff(data) })
       .catch(() => null)
   }, [])
+
+  // 현재 records에서 기존 '더보상XX' 코드 수집 (지사 코드 목록)
+  const branchCodes = useMemo(() => {
+    const codes = new Set<string>()
+    for (const r of records) {
+      if (r.reportAssignee?.startsWith('더보상')) codes.add(r.reportAssignee)
+      if (r.salesStaffName?.startsWith('더보상')) codes.add(r.salesStaffName)
+      if (r.settlementStaffName?.startsWith('더보상')) codes.add(r.settlementStaffName)
+    }
+    // ALL_BRANCHES 기반으로 기본 코드도 추가 (더보상+지사명)
+    for (const b of ALL_BRANCHES) {
+      codes.add(`더보상${b}`)
+    }
+    return Array.from(codes).sort()
+  }, [records, ALL_BRANCHES])
 
   // 섹션 접기/펼치기
   const [openSections, setOpenSections] = useState({
@@ -483,42 +495,86 @@ export default function IncentiveTab() {
                                     border: '1px solid #93c5fd', borderRadius: 4, outline: 'none',
                                   }}
                                 />
-                                {assigneeSearch && (
+                                {assigneeSearch !== null && (
                                   <div style={{
                                     position: 'absolute', top: '100%', left: 0, zIndex: 50,
                                     background: '#fff', border: '1px solid #e2e8f0', borderRadius: 6,
-                                    boxShadow: '0 4px 12px rgba(0,0,0,0.12)', minWidth: 140, maxHeight: 200, overflowY: 'auto',
+                                    boxShadow: '0 4px 12px rgba(0,0,0,0.12)', minWidth: 160, maxHeight: 240, overflowY: 'auto',
                                   }}>
-                                    {tbosangStaff
-                                      .filter(n => n.includes(assigneeSearch))
-                                      .slice(0, 15)
-                                      .map(name => (
-                                        <div
-                                          key={name}
-                                          onMouseDown={async e => {
-                                            e.preventDefault()
-                                            const res = await fetch(`/api/branch/settlement-records/${r.id}`, {
-                                              method: 'PATCH',
-                                              headers: { 'Content-Type': 'application/json' },
-                                              body: JSON.stringify({ reportAssignee: name }),
-                                            })
-                                            if (res.ok) {
-                                              const updated = await res.json()
-                                              setRecords(prev => prev.map(x => x.id === r.id ? { ...x, reportAssignee: updated.reportAssignee, isBranchOwned: updated.isBranchOwned } : x))
-                                            }
-                                            setEditingAssigneeId(null)
-                                            setAssigneeSearch('')
-                                          }}
-                                          style={{ padding: '5px 10px', fontSize: 12, cursor: 'pointer', borderBottom: '1px solid #f1f5f9' }}
-                                          onMouseEnter={e => (e.currentTarget.style.background = '#f0f9ff')}
-                                          onMouseLeave={e => (e.currentTarget.style.background = '')}
-                                        >
-                                          {name}
-                                        </div>
-                                      ))}
-                                    {tbosangStaff.filter(n => n.includes(assigneeSearch)).length === 0 && (
-                                      <div style={{ padding: '5px 10px', fontSize: 12, color: '#94a3b8' }}>검색 결과 없음</div>
-                                    )}
+                                    {/* 지사 코드 섹션 */}
+                                    {(() => {
+                                      const filtered = branchCodes.filter(c =>
+                                        assigneeSearch === '' ? true : c.includes(assigneeSearch)
+                                      )
+                                      if (filtered.length === 0) return null
+                                      const makeHandler = (name: string) => async (e: React.MouseEvent) => {
+                                        e.preventDefault()
+                                        const res = await fetch(`/api/branch/settlement-records/${r.id}`, {
+                                          method: 'PATCH',
+                                          headers: { 'Content-Type': 'application/json' },
+                                          body: JSON.stringify({ reportAssignee: name }),
+                                        })
+                                        if (res.ok) {
+                                          const updated = await res.json()
+                                          setRecords(prev => prev.map(x => x.id === r.id ? { ...x, reportAssignee: updated.reportAssignee, isBranchOwned: updated.isBranchOwned } : x))
+                                        }
+                                        setEditingAssigneeId(null)
+                                        setAssigneeSearch('')
+                                      }
+                                      return (
+                                        <>
+                                          <div style={{ padding: '3px 10px', fontSize: 10, color: '#94a3b8', fontWeight: 600, background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>지사 코드</div>
+                                          {filtered.slice(0, 10).map(name => (
+                                            <div key={name} onMouseDown={makeHandler(name)}
+                                              style={{ padding: '5px 10px', fontSize: 12, cursor: 'pointer', borderBottom: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', gap: 4 }}
+                                              onMouseEnter={e => (e.currentTarget.style.background = '#fef9c3')}
+                                              onMouseLeave={e => (e.currentTarget.style.background = '')}>
+                                              <span style={{ fontSize: 9, color: '#d97706', fontWeight: 700 }}>지사</span>
+                                              <span>{name}</span>
+                                            </div>
+                                          ))}
+                                        </>
+                                      )
+                                    })()}
+                                    {/* 직원 이름 섹션 */}
+                                    {(() => {
+                                      const filtered = tbosangStaff.filter(n =>
+                                        assigneeSearch === '' ? false : n.includes(assigneeSearch)
+                                      )
+                                      if (filtered.length === 0 && assigneeSearch !== '') return (
+                                        branchCodes.filter(c => c.includes(assigneeSearch)).length === 0
+                                          ? <div style={{ padding: '5px 10px', fontSize: 12, color: '#94a3b8' }}>검색 결과 없음</div>
+                                          : null
+                                      )
+                                      if (filtered.length === 0) return null
+                                      const makeHandler = (name: string) => async (e: React.MouseEvent) => {
+                                        e.preventDefault()
+                                        const res = await fetch(`/api/branch/settlement-records/${r.id}`, {
+                                          method: 'PATCH',
+                                          headers: { 'Content-Type': 'application/json' },
+                                          body: JSON.stringify({ reportAssignee: name }),
+                                        })
+                                        if (res.ok) {
+                                          const updated = await res.json()
+                                          setRecords(prev => prev.map(x => x.id === r.id ? { ...x, reportAssignee: updated.reportAssignee, isBranchOwned: updated.isBranchOwned } : x))
+                                        }
+                                        setEditingAssigneeId(null)
+                                        setAssigneeSearch('')
+                                      }
+                                      return (
+                                        <>
+                                          <div style={{ padding: '3px 10px', fontSize: 10, color: '#94a3b8', fontWeight: 600, background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>직원</div>
+                                          {filtered.slice(0, 15).map(name => (
+                                            <div key={name} onMouseDown={makeHandler(name)}
+                                              style={{ padding: '5px 10px', fontSize: 12, cursor: 'pointer', borderBottom: '1px solid #f1f5f9' }}
+                                              onMouseEnter={e => (e.currentTarget.style.background = '#f0f9ff')}
+                                              onMouseLeave={e => (e.currentTarget.style.background = '')}>
+                                              {name}
+                                            </div>
+                                          ))}
+                                        </>
+                                      )
+                                    })()}
                                   </div>
                                 )}
                               </div>
