@@ -195,9 +195,9 @@ async function main() {
     prisma.$queryRaw<{ cnt: bigint }[]>`SELECT COUNT(*) AS cnt FROM (SELECT 1 FROM "WageReviewData" GROUP BY "tfName","patientName","caseType" HAVING COUNT(*)>1) d`,
   ]);
   console.log({
-    reviewDupRemaining: Number(revDup[0]?.cnt ?? 0n),
-    caseDupRemaining: Number(caseDup[0]?.cnt ?? 0n),
-    wageDupRemaining: Number(wageDup[0]?.cnt ?? 0n),
+    reviewDupRemaining: Number(revDup[0]?.cnt ?? 0),
+    caseDupRemaining: Number(caseDup[0]?.cnt ?? 0),
+    wageDupRemaining: Number(wageDup[0]?.cnt ?? 0),
   });
 
   await prisma.$disconnect();
