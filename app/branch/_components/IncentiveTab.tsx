@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useSession } from 'next-auth/react'
 import { QUARTER_MONTHS } from '../_constants/performance'
 import { useBranches } from '@/lib/hooks/useBranches'
 
@@ -72,6 +73,8 @@ const ALL_MONTHS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] as const
 
 // ─── 메인 컴포넌트 ────────────────────────────────────────────────
 export default function IncentiveTab() {
+  const { data: session } = useSession()
+  const isAdmin = (session?.user as any)?.role === 'ADMIN'
   const { shortBranchNames: ALL_BRANCHES } = useBranches()
   const currentYear = new Date().getFullYear()
   const currentQuarter = Math.ceil((new Date().getMonth() + 1) / 3)
@@ -990,15 +993,15 @@ export default function IncentiveTab() {
                   </div>
                 ) : (
                   <div
-                    onClick={() => { setEditingCarryOver(true); setCarryOverInput(String(carryOver)) }}
-                    className="text-2xl font-bold text-emerald-700 cursor-pointer hover:opacity-70 transition-opacity"
-                    title="클릭하여 수정"
+                    onClick={() => { if (isAdmin) { setEditingCarryOver(true); setCarryOverInput(String(carryOver)) } }}
+                    className={`text-2xl font-bold text-emerald-700 transition-opacity ${isAdmin ? 'cursor-pointer hover:opacity-70' : ''}`}
+                    title={isAdmin ? '클릭하여 수정' : undefined}
                   >
                     {fmt(carryOver)}원
                   </div>
                 )}
                 <div className="text-[10px] text-gray-400 mt-1">
-                  월말보고 &apos;합계&apos; 시트 임포트 또는 클릭하여 직접 입력
+                  {isAdmin ? '월말보고 \'합계\' 시트 임포트 또는 클릭하여 직접 입력' : '월말보고 \'합계\' 시트 임포트로 자동 반영'}
                 </div>
               </div>
               {/* 미배분액 */}
