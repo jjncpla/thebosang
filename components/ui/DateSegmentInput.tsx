@@ -37,7 +37,6 @@ export default function DateSegmentInput({ value, onChange, includeTime = false,
   const hourRef = useRef<HTMLInputElement>(null);
   const minuteRef = useRef<HTMLInputElement>(null);
 
-  // Sync segments when external value changes (e.g., loaded from DB)
   const prevValue = useRef(value);
   useEffect(() => {
     if (value !== prevValue.current) {
@@ -54,7 +53,8 @@ export default function DateSegmentInput({ value, onChange, includeTime = false,
       const date = `${y}-${mo.padStart(2, "0")}-${d.padStart(2, "0")}`;
       if (includeTime) {
         if (h.length >= 1 && mi.length >= 1) {
-          onChange(`${date}T${h.padStart(2, "0")}:${mi.padStart(2, "0")}:00`);
+          // 항상 Z 포함 완전한 ISO-8601 emit (Prisma DateTime 요구사항)
+          onChange(`${date}T${h.padStart(2, "0")}:${mi.padStart(2, "0")}:00.000Z`);
         }
       } else {
         onChange(`${date}T00:00:00.000Z`);
@@ -70,10 +70,11 @@ export default function DateSegmentInput({ value, onChange, includeTime = false,
     textAlign: "center", padding: 0, appearance: "none",
     MozAppearance: "textfield" as React.CSSProperties["MozAppearance"],
   };
-  const sep: React.CSSProperties = { color: "#d1d5db", fontSize: 12, userSelect: "none" };
+  const unit: React.CSSProperties = { color: "#6b7280", fontSize: 12, userSelect: "none" as React.CSSProperties["userSelect"] };
+  const sep: React.CSSProperties = { color: "#d1d5db", fontSize: 12, userSelect: "none" as React.CSSProperties["userSelect"], margin: "0 1px" };
 
   return (
-    <div style={{ ...style, display: "flex", alignItems: "center", gap: 1 }}>
+    <div className="date-seg" style={{ ...style, display: "flex", alignItems: "center", gap: 1 }}>
       <input
         value={year} placeholder="연도" maxLength={4} type="text" inputMode="numeric"
         style={{ ...seg, width: 38 }}
@@ -84,10 +85,11 @@ export default function DateSegmentInput({ value, onChange, includeTime = false,
           emit(v, month, day, hour, minute);
         }}
       />
+      <span style={unit}>년</span>
       <span style={sep}>-</span>
       <input
         ref={monthRef} value={month} placeholder="월" maxLength={2} type="text" inputMode="numeric"
-        style={{ ...seg, width: 22 }}
+        style={{ ...seg, width: 20 }}
         onChange={(e) => {
           const v = only(e.target.value).slice(0, 2);
           setMonth(v);
@@ -95,10 +97,11 @@ export default function DateSegmentInput({ value, onChange, includeTime = false,
           emit(year, v, day, hour, minute);
         }}
       />
+      <span style={unit}>월</span>
       <span style={sep}>-</span>
       <input
         ref={dayRef} value={day} placeholder="일" maxLength={2} type="text" inputMode="numeric"
-        style={{ ...seg, width: 22 }}
+        style={{ ...seg, width: 20 }}
         onChange={(e) => {
           const v = only(e.target.value).slice(0, 2);
           setDay(v);
@@ -106,12 +109,13 @@ export default function DateSegmentInput({ value, onChange, includeTime = false,
           emit(year, month, v, hour, minute);
         }}
       />
+      <span style={unit}>일</span>
       {includeTime && (
         <>
-          <span style={{ ...sep, margin: "0 3px" }}>·</span>
+          <span style={{ ...sep, margin: "0 4px" }}>·</span>
           <input
             ref={hourRef} value={hour} placeholder="시" maxLength={2} type="text" inputMode="numeric"
-            style={{ ...seg, width: 22 }}
+            style={{ ...seg, width: 20 }}
             onChange={(e) => {
               const v = only(e.target.value).slice(0, 2);
               setHour(v);
@@ -119,16 +123,18 @@ export default function DateSegmentInput({ value, onChange, includeTime = false,
               emit(year, month, day, v, minute);
             }}
           />
+          <span style={unit}>시</span>
           <span style={sep}>:</span>
           <input
             ref={minuteRef} value={minute} placeholder="분" maxLength={2} type="text" inputMode="numeric"
-            style={{ ...seg, width: 22 }}
+            style={{ ...seg, width: 20 }}
             onChange={(e) => {
               const v = only(e.target.value).slice(0, 2);
               setMinute(v);
               emit(year, month, day, hour, v);
             }}
           />
+          <span style={unit}>분</span>
         </>
       )}
     </div>

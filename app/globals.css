@@ -789,3 +789,6 @@ table.exam th {
 .section-banner-deep { background: var(--deep); color: #fff; border-radius: var(--r-md); padding: 12px 18px; }
 
 .warn-daily { color: #8A5A2B; background: #F6EFE0; padding: 1px 6px; border-radius: var(--r-sm); font-size: 11px; }
+
+/* DateSegmentInput placeholder */
+.date-seg input::placeholder { color: #6b7280; }

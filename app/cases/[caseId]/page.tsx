@@ -960,7 +960,7 @@ function HearingLossTab({ caseId, initial, status, onStatusChange }: { caseId: s
               ))}
             </div>
             <SectionTitle>최초특진 검사결과</SectionTitle>
-            <ExamRoundBlock caseId={caseId} examSet="INITIAL" round={1} label="1회" exams={exams} setExams={setExams} />
+            <ExamRoundBlock caseId={caseId} examSet="INITIAL" round={1} label="상세검사결과" exams={exams} setExams={setExams} />
 
             <div style={{ marginBottom: 12 }}>
               <button onClick={() => setShowReExam((v) => !v)} style={{ background: showReExam ? "#eff6ff" : "white", border: "1px solid #d1d5db", borderRadius: 6, padding: "6px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer", color: showReExam ? "#1A95C8" : "#374151" }}>
@@ -972,20 +972,12 @@ function HearingLossTab({ caseId, initial, status, onStatusChange }: { caseId: s
               <>
                 <SectionTitle>재특진 일정 및 참석</SectionTitle>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 12 }}>
-                  <DField label="1차 재특진일정" k="reSpecialExam1Date" type="datetime-local" />
-                  <DField label="1차 연락담당자" k="reSpecialExam1Contact" />
-                  <DField label="1차 참석자" k="reSpecialExam1Attendee" />
-                  <DField label="2차 재특진일정" k="reSpecialExam2Date" type="datetime-local" />
-                  <DField label="2차 연락담당자" k="reSpecialExam2Contact" />
-                  <DField label="2차 참석자" k="reSpecialExam2Attendee" />
-                  <DField label="3차 재특진일정" k="reSpecialExam3Date" type="datetime-local" />
-                  <DField label="3차 연락담당자" k="reSpecialExam3Contact" />
-                  <DField label="3차 참석자" k="reSpecialExam3Attendee" />
+                  <DField label="재특진일정" k="reSpecialExam1Date" type="datetime-local" />
+                  <DField label="연락담당자" k="reSpecialExam1Contact" />
+                  <DField label="참석자" k="reSpecialExam1Attendee" />
                 </div>
                 <SectionTitle>재특진 검사결과</SectionTitle>
-                {([1, 2, 3] as const).map((r) => (
-                  <ExamRoundBlock key={r} caseId={caseId} examSet="RE" round={r} label={`${r}차`} exams={exams} setExams={setExams} />
-                ))}
+                <ExamRoundBlock caseId={caseId} examSet="RE" round={1} label="상세검사결과" exams={exams} setExams={setExams} />
                 <div style={{ marginBottom: 12 }}>
                   <button onClick={() => setShowReReExam((v) => !v)} style={{ background: showReReExam ? "#eff6ff" : "white", border: "1px solid #d1d5db", borderRadius: 6, padding: "6px 14px", fontSize: 12, fontWeight: 600, cursor: "pointer", color: showReReExam ? "#1A95C8" : "#374151" }}>
                     {showReReExam ? "▲ 재재특진 숨기기" : "▼ 재재특진 입력"}
@@ -993,10 +985,8 @@ function HearingLossTab({ caseId, initial, status, onStatusChange }: { caseId: s
                 </div>
                 {showReReExam && (
                   <>
-                    <SectionTitle>재재특진</SectionTitle>
-                    {([1, 2, 3] as const).map((r) => (
-                      <ExamRoundBlock key={r} caseId={caseId} examSet="RE2" round={r} label={`${r}차`} exams={exams} setExams={setExams} />
-                    ))}
+                    <SectionTitle>재재특진 검사결과</SectionTitle>
+                    <ExamRoundBlock caseId={caseId} examSet="RE2" round={1} label="상세검사결과" exams={exams} setExams={setExams} />
                   </>
                 )}
               </>
