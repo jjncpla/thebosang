@@ -75,30 +75,26 @@ export default function DateSegmentInput({ value, onChange, includeTime = false,
     textAlign: "center", padding: 0, appearance: "none",
     MozAppearance: "textfield" as React.CSSProperties["MozAppearance"],
   };
-  const unit: React.CSSProperties = { color: "#6b7280", fontSize: 12, userSelect: "none" as React.CSSProperties["userSelect"] };
   const sep: React.CSSProperties = { color: "#d1d5db", fontSize: 12, userSelect: "none" as React.CSSProperties["userSelect"], margin: "0 1px" };
 
   return (
     <div className="date-seg" style={{ ...style, display: "flex", alignItems: "center", gap: 1 }}>
       <input
-        value={year} placeholder="연도" maxLength={4} type="text" inputMode="numeric"
+        value={year} placeholder="" maxLength={4} type="text" inputMode="numeric"
         style={{ ...seg, width: 38 }}
         onChange={(e) => {
           const v = only(e.target.value).slice(0, 4);
           setYear(v);
-          if (v.length === 4) monthRef.current?.focus();
           emit(v, month, day, hour, minute);
         }}
       />
-      <span style={unit}>년</span>
       <span style={sep}>-</span>
       <input
-        ref={monthRef} value={month} placeholder="월" maxLength={2} type="text" inputMode="numeric"
+        ref={monthRef} value={month} placeholder="" maxLength={2} type="text" inputMode="numeric"
         style={{ ...seg, width: 20 }}
         onChange={(e) => {
           const v = only(e.target.value).slice(0, 2);
           setMonth(v);
-          if (v.length === 2) dayRef.current?.focus();
           emit(year, v, day, hour, minute);
         }}
         onBlur={(e) => {
@@ -108,15 +104,13 @@ export default function DateSegmentInput({ value, onChange, includeTime = false,
           emit(year, clamped, day, hour, minute);
         }}
       />
-      <span style={unit}>월</span>
       <span style={sep}>-</span>
       <input
-        ref={dayRef} value={day} placeholder="일" maxLength={2} type="text" inputMode="numeric"
+        ref={dayRef} value={day} placeholder="" maxLength={2} type="text" inputMode="numeric"
         style={{ ...seg, width: 20 }}
         onChange={(e) => {
           const v = only(e.target.value).slice(0, 2);
           setDay(v);
-          if (v.length === 2 && includeTime) hourRef.current?.focus();
           emit(year, month, v, hour, minute);
         }}
         onBlur={(e) => {
@@ -126,17 +120,15 @@ export default function DateSegmentInput({ value, onChange, includeTime = false,
           emit(year, month, clamped, hour, minute);
         }}
       />
-      <span style={unit}>일</span>
       {includeTime && (
         <>
           <span style={{ ...sep, margin: "0 4px" }}>·</span>
           <input
-            ref={hourRef} value={hour} placeholder="시" maxLength={2} type="text" inputMode="numeric"
+            ref={hourRef} value={hour} placeholder="" maxLength={2} type="text" inputMode="numeric"
             style={{ ...seg, width: 20 }}
             onChange={(e) => {
               const v = only(e.target.value).slice(0, 2);
               setHour(v);
-              if (v.length === 2) minuteRef.current?.focus();
               emit(year, month, day, v, minute);
             }}
             onBlur={(e) => {
@@ -146,10 +138,9 @@ export default function DateSegmentInput({ value, onChange, includeTime = false,
               emit(year, month, day, clamped, minute);
             }}
           />
-          <span style={unit}>시</span>
           <span style={sep}>:</span>
           <input
-            ref={minuteRef} value={minute} placeholder="분" maxLength={2} type="text" inputMode="numeric"
+            ref={minuteRef} value={minute} placeholder="" maxLength={2} type="text" inputMode="numeric"
             style={{ ...seg, width: 20 }}
             onChange={(e) => {
               const v = only(e.target.value).slice(0, 2);
@@ -163,7 +154,6 @@ export default function DateSegmentInput({ value, onChange, includeTime = false,
               emit(year, month, day, hour, clamped);
             }}
           />
-          <span style={unit}>분</span>
         </>
       )}
     </div>
