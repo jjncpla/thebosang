@@ -23,6 +23,16 @@ export async function GET(request: Request) {
     return NextResponse.json({ branches })
   }
 
+  // namesOnly=true: 더보상 인원 이름 목록만 반환 (담당자 검색용)
+  if (searchParams.get('namesOnly') === 'true') {
+    const names = await prisma.contact.findMany({
+      where: { firmType: firmType || 'TBOSANG', name: { not: null } },
+      select: { name: true },
+      orderBy: { displayOrder: 'asc' },
+    })
+    return NextResponse.json(names.map(c => c.name).filter(Boolean))
+  }
+
   const jobGrade = searchParams.get('jobGrade') || ''
 
   const where: any = {}

@@ -87,6 +87,18 @@ export default function IncentiveTab() {
   const [summary, setSummary] = useState<IncentiveSummary | null>(null)
   const [loading, setLoading] = useState(false)
 
+  // 더보상 전체 인원 (담당자 검색용)
+  const [tbosangStaff, setTbosangStaff] = useState<string[]>([])
+  useEffect(() => {
+    fetch('/api/branch/staff-roster?branchName=전체더보상&year=2099&month=1&allTbosang=true')
+      .catch(() => null)
+    // Contact에서 더보상 전체 인원 로드
+    fetch('/api/contacts?firmType=TBOSANG&namesOnly=true')
+      .then(r => r.ok ? r.json() : [])
+      .then(data => { if (Array.isArray(data)) setTbosangStaff(data) })
+      .catch(() => null)
+  }, [])
+
   // 섹션 접기/펼치기
   const [openSections, setOpenSections] = useState({
     distribution: true,
@@ -107,6 +119,10 @@ export default function IncentiveTab() {
   // 인라인 편집 상태
   const [editingRecordId, setEditingRecordId] = useState<string | null>(null)
   const [editAllocations, setEditAllocations] = useState<{ staffName: string; ratio: number }[]>([])
+
+  // 담당자 편집 상태
+  const [editingAssigneeId, setEditingAssigneeId] = useState<string | null>(null)
+  const [assigneeSearch, setAssigneeSearch] = useState('')
 
   // 사용 내역 추가 폼
   const [showAddUsage, setShowAddUsage] = useState(false)
@@ -452,9 +468,71 @@ export default function IncentiveTab() {
                           <td className={`${cellCls} text-center`}>{r.month}월</td>
                           <td className={`${cellCls} text-center`}>{r.victimName}</td>
                           <td className={`${cellCls} text-center`}>{r.caseType || ''}</td>
-                          <td className={`${cellCls} text-center whitespace-nowrap`}>
-                            {displayAssignee}
-                            {isBranch && <span className="ml-1 text-[10px] text-sky-600 font-semibold">(지사)</span>}
+                          <td className={`${cellCls} text-center whitespace-nowrap`} style={{ minWidth: 110 }}>
+                            {editingAssigneeId === r.id ? (
+                              /* 담당자 인라인 검색 편집 */
+                              <div style={{ position: 'relative' }}>
+                                <input
+                                  autoFocus
+                                  value={assigneeSearch}
+                                  onChange={e => setAssigneeSearch(e.target.value)}
+                                  onKeyDown={e => { if (e.key === 'Escape') { setEditingAssigneeId(null); setAssigneeSearch('') } }}
+                                  placeholder="이름 검색..."
+                                  style={{
+                                    width: '100%', padding: '2px 6px', fontSize: 12,
+                                    border: '1px solid #93c5fd', borderRadius: 4, outline: 'none',
+                                  }}
+                                />
+                                {assigneeSearch && (
+                                  <div style={{
+                                    position: 'absolute', top: '100%', left: 0, zIndex: 50,
+                                    background: '#fff', border: '1px solid #e2e8f0', borderRadius: 6,
+                                    boxShadow: '0 4px 12px rgba(0,0,0,0.12)', minWidth: 140, maxHeight: 200, overflowY: 'auto',
+                                  }}>
+                                    {tbosangStaff
+                                      .filter(n => n.includes(assigneeSearch))
+                                      .slice(0, 15)
+                                      .map(name => (
+                                        <div
+                                          key={name}
+                                          onMouseDown={async e => {
+                                            e.preventDefault()
+                                            const res = await fetch(`/api/branch/settlement-records/${r.id}`, {
+                                              method: 'PATCH',
+                                              headers: { 'Content-Type': 'application/json' },
+                                              body: JSON.stringify({ reportAssignee: name }),
+                                            })
+                                            if (res.ok) {
+                                              const updated = await res.json()
+                                              setRecords(prev => prev.map(x => x.id === r.id ? { ...x, reportAssignee: updated.reportAssignee, isBranchOwned: updated.isBranchOwned } : x))
+                                            }
+                                            setEditingAssigneeId(null)
+                                            setAssigneeSearch('')
+                                          }}
+                                          style={{ padding: '5px 10px', fontSize: 12, cursor: 'pointer', borderBottom: '1px solid #f1f5f9' }}
+                                          onMouseEnter={e => (e.currentTarget.style.background = '#f0f9ff')}
+                                          onMouseLeave={e => (e.currentTarget.style.background = '')}
+                                        >
+                                          {name}
+                                        </div>
+                                      ))}
+                                    {tbosangStaff.filter(n => n.includes(assigneeSearch)).length === 0 && (
+                                      <div style={{ padding: '5px 10px', fontSize: 12, color: '#94a3b8' }}>검색 결과 없음</div>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            ) : (
+                              <span
+                                onClick={() => { setEditingAssigneeId(r.id); setAssigneeSearch('') }}
+                                title="클릭하여 담당자 수정"
+                                style={{ cursor: 'pointer' }}
+                                className="hover:bg-sky-50 hover:text-sky-700 rounded px-1 transition-colors"
+                              >
+                                {displayAssignee || <span className="text-gray-300">-</span>}
+                                {isBranch && <span className="ml-1 text-[10px] text-sky-600 font-semibold">(지사)</span>}
+                              </span>
+                            )}
                           </td>
                           <td className={`${cellCls} text-right`}>{fmt(netAmt)}</td>
                           <td className={`${cellCls} text-right font-medium`} style={{ color: '#059669' }}>{fmt(base)}</td>
