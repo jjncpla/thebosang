@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { inferNextStatus, CASE_FIELD_RULES } from "@/lib/status-transition";
+import { syncFromCaseStatus } from "@/lib/case-sync";
 
 export async function GET(
   _req: NextRequest,
@@ -110,6 +111,11 @@ export async function PATCH(
         bereaved: { select: { id: true } },
       },
     });
+
+    // status가 APPROVED/REJECTED로 바뀌면 HL.decisionType + ObjectionReview 싱크
+    if (updated.caseType === "HEARING_LOSS" && (updated.status === "APPROVED" || updated.status === "REJECTED")) {
+      await syncFromCaseStatus(caseId);
+    }
 
     return NextResponse.json({
       ...updated,

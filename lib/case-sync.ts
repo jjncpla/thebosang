@@ -35,6 +35,65 @@ export function decisionTypeToApproval(dt: string | null | undefined): "승인" 
 }
 
 /**
+ * Case.status 변경 시 HL.decisionType + ObjectionReview 싱크
+ * - Case.status가 APPROVED/REJECTED이면 HL.decisionType도 맞춤
+ * - Review 없으면 생성/연결
+ */
+export async function syncFromCaseStatus(caseId: string) {
+  const caseInfo = await prisma.case.findUnique({
+    where: { id: caseId },
+    include: {
+      patient: { select: { name: true } },
+      hearingLoss: { select: { decisionType: true, decisionReceivedAt: true } },
+    },
+  });
+  if (!caseInfo || caseInfo.caseType !== "HEARING_LOSS") return;
+
+  const status = caseInfo.status;
+  if (status !== "APPROVED" && status !== "REJECTED") return;
+
+  // 1) HL.decisionType 맞춤
+  if (caseInfo.hearingLoss?.decisionType !== status) {
+    await prisma.hearingLossDetail.upsert({
+      where: { caseId },
+      create: { caseId, decisionType: status },
+      update: { decisionType: status },
+    });
+  }
+
+  // 2) Review 연결/생성
+  const approval = status === "APPROVED" ? "승인" : "불승인";
+  let review = await prisma.objectionReview.findFirst({ where: { caseId } });
+  if (!review) {
+    review = await prisma.objectionReview.findFirst({
+      where: {
+        caseType: "HEARING_LOSS",
+        tfName: caseInfo.tfName ?? "",
+        patientName: caseInfo.patient?.name ?? "",
+      },
+    });
+    if (review) {
+      await prisma.objectionReview.update({
+        where: { id: review.id },
+        data: { caseId: review.caseId ?? caseId, approvalStatus: review.approvalStatus || approval },
+      });
+    } else {
+      await prisma.objectionReview.create({
+        data: {
+          caseId,
+          tfName: caseInfo.tfName ?? "",
+          patientName: caseInfo.patient?.name ?? "",
+          caseType: "HEARING_LOSS",
+          approvalStatus: approval,
+          progressStatus: "",
+          decisionDate: caseInfo.hearingLoss?.decisionReceivedAt ?? null,
+        },
+      });
+    }
+  }
+}
+
+/**
  * HearingLossDetail.decisionType 입력/변경 시 Case + ObjectionReview 싱크
  * - Case.status: OBJECTION/WAGE_CORRECTION/CLOSED이면 덮지 않고 유지
  * - ObjectionReview: caseId 매칭 우선, 없으면 tfName+patientName+caseType 매칭, 없으면 신규 생성
