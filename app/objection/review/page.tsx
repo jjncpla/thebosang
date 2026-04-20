@@ -6,8 +6,10 @@ import { CASE_TYPE_LABELS } from "@/lib/constants/case";
 import { useBranches } from "@/lib/hooks/useBranches";
 const APPROVAL_OPTIONS = ["승인", "불승인", "일부승인"];
 // 송무 인계는 기일관리 페이지에서만 관리 — 처분검토에서는 제거
+// 모달에서는 "이의제기 진행"·"평정청구 진행"도 선택 가능해야 함 (선택 즉시 기일관리 페이지로 자동 이관됨)
 const PROGRESS_OPTIONS = ["종결", "검토중", "이의제기 진행", "평정청구 진행"];
-const PROGRESS_FILTER_OPTIONS = ["미검토", "검토중", "이의제기 진행", "평정청구 진행"];
+// 필터는 이 페이지에 실제로 남아있는 상태만 제공
+const PROGRESS_FILTER_OPTIONS = ["미검토", "검토중", "종결"];
 const WAGE_RESULT_OPTIONS = ["종결", "평정청구 진행", "검토중"];
 // 정공(정보공개청구) 상태값 — 엑셀 매크로 입력 기준
 const INFO_DISCLOSURE_OPTIONS = ["요청", "요청중", "확보", "평임확보", "평임 부존재", "불필요"];
@@ -336,7 +338,12 @@ export default function ObjectionReviewPage() {
   useEffect(() => { setPageLimit(PAGE_SIZE); }, [filterBranch, filterTf, filterProgress, filterCaseType, filterInfo, searchReview]);
 
   // 클라이언트 사이드 필터 적용
+  // 최초총현황은 미검토/검토중/종결 건만 노출 (이의제기 진행·평정청구 진행은 기일관리 페이지로 이관)
+  const ALLOWED_STATUSES_ON_REVIEW = ["", "검토중", "종결"];
   const filteredReviews = reviews.filter(r => {
+    // 자동인입(isAutoFilled=true)은 항상 표시, 그 외는 허용 상태만
+    if (!r.isAutoFilled && !ALLOWED_STATUSES_ON_REVIEW.includes(r.progressStatus || "")) return false;
+
     if (filterProgress === "미검토" && (r.progressStatus && r.progressStatus !== "")) return false;
     if (filterInfo === "요청중" && !(r.infoDisclosureStatus === "요청" || r.infoDisclosureStatus === "요청중")) return false;
     if (filterInfo === "확보") {
@@ -348,9 +355,6 @@ export default function ObjectionReviewPage() {
       const s = r.infoDisclosureStatus;
       if (r.progressStatus !== "검토중") return false;
       if (!(s === "확보" || s === "평임확보")) return false;
-    }
-    if (filterInfo === "지사별") {
-      // placeholder: branch selector로 커버되어 이 케이스는 없음
     }
     return true;
   });
@@ -368,15 +372,14 @@ export default function ObjectionReviewPage() {
     }
   };
 
-  // stats (전체 reviews 기준)
+  // stats: 최초총현황에 남는 상태만 (이의제기/평정청구는 기일관리로 이관되어 집계 제외)
+  const visibleReviews = reviews.filter(r => !r.progressStatus || ["검토중", "종결"].includes(r.progressStatus));
   const stats = {
-    unreviewed: reviews.filter(r => !r.progressStatus || r.progressStatus === "").length,
-    reviewing: reviews.filter(r => r.progressStatus === "검토중").length,
-    ongoing: reviews.filter(r => r.progressStatus === "이의제기 진행").length,
-    closed: reviews.filter(r => r.progressStatus === "종결").length,
-    wage: reviews.filter(r => r.progressStatus === "평정청구 진행").length,
-    infoRequested: reviews.filter(r => r.infoDisclosureStatus === "요청" || r.infoDisclosureStatus === "요청중").length,
-    infoObtained: reviews.filter(r => r.progressStatus === "검토중" && (r.infoDisclosureStatus === "확보" || r.infoDisclosureStatus === "평임확보")).length,
+    unreviewed: visibleReviews.filter(r => !r.progressStatus || r.progressStatus === "").length,
+    reviewing: visibleReviews.filter(r => r.progressStatus === "검토중").length,
+    closed: visibleReviews.filter(r => r.progressStatus === "종결").length,
+    infoRequested: visibleReviews.filter(r => r.infoDisclosureStatus === "요청" || r.infoDisclosureStatus === "요청중").length,
+    infoObtained: visibleReviews.filter(r => r.progressStatus === "검토중" && (r.infoDisclosureStatus === "확보" || r.infoDisclosureStatus === "평임확보")).length,
   };
 
   const btnStyle = (active: boolean) => ({
@@ -408,13 +411,11 @@ export default function ObjectionReviewPage() {
         {/* ── 최초총현황 탭 ────────────────────────── */}
         {tab === "review" && (
           <>
-            {/* Stats: 진행상태 5개 + 정공 관련 2개 */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 10, marginBottom: 16 }}>
+            {/* Stats: 최초총현황 현황 (미검토/검토중/종결) + 정공 지표 2개 */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 10, marginBottom: 16 }}>
               {[
                 { label: "미검토", value: stats.unreviewed, color: "#6b7280", kind: "progress" as const, filter: "미검토" },
                 { label: "검토중", value: stats.reviewing, color: "#29ABE2", kind: "progress" as const, filter: "검토중" },
-                { label: "이의제기 진행", value: stats.ongoing, color: "#d97706", kind: "progress" as const, filter: "이의제기 진행" },
-                { label: "평정청구 진행", value: stats.wage, color: "#ea580c", kind: "progress" as const, filter: "평정청구 진행" },
                 { label: "종결", value: stats.closed, color: "#059669", kind: "progress" as const, filter: "종결" },
                 { label: "정공 요청중", value: stats.infoRequested, color: "#b45309", kind: "info" as const, filter: "요청중" },
                 { label: "결정대기 (검토중+확보)", value: stats.infoObtained, color: "#15803d", kind: "info" as const, filter: "결정대기" },

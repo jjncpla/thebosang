@@ -186,9 +186,9 @@ async function main() {
   // ──────────────────────────────────────────────────────
   // C) 승인 → WageReviewData 누락분 생성
   // ──────────────────────────────────────────────────────
-  console.log("\n=== C) 승인 → 평임 데이터 검토 동기화 ===");
+  console.log("\n=== C) 승인/일부승인 → 평임 데이터 검토 동기화 ===");
   const approved = await prisma.objectionReview.findMany({
-    where: { approvalStatus: "승인" },
+    where: { approvalStatus: { in: ["승인", "일부승인"] } },
     select: {
       id: true, caseId: true, tfName: true, patientName: true, caseType: true,
       decisionDate: true, hasInfoDisclosure: true,

@@ -114,7 +114,7 @@ export async function POST(req: NextRequest) {
         data: { approvalStatus, ...(progressStatus && { progressStatus }) },
       });
 
-      if (updated.progressStatus === "평정청구 진행" || updated.approvalStatus === "승인") {
+      if (updated.progressStatus === "평정청구 진행" || updated.approvalStatus === "승인" || updated.approvalStatus === "일부승인") {
         const existingWageReview = await prisma.wageReviewData.findFirst({ where: { caseId } });
         if (!existingWageReview) {
           await prisma.wageReviewData.create({
@@ -169,7 +169,7 @@ export async function POST(req: NextRequest) {
     },
   });
 
-  if (item.progressStatus === "평정청구 진행" || item.approvalStatus === "승인") {
+  if (item.progressStatus === "평정청구 진행" || item.approvalStatus === "승인" || item.approvalStatus === "일부승인") {
     let existingWageReview;
     if (item.caseId) {
       existingWageReview = await prisma.wageReviewData.findFirst({ where: { caseId: item.caseId } });
