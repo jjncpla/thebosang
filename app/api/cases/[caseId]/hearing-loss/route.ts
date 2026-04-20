@@ -51,6 +51,13 @@ export async function PUT(
       }
     }
 
+    // datetime-local 입력값 "YYYY-MM-DDTHH:mm" → "YYYY-MM-DDTHH:mm:ss" (Prisma ISO-8601 요구)
+    for (const [k, v] of Object.entries(data)) {
+      if (typeof v === "string" && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(v)) {
+        data[k] = v + ":00";
+      }
+    }
+
     // 기존 데이터 조회 (결정수령일 / 처분결과 변경 감지용)
     const existingDetail = await prisma.hearingLossDetail.findUnique({
       where: { caseId },
