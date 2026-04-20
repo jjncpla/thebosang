@@ -405,7 +405,10 @@ function ExamRoundBlock({
         ? `/api/cases/${caseId}/hearing-loss/exams/${exam.id}`
         : `/api/cases/${caseId}/hearing-loss/exams`;
       const res = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(exam) });
-      if (!res.ok) throw new Error();
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({}));
+        throw new Error(errBody.error || "저장에 실패했습니다");
+      }
       const updated: HearingLossExam = await res.json();
       setExams((prev) => {
         const idx = prev.findIndex((e) => e.examSet === examSet && e.examRound === round);
@@ -414,7 +417,7 @@ function ExamRoundBlock({
       });
       setMsg("저장되었습니다");
       setTimeout(() => setMsg(null), 3000);
-    } catch { setMsg("오류가 발생했습니다"); }
+    } catch (e) { setMsg(e instanceof Error ? e.message : "오류가 발생했습니다"); }
     finally { setSaving(false); }
   };
 
@@ -612,7 +615,10 @@ function HearingLossTab({ caseId, initial }: { caseId: string; initial: HearingL
       const res = await fetch(`/api/cases/${caseId}/hearing-loss`, {
         method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(detail),
       });
-      if (!res.ok) throw new Error("저장 실패");
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({}));
+        throw new Error(errBody.error || "저장에 실패했습니다");
+      }
       // 처분결과 승인/불승인 시 처분검토 페이지에 자동 반영
       if (detail.decisionType === "APPROVED" || detail.decisionType === "REJECTED") {
         try {
@@ -636,7 +642,7 @@ function HearingLossTab({ caseId, initial }: { caseId: string; initial: HearingL
       }
       setSaveMsg("저장되었습니다");
       setTimeout(() => setSaveMsg(null), 3000);
-    } catch { setSaveMsg("오류가 발생했습니다"); }
+    } catch (e) { setSaveMsg(e instanceof Error ? e.message : "오류가 발생했습니다"); }
     finally { setSaving(false); }
   };
 

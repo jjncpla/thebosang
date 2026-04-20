@@ -20,6 +20,7 @@ export async function POST(
     return NextResponse.json(exam);
   } catch (err) {
     console.error("[POST /api/cases/[caseId]/hearing-loss/exams]", err);
-    return NextResponse.json({ error: "저장 오류" }, { status: 500 });
+    const msg = err instanceof Error ? err.message : "저장 오류";
+    return NextResponse.json({ error: msg }, { status: 500 });
   }
 }
