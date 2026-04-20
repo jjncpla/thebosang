@@ -51,16 +51,17 @@ export async function PUT(
       }
     }
 
-    // 날짜 문자열 정규화 (Prisma DateTime 필드는 완전한 ISO-8601 요구)
+    // 날짜 문자열 정규화 + 유효성 검사 (Prisma DateTime 필드)
     for (const [k, v] of Object.entries(data)) {
       if (typeof v === "string") {
-        if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(v)) {
-          data[k] = v + ":00.000Z";
-        } else if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(v)) {
-          data[k] = v + ".000Z";
-        } else if (/^\d{4}-\d{2}-\d{2}$/.test(v)) {
-          data[k] = v + "T00:00:00.000Z";
-        }
+        let iso = v;
+        if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(v))          iso = v + ":00.000Z";
+        else if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(v)) iso = v + ".000Z";
+        else if (/^\d{4}-\d{2}-\d{2}$/.test(v))                    iso = v + "T00:00:00.000Z";
+        else continue;
+        // Date 생성 시 유효하지 않은 날짜(예: 2월 34일) → null 처리
+        const d = new Date(iso);
+        data[k] = isNaN(d.getTime()) ? null : iso;
       }
     }
 

@@ -24,6 +24,12 @@ function parse(v: string, includeTime: boolean) {
   };
 }
 
+function clamp(val: string, min: number, max: number): string {
+  const n = parseInt(val, 10);
+  if (isNaN(n) || val === "") return val;
+  return Math.max(min, Math.min(max, n)).toString().padStart(2, "0");
+}
+
 export default function DateSegmentInput({ value, onChange, includeTime = false, style }: Props) {
   const p = parse(value, includeTime);
   const [year, setYear] = useState(p.year);
@@ -53,7 +59,6 @@ export default function DateSegmentInput({ value, onChange, includeTime = false,
       const date = `${y}-${mo.padStart(2, "0")}-${d.padStart(2, "0")}`;
       if (includeTime) {
         if (h.length >= 1 && mi.length >= 1) {
-          // 항상 Z 포함 완전한 ISO-8601 emit (Prisma DateTime 요구사항)
           onChange(`${date}T${h.padStart(2, "0")}:${mi.padStart(2, "0")}:00.000Z`);
         }
       } else {
@@ -96,6 +101,12 @@ export default function DateSegmentInput({ value, onChange, includeTime = false,
           if (v.length === 2) dayRef.current?.focus();
           emit(year, v, day, hour, minute);
         }}
+        onBlur={(e) => {
+          if (!e.target.value) return;
+          const clamped = clamp(e.target.value, 1, 12);
+          setMonth(clamped);
+          emit(year, clamped, day, hour, minute);
+        }}
       />
       <span style={unit}>월</span>
       <span style={sep}>-</span>
@@ -107,6 +118,12 @@ export default function DateSegmentInput({ value, onChange, includeTime = false,
           setDay(v);
           if (v.length === 2 && includeTime) hourRef.current?.focus();
           emit(year, month, v, hour, minute);
+        }}
+        onBlur={(e) => {
+          if (!e.target.value) return;
+          const clamped = clamp(e.target.value, 1, 31);
+          setDay(clamped);
+          emit(year, month, clamped, hour, minute);
         }}
       />
       <span style={unit}>일</span>
@@ -122,6 +139,12 @@ export default function DateSegmentInput({ value, onChange, includeTime = false,
               if (v.length === 2) minuteRef.current?.focus();
               emit(year, month, day, v, minute);
             }}
+            onBlur={(e) => {
+              if (!e.target.value) return;
+              const clamped = clamp(e.target.value, 0, 23);
+              setHour(clamped);
+              emit(year, month, day, clamped, minute);
+            }}
           />
           <span style={unit}>시</span>
           <span style={sep}>:</span>
@@ -132,6 +155,12 @@ export default function DateSegmentInput({ value, onChange, includeTime = false,
               const v = only(e.target.value).slice(0, 2);
               setMinute(v);
               emit(year, month, day, hour, v);
+            }}
+            onBlur={(e) => {
+              if (!e.target.value) return;
+              const clamped = clamp(e.target.value, 0, 59);
+              setMinute(clamped);
+              emit(year, month, day, hour, clamped);
             }}
           />
           <span style={unit}>분</span>
