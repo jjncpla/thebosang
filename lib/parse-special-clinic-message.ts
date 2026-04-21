@@ -1,3 +1,5 @@
+import { canonicalizeTfName } from '@/lib/tf-normalize'
+
 export interface ParsedSchedule {
   patientName: string
   tfName: string
@@ -289,15 +291,18 @@ export function parseSpecialClinicMessage(
 
 function normalizeTfName(name: string, tfOrg: TfOrg = '이산'): string {
   const trimmed = name.trim()
-  // 이미 조직 접두어가 붙은 경우 그대로 보존
+  let withOrg = trimmed
   if (trimmed.startsWith('더보상') || trimmed.startsWith('이산')) {
-    return trimmed
+    // 이미 조직 접두어 있음 — 그대로
+    withOrg = trimmed
+  } else if (tfOrg === 'neutral') {
+    // 통합방(neutral): 접두어 강제 부여 없음
+    withOrg = trimmed
+  } else {
+    withOrg = tfOrg + trimmed
   }
-  // 통합방(neutral)은 원본 그대로 — 이산·더보상 혼재 환경에서 강제 분류 금지
-  if (tfOrg === 'neutral') {
-    return trimmed
-  }
-  return tfOrg + trimmed
+  // 최종적으로 표준 TF 목록에 맞춰 정규화 (alias·담당자꼬리 제거)
+  return canonicalizeTfName(withOrg) || withOrg
 }
 
 function parseDate(text: string, msgDate: Date): Date | null {

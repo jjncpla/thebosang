@@ -2,6 +2,7 @@ import { auth } from "@/auth"
 import { prisma } from "@/lib/prisma"
 import { parseSpecialClinicMessage, type TfOrg } from "@/lib/parse-special-clinic-message"
 import { parseTelegramHtml } from "@/lib/parse-telegram-html"
+import { canonicalizeTfName } from "@/lib/tf-normalize"
 import { NextRequest, NextResponse } from "next/server"
 
 /**
@@ -108,12 +109,15 @@ export async function POST(req: NextRequest) {
       if (!tfName) {
         const dbTf = nameToTfMap.get(p.patientName)
         if (dbTf) {
-          tfName = dbTf
+          tfName = canonicalizeTfName(dbTf) || dbTf
           dbMatched++
         } else {
           tfName = LEGACY_TF
           legacyTagged++
         }
+      } else {
+        // 파서가 이미 canonical을 반환하지만, DB 매칭 TF도 동일 규칙 적용 위해 한 번 더 정규화
+        tfName = canonicalizeTfName(tfName) || tfName
       }
 
       const existing = await prisma.specialClinicSchedule.findFirst({
