@@ -1031,6 +1031,17 @@ model Branch {
   @@map("branches")
 }
 
+/// TF별 메타데이터(메모/설명). 지사-TF 매핑은 Branch.assignedTFs에 있고, 여기는 TF 이름에 대한 설명만 저장.
+model TfMeta {
+  id        String   @id @default(cuid())
+  tfName    String   @unique
+  memo      String?  @db.Text    // 사용자 정리안 메모 (예: "대구달서/수성으로 세분화되기 전 명칭")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("tf_metas")
+}
+
 model IsanOffice {
   id      String @id @default(cuid())
   name    String
