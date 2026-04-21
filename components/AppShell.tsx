@@ -45,6 +45,7 @@ const MENU_ITEMS: MenuItem[] = [
       { id: "patients-list", label: "재해자 목록", path: "/patients" },
       { id: "cases-db", label: "사건 DB", path: "/cases/db" },
       { id: "cases-import", label: "데이터 임포트", path: "/cases/import" },
+      { id: "settlement", label: "정산 관리", path: "/settlement" },
     ],
   },
   { id: "forms", label: "양식 관리", icon: "📋", path: "/forms", restricted: "admin" },

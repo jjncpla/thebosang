@@ -958,6 +958,27 @@ model SettlementAllocation {
   createdAt          DateTime         @default(now())
 }
 
+model SettlementTracker {
+  id            String    @id @default(cuid())
+  tfGroup       String    // TF 그룹명 (예: "울산/울동 TF")
+  category      String    // "미정산" | "정산예정"
+  isPaid        Boolean   @default(false)  // ★ 지급완료 여부
+  victimName    String
+  grade         String?   // 등급/유형 (예: "6급(근골)", "유족급여,장례비")
+  branchName    String?   // 지사명
+  managerName   String?   // 담당자 약칭
+  decisionDate  DateTime? // 결정·지급일
+  scheduledDate DateTime? // 정산 예정일
+  status        String?   // 상태 (분할 납부중, 정산완료 등)
+  isInstallment Boolean   @default(false)
+  totalAmount   Int?      // 총 정산금 (만원)
+  paidAmount    Int?      // 기납부액 (만원)
+  memo          String?
+  sortOrder     Int       @default(0)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
 model StaffRoster {
   id           String   @id @default(cuid())
   branchName   String
