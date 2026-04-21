@@ -32,18 +32,47 @@ const EXPLICIT_ALIAS: Record<string, string> = {
   '서울동부TF': '이산서울동부TF',
   '인천북부TF': '이산인천북부TF',
   '직업병상담소TF': '더보상직업병상담소TF',
+
+  // 사용자 정리안 (2026-04-21)
+  // 세분화 전 / 특수 명칭 매핑
+  '북부TF': '더보상서울북부TF',
+  '경인TF': '더보상경인TF',
+  '북부영업TF': '더보상서울북부영업TF',
+  '북부상담TF': '더보상서울북부상담TF',
+  '보령TF': '이산보령TF',
+  '경수TF': '더보상수원TF',
+  '더보상경수TF': '더보상수원TF',
+  '대구북부TF': '더보상대구TF',
+  '전하TF': '더보상울동TF',
+  '서지본TF': '이산서울지역본부TF',
+  '포프TF': '더보상포프TF',
+  '거제TF': '이산거제TF',
+  '게제TF': '이산거제TF',
+  '구미': '더보상구미TF',
+  '이산부산본부TF': '이산부산지역본부TF',
+  '이산부경TF': '더보상부경TF',
+  '이산부본TF': '이산부산지역본부TF',
+  '부본TF': '이산부산지역본부TF',
+  '원주TF': '이산원주TF',
+  '서울마곡TF': '이산마곡TF',
+  '의정부지사TF': '이산의정부TF',
+  '공상TF': '공무상재해TF',
+  '법률원TF': '더보상법률원TF',
+  '복지TF': '더보상울산TF',
+  '강원TF': '이산강원TF',
+  '익산TF': '이산익산TF',
+  '부산중부TF': '더보상부중TF',
+  '어선원TF': '더보상어선원TF',
+  '대전TF': '더보상대전TF',
+  '대구중부TF': '더보상대구중부TF',
+
   // 흔한 오타
   '율동TF': '더보상울동TF',
   '이상인천TF': '이산인천TF',
-  '더보싱익산TF': '더보상익산TF',
   '이상평택TF': '이산평택TF',
+  '더보싱익산TF': '더보상익산TF',
+  '더보상어성원TF': '더보상어선원TF',
 }
-
-/** 특수·Legacy TF — 정규화 대상에서 제외 (그대로 유지) */
-const KEEP_AS_IS = new Set([
-  'Legacy', '미분류',
-  '경북TF', '진폐TF',  // 통합방에서 자주 쓰이는 특수 그룹 TF
-])
 
 /** 담당자·직급·변형 표기를 모두 제거하여 정규화된 TF 부분만 반환 */
 function stripHandlerSuffix(raw: string): string {
@@ -90,16 +119,14 @@ export function canonicalizeTfName(raw: string | null | undefined): string {
   let s = raw.trim()
   if (!s) return ''
 
-  if (KEEP_AS_IS.has(s)) return s
+  // 이미 표준이면 바로 반환 (Legacy / 경북TF / 진폐TF 등도 TF_BY_BRANCH에 포함됨)
+  if (STANDARD_SET.has(s)) return s
 
   // 담당자·괄호 등 꼬리 정리
   s = stripHandlerSuffix(s)
   if (!s) return raw.trim()
 
-  // 정리 후 특수 TF 재확인
-  if (KEEP_AS_IS.has(s)) return s
-
-  // 이미 표준이면 그대로
+  // 정리 후 다시 표준 체크
   if (STANDARD_SET.has(s)) return s
 
   // 명시적 alias
