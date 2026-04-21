@@ -364,7 +364,23 @@ function LawTab() {
   );
 }
 
-function RegulationTab({ dataUrl }: { dataUrl: string }) {
+// ─── Internal Regulation Registry ───────────────────────────────────────────
+
+type RegEntry = { id: string; label: string; dataUrl: string };
+
+const INTERNAL_REGS: RegEntry[] = [
+  { id: "bosang",    label: "보상업무처리규정",                      dataUrl: "/data/bosang-gyuchung.json" },
+  { id: "yoyang",    label: "요양업무처리규정",                      dataUrl: "/data/yoyang-gyuchung.json" },
+  { id: "janghae",   label: "장해등급 심사에 관한 규정",               dataUrl: "/data/janghae-gyuchung.json" },
+  { id: "minwon",    label: "민원 처리에 관한 규정",                  dataUrl: "/data/minwon-gyuchung.json" },
+  { id: "jigeub",    label: "보험급여 및 반환금 등 지급업무 처리규정",   dataUrl: "/data/boheum-jigeub-gyuchung.json" },
+  { id: "budang",    label: "부당이득 징수 업무처리규정",               dataUrl: "/data/budang-gyuchung.json" },
+  { id: "jilbyeong", label: "업무상질병판정위원회 운영규정",             dataUrl: "/data/jilbyeong-gyuchung.json" },
+];
+
+// ─── RegulationPanel (chapter + article navigation) ──────────────────────────
+
+function RegulationPanel({ dataUrl }: { dataUrl: string }) {
   const [regulation, setRegulation] = useState<Regulation | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedChapter, setSelectedChapter] = useState<Chapter | null>(null);
@@ -394,16 +410,11 @@ function RegulationTab({ dataUrl }: { dataUrl: string }) {
   const toggleChapter = (chId: string) => {
     setExpandedChapters((prev) => {
       const next = new Set(prev);
-      if (next.has(chId)) {
-        next.delete(chId);
-      } else {
-        next.add(chId);
-      }
+      next.has(chId) ? next.delete(chId) : next.add(chId);
       return next;
     });
   };
 
-  // Filter by search
   const searchResults: Article[] =
     search.trim().length >= 2 && regulation
       ? regulation.chapters.flatMap((ch) =>
@@ -416,43 +427,22 @@ function RegulationTab({ dataUrl }: { dataUrl: string }) {
         )
       : [];
 
-  if (loading) {
+  if (loading)
     return (
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          height: 200,
-          color: "#9ca3af",
-          fontSize: 14,
-        }}
-      >
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: 200, color: "#9ca3af", fontSize: 14 }}>
         불러오는 중...
       </div>
     );
-  }
 
-  if (!regulation) {
-    return (
-      <div
-        style={{
-          padding: 32,
-          color: "#ef4444",
-          fontSize: 14,
-        }}
-      >
-        데이터를 불러오지 못했습니다.
-      </div>
-    );
-  }
+  if (!regulation)
+    return <div style={{ padding: 32, color: "#ef4444", fontSize: 14 }}>데이터를 불러오지 못했습니다.</div>;
 
   return (
-    <div style={{ display: "flex", height: "calc(100vh - 160px)", gap: 0 }}>
-      {/* Left: Chapter/Article nav */}
+    <div style={{ display: "flex", flex: 1, minHeight: 0 }}>
+      {/* Chapter/Article nav */}
       <div
         style={{
-          width: 260,
+          width: 240,
           flexShrink: 0,
           borderRight: "1px solid #e5e7eb",
           overflowY: "auto",
@@ -461,116 +451,50 @@ function RegulationTab({ dataUrl }: { dataUrl: string }) {
           flexDirection: "column",
         }}
       >
-        {/* Search */}
-        <div style={{ padding: "12px 12px 8px", borderBottom: "1px solid #e5e7eb" }}>
+        <div style={{ padding: "10px 10px 6px", borderBottom: "1px solid #e5e7eb" }}>
           <input
             type="text"
             placeholder="조문 검색..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            style={{
-              width: "100%",
-              padding: "6px 10px",
-              fontSize: 13,
-              border: "1px solid #d1d5db",
-              borderRadius: 6,
-              outline: "none",
-              boxSizing: "border-box",
-            }}
+            style={{ width: "100%", padding: "5px 9px", fontSize: 12, border: "1px solid #d1d5db", borderRadius: 5, outline: "none", boxSizing: "border-box" }}
           />
         </div>
 
-        {/* Search results */}
         {search.trim().length >= 2 ? (
           <div style={{ flex: 1, overflowY: "auto" }}>
             {searchResults.length === 0 ? (
-              <div style={{ padding: 16, fontSize: 13, color: "#9ca3af" }}>
-                검색 결과 없음
-              </div>
+              <div style={{ padding: 14, fontSize: 12, color: "#9ca3af" }}>검색 결과 없음</div>
             ) : (
               searchResults.map((art) => (
                 <button
                   key={art.id}
-                  onClick={() => {
-                    setSelectedArticle(art);
-                    setSearch("");
-                  }}
-                  style={{
-                    display: "block",
-                    width: "100%",
-                    textAlign: "left",
-                    padding: "8px 14px",
-                    fontSize: 12,
-                    border: "none",
-                    cursor: "pointer",
-                    background: "transparent",
-                    color: "#374151",
-                    borderBottom: "1px solid #f3f4f6",
-                  }}
+                  onClick={() => { setSelectedArticle(art); setSearch(""); }}
+                  style={{ display: "block", width: "100%", textAlign: "left", padding: "7px 12px", fontSize: 11, border: "none", cursor: "pointer", background: "transparent", color: "#374151", borderBottom: "1px solid #f3f4f6" }}
                 >
-                  <div style={{ fontWeight: 600 }}>
-                    {art.number}({art.title})
-                  </div>
-                  <div
-                    style={{
-                      color: "#6b7280",
-                      marginTop: 2,
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    {art.content.slice(0, 50)}...
+                  <div style={{ fontWeight: 600 }}>{art.number}({art.title})</div>
+                  <div style={{ color: "#6b7280", marginTop: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {art.content.slice(0, 45)}...
                   </div>
                 </button>
               ))
             )}
           </div>
         ) : (
-          /* Chapter/Article tree */
           <div style={{ flex: 1, overflowY: "auto" }}>
             {regulation.chapters.map((ch) => (
               <div key={ch.id}>
                 <button
-                  onClick={() => {
-                    toggleChapter(ch.id);
-                    setSelectedChapter(ch);
-                    setSelectedArticle(null);
-                  }}
+                  onClick={() => { toggleChapter(ch.id); setSelectedChapter(ch); setSelectedArticle(null); }}
                   style={{
-                    display: "flex",
-                    alignItems: "center",
-                    width: "100%",
-                    textAlign: "left",
-                    padding: "9px 14px",
-                    fontSize: 12,
-                    fontWeight: 700,
-                    border: "none",
-                    cursor: "pointer",
-                    background:
-                      selectedChapter?.id === ch.id && !selectedArticle
-                        ? "#dbeafe"
-                        : "transparent",
-                    color:
-                      selectedChapter?.id === ch.id && !selectedArticle
-                        ? "#1d4ed8"
-                        : "#111827",
-                    borderBottom: "1px solid #e5e7eb",
-                    gap: 6,
+                    display: "flex", alignItems: "center", width: "100%", textAlign: "left",
+                    padding: "8px 12px", fontSize: 11, fontWeight: 700, border: "none", cursor: "pointer",
+                    background: selectedChapter?.id === ch.id && !selectedArticle ? "#dbeafe" : "transparent",
+                    color: selectedChapter?.id === ch.id && !selectedArticle ? "#1d4ed8" : "#111827",
+                    borderBottom: "1px solid #e5e7eb", gap: 5,
                   }}
                 >
-                  <span
-                    style={{
-                      fontSize: 10,
-                      transform: expandedChapters.has(ch.id)
-                        ? "rotate(90deg)"
-                        : "none",
-                      display: "inline-block",
-                      transition: "transform 0.15s",
-                    }}
-                  >
-                    ▶
-                  </span>
+                  <span style={{ fontSize: 9, transform: expandedChapters.has(ch.id) ? "rotate(90deg)" : "none", display: "inline-block", transition: "transform 0.15s" }}>▶</span>
                   {ch.title}
                 </button>
                 {expandedChapters.has(ch.id) && (
@@ -578,29 +502,14 @@ function RegulationTab({ dataUrl }: { dataUrl: string }) {
                     {ch.articles.map((art) => (
                       <button
                         key={art.id}
-                        onClick={() => {
-                          setSelectedArticle(art);
-                          setSelectedChapter(ch);
-                        }}
+                        onClick={() => { setSelectedArticle(art); setSelectedChapter(ch); }}
                         style={{
-                          display: "block",
-                          width: "100%",
-                          textAlign: "left",
-                          padding: "6px 14px 6px 28px",
-                          fontSize: 12,
-                          border: "none",
-                          cursor: "pointer",
-                          background:
-                            selectedArticle?.id === art.id
-                              ? "#eff6ff"
-                              : "transparent",
-                          color:
-                            selectedArticle?.id === art.id
-                              ? "#1d4ed8"
-                              : "#374151",
+                          display: "block", width: "100%", textAlign: "left",
+                          padding: "5px 12px 5px 24px", fontSize: 11, border: "none", cursor: "pointer",
+                          background: selectedArticle?.id === art.id ? "#eff6ff" : "transparent",
+                          color: selectedArticle?.id === art.id ? "#1d4ed8" : "#374151",
                           borderBottom: "1px solid #f9fafb",
-                          fontWeight:
-                            selectedArticle?.id === art.id ? 600 : 400,
+                          fontWeight: selectedArticle?.id === art.id ? 600 : 400,
                         }}
                       >
                         {art.number}({art.title})
@@ -614,19 +523,67 @@ function RegulationTab({ dataUrl }: { dataUrl: string }) {
         )}
       </div>
 
-      {/* Right: Content */}
+      {/* Content */}
       <div style={{ flex: 1, overflowY: "auto", padding: "24px 32px" }}>
         {selectedArticle ? (
-          <ArticleView
-            article={selectedArticle}
-            onBack={() => setSelectedArticle(null)}
-          />
+          <ArticleView article={selectedArticle} onBack={() => setSelectedArticle(null)} />
         ) : selectedChapter ? (
-          <ChapterView
-            chapter={selectedChapter}
-            onSelectArticle={setSelectedArticle}
-          />
+          <ChapterView chapter={selectedChapter} onSelectArticle={setSelectedArticle} />
         ) : null}
+      </div>
+    </div>
+  );
+}
+
+// ─── InternalRegulationTab (좌측: 규정 선택 / 우측: 해당 규정 내용) ───────────
+
+function InternalRegulationTab() {
+  const [selectedReg, setSelectedReg] = useState<RegEntry>(INTERNAL_REGS[0]);
+
+  return (
+    <div style={{ display: "flex", height: "calc(100vh - 160px)" }}>
+      {/* Regulation selector sidebar */}
+      <div
+        style={{
+          width: 200,
+          flexShrink: 0,
+          borderRight: "1px solid #e5e7eb",
+          overflowY: "auto",
+          background: "#f0f4f8",
+        }}
+      >
+        <div style={{ padding: "10px 12px 6px", fontSize: 10, fontWeight: 700, color: "#9ca3af", letterSpacing: "0.06em" }}>
+          근로복지공단 내부규정
+        </div>
+        {INTERNAL_REGS.map((reg) => {
+          const isActive = selectedReg.id === reg.id;
+          return (
+            <button
+              key={reg.id}
+              onClick={() => setSelectedReg(reg)}
+              style={{
+                display: "block", width: "100%", textAlign: "left",
+                padding: "9px 14px", fontSize: 12, border: "none", cursor: "pointer",
+                background: isActive ? "#1d4ed8" : "transparent",
+                color: isActive ? "#fff" : "#374151",
+                fontWeight: isActive ? 700 : 400,
+                borderLeft: isActive ? "3px solid #1e40af" : "3px solid transparent",
+                lineHeight: 1.5,
+              }}
+            >
+              {reg.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Regulation content */}
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
+        {/* Regulation title bar */}
+        <div style={{ padding: "10px 16px", borderBottom: "1px solid #e5e7eb", background: "#fff", flexShrink: 0 }}>
+          <span style={{ fontSize: 14, fontWeight: 700, color: "#111827" }}>{selectedReg.label}</span>
+        </div>
+        <RegulationPanel key={selectedReg.id} dataUrl={selectedReg.dataUrl} />
       </div>
     </div>
   );
@@ -753,9 +710,8 @@ function ChapterView({
 // ─── Main Page ───────────────────────────────────────────────────────────────
 
 const TABS = [
-  { id: "law", label: "관련 법령" },
-  { id: "bosang", label: "보상업무처리규정" },
-  { id: "yoyang", label: "요양업무처리규정" },
+  { id: "law",      label: "관련 법령" },
+  { id: "internal", label: "근로복지공단 내부규정" },
 ] as const;
 
 type TabId = (typeof TABS)[number]["id"];
@@ -769,26 +725,12 @@ export default function LawPage() {
         display: "flex",
         flexDirection: "column",
         height: "100%",
-        fontFamily:
-          "'Malgun Gothic', 'Apple SD Gothic Neo', 'Segoe UI', sans-serif",
+        fontFamily: "'Malgun Gothic', 'Apple SD Gothic Neo', 'Segoe UI', sans-serif",
       }}
     >
       {/* Header */}
-      <div
-        style={{
-          padding: "16px 24px 0",
-          borderBottom: "1px solid #e5e7eb",
-          background: "#fff",
-        }}
-      >
-        <h1
-          style={{
-            fontSize: 18,
-            fontWeight: 700,
-            color: "#111827",
-            marginBottom: 12,
-          }}
-        >
+      <div style={{ padding: "16px 24px 0", borderBottom: "1px solid #e5e7eb", background: "#fff" }}>
+        <h1 style={{ fontSize: 18, fontWeight: 700, color: "#111827", marginBottom: 12 }}>
           법령 및 규정
         </h1>
         <div style={{ display: "flex", gap: 0 }}>
@@ -804,10 +746,7 @@ export default function LawPage() {
                 background: "none",
                 cursor: "pointer",
                 color: activeTab === tab.id ? "#1d4ed8" : "#6b7280",
-                borderBottom:
-                  activeTab === tab.id
-                    ? "2px solid #1d4ed8"
-                    : "2px solid transparent",
+                borderBottom: activeTab === tab.id ? "2px solid #1d4ed8" : "2px solid transparent",
                 marginBottom: -1,
               }}
             >
@@ -819,13 +758,8 @@ export default function LawPage() {
 
       {/* Tab content */}
       <div style={{ flex: 1, overflow: "hidden" }}>
-        {activeTab === "law" && <LawTab />}
-        {activeTab === "bosang" && (
-          <RegulationTab dataUrl="/data/bosang-gyuchung.json" />
-        )}
-        {activeTab === "yoyang" && (
-          <RegulationTab dataUrl="/data/yoyang-gyuchung.json" />
-        )}
+        {activeTab === "law"      && <LawTab />}
+        {activeTab === "internal" && <InternalRegulationTab />}
       </div>
     </div>
   );
