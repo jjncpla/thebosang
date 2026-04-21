@@ -12,6 +12,8 @@ interface FileResult {
     savedNew: number
     skippedDuplicate: number
     parseFailures: number
+    dbMatched?: number
+    legacyTagged?: number
   }
   error?: string
 }
@@ -99,9 +101,11 @@ export default function BackfillPage() {
       acc.savedNew += r.stats.savedNew
       acc.skippedDuplicate += r.stats.skippedDuplicate
       acc.parseFailures += r.stats.parseFailures
+      acc.dbMatched += r.stats.dbMatched ?? 0
+      acc.legacyTagged += r.stats.legacyTagged ?? 0
     }
     return acc
-  }, { totalMessages: 0, filtered: 0, savedNew: 0, skippedDuplicate: 0, parseFailures: 0 })
+  }, { totalMessages: 0, filtered: 0, savedNew: 0, skippedDuplicate: 0, parseFailures: 0, dbMatched: 0, legacyTagged: 0 })
 
   const doneCount = results.filter(r => r.status === 'done' || r.status === 'error').length
   const progressPct = results.length ? Math.round((doneCount / results.length) * 100) : 0
@@ -221,11 +225,19 @@ export default function BackfillPage() {
                 style={{ width: `${progressPct}%` }}
               />
             </div>
-            <div className="text-xs text-gray-600">
-              파싱 대상 메시지 <b>{totals.filtered.toLocaleString()}</b>건 /
-              저장 <b className="text-green-600">{totals.savedNew.toLocaleString()}</b>건 /
-              중복 스킵 <b className="text-gray-500">{totals.skippedDuplicate.toLocaleString()}</b>건 /
-              파싱 실패 <b className="text-amber-600">{totals.parseFailures.toLocaleString()}</b>건
+            <div className="text-xs text-gray-600 space-y-0.5">
+              <div>
+                파싱 대상 <b>{totals.filtered.toLocaleString()}</b>건 /
+                저장 <b className="text-green-600">{totals.savedNew.toLocaleString()}</b>건 /
+                중복 스킵 <b className="text-gray-500">{totals.skippedDuplicate.toLocaleString()}</b>건 /
+                파싱 실패 <b className="text-amber-600">{totals.parseFailures.toLocaleString()}</b>건
+              </div>
+              {(totals.dbMatched > 0 || totals.legacyTagged > 0) && (
+                <div className="text-[11px] text-gray-500">
+                  TF 없음 처리: DB 환자 매칭 <b className="text-sky-600">{totals.dbMatched.toLocaleString()}</b>건 /
+                  Legacy 부여 <b className="text-gray-500">{totals.legacyTagged.toLocaleString()}</b>건
+                </div>
+              )}
             </div>
           </div>
           <div className="max-h-96 overflow-y-auto">
