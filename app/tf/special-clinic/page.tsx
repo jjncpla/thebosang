@@ -917,30 +917,52 @@ function SpecialClinicCalendar() {
         })()}
       </div>
 
-      {/* TF 범례 사이드바 — 이달 실제 일정 있는 TF만 표시 (2열) */}
+      {/* TF 범례 사이드바 — 더보상 / 이산 구분 */}
       {(() => {
         const activeTfs = [...new Set(schedules.map(s => s.tfName))].sort()
         if (activeTfs.length === 0) return null
+        const bosangTfs = activeTfs.filter(tf => !tf.startsWith('이산'))
+        const isanTfs = activeTfs.filter(tf => tf.startsWith('이산'))
+        function TFItem({ tf }: { tf: string }) {
+          const isActive = selectedTFs.length === 0 || selectedTFs.includes(tf)
+          return (
+            <div
+              onClick={() => { toggleTF(tf); setSelectedBranch('') }}
+              className="flex items-center gap-1 cursor-pointer hover:bg-gray-50 rounded px-0.5 -mx-0.5 min-w-0"
+              style={{ opacity: isActive ? 1 : 0.35 }}
+              title={tf}
+            >
+              <span className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ backgroundColor: getTFColor(tf) }} />
+              <span className="text-[10px] text-gray-700 truncate">{tf}</span>
+            </div>
+          )
+        }
         return (
           <div className="w-60 flex-shrink-0">
-            <div className="sticky top-4 border rounded-lg p-3 bg-white">
-              <div className="text-[10px] font-semibold text-gray-500 mb-2">TF 범례</div>
-              <div className="grid grid-cols-2 gap-x-2 gap-y-1">
-                {activeTfs.map(tf => {
-                  const isActive = selectedTFs.length === 0 || selectedTFs.includes(tf)
-                  return (
-                    <div key={tf}
-                      onClick={() => { toggleTF(tf); setSelectedBranch('') }}
-                      className="flex items-center gap-1 cursor-pointer hover:bg-gray-50 rounded px-0.5 -mx-0.5 min-w-0"
-                      style={{ opacity: isActive ? 1 : 0.35 }}
-                      title={tf}
-                    >
-                      <span className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ backgroundColor: getTFColor(tf) }} />
-                      <span className="text-[10px] text-gray-700 truncate">{tf}</span>
-                    </div>
-                  )
-                })}
-              </div>
+            <div className="sticky top-4 border rounded-lg p-3 bg-white space-y-3">
+              {bosangTfs.length > 0 && (
+                <div>
+                  <div className="text-[10px] font-semibold text-gray-400 mb-1.5 flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-sky-400 flex-shrink-0" />더보상
+                  </div>
+                  <div className="grid grid-cols-2 gap-x-2 gap-y-1">
+                    {bosangTfs.map(tf => <TFItem key={tf} tf={tf} />)}
+                  </div>
+                </div>
+              )}
+              {bosangTfs.length > 0 && isanTfs.length > 0 && (
+                <div className="border-t border-gray-100" />
+              )}
+              {isanTfs.length > 0 && (
+                <div>
+                  <div className="text-[10px] font-semibold text-gray-400 mb-1.5 flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-purple-400 flex-shrink-0" />이산
+                  </div>
+                  <div className="grid grid-cols-2 gap-x-2 gap-y-1">
+                    {isanTfs.map(tf => <TFItem key={tf} tf={tf} />)}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )
