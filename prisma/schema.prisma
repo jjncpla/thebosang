@@ -151,18 +151,39 @@ model HearingLossDetail {
   specialExam5Contact   String?
   specialExam5Attendee  String?
 
-  // 재특진 병원
-  reSpecialClinic String?
+  // 특진병원 픽업/비고
+  specialClinicPickup Boolean?
+  specialClinicNote   String?
 
-  reSpecialExam1Date    DateTime?
-  reSpecialExam1Contact String?
+  // 재특진 병원
+  reSpecialClinic       String?
+  reSpecialClinicPickup Boolean?
+  reSpecialClinicNote   String?
+
+  reSpecialExam1Date     DateTime?
+  reSpecialExam1Contact  String?
   reSpecialExam1Attendee String?
-  reSpecialExam2Date    DateTime?
-  reSpecialExam2Contact String?
+  reSpecialExam2Date     DateTime?
+  reSpecialExam2Contact  String?
   reSpecialExam2Attendee String?
-  reSpecialExam3Date    DateTime?
-  reSpecialExam3Contact String?
+  reSpecialExam3Date     DateTime?
+  reSpecialExam3Contact  String?
   reSpecialExam3Attendee String?
+
+  // 재재특진 병원
+  re2SpecialClinic       String?
+  re2SpecialClinicPickup Boolean?
+  re2SpecialClinicNote   String?
+
+  re2SpecialExam1Date     DateTime?
+  re2SpecialExam1Contact  String?
+  re2SpecialExam1Attendee String?
+  re2SpecialExam2Date     DateTime?
+  re2SpecialExam2Contact  String?
+  re2SpecialExam2Attendee String?
+  re2SpecialExam3Date     DateTime?
+  re2SpecialExam3Contact  String?
+  re2SpecialExam3Attendee String?
 
   // 전문조사
   expertRequestReceivedAt          DateTime?
@@ -1074,10 +1095,12 @@ model SpecialClinicSchedule {
   content         String?   @db.Text
 
   // 특진/재특진 전용
-  patientName     String?
-  hospitalName    String?
-  clinicType      String?   // "특진" | "재특진"
-  examRound       Int?
+  patientName    String?
+  hospitalName   String?
+  clinicType     String?  // "특진" | "재특진"
+  examRound      Int?
+  assignedStaff  String?  // 담당자
+  attended       Boolean? // 참석 여부
 
   // 텔레그램 수신
   sender          String?

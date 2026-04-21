@@ -26,6 +26,8 @@ interface Schedule {
   sourceDate: string | null
   rawMessage: string | null
   memo: string | null
+  assignedStaff: string | null
+  attended: boolean | null
   createdAt: string
 }
 
@@ -1027,6 +1029,8 @@ function InputModal({
         examRound: target.examRound ?? 1,
         title: target.title || '',
         content: target.content || '',
+        assignedStaff: target.assignedStaff || '',
+        attended: target.attended ?? null,
       }
     }
     return {
@@ -1041,6 +1045,8 @@ function InputModal({
       examRound: 1,
       title: '',
       content: '',
+      assignedStaff: '',
+      attended: null as boolean | null,
     }
   }
   const [form, setForm] = useState(() => initForm(editTarget))
@@ -1090,6 +1096,8 @@ function InputModal({
         hospitalName: form.hospitalName,
         clinicType: form.clinicType,
         examRound: form.examRound,
+        assignedStaff: form.assignedStaff || null,
+        attended: form.attended,
         title: null,
         content: null,
       })
@@ -1222,6 +1230,22 @@ function InputModal({
                 <div>
                   <label className="text-xs text-gray-500">시간 (선택)</label>
                   <input type="time" value={form.scheduledTime} onChange={e => setForm(f => ({ ...f, scheduledTime: e.target.value }))} className={inputCls} />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-500">담당자</label>
+                  <input value={form.assignedStaff} onChange={e => setForm(f => ({ ...f, assignedStaff: e.target.value }))} placeholder="참석 담당자명" className={inputCls} />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-500">참석 여부</label>
+                  <div className="flex gap-3 mt-1.5">
+                    {([['true', '참석'], ['false', '불참'], ['', '미정']] as const).map(([val, label]) => (
+                      <label key={val} className="flex items-center gap-1 text-xs cursor-pointer">
+                        <input type="radio" name="attended" checked={form.attended === (val === '' ? null : val === 'true')}
+                          onChange={() => setForm(f => ({ ...f, attended: val === '' ? null : val === 'true' }))} />
+                        {label}
+                      </label>
+                    ))}
+                  </div>
                 </div>
                 <div className="col-span-2">
                   <label className="text-xs text-gray-500">메모</label>
