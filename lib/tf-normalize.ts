@@ -42,19 +42,24 @@ const KEEP_AS_IS = new Set([
 
 /** 담당자·직급이 TF명 뒤에 붙은 형태에서 TF 부분만 추출 */
 function stripHandlerSuffix(raw: string): string {
-  // 예: "평택TF 강병훈 과장님" → "평택TF"
-  //     "울산TF/산재1팀" → "울산TF" (슬래시 뒤 버림)
-  //     "부산TF (담당자)" → "부산TF"
-  const slashIdx = raw.indexOf('/')
-  if (slashIdx > -1) raw = raw.slice(0, slashIdx).trim()
+  let s = raw.trim()
 
-  const parenIdx = raw.indexOf('(')
-  if (parenIdx > -1) raw = raw.slice(0, parenIdx).trim()
+  // 슬래시·괄호 뒷부분 제거 (기존 케이스)
+  const slashIdx = s.indexOf('/')
+  if (slashIdx > -1) s = s.slice(0, slashIdx).trim()
+  const parenIdx = s.indexOf('(')
+  if (parenIdx > -1) s = s.slice(0, parenIdx).trim()
+  const ampIdx = s.indexOf('&')
+  if (ampIdx > -1) s = s.slice(0, ampIdx).trim()
 
-  // 공백 뒤 담당자·직급이 붙은 경우
-  const m = raw.match(/^([가-힣a-zA-Z0-9]+TF)(?:\s+.*)?$/)
-  if (m) return m[1]
-  return raw.trim()
+  // "...TF" 로 끝나는 가장 긴 접두부만 남김 — 그 이후 문자는 모두 부가정보(담당자/직급/괄호닫기/하이픈기재)
+  //   예: "평택TF) 강병훈 과장님"     → "평택TF"
+  //       "평택TF 강병훈 과장님"      → "평택TF"
+  //       "대구수성TF ) 이광희 차장님" → "대구수성TF"
+  //       "울산TF-북"                  → "울산TF" (하이픈 뒤는 부가표기로 판단)
+  const m = s.match(/^(.*?TF)(?![가-힣a-zA-Z0-9])/)
+  if (m) return m[1].trim()
+  return s
 }
 
 /**
@@ -92,7 +97,14 @@ export function canonicalizeTfName(raw: string | null | undefined): string {
   return s
 }
 
-/** 정규화 결과를 표준인지 판별 */
+/**
+ * TF명이 정규화 표준인지 판별.
+ * 기준: TF_BY_BRANCH에 명시된 이름(ALL_TF_LIST)에 정확히 일치해야 함.
+ * → `이산XXX` 또는 `더보상XXX` 접두어가 정확히 하나 붙은 형태만 canonical.
+ *
+ * Legacy / 경북TF / 진폐TF 같은 KEEP_AS_IS는 canonicalize 단계에선 보존되지만
+ * 이 함수는 false 반환 → 사용자 정리 대상(unclassified) 목록에 포함됨.
+ */
 export function isCanonicalTf(name: string): boolean {
-  return STANDARD_SET.has(name) || KEEP_AS_IS.has(name)
+  return STANDARD_SET.has(name)
 }

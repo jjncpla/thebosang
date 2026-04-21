@@ -809,25 +809,26 @@ function SpecialClinicCalendar() {
         })()}
       </div>
 
-      {/* TF 범례 사이드바 — 이달 실제 일정 있는 TF만 표시 */}
+      {/* TF 범례 사이드바 — 이달 실제 일정 있는 TF만 표시 (2열) */}
       {(() => {
         const activeTfs = [...new Set(schedules.map(s => s.tfName))].sort()
         if (activeTfs.length === 0) return null
         return (
-          <div className="w-36 flex-shrink-0">
+          <div className="w-60 flex-shrink-0">
             <div className="sticky top-4 border rounded-lg p-3 bg-white">
               <div className="text-[10px] font-semibold text-gray-500 mb-2">TF 범례</div>
-              <div className="space-y-1.5">
+              <div className="grid grid-cols-2 gap-x-2 gap-y-1">
                 {activeTfs.map(tf => {
                   const isActive = selectedTFs.length === 0 || selectedTFs.includes(tf)
                   return (
                     <div key={tf}
                       onClick={() => { toggleTF(tf); setSelectedBranch('') }}
-                      className="flex items-center gap-1.5 cursor-pointer hover:bg-gray-50 rounded px-0.5 -mx-0.5"
+                      className="flex items-center gap-1 cursor-pointer hover:bg-gray-50 rounded px-0.5 -mx-0.5 min-w-0"
                       style={{ opacity: isActive ? 1 : 0.35 }}
+                      title={tf}
                     >
                       <span className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ backgroundColor: getTFColor(tf) }} />
-                      <span className="text-[10px] text-gray-700">{tf}</span>
+                      <span className="text-[10px] text-gray-700 truncate">{tf}</span>
                     </div>
                   )
                 })}

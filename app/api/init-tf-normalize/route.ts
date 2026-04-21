@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma"
-import { canonicalizeTfName } from "@/lib/tf-normalize"
+import { canonicalizeTfName, isCanonicalTf } from "@/lib/tf-normalize"
 import { NextResponse } from "next/server"
 
 /**
@@ -43,11 +43,31 @@ export async function GET() {
     totalAffected += count
   }
 
+  // 4. 변환 후 distinct 재조회 + 비표준(unclassified) 리스트업
+  const afterRows = await prisma.specialClinicSchedule.findMany({
+    select: { tfName: true },
+    distinct: ['tfName'],
+  })
+  const afterDistinct = [...new Set(afterRows.map(r => r.tfName).filter(Boolean))]
+
+  const unclassifiedTfs: { tfName: string; count: number }[] = []
+  for (const tf of afterDistinct) {
+    if (!isCanonicalTf(tf)) {
+      const count = await prisma.specialClinicSchedule.count({ where: { tfName: tf } })
+      unclassifiedTfs.push({ tfName: tf, count })
+    }
+  }
+  unclassifiedTfs.sort((a, b) => b.count - a.count)
+
   return NextResponse.json({
     ok: true,
     distinctTfsBefore: distinctTfs.length,
+    distinctTfsAfter: afterDistinct.length,
+    canonicalCount: afterDistinct.length - unclassifiedTfs.length,
+    unclassifiedCount: unclassifiedTfs.length,
     mappingsApplied: mappings.length,
     recordsUpdated: totalAffected,
     mappings,
+    unclassifiedTfs,
   })
 }
