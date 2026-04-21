@@ -35,7 +35,29 @@ export async function GET(req: NextRequest) {
     orderBy: [{ scheduledDate: "asc" }, { scheduledHour: "asc" }],
   })
 
-  return NextResponse.json(schedules)
+  // 특진/재특진 일정의 patientName으로 Patient 연락처 조회
+  const patientNames = [...new Set(
+    schedules
+      .filter(s => s.patientName && (s.category === "특진" || s.category === "재특진"))
+      .map(s => s.patientName as string)
+  )]
+  const patients = patientNames.length > 0
+    ? await prisma.patient.findMany({
+        where: { name: { in: patientNames } },
+        select: { name: true, phone: true },
+      })
+    : []
+  const phoneMap: Record<string, string> = {}
+  for (const p of patients) {
+    if (p.phone && !phoneMap[p.name]) phoneMap[p.name] = p.phone
+  }
+
+  const enriched = schedules.map(s => ({
+    ...s,
+    patientPhone: s.patientName ? (phoneMap[s.patientName] ?? null) : null,
+  }))
+
+  return NextResponse.json(enriched)
 }
 
 export async function POST(req: NextRequest) {
