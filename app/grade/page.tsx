@@ -1375,7 +1375,7 @@ function TFMonitoringSection() {
 type WageMenu = "minimum" | "construction" | "compensation" | "calculator" | "stats" | "manage" | null;
 type ActivePage =
   | "장해보상일수" | "소음성난청" | "폐질환등급표"
-  | "근로복지공단규정" | "평균임금"
+  | "근로복지공단규정" | "평균임금" | "공단기타정보"
   | "재해조사" | "담당TF모니터링" | "TF공지" | "TF통계"
   | "최초요양급여" | "추가상병" | "재요양"
   | "휴업급여" | "유족급여장례비" | "이유서의견서" | "주요쟁점"
@@ -1420,6 +1420,7 @@ export default function GradePage() {
           ["소음성난청",   "소음성 난청"],
           ["폐질환등급표", "폐질환 등급표"],
           ["평균임금",     "평균임금"],
+          ["공단기타정보", "근로복지공단 기타 정보"],
         ] as [ActivePage, string][]).map(([key, label]) => (
           <button key={String(key)} onClick={() => setActivePage(key)} style={activePage === key ? activeSubBtn : subBtn}>{label}</button>
         ))}
@@ -1546,8 +1547,17 @@ export default function GradePage() {
           {/* 담당TF 모니터링 */}
           {activePage === "담당TF모니터링" && <TFMonitoringSection />}
 
+          {/* 근로복지공단 기타 정보 */}
+          {activePage === "공단기타정보" && (
+            <div style={{padding:40,textAlign:"center",color:"#6b7280",fontSize:15}}>
+              <div style={{fontSize:32,marginBottom:16}}>🏗️</div>
+              <div style={{fontWeight:600,fontSize:17,color:"#374151",marginBottom:8}}>근로복지공단 기타 정보</div>
+              <div>데이터를 업로드하면 여기에 표시됩니다.</div>
+            </div>
+          )}
+
           {/* 준비 중 페이지 */}
-          {activePage !== null && !["장해보상일수","소음성난청","폐질환등급표","평균임금","담당TF모니터링"].includes(activePage) && (
+          {activePage !== null && !["장해보상일수","소음성난청","폐질환등급표","평균임금","공단기타정보","담당TF모니터링"].includes(activePage) && (
             <div style={{textAlign:"center",padding:80,color:"#6b7280",fontSize:16}}>준비 중입니다.</div>
           )}
 

@@ -9,7 +9,7 @@ const QUICK_MENUS = [
   { label: "재해자 목록",   href: "/patients",          icon: "👥" },
   { label: "To Do List",    href: "/todo",              icon: "☑️" },
   { label: "통합 캘린더",   href: "/tf/special-clinic", icon: "📅" },
-  { label: "장해등급·평균임금", href: "/grade",          icon: "📊" },
+  { label: "실무 참고 정보",    href: "/grade",          icon: "📊" },
   { label: "상담 관리",     href: "/consultation",      icon: "💬" },
   { label: "이의제기",      href: "/objection/review",  icon: "⚖️" },
   { label: "지사장 관리·운영", href: "/branch",          icon: "🏢" },

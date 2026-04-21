@@ -34,7 +34,7 @@ type EmpResult = {
 const MENU_ITEMS: MenuItem[] = [
   { id: "todo", label: "To Do List", icon: "☑", path: "/todo" },
   { id: "law", label: "법령 및 규정", icon: "📜", path: "/law" },
-  { id: "grade", label: "장해등급·평균임금", icon: "📊", path: "/grade" },
+  { id: "grade", label: "실무 참고 정보", icon: "📊", path: "/grade" },
   {
     id: "cases",
     label: "사건 관리",
