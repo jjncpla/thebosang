@@ -151,6 +151,7 @@ function LawTab() {
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(
     new Set([LAW_GROUPS[0].id])
   );
+  const [sidebarOpen, setSidebarOpen] = useState(true);
 
   const categories: Array<"주요 법률" | "관련 법률"> = ["주요 법률", "관련 법률"];
 
@@ -166,161 +167,176 @@ function LawTab() {
   return (
     <div style={{ display: "flex", height: "calc(100vh - 160px)", gap: 0 }}>
       {/* Left sidebar */}
-      <div
-        style={{
-          width: 256,
-          flexShrink: 0,
-          borderRight: "1px solid #e5e7eb",
-          overflowY: "auto",
-          background: "#f9fafb",
-          display: "flex",
-          flexDirection: "column",
-        }}
-      >
-        <div style={{ flex: 1 }}>
-          {categories.map((cat) => (
-            <div key={cat}>
-              {/* Category label */}
-              <div
-                style={{
-                  padding: "12px 14px 6px",
-                  fontSize: 10,
-                  fontWeight: 700,
-                  color: "#9ca3af",
-                  letterSpacing: "0.08em",
-                  textTransform: "uppercase",
-                }}
-              >
-                {cat}
-              </div>
-
-              {LAW_GROUPS.filter((g) => g.category === cat).map((group) => {
-                const isExpanded = expandedGroups.has(group.id);
-                const isGroupActive = group.laws.some((l) => l.id === selectedItem.id);
-                return (
-                  <div key={group.id}>
-                    {/* Group header */}
-                    <button
-                      onClick={() => toggleGroup(group.id)}
-                      style={{
-                        display: "flex",
-                        alignItems: "flex-start",
-                        width: "100%",
-                        textAlign: "left",
-                        padding: "7px 14px",
-                        fontSize: 12,
-                        fontWeight: isGroupActive ? 700 : 500,
-                        border: "none",
-                        cursor: "pointer",
-                        background: isGroupActive ? "#eff6ff" : "transparent",
-                        color: isGroupActive ? "#1d4ed8" : "#374151",
-                        gap: 6,
-                        lineHeight: 1.45,
-                      }}
-                    >
-                      <span
-                        style={{
-                          fontSize: 9,
-                          marginTop: 3,
-                          flexShrink: 0,
-                          transform: isExpanded ? "rotate(90deg)" : "none",
-                          display: "inline-block",
-                          transition: "transform 0.15s",
-                          color: "#9ca3af",
-                        }}
-                      >
-                        ▶
-                      </span>
-                      <span>{group.groupName}</span>
-                    </button>
-
-                    {/* Sub-items */}
-                    {isExpanded && (
-                      <div style={{ paddingLeft: 8, paddingBottom: 4 }}>
-                        {group.laws.map((law) => {
-                          const colors = LABEL_COLORS[law.label];
-                          const isActive = selectedItem.id === law.id;
-                          return (
-                            <button
-                              key={law.id}
-                              onClick={() => setSelectedItem(law)}
-                              style={{
-                                display: "flex",
-                                alignItems: "center",
-                                width: "100%",
-                                textAlign: "left",
-                                padding: "5px 14px 5px 20px",
-                                fontSize: 12,
-                                border: "none",
-                                cursor: "pointer",
-                                background: isActive ? "#dbeafe" : "transparent",
-                                color: isActive ? "#1d4ed8" : "#4b5563",
-                                fontWeight: isActive ? 600 : 400,
-                                gap: 8,
-                                borderLeft: isActive
-                                  ? "2px solid #3b82f6"
-                                  : "2px solid transparent",
-                              }}
-                            >
-                              <span
-                                style={{
-                                  fontSize: 10,
-                                  padding: "1px 5px",
-                                  borderRadius: 3,
-                                  background: colors.bg,
-                                  color: colors.text,
-                                  border: `1px solid ${colors.border}`,
-                                  flexShrink: 0,
-                                  fontWeight: 600,
-                                }}
-                              >
-                                {law.label}
-                              </span>
-                              <span style={{ lineHeight: 1.4 }}>{law.name}</span>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-
-              <div style={{ height: 8 }} />
-            </div>
-          ))}
-        </div>
-
-        <div style={{ padding: "12px 14px", borderTop: "1px solid #e5e7eb" }}>
-          <a
-            href="https://www.law.go.kr"
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{
-              display: "block",
-              fontSize: 11,
-              color: "#9ca3af",
-              textDecoration: "none",
-              textAlign: "center",
-            }}
-          >
-            국가법령정보센터 ↗
-          </a>
-        </div>
-      </div>
-
-      {/* Right iframe */}
-      <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+      {sidebarOpen && (
         <div
           style={{
-            padding: "10px 16px",
+            width: 256,
+            flexShrink: 0,
+            borderRight: "1px solid #e5e7eb",
+            overflowY: "auto",
+            background: "#f9fafb",
+            display: "flex",
+            flexDirection: "column",
+          }}
+        >
+          <div style={{ flex: 1 }}>
+            {categories.map((cat) => (
+              <div key={cat}>
+                <div
+                  style={{
+                    padding: "12px 14px 6px",
+                    fontSize: 10,
+                    fontWeight: 700,
+                    color: "#9ca3af",
+                    letterSpacing: "0.08em",
+                    textTransform: "uppercase",
+                  }}
+                >
+                  {cat}
+                </div>
+
+                {LAW_GROUPS.filter((g) => g.category === cat).map((group) => {
+                  const isExpanded = expandedGroups.has(group.id);
+                  const isGroupActive = group.laws.some((l) => l.id === selectedItem.id);
+                  return (
+                    <div key={group.id}>
+                      <button
+                        onClick={() => toggleGroup(group.id)}
+                        style={{
+                          display: "flex",
+                          alignItems: "flex-start",
+                          width: "100%",
+                          textAlign: "left",
+                          padding: "7px 14px",
+                          fontSize: 12,
+                          fontWeight: isGroupActive ? 700 : 500,
+                          border: "none",
+                          cursor: "pointer",
+                          background: isGroupActive ? "#eff6ff" : "transparent",
+                          color: isGroupActive ? "#1d4ed8" : "#374151",
+                          gap: 6,
+                          lineHeight: 1.45,
+                        }}
+                      >
+                        <span
+                          style={{
+                            fontSize: 9,
+                            marginTop: 3,
+                            flexShrink: 0,
+                            transform: isExpanded ? "rotate(90deg)" : "none",
+                            display: "inline-block",
+                            transition: "transform 0.15s",
+                            color: "#9ca3af",
+                          }}
+                        >
+                          ▶
+                        </span>
+                        <span>{group.groupName}</span>
+                      </button>
+
+                      {isExpanded && (
+                        <div style={{ paddingLeft: 8, paddingBottom: 4 }}>
+                          {group.laws.map((law) => {
+                            const colors = LABEL_COLORS[law.label];
+                            const isActive = selectedItem.id === law.id;
+                            return (
+                              <button
+                                key={law.id}
+                                onClick={() => setSelectedItem(law)}
+                                style={{
+                                  display: "flex",
+                                  alignItems: "center",
+                                  width: "100%",
+                                  textAlign: "left",
+                                  padding: "5px 14px 5px 20px",
+                                  fontSize: 12,
+                                  border: "none",
+                                  cursor: "pointer",
+                                  background: isActive ? "#dbeafe" : "transparent",
+                                  color: isActive ? "#1d4ed8" : "#4b5563",
+                                  fontWeight: isActive ? 600 : 400,
+                                  gap: 8,
+                                  borderLeft: isActive ? "2px solid #3b82f6" : "2px solid transparent",
+                                }}
+                              >
+                                <span
+                                  style={{
+                                    fontSize: 10,
+                                    padding: "1px 5px",
+                                    borderRadius: 3,
+                                    background: colors.bg,
+                                    color: colors.text,
+                                    border: `1px solid ${colors.border}`,
+                                    flexShrink: 0,
+                                    fontWeight: 600,
+                                  }}
+                                >
+                                  {law.label}
+                                </span>
+                                <span style={{ lineHeight: 1.4 }}>{law.name}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+
+                <div style={{ height: 8 }} />
+              </div>
+            ))}
+          </div>
+
+          <div style={{ padding: "12px 14px", borderTop: "1px solid #e5e7eb" }}>
+            <a
+              href="https://www.law.go.kr"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ display: "block", fontSize: 11, color: "#9ca3af", textDecoration: "none", textAlign: "center" }}
+            >
+              국가법령정보센터 ↗
+            </a>
+          </div>
+        </div>
+      )}
+
+      {/* Right iframe area */}
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
+        {/* Toolbar */}
+        <div
+          style={{
+            padding: "8px 12px",
             borderBottom: "1px solid #e5e7eb",
             background: "#fff",
             display: "flex",
             alignItems: "center",
             gap: 10,
+            flexShrink: 0,
           }}
         >
+          {/* 접기/펼치기 버튼 */}
+          <button
+            onClick={() => setSidebarOpen((v) => !v)}
+            title={sidebarOpen ? "목록 접기" : "목록 펼치기"}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 4,
+              padding: "4px 8px",
+              fontSize: 12,
+              border: "1px solid #e5e7eb",
+              borderRadius: 5,
+              background: "#f9fafb",
+              color: "#4b5563",
+              cursor: "pointer",
+              flexShrink: 0,
+            }}
+          >
+            <span style={{ fontSize: 11 }}>{sidebarOpen ? "◀" : "▶"}</span>
+            <span>{sidebarOpen ? "목록 접기" : "목록 펼치기"}</span>
+          </button>
+
           {(() => {
             const colors = LABEL_COLORS[selectedItem.label];
             return (
@@ -340,7 +356,7 @@ function LawTab() {
               </span>
             );
           })()}
-          <span style={{ fontSize: 14, fontWeight: 600, color: "#111827" }}>
+          <span style={{ fontSize: 13, fontWeight: 600, color: "#111827", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
             {selectedItem.name}
           </span>
           <a
@@ -352,13 +368,17 @@ function LawTab() {
             새 탭에서 열기 ↗
           </a>
         </div>
-        <iframe
-          key={selectedItem.id}
-          src={selectedItem.url}
-          style={{ flex: 1, border: "none" }}
-          title={selectedItem.name}
-          sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-top-navigation"
-        />
+
+        {/* iframe wrapper — 가로 스크롤 가능 */}
+        <div style={{ flex: 1, overflow: "auto", position: "relative" }}>
+          <iframe
+            key={selectedItem.id}
+            src={selectedItem.url}
+            style={{ width: "100%", minWidth: 900, height: "100%", border: "none", display: "block" }}
+            title={selectedItem.name}
+            sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-top-navigation"
+          />
+        </div>
       </div>
     </div>
   );
