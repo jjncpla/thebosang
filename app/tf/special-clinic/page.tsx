@@ -3,7 +3,7 @@
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { getTFColor } from '@/lib/tf-colors'
-import { TF_BY_BRANCH, ALL_TF_LIST } from '@/lib/constants/tf'
+import { TF_BY_BRANCH as FALLBACK_TF_BY_BRANCH, ALL_TF_LIST as FALLBACK_ALL_TF_LIST } from '@/lib/constants/tf'
 
 // ─── 타입 ────────────────────────────────────────────────────────
 interface Schedule {
@@ -130,6 +130,23 @@ function SpecialClinicCalendar() {
       .then((m: Record<string, string>) => { if (m && typeof m === 'object') setBranchColorMap(m) })
       .catch(() => {})
   }, [])
+
+  // DB에서 지사-TF 맵 로드 — admin/branches/tf 변경이 즉시 반영됨
+  const [dbTfByBranch, setDbTfByBranch] = useState<Record<string, string[]> | null>(null)
+  useEffect(() => {
+    fetch('/api/branches-tf-map')
+      .then(r => r.ok ? r.json() : null)
+      .then((data: { branches?: Array<{ name: string; tfs: string[] }> } | null) => {
+        if (!data?.branches) return
+        const map: Record<string, string[]> = {}
+        for (const b of data.branches) map[b.name] = b.tfs
+        setDbTfByBranch(map)
+      })
+      .catch(() => {})
+  }, [])
+  // DB 로드 전엔 하드코딩 fallback 사용
+  const TF_BY_BRANCH = dbTfByBranch ?? FALLBACK_TF_BY_BRANCH
+  const ALL_TF_LIST = dbTfByBranch ? Object.values(dbTfByBranch).flat() : FALLBACK_ALL_TF_LIST
 
   // URL 동기화
   useEffect(() => {
