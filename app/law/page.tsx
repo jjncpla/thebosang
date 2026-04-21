@@ -589,22 +589,24 @@ function InternalRegulationTab() {
   );
 }
 
-// ① ~ ⑳ 원문자 및 법령 항목 기호 앞에서 단락 분리
-function formatArticleContent(raw: string): string[] {
-  // 분리 기준: ①~⑳ 원문자, 또는 줄 앞의 숫자+점(1. 2. ...), 가·나·다 목 기호
-  const SPLIT_RE = /((?:^|\s)(?:[①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳]|\d+\.\s|[가나다라마바사아자차카타파하]\.\s))/g;
-  const parts = raw.split(SPLIT_RE).filter((s) => s.trim().length > 0);
+// 항목 기호 판별 (원문자·1~2자리 숫자목·가나다목만 — 연도 4자리 숫자 제외)
+const ITEM_MARKER_RE = /^(?:[①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳]|[1-9]\d?\.|[가나다라마바사아자차카타파하]\.)$/;
+// 단락 분리 기준 (연도처럼 보이는 4자리 숫자는 제외)
+const SPLIT_RE = /(?<=[^\d])([①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳]|(?<!\d)[1-9]\d?\.\s|(?<![0-9])[가나다라마바사아자차카타파하]\.\s)/g;
 
-  // 분리된 조각들을 재합산: 기호 + 뒤따르는 내용을 하나의 단락으로
+function formatArticleContent(raw: string): Array<{ body: string; amendment: string | null }> {
+  // 1) <개정 …> 블록을 하나의 토큰으로 정규화 (내부 공백·줄바꿈 압축)
+  const normalized = raw.replace(/<개정[^>]*>/g, (m) => m.replace(/\s+/g, " ").trim());
+
+  // 2) 항목 기호 앞에서 단락 분리 (연도 숫자는 분리 안 함)
+  const parts = normalized.split(SPLIT_RE).filter((s) => s.trim().length > 0);
+
   const paragraphs: string[] = [];
   let buffer = "";
   for (const part of parts) {
     const trimmed = part.trim();
     if (!trimmed) continue;
-    const isMarker = /^[①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳]$/.test(trimmed) ||
-                     /^\d+\.$/.test(trimmed) ||
-                     /^[가나다라마바사아자차카타파하]\.$/.test(trimmed);
-    if (isMarker) {
+    if (ITEM_MARKER_RE.test(trimmed)) {
       if (buffer.trim()) paragraphs.push(buffer.trim());
       buffer = trimmed + " ";
     } else {
@@ -612,7 +614,17 @@ function formatArticleContent(raw: string): string[] {
     }
   }
   if (buffer.trim()) paragraphs.push(buffer.trim());
-  return paragraphs.length > 0 ? paragraphs : [raw];
+  const result = paragraphs.length > 0 ? paragraphs : [normalized];
+
+  // 3) 각 단락에서 <개정 …> 부분을 분리해 별도 표시용으로 반환
+  return result.map((para) => {
+    const idx = para.indexOf("<개정");
+    if (idx === -1) return { body: para, amendment: null };
+    return {
+      body: para.slice(0, idx).trim(),
+      amendment: para.slice(idx).trim(),
+    };
+  });
 }
 
 function ArticleView({
@@ -653,23 +665,19 @@ function ArticleView({
         {article.number}({article.title})
       </h2>
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        {paragraphs.map((para, i) => {
-          // 첫 단락(조문 서두)은 들여쓰기 없이, 항목 기호 단락은 약간 들여쓰기
-          const isItem = /^[①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳\d]/.test(para);
+        {paragraphs.map(({ body, amendment }, i) => {
+          const isItem = /^[①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳1-9가나다라마바사아자차카타파하]/.test(body);
           return (
-            <p
-              key={i}
-              style={{
-                fontSize: 14,
-                lineHeight: 1.9,
-                color: "#374151",
-                margin: 0,
-                paddingLeft: isItem ? 8 : 0,
-                wordBreak: "keep-all",
-              }}
-            >
-              {para}
-            </p>
+            <div key={i} style={{ paddingLeft: isItem ? 8 : 0 }}>
+              <p style={{ fontSize: 14, lineHeight: 1.9, color: "#374151", margin: 0, wordBreak: "keep-all" }}>
+                {body}
+              </p>
+              {amendment && (
+                <p style={{ fontSize: 12, lineHeight: 1.7, color: "#9ca3af", margin: "2px 0 0 0", wordBreak: "keep-all" }}>
+                  {amendment}
+                </p>
+              )}
+            </div>
           );
         })}
       </div>
