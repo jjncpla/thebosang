@@ -15,6 +15,7 @@ interface BranchWithTfs {
   name: string
   shortName: string | null
   region: string | null
+  colorBase: string | null
   isActive: boolean
   displayOrder: number
   tfs: TfItem[]
@@ -39,11 +40,20 @@ export default function TfManagementPage() {
   const [editingBranch, setEditingBranch] = useState<string | null>(null)
   const [tfListDraft, setTfListDraft] = useState<string[]>([])
   const [newTfInput, setNewTfInput] = useState('')
+  const [editingColorBranch, setEditingColorBranch] = useState<string | null>(null)
+  const [colorDraft, setColorDraft] = useState('#006838')
+
+  // DB 색상 맵 (Branch.colorBase)
+  const [branchColorMap, setBranchColorMap] = useState<Record<string, string>>({})
 
   const load = useCallback(async () => {
     setLoading(true)
-    const res = await fetch('/api/admin/tf-overview')
+    const [res, colorRes] = await Promise.all([
+      fetch('/api/admin/tf-overview'),
+      fetch('/api/tf-color-map'),
+    ])
     if (res.ok) setData(await res.json())
+    if (colorRes.ok) setBranchColorMap(await colorRes.json())
     setLoading(false)
   }, [])
 
@@ -91,6 +101,29 @@ export default function TfManagementPage() {
     setEditingBranch(branch.id)
     setTfListDraft(branch.tfs.map(t => t.tfName))
     setNewTfInput('')
+  }
+
+  function openColorEdit(branch: BranchWithTfs) {
+    setEditingColorBranch(branch.id)
+    setColorDraft(branch.colorBase ?? '#006838')
+  }
+
+  async function saveBranchColor() {
+    if (!editingColorBranch) return
+    setSaving(true)
+    const res = await fetch(`/api/admin/branches/${editingColorBranch}/color`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ colorBase: colorDraft }),
+    })
+    setSaving(false)
+    if (res.ok) {
+      setEditingColorBranch(null)
+      await load()
+    } else {
+      const err = await res.text().catch(() => '')
+      alert('저장 실패: ' + err)
+    }
   }
 
   async function saveBranchTfs() {
@@ -177,21 +210,33 @@ export default function TfManagementPage() {
         const memosCount = branch.tfs.filter(t => t.memo).length
         return (
           <div key={branch.id} className="border rounded-lg bg-white">
-            <button
-              onClick={() => toggleBranch(branch.id)}
-              className="w-full flex items-center justify-between px-3 py-2 border-b bg-gray-50 hover:bg-gray-100 text-left"
-            >
-              <div className="flex items-center gap-2">
+            <div className="flex items-center justify-between px-3 py-2 border-b bg-gray-50 hover:bg-gray-100">
+              <button
+                onClick={() => toggleBranch(branch.id)}
+                className="flex items-center gap-2 text-left flex-1"
+              >
                 <span className="text-xs text-gray-400">{branchOpen ? '▼' : '▶'}</span>
+                <span
+                  className="w-3 h-3 rounded-sm flex-shrink-0 border border-gray-300"
+                  style={{ backgroundColor: branch.colorBase ?? '#D1D5DB' }}
+                  title={`지사 대표 색: ${branch.colorBase ?? '(미설정)'}`}
+                />
                 <span className="text-sm font-semibold text-gray-800">{branch.name}</span>
                 {branch.region && <span className="text-[10px] text-gray-400">({branch.region})</span>}
                 {!branch.isActive && <span className="text-[10px] text-red-500 bg-red-50 px-1.5 py-0.5 rounded">비활성</span>}
-              </div>
+              </button>
               <div className="flex items-center gap-3 text-xs text-gray-500">
                 <span>TF {branch.tfs.length}개</span>
                 {memosCount > 0 && <span className="text-sky-600">메모 {memosCount}</span>}
+                <button
+                  onClick={() => openColorEdit(branch)}
+                  className="text-[11px] text-gray-400 hover:text-sky-600 hover:underline"
+                  title="지사 대표 색 변경"
+                >
+                  🎨 색상
+                </button>
               </div>
-            </button>
+            </div>
             {branchOpen && (
               <div className="p-2 space-y-1">
                 {branch.tfs.length === 0 ? (
@@ -205,7 +250,7 @@ export default function TfManagementPage() {
                         <div className="flex items-center gap-2 px-2.5 py-1.5 hover:bg-gray-50">
                           <span
                             className="w-2.5 h-2.5 rounded-sm flex-shrink-0"
-                            style={{ backgroundColor: getTFColor(tf.tfName) }}
+                            style={{ backgroundColor: getTFColor(tf.tfName, branchColorMap) }}
                           />
                           <button
                             onClick={() => hasMemo && toggleTf(tf.tfName)}
@@ -266,7 +311,7 @@ export default function TfManagementPage() {
           <div className="p-2 space-y-1">
             {data.orphanTfs.map(tf => (
               <div key={tf.tfName} className="flex items-center gap-2 px-2.5 py-1.5 bg-white rounded border">
-                <span className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ backgroundColor: getTFColor(tf.tfName) }} />
+                <span className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ backgroundColor: getTFColor(tf.tfName, branchColorMap) }} />
                 <span className="text-sm text-gray-800 flex-1">{tf.tfName}</span>
                 <span className="text-[11px] text-gray-400">사용 {tf.usageCount.toLocaleString()}건</span>
                 <button
@@ -308,6 +353,70 @@ export default function TfManagementPage() {
         </div>
       )}
 
+      {/* 지사 색상 편집 모달 */}
+      {editingColorBranch && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center" onClick={() => setEditingColorBranch(null)}>
+          <div className="absolute inset-0 bg-black/30" />
+          <div className="relative bg-white rounded-xl shadow-xl w-full max-w-md p-5 space-y-3" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-bold">
+                지사 대표 색: <span className="text-sky-600">{data?.branches.find(b => b.id === editingColorBranch)?.name}</span>
+              </h2>
+              <button onClick={() => setEditingColorBranch(null)} className="text-gray-400 hover:text-gray-600">✕</button>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <input
+                type="color"
+                value={colorDraft}
+                onChange={e => setColorDraft(e.target.value.toUpperCase())}
+                className="w-14 h-14 cursor-pointer border rounded"
+              />
+              <input
+                type="text"
+                value={colorDraft}
+                onChange={e => setColorDraft(e.target.value)}
+                placeholder="#006838"
+                className="flex-1 border rounded px-2 py-1.5 text-sm font-mono focus:outline-none focus:border-sky-400"
+              />
+            </div>
+
+            {/* 미리보기 — 이 지사 소속 TF들이 이 색을 베이스로 어떻게 변형되는지 */}
+            {(() => {
+              const branch = data?.branches.find(b => b.id === editingColorBranch)
+              if (!branch) return null
+              const previewMap = { ...branchColorMap, [branch.name]: colorDraft }
+              return (
+                <div className="border rounded p-2 space-y-1">
+                  <div className="text-[10px] text-gray-400 mb-1">미리보기 (소속 TF 색상 변형)</div>
+                  {branch.tfs.length === 0 && <div className="text-xs text-gray-400">소속 TF 없음</div>}
+                  {branch.tfs.map(tf => (
+                    <div key={tf.tfName} className="flex items-center gap-2 text-xs">
+                      <span className="w-3 h-3 rounded-sm" style={{ backgroundColor: getTFColor(tf.tfName, previewMap) }} />
+                      <span>{tf.tfName}</span>
+                    </div>
+                  ))}
+                </div>
+              )
+            })()}
+
+            <div className="text-[11px] text-gray-500 bg-gray-50 rounded p-2">
+              💡 지사 대표 색을 정하면, 소속 TF들은 명도만 다른 같은 계열 색으로 자동 배정됩니다.
+              <br />통합캘린더의 모든 TF 색상이 여기서 관리된 값으로 통일됩니다.
+            </div>
+
+            <div className="flex justify-end gap-2 border-t pt-3">
+              <button onClick={() => setEditingColorBranch(null)} className="px-3 py-1.5 text-sm text-gray-500 border rounded hover:bg-gray-50">
+                취소
+              </button>
+              <button onClick={saveBranchColor} disabled={saving} className="px-4 py-1.5 text-sm bg-sky-500 text-white rounded hover:bg-sky-600 disabled:opacity-50">
+                {saving ? '저장 중...' : '저장'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 지사 TF 편집 모달 */}
       {editingBranch && (
         <div className="fixed inset-0 z-50 flex items-center justify-center" onClick={() => setEditingBranch(null)}>
@@ -326,7 +435,7 @@ export default function TfManagementPage() {
               )}
               {tfListDraft.map((tf, idx) => (
                 <div key={tf} className="flex items-center gap-2 px-2 py-1 border rounded bg-gray-50">
-                  <span className="w-2 h-2 rounded-sm" style={{ backgroundColor: getTFColor(tf) }} />
+                  <span className="w-2 h-2 rounded-sm" style={{ backgroundColor: getTFColor(tf, branchColorMap) }} />
                   <span className="text-sm flex-1">{tf}</span>
                   <button
                     onClick={() => moveTfInDraft(tf, -1)}

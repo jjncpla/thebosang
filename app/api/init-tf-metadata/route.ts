@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma"
 import { TF_BY_BRANCH } from "@/lib/constants/tf"
+import { BRANCH_BASE_COLORS } from "@/lib/tf-colors"
 import { NextResponse } from "next/server"
 
 /**
@@ -30,6 +31,11 @@ export async function GET() {
       "createdAt" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
       "updatedAt" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
     )
+  `)
+
+  // 1.5. branches 테이블에 colorBase 컬럼 추가 (없으면)
+  await run('ADD COLUMN colorBase', () => prisma.$executeRaw`
+    ALTER TABLE "branches" ADD COLUMN IF NOT EXISTS "colorBase" TEXT
   `)
 
   // 2. 메모 seed (사용자 정리안 2026-04-21)
@@ -87,19 +93,33 @@ export async function GET() {
   }
   steps.push({ step: 'seed memos', ok: true, result: { inserted: seedInserted, skipped: seedSkipped } })
 
-  // 3. Branch 테이블에 TF_BY_BRANCH 내용 upsert (신규 지사/TF 동기화)
+  // 3. Branch 테이블에 TF_BY_BRANCH 내용 + colorBase upsert
+  //    colorBase는 기존 값이 있으면 유지(사용자 편집 보존), 없을 때만 하드코딩 팔레트에서 seed
   let branchUpserted = 0
   const branchEntries = Object.entries(TF_BY_BRANCH)
   for (let i = 0; i < branchEntries.length; i++) {
     const [branchName, tfs] = branchEntries[i]
+    const defaultColor = BRANCH_BASE_COLORS[branchName] ?? null
     try {
+      const existing = await prisma.branch.findUnique({
+        where: { name: branchName },
+        select: { colorBase: true },
+      })
+      const colorToSet = existing?.colorBase ?? defaultColor
+
       await prisma.branch.upsert({
         where: { name: branchName },
-        update: { assignedTFs: tfs as unknown as object, displayOrder: i },
+        update: {
+          assignedTFs: tfs as unknown as object,
+          displayOrder: i,
+          // 기존 값이 null이면 seed, 있으면 기존값 유지
+          ...(existing?.colorBase ? {} : { colorBase: colorToSet }),
+        },
         create: {
           name: branchName,
           assignedTFs: tfs as unknown as object,
           displayOrder: i,
+          colorBase: colorToSet,
           firmType: 'TBOSANG',
           isActive: true,
         },
@@ -109,7 +129,7 @@ export async function GET() {
       steps.push({ step: `branch upsert ${branchName}`, ok: false, error: e instanceof Error ? e.message : String(e) })
     }
   }
-  steps.push({ step: 'branches upsert', ok: true, result: { count: branchUpserted } })
+  steps.push({ step: 'branches upsert (with color seed)', ok: true, result: { count: branchUpserted } })
 
   const allOk = steps.every(s => s.ok)
   return NextResponse.json({ ok: allOk, steps })

@@ -61,9 +61,9 @@ const CATEGORY_COLORS: Record<string, string> = {
 function isFreeform(category: string) {
   return (FREEFORM_CATEGORIES as readonly string[]).includes(category)
 }
-function eventColor(s: Schedule) {
+function eventColor(s: Schedule, colorMap?: Record<string, string>) {
   if (isFreeform(s.category)) return CATEGORY_COLORS[s.category] || '#95A5A6'
-  return getTFColor(s.tfName)
+  return getTFColor(s.tfName, colorMap)
 }
 function eventTitle(s: Schedule) {
   if (isFreeform(s.category)) return s.title || s.category
@@ -122,6 +122,14 @@ function SpecialClinicCalendar() {
   const [holidays, setHolidays] = useState<Record<string, string>>({})
   const [draggedEventId, setDraggedEventId] = useState<string | null>(null)
   const popupRef = useRef<HTMLDivElement>(null)
+  // DB에서 지사별 색상 맵 (Branch.colorBase) 로드
+  const [branchColorMap, setBranchColorMap] = useState<Record<string, string>>({})
+  useEffect(() => {
+    fetch('/api/tf-color-map')
+      .then(r => r.ok ? r.json() : {})
+      .then((m: Record<string, string>) => { if (m && typeof m === 'object') setBranchColorMap(m) })
+      .catch(() => {})
+  }, [])
 
   // URL 동기화
   useEffect(() => {
@@ -502,7 +510,7 @@ function SpecialClinicCalendar() {
                   {TF_BY_BRANCH[branch].map(tf => (
                     <label key={tf} className="flex items-center gap-2 px-2 py-1 hover:bg-gray-50 cursor-pointer text-xs">
                       <input type="checkbox" checked={selectedTFs.includes(tf)} onChange={() => { toggleTF(tf); setSelectedBranch('') }} className="rounded" />
-                      <span className="w-2 h-2 rounded-sm flex-shrink-0" style={{ backgroundColor: getTFColor(tf) }} />
+                      <span className="w-2 h-2 rounded-sm flex-shrink-0" style={{ backgroundColor: getTFColor(tf, branchColorMap) }} />
                       {tf}
                     </label>
                   ))}
@@ -669,7 +677,7 @@ function SpecialClinicCalendar() {
                       </div>
                       {(isExpanded ? daySchedules : daySchedules.slice(0, maxShow)).map(s => {
                         const free = isFreeform(s.category)
-                        const color = eventColor(s)
+                        const color = eventColor(s, branchColorMap)
                         return (
                         <button
                           key={s.id}
@@ -750,7 +758,7 @@ function SpecialClinicCalendar() {
                   <div className="flex-1 space-y-0.5 overflow-y-auto">
                     {wdSchedules.map(s => {
                       const free = isFreeform(s.category)
-                      const color = eventColor(s)
+                      const color = eventColor(s, branchColorMap)
                       return (
                       <button
                         key={s.id}
@@ -825,7 +833,7 @@ function SpecialClinicCalendar() {
                   <div className="text-xs text-gray-400 font-medium">하루종일</div>
                   {allDayScheds.map(s => {
                     const free = isFreeform(s.category)
-                    const color = eventColor(s)
+                    const color = eventColor(s, branchColorMap)
                     return (
                     <div key={s.id} className="rounded-lg p-3 border" style={{ borderLeftWidth: 4, borderLeftColor: color, backgroundColor: color + '08' }}>
                       <div className="flex items-center gap-2 mb-1">
@@ -869,7 +877,7 @@ function SpecialClinicCalendar() {
                   <div className="text-xs text-gray-400 font-medium">시간 일정</div>
                   {timedScheds.map(s => {
                     const free = isFreeform(s.category)
-                    const color = eventColor(s)
+                    const color = eventColor(s, branchColorMap)
                     return (
                     <div key={s.id} className="flex gap-3">
                       <div className="text-xs font-medium text-sky-600 w-12 pt-3 text-right flex-shrink-0">
@@ -932,7 +940,7 @@ function SpecialClinicCalendar() {
               style={{ opacity: isActive ? 1 : 0.35 }}
               title={tf}
             >
-              <span className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ backgroundColor: getTFColor(tf) }} />
+              <span className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ backgroundColor: getTFColor(tf, branchColorMap) }} />
               <span className="text-[10px] text-gray-700 truncate">{tf}</span>
             </div>
           )
@@ -1006,7 +1014,7 @@ function SpecialClinicCalendar() {
                     <span className="text-gray-400 truncate">{s.hospitalName}</span>
                   </>
                 )}
-                <span className="ml-auto text-[10px]" style={{ color: eventColor(s) }}>{s.tfName || s.category}</span>
+                <span className="ml-auto text-[10px]" style={{ color: eventColor(s, branchColorMap) }}>{s.tfName || s.category}</span>
               </button>
               )
             })}
@@ -1032,8 +1040,8 @@ function SpecialClinicCalendar() {
           <div className="p-4 space-y-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <span className="w-3 h-3 rounded-full" style={{ backgroundColor: eventColor(selected) }} />
-                <span className="text-xs font-medium" style={{ color: eventColor(selected) }}>
+                <span className="w-3 h-3 rounded-full" style={{ backgroundColor: eventColor(selected, branchColorMap) }} />
+                <span className="text-xs font-medium" style={{ color: eventColor(selected, branchColorMap) }}>
                   {isFreeform(selected.category) ? selected.category : selected.tfName}
                 </span>
                 {isFreeform(selected.category) && selected.tfName && (

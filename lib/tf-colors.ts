@@ -1,10 +1,11 @@
 import { TF_BY_BRANCH, TF_TO_BRANCH } from '@/lib/constants/tf'
 
 /**
- * 지사별 베이스 컬러(팔레트). 같은 지사 소속 TF들은 같은 계열(명도만 조절).
- * 지사별로 시각적으로 구분되는 22색.
+ * 지사별 베이스 컬러(팔레트) — 하드코딩 fallback.
+ * 실제 런타임 색상은 Branch.colorBase (DB) 우선, 없을 때만 이 값을 사용.
+ * `BRANCH_BASE_COLORS` 이름으로 export해서 init API의 seed 값으로도 사용됨.
  */
-const BRANCH_BASE: Record<string, string> = {
+export const BRANCH_BASE_COLORS: Record<string, string> = {
   '노무법인 더보상 울산지사':       '#006838', // 진녹
   '노무법인 더보상 울산동부지사':   '#29ABE2', // 하늘
   '노무법인 더보상 부산경남지사':   '#E74C3C', // 빨강
@@ -57,17 +58,24 @@ function hashColor(name: string): string {
 
 /**
  * TF 이름 → 색상.
+ * @param tfName
+ * @param branchColorOverride DB에서 로드한 지사별 색상 맵 (선택). 있으면 이 값 우선.
+ *
  * - TF_BY_BRANCH 에 등록된 TF는 해당 지사 팔레트 기반 (지사 내 순서에 따라 명도 변형)
- * - 'Legacy' 은 회색
+ * - 'Legacy' / '미분류' 은 회색
  * - 미등록 TF 는 해시 기반 고유 색상
  */
-export function getTFColor(tfName: string): string {
+export function getTFColor(tfName: string, branchColorOverride?: Record<string, string>): string {
   if (!tfName) return '#95A5A6'
   if (tfName === 'Legacy' || tfName === '미분류') return '#95A5A6'
 
+  const resolveBase = (branch: string): string | undefined => {
+    return branchColorOverride?.[branch] ?? BRANCH_BASE_COLORS[branch]
+  }
+
   const branch = TF_TO_BRANCH[tfName]
   if (branch) {
-    const base = BRANCH_BASE[branch]
+    const base = resolveBase(branch)
     if (base) {
       const tfs = TF_BY_BRANCH[branch] || []
       const idx = tfs.indexOf(tfName)
@@ -83,7 +91,7 @@ export function getTFColor(tfName: string): string {
       const stripped = tfName.slice(prefix.length)
       const b = TF_TO_BRANCH[stripped]
       if (b) {
-        const base = BRANCH_BASE[b]
+        const base = resolveBase(b)
         if (base) return adjustLightness(base, prefix === '더보상' ? -20 : 20)
       }
     }

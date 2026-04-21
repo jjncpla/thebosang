@@ -18,6 +18,7 @@ export async function GET() {
       shortName: true,
       region: true,
       assignedTFs: true,
+      colorBase: true,
       isActive: true,
       displayOrder: true,
     },

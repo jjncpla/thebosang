@@ -1019,6 +1019,7 @@ model Branch {
   fax             String?
   region          String?
   assignedTFs     Json?
+  colorBase       String?  // 지사 대표 색(hex, 예: "#006838"). 소속 TF 색 계열의 베이스
   branchManagerId String?
   firmType        String   @default("TBOSANG")
   isActive        Boolean  @default(true)
