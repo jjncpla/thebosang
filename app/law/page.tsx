@@ -23,157 +23,288 @@ type Regulation = {
   chapters: Chapter[];
 };
 
-type LawLink = {
+type LawItem = {
   id: string;
+  label: "법" | "시행령" | "시행규칙";
   name: string;
-  shortName: string;
   url: string;
-  category: string;
+};
+
+type LawGroup = {
+  id: string;
+  groupName: string;
+  category: "주요 법률" | "관련 법률";
+  laws: LawItem[];
 };
 
 // ─── Data ────────────────────────────────────────────────────────────────────
 
-const LAW_LINKS: LawLink[] = [
+const LAW_GROUPS: LawGroup[] = [
   {
-    id: "산재법",
-    name: "산업재해보상보험법",
-    shortName: "산재보험법",
-    url: "https://www.law.go.kr/법령/산업재해보상보험법",
+    id: "산재",
+    groupName: "산업재해보상보험법령",
     category: "주요 법률",
+    laws: [
+      { id: "산재법", label: "법", name: "산업재해보상보험법", url: "https://www.law.go.kr/법령/산업재해보상보험법" },
+      { id: "산재령", label: "시행령", name: "산업재해보상보험법 시행령", url: "https://www.law.go.kr/법령/산업재해보상보험법시행령" },
+      { id: "산재칙", label: "시행규칙", name: "산업재해보상보험법 시행규칙", url: "https://www.law.go.kr/법령/산업재해보상보험법시행규칙" },
+    ],
   },
   {
-    id: "산재령",
-    name: "산업재해보상보험법 시행령",
-    shortName: "산재보험법 시행령",
-    url: "https://www.law.go.kr/법령/산업재해보상보험법시행령",
+    id: "근기",
+    groupName: "근로기준법령",
     category: "주요 법률",
+    laws: [
+      { id: "근기법", label: "법", name: "근로기준법", url: "https://www.law.go.kr/법령/근로기준법" },
+      { id: "근기령", label: "시행령", name: "근로기준법 시행령", url: "https://www.law.go.kr/법령/근로기준법시행령" },
+    ],
   },
   {
-    id: "산재칙",
-    name: "산업재해보상보험법 시행규칙",
-    shortName: "산재보험법 시행규칙",
-    url: "https://www.law.go.kr/법령/산업재해보상보험법시행규칙",
-    category: "주요 법률",
-  },
-  {
-    id: "근기법",
-    name: "근로기준법",
-    shortName: "근로기준법",
-    url: "https://www.law.go.kr/법령/근로기준법",
-    category: "주요 법률",
-  },
-  {
-    id: "근기령",
-    name: "근로기준법 시행령",
-    shortName: "근기법 시행령",
-    url: "https://www.law.go.kr/법령/근로기준법시행령",
-    category: "주요 법률",
-  },
-  {
-    id: "보험료법",
-    name: "고용보험 및 산업재해보상보험의 보험료징수 등에 관한 법률",
-    shortName: "보험료징수법",
-    url: "https://www.law.go.kr/법령/고용보험및산업재해보상보험의보험료징수등에관한법률",
+    id: "보험료",
+    groupName: "고용보험 및 산업재해보상보험의 보험료징수 등에 관한 법률",
     category: "관련 법률",
+    laws: [
+      { id: "보험료법", label: "법", name: "고용보험 및 산업재해보상보험의 보험료징수 등에 관한 법률", url: "https://www.law.go.kr/법령/고용보험및산업재해보상보험의보험료징수등에관한법률" },
+    ],
   },
   {
-    id: "고용법",
-    name: "고용보험법",
-    shortName: "고용보험법",
-    url: "https://www.law.go.kr/법령/고용보험법",
+    id: "고용",
+    groupName: "고용보험법령",
     category: "관련 법률",
+    laws: [
+      { id: "고용법", label: "법", name: "고용보험법", url: "https://www.law.go.kr/법령/고용보험법" },
+    ],
   },
   {
-    id: "장애법",
-    name: "장애인복지법",
-    shortName: "장애인복지법",
-    url: "https://www.law.go.kr/법령/장애인복지법",
+    id: "공무원재해",
+    groupName: "공무원 재해보상법령",
     category: "관련 법률",
+    laws: [
+      { id: "공무원재해법", label: "법", name: "공무원 재해보상법", url: "https://www.law.go.kr/법령/공무원재해보상법" },
+      { id: "공무원재해령", label: "시행령", name: "공무원 재해보상법 시행령", url: "https://www.law.go.kr/법령/공무원재해보상법시행령" },
+      { id: "공무원재해칙", label: "시행규칙", name: "공무원 재해보상법 시행규칙", url: "https://www.law.go.kr/법령/공무원재해보상법시행규칙" },
+    ],
   },
   {
-    id: "전자정부",
-    name: "전자정부법",
-    shortName: "전자정부법",
-    url: "https://www.law.go.kr/법령/전자정부법",
+    id: "어선원",
+    groupName: "어선원 및 어선 재해보상보험법령",
     category: "관련 법률",
+    laws: [
+      { id: "어선원법", label: "법", name: "어선원 및 어선 재해보상보험법", url: "https://www.law.go.kr/법령/어선원및어선재해보상보험법" },
+      { id: "어선원령", label: "시행령", name: "어선원 및 어선 재해보상보험법 시행령", url: "https://www.law.go.kr/법령/어선원및어선재해보상보험법시행령" },
+      { id: "어선원칙", label: "시행규칙", name: "어선원 및 어선 재해보상보험법 시행규칙", url: "https://www.law.go.kr/법령/어선원및어선재해보상보험법시행규칙" },
+    ],
+  },
+  {
+    id: "진폐",
+    groupName: "진폐의 예방과 진폐근로자의 보호 등에 관한 법률",
+    category: "관련 법률",
+    laws: [
+      { id: "진폐법", label: "법", name: "진폐의 예방과 진폐근로자의 보호 등에 관한 법률", url: "https://www.law.go.kr/법령/진폐의예방과진폐근로자의보호등에관한법률" },
+      { id: "진폐령", label: "시행령", name: "진폐의 예방과 진폐근로자의 보호 등에 관한 법률 시행령", url: "https://www.law.go.kr/법령/진폐의예방과진폐근로자의보호등에관한법률시행령" },
+      { id: "진폐칙", label: "시행규칙", name: "진폐의 예방과 진폐근로자의 보호 등에 관한 법률 시행규칙", url: "https://www.law.go.kr/법령/진폐의예방과진폐근로자의보호등에관한법률시행규칙" },
+    ],
+  },
+  {
+    id: "석탄",
+    groupName: "석탄산업법령",
+    category: "관련 법률",
+    laws: [
+      { id: "석탄법", label: "법", name: "석탄산업법", url: "https://www.law.go.kr/법령/석탄산업법" },
+      { id: "석탄령", label: "시행령", name: "석탄산업법 시행령", url: "https://www.law.go.kr/법령/석탄산업법시행령" },
+      { id: "석탄칙", label: "시행규칙", name: "석탄산업법 시행규칙", url: "https://www.law.go.kr/법령/석탄산업법시행규칙" },
+    ],
+  },
+  {
+    id: "안전보건",
+    groupName: "산업안전보건법령",
+    category: "관련 법률",
+    laws: [
+      { id: "안전법", label: "법", name: "산업안전보건법", url: "https://www.law.go.kr/법령/산업안전보건법" },
+      { id: "안전령", label: "시행령", name: "산업안전보건법 시행령", url: "https://www.law.go.kr/법령/산업안전보건법시행령" },
+      { id: "안전칙", label: "시행규칙", name: "산업안전보건법 시행규칙", url: "https://www.law.go.kr/법령/산업안전보건법시행규칙" },
+    ],
+  },
+  {
+    id: "행심",
+    groupName: "행정심판법령",
+    category: "관련 법률",
+    laws: [
+      { id: "행심법", label: "법", name: "행정심판법", url: "https://www.law.go.kr/법령/행정심판법" },
+      { id: "행심령", label: "시행령", name: "행정심판법 시행령", url: "https://www.law.go.kr/법령/행정심판법시행령" },
+      { id: "행심칙", label: "시행규칙", name: "행정심판법 시행규칙", url: "https://www.law.go.kr/법령/행정심판법시행규칙" },
+    ],
   },
 ];
 
 // ─── Sub-components ──────────────────────────────────────────────────────────
 
-function LawTab() {
-  const [selectedLaw, setSelectedLaw] = useState<LawLink>(LAW_LINKS[0]);
+const LABEL_COLORS: Record<LawItem["label"], { bg: string; text: string; border: string }> = {
+  법: { bg: "#dbeafe", text: "#1d4ed8", border: "#93c5fd" },
+  시행령: { bg: "#dcfce7", text: "#15803d", border: "#86efac" },
+  시행규칙: { bg: "#fef9c3", text: "#92400e", border: "#fde68a" },
+};
 
-  const categories = Array.from(new Set(LAW_LINKS.map((l) => l.category)));
+function LawTab() {
+  const firstItem = LAW_GROUPS[0].laws[0];
+  const [selectedItem, setSelectedItem] = useState<LawItem>(firstItem);
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(
+    new Set([LAW_GROUPS[0].id])
+  );
+
+  const categories: Array<"주요 법률" | "관련 법률"> = ["주요 법률", "관련 법률"];
+
+  const toggleGroup = (gid: string) => {
+    setExpandedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(gid)) next.delete(gid);
+      else next.add(gid);
+      return next;
+    });
+  };
 
   return (
     <div style={{ display: "flex", height: "calc(100vh - 160px)", gap: 0 }}>
       {/* Left sidebar */}
       <div
         style={{
-          width: 220,
+          width: 256,
           flexShrink: 0,
           borderRight: "1px solid #e5e7eb",
           overflowY: "auto",
           background: "#f9fafb",
+          display: "flex",
+          flexDirection: "column",
         }}
       >
-        {categories.map((cat) => (
-          <div key={cat}>
-            <div
-              style={{
-                padding: "10px 16px 6px",
-                fontSize: 11,
-                fontWeight: 700,
-                color: "#6b7280",
-                letterSpacing: "0.05em",
-                textTransform: "uppercase",
-              }}
-            >
-              {cat}
-            </div>
-            {LAW_LINKS.filter((l) => l.category === cat).map((law) => (
-              <button
-                key={law.id}
-                onClick={() => setSelectedLaw(law)}
+        <div style={{ flex: 1 }}>
+          {categories.map((cat) => (
+            <div key={cat}>
+              {/* Category label */}
+              <div
                 style={{
-                  display: "block",
-                  width: "100%",
-                  textAlign: "left",
-                  padding: "8px 16px",
-                  fontSize: 13,
-                  border: "none",
-                  cursor: "pointer",
-                  background:
-                    selectedLaw.id === law.id ? "#dbeafe" : "transparent",
-                  color: selectedLaw.id === law.id ? "#1d4ed8" : "#374151",
-                  fontWeight: selectedLaw.id === law.id ? 600 : 400,
-                  borderLeft:
-                    selectedLaw.id === law.id
-                      ? "3px solid #3b82f6"
-                      : "3px solid transparent",
-                  lineHeight: 1.4,
+                  padding: "12px 14px 6px",
+                  fontSize: 10,
+                  fontWeight: 700,
+                  color: "#9ca3af",
+                  letterSpacing: "0.08em",
+                  textTransform: "uppercase",
                 }}
               >
-                {law.shortName}
-              </button>
-            ))}
-          </div>
-        ))}
-        <div style={{ padding: "16px", borderTop: "1px solid #e5e7eb", marginTop: 8 }}>
+                {cat}
+              </div>
+
+              {LAW_GROUPS.filter((g) => g.category === cat).map((group) => {
+                const isExpanded = expandedGroups.has(group.id);
+                const isGroupActive = group.laws.some((l) => l.id === selectedItem.id);
+                return (
+                  <div key={group.id}>
+                    {/* Group header */}
+                    <button
+                      onClick={() => toggleGroup(group.id)}
+                      style={{
+                        display: "flex",
+                        alignItems: "flex-start",
+                        width: "100%",
+                        textAlign: "left",
+                        padding: "7px 14px",
+                        fontSize: 12,
+                        fontWeight: isGroupActive ? 700 : 500,
+                        border: "none",
+                        cursor: "pointer",
+                        background: isGroupActive ? "#eff6ff" : "transparent",
+                        color: isGroupActive ? "#1d4ed8" : "#374151",
+                        gap: 6,
+                        lineHeight: 1.45,
+                      }}
+                    >
+                      <span
+                        style={{
+                          fontSize: 9,
+                          marginTop: 3,
+                          flexShrink: 0,
+                          transform: isExpanded ? "rotate(90deg)" : "none",
+                          display: "inline-block",
+                          transition: "transform 0.15s",
+                          color: "#9ca3af",
+                        }}
+                      >
+                        ▶
+                      </span>
+                      <span>{group.groupName}</span>
+                    </button>
+
+                    {/* Sub-items */}
+                    {isExpanded && (
+                      <div style={{ paddingLeft: 8, paddingBottom: 4 }}>
+                        {group.laws.map((law) => {
+                          const colors = LABEL_COLORS[law.label];
+                          const isActive = selectedItem.id === law.id;
+                          return (
+                            <button
+                              key={law.id}
+                              onClick={() => setSelectedItem(law)}
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                width: "100%",
+                                textAlign: "left",
+                                padding: "5px 14px 5px 20px",
+                                fontSize: 12,
+                                border: "none",
+                                cursor: "pointer",
+                                background: isActive ? "#dbeafe" : "transparent",
+                                color: isActive ? "#1d4ed8" : "#4b5563",
+                                fontWeight: isActive ? 600 : 400,
+                                gap: 8,
+                                borderLeft: isActive
+                                  ? "2px solid #3b82f6"
+                                  : "2px solid transparent",
+                              }}
+                            >
+                              <span
+                                style={{
+                                  fontSize: 10,
+                                  padding: "1px 5px",
+                                  borderRadius: 3,
+                                  background: colors.bg,
+                                  color: colors.text,
+                                  border: `1px solid ${colors.border}`,
+                                  flexShrink: 0,
+                                  fontWeight: 600,
+                                }}
+                              >
+                                {law.label}
+                              </span>
+                              <span style={{ lineHeight: 1.4 }}>{law.name}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+
+              <div style={{ height: 8 }} />
+            </div>
+          ))}
+        </div>
+
+        <div style={{ padding: "12px 14px", borderTop: "1px solid #e5e7eb" }}>
           <a
             href="https://www.law.go.kr"
             target="_blank"
             rel="noopener noreferrer"
             style={{
               display: "block",
-              fontSize: 12,
-              color: "#6b7280",
+              fontSize: 11,
+              color: "#9ca3af",
               textDecoration: "none",
               textAlign: "center",
             }}
           >
-            국가법령정보센터 →
+            국가법령정보센터 ↗
           </a>
         </div>
       </div>
@@ -187,26 +318,45 @@ function LawTab() {
             background: "#fff",
             display: "flex",
             alignItems: "center",
-            gap: 12,
+            gap: 10,
           }}
         >
+          {(() => {
+            const colors = LABEL_COLORS[selectedItem.label];
+            return (
+              <span
+                style={{
+                  fontSize: 11,
+                  padding: "2px 6px",
+                  borderRadius: 4,
+                  background: colors.bg,
+                  color: colors.text,
+                  border: `1px solid ${colors.border}`,
+                  fontWeight: 700,
+                  flexShrink: 0,
+                }}
+              >
+                {selectedItem.label}
+              </span>
+            );
+          })()}
           <span style={{ fontSize: 14, fontWeight: 600, color: "#111827" }}>
-            {selectedLaw.name}
+            {selectedItem.name}
           </span>
           <a
-            href={selectedLaw.url}
+            href={selectedItem.url}
             target="_blank"
             rel="noopener noreferrer"
-            style={{ fontSize: 12, color: "#3b82f6", textDecoration: "none" }}
+            style={{ fontSize: 12, color: "#3b82f6", textDecoration: "none", marginLeft: "auto", flexShrink: 0 }}
           >
             새 탭에서 열기 ↗
           </a>
         </div>
         <iframe
-          key={selectedLaw.id}
-          src={selectedLaw.url}
+          key={selectedItem.id}
+          src={selectedItem.url}
           style={{ flex: 1, border: "none" }}
-          title={selectedLaw.name}
+          title={selectedItem.name}
           sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-top-navigation"
         />
       </div>
