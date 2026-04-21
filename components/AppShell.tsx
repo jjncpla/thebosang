@@ -21,6 +21,16 @@ type SearchResult = {
   patient: { id: string; name: string; ssn: string | null } | null;
 };
 
+type EmpResult = {
+  id: string;
+  name: string;
+  branch: string;
+  title: string;
+  jobGrade: string;
+  mobile: string;
+  hireDate: string | null;
+};
+
 const MENU_ITEMS: MenuItem[] = [
   { id: "todo", label: "To Do List", icon: "☑", path: "/todo" },
   { id: "law", label: "법령 및 규정", icon: "📜", path: "/law" },
@@ -87,6 +97,12 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const [searchOpen, setSearchOpen] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
   const searchBoxRef = useRef<HTMLDivElement>(null);
+
+  const [empQuery, setEmpQuery] = useState("");
+  const [empResults, setEmpResults] = useState<EmpResult[]>([]);
+  const [empOpen, setEmpOpen] = useState(false);
+  const empRef = useRef<HTMLInputElement>(null);
+  const empBoxRef = useRef<HTMLDivElement>(null);
   const pathname = usePathname();
   const router = useRouter();
   const { data: session } = useSession();
@@ -120,18 +136,21 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     return () => window.removeEventListener("keydown", handler);
   }, []);
 
-  // Click outside to close dropdown
+  // Click outside to close dropdowns
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (searchBoxRef.current && !searchBoxRef.current.contains(e.target as Node)) {
         setSearchOpen(false);
+      }
+      if (empBoxRef.current && !empBoxRef.current.contains(e.target as Node)) {
+        setEmpOpen(false);
       }
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  // Debounced search
+  // Debounced case search
   const doSearch = useCallback(async (q: string) => {
     if (q.trim().length < 2) { setSearchResults([]); return; }
     try {
@@ -147,6 +166,24 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     const t = setTimeout(() => doSearch(searchQuery), 250);
     return () => clearTimeout(t);
   }, [searchQuery, doSearch]);
+
+  // Debounced employee search
+  const doEmpSearch = useCallback(async (q: string) => {
+    if (q.trim().length < 1) { setEmpResults([]); return; }
+    try {
+      const params = new URLSearchParams({ firmType: "TBOSANG", search: q });
+      const res = await fetch(`/api/contacts?${params}`);
+      if (res.ok) {
+        const data = await res.json();
+        setEmpResults((data.contacts || []).slice(0, 8));
+      }
+    } catch { setEmpResults([]); }
+  }, []);
+
+  useEffect(() => {
+    const t = setTimeout(() => doEmpSearch(empQuery), 250);
+    return () => clearTimeout(t);
+  }, [empQuery, doEmpSearch]);
 
   const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter" && searchQuery.trim()) {
@@ -455,6 +492,82 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                       전체 결과 보기 →
                     </button>
                   </>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Employee search */}
+          <div
+            ref={empBoxRef}
+            style={{
+              position: "relative",
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              background: pathname === "/" ? "rgba(255,255,255,.1)" : "var(--surface)",
+              border: `1px solid ${pathname === "/" ? "rgba(255,255,255,.18)" : "var(--paper-line)"}`,
+              borderRadius: 8,
+              padding: "5px 10px",
+              minWidth: 180,
+            }}
+          >
+            <span style={{ fontSize: 12, color: pathname === "/" ? "rgba(255,255,255,.6)" : "var(--ink-400)", flexShrink: 0 }}>👤</span>
+            <input
+              ref={empRef}
+              type="text"
+              value={empQuery}
+              onChange={(e) => { setEmpQuery(e.target.value); setEmpOpen(true); }}
+              onFocus={() => setEmpOpen(true)}
+              onKeyDown={(e) => { if (e.key === "Escape") { setEmpOpen(false); empRef.current?.blur(); } }}
+              placeholder="임직원 검색"
+              style={{
+                flex: 1,
+                border: "none",
+                outline: "none",
+                background: "transparent",
+                fontSize: 13,
+                color: pathname === "/" ? "rgba(255,255,255,.9)" : "var(--ink-700)",
+                minWidth: 0,
+              }}
+            />
+            {empOpen && empQuery.trim().length >= 1 && (
+              <div style={{
+                position: "absolute",
+                top: "calc(100% + 6px)",
+                left: 0,
+                right: 0,
+                background: "#fff",
+                border: "1px solid var(--paper-line)",
+                borderRadius: 8,
+                boxShadow: "0 8px 24px rgba(0,0,0,.12)",
+                zIndex: 200,
+                minWidth: 360,
+                maxHeight: 360,
+                overflowY: "auto",
+              }}>
+                {empResults.length === 0 ? (
+                  <div style={{ padding: "14px 16px", fontSize: 13, color: "var(--ink-400)" }}>검색 결과가 없습니다.</div>
+                ) : (
+                  empResults.map((c) => (
+                    <div key={c.id} style={{
+                      padding: "10px 14px",
+                      borderBottom: "1px solid var(--paper-line)",
+                      fontSize: 13,
+                      color: "var(--ink-700)",
+                    }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 3 }}>
+                        <span style={{ fontWeight: 700, color: "var(--ink-900)" }}>{c.name}</span>
+                        <span style={{ fontSize: 11, background: "#f0fdf4", color: "#065f46", padding: "1px 6px", borderRadius: 4, border: "1px solid #d1fae5" }}>{c.jobGrade}</span>
+                        <span style={{ fontSize: 11, color: "var(--ink-400)" }}>{c.title}</span>
+                      </div>
+                      <div style={{ display: "flex", gap: 12, fontSize: 11, color: "var(--ink-400)" }}>
+                        <span>{c.branch}</span>
+                        <span>{c.mobile || "-"}</span>
+                        <span>{c.hireDate ? c.hireDate.slice(0, 10) : "-"}</span>
+                      </div>
+                    </div>
+                  ))
                 )}
               </div>
             )}
