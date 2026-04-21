@@ -1040,7 +1040,7 @@ function InputModal({
 
   // 텍스트 붙여넣기
   const [pasteText, setPasteText] = useState('')
-  const [pasteTfOrg, setPasteTfOrg] = useState<'이산' | '더보상'>('이산')
+  const [pasteTfOrg, setPasteTfOrg] = useState<'이산' | '더보상' | 'neutral'>('neutral')
   const [parsing, setParsing] = useState(false)
   const [parseResult, setParseResult] = useState<{ parsed: number; saved: number } | null>(null)
 
@@ -1281,22 +1281,28 @@ function InputModal({
 
         {modalTab === 'paste' && (
           <div className="space-y-3">
-            <div className="flex items-center gap-3">
-              <label className="text-xs text-gray-500">조직:</label>
-              {(['이산','더보상'] as const).map(org => (
-                <label key={org} className="flex items-center gap-1 text-xs cursor-pointer">
+            <div className="flex items-center gap-3 flex-wrap">
+              <label className="text-xs text-gray-500">메시지 출처:</label>
+              {([
+                ['neutral', '통합방', 'TF명 원본 보존'],
+                ['이산', '이산 전용방', 'TF명 앞에 "이산" 자동 부여'],
+                ['더보상', '더보상 전용방', 'TF명 앞에 "더보상" 자동 부여'],
+              ] as const).map(([val, label, desc]) => (
+                <label key={val} className="flex items-center gap-1 text-xs cursor-pointer" title={desc}>
                   <input
                     type="radio"
                     name="pasteTfOrg"
-                    checked={pasteTfOrg === org}
-                    onChange={() => setPasteTfOrg(org)}
+                    checked={pasteTfOrg === val}
+                    onChange={() => setPasteTfOrg(val)}
                   />
-                  {org}TF
+                  {label}
                 </label>
               ))}
-              <span className="text-[10px] text-gray-400 ml-auto">
-                TF명 접두어로 사용됨 (예: {pasteTfOrg}울산TF)
-              </span>
+            </div>
+            <div className="text-[10px] text-gray-400 -mt-1">
+              {pasteTfOrg === 'neutral' && '※ 메시지의 TF명(예: 울산TF, 진폐TF)을 그대로 저장'}
+              {pasteTfOrg === '이산' && '※ 접두어 없는 TF명에 "이산" 자동 부여 (예: 울산TF → 이산울산TF)'}
+              {pasteTfOrg === '더보상' && '※ 접두어 없는 TF명에 "더보상" 자동 부여 (예: 부산TF → 더보상부산TF)'}
             </div>
             <textarea
               value={pasteText}

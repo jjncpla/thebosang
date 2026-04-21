@@ -12,10 +12,16 @@ export interface ParsedSchedule {
   memo: string
 }
 
-export type TfOrg = '이산' | '더보상'
+export type TfOrg = '이산' | '더보상' | 'neutral'
 
 export interface ParseOptions {
-  /** TF 조직명. 이산TF 방은 '이산', 더보상 방은 '더보상'. 기본값 '이산'(기존 호환). */
+  /**
+   * TF 조직명.
+   * - '이산': 접두어 없는 TF명에 '이산' 자동 부여 (이산TF 전용방)
+   * - '더보상': 접두어 없는 TF명에 '더보상' 자동 부여 (더보상 전용방)
+   * - 'neutral': 메시지 TF명 원본 그대로 보존 (이산·더보상 혼재 통합방)
+   * 기본값 '이산' (기존 호환).
+   */
   tfOrg?: TfOrg
 }
 
@@ -196,7 +202,12 @@ export function parseSpecialClinicMessage(
 
 function normalizeTfName(name: string, tfOrg: TfOrg = '이산'): string {
   const trimmed = name.trim()
+  // 이미 조직 접두어가 붙은 경우 그대로 보존
   if (trimmed.startsWith('더보상') || trimmed.startsWith('이산')) {
+    return trimmed
+  }
+  // 통합방(neutral)은 원본 그대로 — 이산·더보상 혼재 환경에서 강제 분류 금지
+  if (tfOrg === 'neutral') {
     return trimmed
   }
   return tfOrg + trimmed
