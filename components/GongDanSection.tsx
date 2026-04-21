@@ -89,7 +89,7 @@ export default function GongDanSection() {
         ))}
       </div>
 
-      <div style={{padding:"20px 0"}}>
+      <div style={{padding:"20px 16px"}}>
 
         {/* 🏢 지사 안내 */}
         {menu === "branch" && (
