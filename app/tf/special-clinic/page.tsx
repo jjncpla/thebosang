@@ -95,6 +95,10 @@ function SpecialClinicCalendar() {
   const [categoryFilters, setCategoryFilters] = useState<string[]>([])
   const [categoryPanelOpen, setCategoryPanelOpen] = useState(false)
   const categoryPanelRef = useRef<HTMLDivElement>(null)
+  const [hospitalFilters, setHospitalFilters] = useState<string[]>([])
+  const [hospitalPanelOpen, setHospitalPanelOpen] = useState(false)
+  const hospitalPanelRef = useRef<HTMLDivElement>(null)
+  const [hospitalSearch, setHospitalSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState(searchParams?.get('status') || 'all')
   const [searchQuery, setSearchQuery] = useState('')
   const [debouncedQuery, setDebouncedQuery] = useState('')
@@ -161,6 +165,15 @@ function SpecialClinicCalendar() {
     return () => document.removeEventListener('mousedown', handleClick)
   }, [categoryPanelOpen])
 
+  // 병원 패널 외부 클릭 닫기
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (hospitalPanelRef.current && !hospitalPanelRef.current.contains(e.target as Node)) setHospitalPanelOpen(false)
+    }
+    if (hospitalPanelOpen) document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [hospitalPanelOpen])
+
   // 데이터 로드 (전체 — 프론트에서 필터링)
   const load = useCallback(async () => {
     setLoading(true)
@@ -221,10 +234,16 @@ function SpecialClinicCalendar() {
   }
   const branchButtonLabel = selectedBranch ? BRANCH_SHORT[selectedBranch] || selectedBranch : '지사 선택'
 
-  // 프론트 필터링 (TF 복수선택 + 카테고리 + 검색)
+  // 이달 병원 목록 (특진/재특진만, 가나다 정렬)
+  const hospitalList = [...new Set(
+    schedules.filter(s => s.hospitalName && !isFreeform(s.category)).map(s => s.hospitalName!)
+  )].sort((a, b) => a.localeCompare(b, 'ko'))
+
+  // 프론트 필터링 (TF 복수선택 + 카테고리 + 병원 + 검색)
   const filteredSchedules = schedules.filter(s => {
     if (selectedTFs.length > 0 && !selectedTFs.includes(s.tfName)) return false
     if (categoryFilters.length > 0 && !categoryFilters.includes(s.category) && !categoryFilters.includes(s.clinicType ?? '')) return false
+    if (hospitalFilters.length > 0 && (!s.hospitalName || !hospitalFilters.includes(s.hospitalName))) return false
     if (debouncedQuery) {
       const q = debouncedQuery.toLowerCase()
       const haystack = [s.patientName, s.hospitalName, s.tfName, s.memo, s.title, s.content].filter(Boolean) as string[]
@@ -523,6 +542,54 @@ function SpecialClinicCalendar() {
                   {c}
                 </label>
               ))}
+            </div>
+          )}
+        </div>
+
+        {/* 병원 복수선택 드롭다운 */}
+        <div className="relative" ref={hospitalPanelRef}>
+          <button
+            onClick={() => setHospitalPanelOpen(p => !p)}
+            className={`border rounded px-2 py-1 text-xs flex items-center gap-1 hover:bg-gray-50 ${hospitalFilters.length > 0 ? 'bg-teal-50 border-teal-300 text-teal-700' : ''}`}
+          >
+            {hospitalFilters.length === 0
+              ? '전체 병원'
+              : hospitalFilters.length === 1
+                ? hospitalFilters[0].length > 8 ? hospitalFilters[0].slice(0, 8) + '…' : hospitalFilters[0]
+                : `${hospitalFilters[0].length > 6 ? hospitalFilters[0].slice(0, 6) + '…' : hospitalFilters[0]} 외 ${hospitalFilters.length - 1}개`}
+            {' '}<span className="text-gray-400">▼</span>
+          </button>
+          {hospitalPanelOpen && (
+            <div className="absolute top-full mt-1 left-0 bg-white border rounded-lg shadow-lg z-40 w-56 py-1">
+              <div className="px-2 py-1 border-b flex items-center justify-between gap-2">
+                <button onClick={() => { setHospitalFilters([]); setHospitalSearch('') }} className="text-[10px] text-sky-500 hover:underline flex-shrink-0">전체 초기화</button>
+                <input
+                  value={hospitalSearch}
+                  onChange={e => setHospitalSearch(e.target.value)}
+                  placeholder="병원명 검색..."
+                  className="border border-gray-200 rounded px-1.5 py-0.5 text-[10px] w-full focus:outline-none focus:border-sky-300"
+                  onClick={e => e.stopPropagation()}
+                />
+              </div>
+              {hospitalList.length === 0 ? (
+                <div className="px-3 py-2 text-[10px] text-gray-400">이달 특진/재특진 일정 없음</div>
+              ) : (
+                <div className="max-h-64 overflow-y-auto">
+                  {hospitalList
+                    .filter(h => !hospitalSearch || h.toLowerCase().includes(hospitalSearch.toLowerCase()))
+                    .map(h => (
+                    <label key={h} className="flex items-center gap-2 px-2 py-1 hover:bg-gray-50 cursor-pointer text-xs">
+                      <input
+                        type="checkbox"
+                        checked={hospitalFilters.includes(h)}
+                        onChange={() => setHospitalFilters(prev => prev.includes(h) ? prev.filter(x => x !== h) : [...prev, h])}
+                        className="rounded flex-shrink-0"
+                      />
+                      <span className="truncate" title={h}>{h}</span>
+                    </label>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>
