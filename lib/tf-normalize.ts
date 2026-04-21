@@ -13,13 +13,13 @@ import { ALL_TF_LIST } from '@/lib/constants/tf'
 
 const STANDARD_SET = new Set(ALL_TF_LIST)
 
-/** 명시적 alias — 약칭·별칭 → 표준명 */
+/** 명시적 alias — 약칭·별칭·오타 → 표준명 */
 const EXPLICIT_ALIAS: Record<string, string> = {
   // 더보상 약칭
   '울동TF': '더보상울동TF',
   '부중TF': '더보상부중TF',
   '부경TF': '더보상부경TF',
-  // 표기 변형
+  // 표기 변형 (이산 접두어 누락)
   '울산동부TF': '이산울산동부TF',
   '울산남부TF': '이산울산남부TF',
   '울산북부TF': '이산울산북부TF',
@@ -32,6 +32,11 @@ const EXPLICIT_ALIAS: Record<string, string> = {
   '서울동부TF': '이산서울동부TF',
   '인천북부TF': '이산인천북부TF',
   '직업병상담소TF': '더보상직업병상담소TF',
+  // 흔한 오타
+  '율동TF': '더보상울동TF',
+  '이상인천TF': '이산인천TF',
+  '더보싱익산TF': '더보상익산TF',
+  '이상평택TF': '이산평택TF',
 }
 
 /** 특수·Legacy TF — 정규화 대상에서 제외 (그대로 유지) */
@@ -40,25 +45,39 @@ const KEEP_AS_IS = new Set([
   '경북TF', '진폐TF',  // 통합방에서 자주 쓰이는 특수 그룹 TF
 ])
 
-/** 담당자·직급이 TF명 뒤에 붙은 형태에서 TF 부분만 추출 */
+/** 담당자·직급·변형 표기를 모두 제거하여 정규화된 TF 부분만 반환 */
 function stripHandlerSuffix(raw: string): string {
   let s = raw.trim()
 
-  // 슬래시·괄호 뒷부분 제거 (기존 케이스)
+  // 감싸는 괄호 제거: "(전북TF)" → "전북TF"
+  if (s.startsWith('(') && s.endsWith(')')) s = s.slice(1, -1).trim()
+  // 앞에만 붙은 여는 괄호: "(마곡TF" → "마곡TF"
+  s = s.replace(/^\(+/, '').trim()
+
+  // 구분자 뒤 버림: /, (, &, ,
   const slashIdx = s.indexOf('/')
   if (slashIdx > -1) s = s.slice(0, slashIdx).trim()
   const parenIdx = s.indexOf('(')
   if (parenIdx > -1) s = s.slice(0, parenIdx).trim()
   const ampIdx = s.indexOf('&')
   if (ampIdx > -1) s = s.slice(0, ampIdx).trim()
+  const commaIdx = s.indexOf(',')
+  if (commaIdx > -1) s = s.slice(0, commaIdx).trim()
 
-  // "...TF" 로 끝나는 가장 긴 접두부만 남김 — 그 이후 문자는 모두 부가정보(담당자/직급/괄호닫기/하이픈기재)
-  //   예: "평택TF) 강병훈 과장님"     → "평택TF"
-  //       "평택TF 강병훈 과장님"      → "평택TF"
-  //       "대구수성TF ) 이광희 차장님" → "대구수성TF"
-  //       "울산TF-북"                  → "울산TF" (하이픈 뒤는 부가표기로 판단)
+  // 언더스코어를 공백으로 치환 (후처리에서 공백 제거됨)
+  s = s.replace(/_+/g, ' ')
+
+  // "...TF" 로 끝나는 가장 긴 접두부만 남김 — 그 뒤는 모두 담당자/직급/부가정보
+  //   예: "평택TF) 강병훈 과장님"   → "평택TF"
+  //       "대구수성TF ) 이광희"     → "대구수성TF"
+  //       "울산TF-북"                → "울산TF" (하이픈 뒤 변형 제거)
+  //       "더보상 여수TF"            → "더보상 여수TF" (공백 유지, 후처리에서 제거)
   const m = s.match(/^(.*?TF)(?![가-힣a-zA-Z0-9])/)
-  if (m) return m[1].trim()
+  if (m) s = m[1].trim()
+
+  // 내부 공백 전부 제거: "청주 TF" → "청주TF", "더보상 여수TF" → "더보상여수TF"
+  s = s.replace(/\s+/g, '')
+
   return s
 }
 
