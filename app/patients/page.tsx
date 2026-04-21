@@ -6,6 +6,16 @@ import { useSession } from "next-auth/react";
 import { CASE_TYPE_LABELS } from "@/lib/constants/case";
 import { useBranches } from "@/lib/hooks/useBranches";
 
+type ContactItem = {
+  id: string;
+  name: string;
+  branch: string;
+  title: string;
+  jobGrade: string;
+  mobile: string;
+  hireDate: string | null;
+};
+
 type PatientListItem = {
   id: string;
   name: string;
@@ -59,6 +69,12 @@ export default function PatientsPage() {
   const [submittedSearch, setSubmittedSearch] = useState("");
   const [filterTf, setFilterTf] = useState("");
 
+  // 임직원 검색
+  const [empSearch, setEmpSearch] = useState("");
+  const [empSubmitted, setEmpSubmitted] = useState("");
+  const [empResults, setEmpResults] = useState<ContactItem[]>([]);
+  const [empLoading, setEmpLoading] = useState(false);
+
   const fetchPatients = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -81,7 +97,25 @@ export default function PatientsPage() {
 
   const handleSearch = () => setSubmittedSearch(search);
 
+  const fetchEmployees = useCallback(async () => {
+    if (!empSubmitted) { setEmpResults([]); return; }
+    setEmpLoading(true);
+    try {
+      const params = new URLSearchParams({ firmType: "TBOSANG", search: empSubmitted });
+      const res = await fetch(`/api/contacts?${params}`);
+      const data = await res.json();
+      setEmpResults(data.contacts || []);
+    } finally {
+      setEmpLoading(false);
+    }
+  }, [empSubmitted]);
+
+  useEffect(() => { fetchEmployees(); }, [fetchEmployees]);
+
+  const handleEmpSearch = () => setEmpSubmitted(empSearch);
+
   const COLUMNS = ["연번", "성명", "주민번호", "연락처", "사건수", "상병", "등록일"];
+  const EMP_COLUMNS = ["이름", "소속", "직책", "직군", "핸드폰번호", "입사일"];
 
   return (
     <div style={{ padding: 24, minHeight: "100%", background: "#f1f5f9", fontFamily: "'Malgun Gothic', 'Apple SD Gothic Neo', 'Segoe UI', sans-serif" }}>
@@ -108,19 +142,20 @@ export default function PatientsPage() {
 
       {/* Search */}
       <div style={{ background: "white", borderRadius: 10, border: "1px solid #e5e7eb", padding: "12px 16px", marginBottom: 16, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", boxShadow: "0 1px 3px rgba(0,0,0,0.05)" }}>
+        {/* 재해자 검색 */}
         <input
           type="text"
           placeholder="이름, 주민번호, 전화번호 뒷 4자리 검색..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-          style={{ border: "1px solid #e5e7eb", borderRadius: 6, padding: "6px 12px", fontSize: 13, color: "#374151", outline: "none", width: 300, background: "#f9fafb" }}
+          style={{ border: "1px solid #e5e7eb", borderRadius: 6, padding: "6px 12px", fontSize: 13, color: "#374151", outline: "none", width: 280, background: "#f9fafb" }}
         />
         <button
           onClick={handleSearch}
           style={{ background: "#29ABE2", color: "white", border: "none", borderRadius: 6, padding: "7px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
         >
-          검색
+          재해자 검색
         </button>
         <select
           value={filterTf}
@@ -142,7 +177,81 @@ export default function PatientsPage() {
             초기화
           </button>
         )}
+
+        {/* 구분선 */}
+        <div style={{ width: 1, height: 28, background: "#e5e7eb", margin: "0 4px" }} />
+
+        {/* 임직원 검색 */}
+        <input
+          type="text"
+          placeholder="임직원 이름 검색..."
+          value={empSearch}
+          onChange={(e) => setEmpSearch(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && handleEmpSearch()}
+          style={{ border: "1px solid #e5e7eb", borderRadius: 6, padding: "6px 12px", fontSize: 13, color: "#374151", outline: "none", width: 180, background: "#f9fafb" }}
+        />
+        <button
+          onClick={handleEmpSearch}
+          style={{ background: "#005530", color: "white", border: "none", borderRadius: 6, padding: "7px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
+        >
+          임직원 검색
+        </button>
+        {empSubmitted && (
+          <button
+            onClick={() => { setEmpSearch(""); setEmpSubmitted(""); setEmpResults([]); }}
+            style={{ background: "none", border: "1px solid #e5e7eb", borderRadius: 6, padding: "7px 12px", fontSize: 12, color: "#6b7280", cursor: "pointer" }}
+          >
+            초기화
+          </button>
+        )}
       </div>
+
+      {/* 임직원 검색 결과 */}
+      {empSubmitted && (
+        <div style={{ background: "white", borderRadius: 10, border: "1px solid #e5e7eb", overflow: "hidden", boxShadow: "0 1px 3px rgba(0,0,0,0.05)", marginBottom: 16 }}>
+          <div style={{ padding: "10px 16px", background: "#f0fdf4", borderBottom: "1px solid #e5e7eb", display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ fontSize: 12, fontWeight: 700, color: "#005530" }}>임직원 검색 결과</span>
+            {!empLoading && (
+              <span style={{ background: "#d1fae5", color: "#065f46", fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 999 }}>
+                {empResults.length}명
+              </span>
+            )}
+          </div>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+            <thead>
+              <tr style={{ background: "#005530", borderBottom: "2px solid #004425" }}>
+                {EMP_COLUMNS.map((h) => (
+                  <th key={h} style={{ padding: "9px 16px", textAlign: "left", fontSize: 11, fontWeight: 700, color: "#fff", letterSpacing: 1, whiteSpace: "nowrap" }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {empLoading && (
+                <tr><td colSpan={EMP_COLUMNS.length} style={{ padding: "24px 16px", textAlign: "center", color: "#9ca3af", fontSize: 13 }}>검색 중...</td></tr>
+              )}
+              {!empLoading && empResults.length === 0 && (
+                <tr><td colSpan={EMP_COLUMNS.length} style={{ padding: "24px 16px", textAlign: "center", color: "#9ca3af", fontSize: 13 }}>검색 결과가 없습니다</td></tr>
+              )}
+              {!empLoading && empResults.map((c) => (
+                <tr key={c.id} style={{ borderBottom: "1px solid #f1f5f9" }}>
+                  <td style={{ padding: "10px 16px", fontWeight: 600, color: "#111827" }}>{c.name}</td>
+                  <td style={{ padding: "10px 16px", color: "#374151" }}>{c.branch || "-"}</td>
+                  <td style={{ padding: "10px 16px", color: "#374151" }}>{c.title || "-"}</td>
+                  <td style={{ padding: "10px 16px" }}>
+                    {c.jobGrade ? (
+                      <span style={{ background: "#f0fdf4", color: "#065f46", fontSize: 11, fontWeight: 600, padding: "2px 8px", borderRadius: 999, border: "1px solid #d1fae5" }}>
+                        {c.jobGrade}
+                      </span>
+                    ) : "-"}
+                  </td>
+                  <td style={{ padding: "10px 16px", color: "#374151", fontFamily: "monospace", fontSize: 12 }}>{c.mobile || "-"}</td>
+                  <td style={{ padding: "10px 16px", color: "#9ca3af", fontFamily: "monospace", fontSize: 12 }}>{c.hireDate ? formatDate(c.hireDate) : "-"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {/* Table */}
       <div style={{ background: "white", borderRadius: 10, border: "1px solid #e5e7eb", overflow: "hidden", boxShadow: "0 1px 3px rgba(0,0,0,0.05)" }}>
