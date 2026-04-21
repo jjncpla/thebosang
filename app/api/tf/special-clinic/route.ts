@@ -30,9 +30,30 @@ export async function GET(req: NextRequest) {
   if (clinicType) where.clinicType = clinicType
   if (status !== "all") where.status = status
 
+  // 응답 경량화: rawMessage·sourceDate·telegramMsgId는 리스트 응답에서 제외
+  // (팝업 상세에만 사용되므로 필요 시 별도 조회)
   const schedules = await prisma.specialClinicSchedule.findMany({
     where,
     orderBy: [{ scheduledDate: "asc" }, { scheduledHour: "asc" }],
+    select: {
+      id: true,
+      patientName: true,
+      tfName: true,
+      hospitalName: true,
+      clinicType: true,
+      category: true,
+      examRound: true,
+      title: true,
+      content: true,
+      scheduledDate: true,
+      isAllDay: true,
+      scheduledHour: true,
+      scheduledMinute: true,
+      status: true,
+      sender: true,
+      memo: true,
+      createdAt: true,
+    },
   })
 
   // 특진/재특진 일정의 patientName으로 Patient 연락처 조회
