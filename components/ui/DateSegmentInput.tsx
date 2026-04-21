@@ -86,8 +86,9 @@ export default function DateSegmentInput({ value, onChange, includeTime = false,
         onChange={(e) => {
           const v = only(e.target.value).slice(0, 4);
           setYear(v);
-          emit(v, month, day, hour, minute);
+          if (v.length === 4) emit(v, month, day, hour, minute);
         }}
+        onBlur={() => emit(year, month, day, hour, minute)}
       />
       <span style={unit}>년</span>
       <span style={sep}>-</span>
@@ -97,7 +98,7 @@ export default function DateSegmentInput({ value, onChange, includeTime = false,
         onChange={(e) => {
           const v = only(e.target.value).slice(0, 2);
           setMonth(v);
-          emit(year, v, day, hour, minute);
+          if (v.length === 2) emit(year, v, day, hour, minute);
         }}
         onBlur={(e) => {
           if (!e.target.value) return;
@@ -114,7 +115,7 @@ export default function DateSegmentInput({ value, onChange, includeTime = false,
         onChange={(e) => {
           const v = only(e.target.value).slice(0, 2);
           setDay(v);
-          emit(year, month, v, hour, minute);
+          if (v.length === 2) emit(year, month, v, hour, minute);
         }}
         onBlur={(e) => {
           if (!e.target.value) return;
@@ -133,7 +134,7 @@ export default function DateSegmentInput({ value, onChange, includeTime = false,
             onChange={(e) => {
               const v = only(e.target.value).slice(0, 2);
               setHour(v);
-              emit(year, month, day, v, minute);
+              if (v.length === 2) emit(year, month, day, v, minute);
             }}
             onBlur={(e) => {
               if (!e.target.value) return;
@@ -150,7 +151,7 @@ export default function DateSegmentInput({ value, onChange, includeTime = false,
             onChange={(e) => {
               const v = only(e.target.value).slice(0, 2);
               setMinute(v);
-              emit(year, month, day, hour, v);
+              if (v.length === 2) emit(year, month, day, hour, v);
             }}
             onBlur={(e) => {
               if (!e.target.value) return;
