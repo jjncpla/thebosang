@@ -295,9 +295,15 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
       {/* ── Main area ── */}
       <div className="main-area">
-        {/* Topbar */}
-        <header className="topbar">
-          <div className="crumbs">
+        {/* Topbar — 홈('/') 에서는 히어로와 이어지도록 딥그린 */}
+        <header
+          className="topbar"
+          style={pathname === "/" ? {
+            background: "var(--deep)",
+            borderBottom: "none",
+          } : undefined}
+        >
+          <div className="crumbs" style={pathname === "/" ? { color: "rgba(255,255,255,.6)" } : undefined}>
             <span>TBSS</span>
             {section && (
               <>
@@ -308,14 +314,26 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             {section !== title && (
               <>
                 <span className="sep">/</span>
-                <span className="cur">{title}</span>
+                <span className={pathname === "/" ? "" : "cur"}
+                  style={pathname === "/" ? { color: "rgba(255,255,255,.9)", fontWeight: 500 } : undefined}
+                >{title}</span>
               </>
             )}
           </div>
 
           {/* Functional search */}
-          <div ref={searchBoxRef} className="search-box" style={{ position: "relative" }}>
-            <span style={{ fontSize: 13, color: "var(--ink-400)", flexShrink: 0 }}>🔍</span>
+          <div
+            ref={searchBoxRef}
+            className="search-box"
+            style={{
+              position: "relative",
+              ...(pathname === "/" ? {
+                background: "rgba(255,255,255,.1)",
+                border: "1px solid rgba(255,255,255,.18)",
+              } : {}),
+            }}
+          >
+            <span style={{ fontSize: 13, color: pathname === "/" ? "rgba(255,255,255,.6)" : "var(--ink-400)", flexShrink: 0 }}>🔍</span>
             <input
               ref={searchRef}
               type="text"
@@ -330,15 +348,15 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 outline: "none",
                 background: "transparent",
                 fontSize: 13,
-                color: "var(--ink-700)",
+                color: pathname === "/" ? "rgba(255,255,255,.9)" : "var(--ink-700)",
                 minWidth: 0,
               }}
             />
             <span
               style={{
                 fontSize: 11,
-                color: "var(--ink-400)",
-                border: "1px solid var(--paper-line)",
+                color: pathname === "/" ? "rgba(255,255,255,.45)" : "var(--ink-400)",
+                border: `1px solid ${pathname === "/" ? "rgba(255,255,255,.2)" : "var(--paper-line)"}`,
                 padding: "1px 6px",
                 borderRadius: 3,
                 flexShrink: 0,
@@ -444,11 +462,17 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
           <div className="right">
             {session?.user && (
-              <div className="user-chip">
+              <div
+                className="user-chip"
+                style={pathname === "/" ? {
+                  background: "rgba(255,255,255,.1)",
+                  border: "1px solid rgba(255,255,255,.18)",
+                } : undefined}
+              >
                 <div className="avatar">{userInitial}</div>
                 <div className="who">
-                  <b>{userName}</b>
-                  <span>{userBranch || role}</span>
+                  <b style={pathname === "/" ? { color: "#fff" } : undefined}>{userName}</b>
+                  <span style={pathname === "/" ? { color: "rgba(255,255,255,.55)" } : undefined}>{userBranch || role}</span>
                 </div>
               </div>
             )}
@@ -456,12 +480,14 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               className="btn btn-ghost btn-sm"
               onClick={() => router.push("/mypage/password")}
               title="비밀번호 변경"
+              style={pathname === "/" ? { color: "rgba(255,255,255,.75)", borderColor: "rgba(255,255,255,.2)" } : undefined}
             >
               비밀번호 변경
             </button>
             <button
               className="btn btn-ghost btn-sm"
               onClick={() => signOut({ callbackUrl: `${window.location.origin}/login` })}
+              style={pathname === "/" ? { color: "rgba(255,255,255,.75)", borderColor: "rgba(255,255,255,.2)" } : undefined}
             >
               로그아웃
             </button>
