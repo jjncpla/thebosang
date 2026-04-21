@@ -52,6 +52,8 @@ export async function GET(req: NextRequest) {
       status: true,
       sender: true,
       memo: true,
+      assignedStaff: true,
+      attended: true,
       createdAt: true,
     },
   })
