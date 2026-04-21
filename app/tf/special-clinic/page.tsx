@@ -9,6 +9,7 @@ import { TF_BY_BRANCH, ALL_TF_LIST } from '@/lib/constants/tf'
 interface Schedule {
   id: string
   patientName: string | null
+  patientPhone: string | null
   tfName: string
   hospitalName: string | null
   clinicType: string | null
@@ -733,7 +734,10 @@ function SpecialClinicCalendar() {
                         </>
                       ) : (
                         <>
-                          <div className="text-sm font-bold text-gray-800">{s.patientName} &nbsp;{s.clinicType} {s.examRound}차</div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-bold text-gray-800">{s.patientName} &nbsp;{s.clinicType} {s.examRound}차</span>
+                            {s.patientPhone && <span className="text-xs text-gray-500">{s.patientPhone}</span>}
+                          </div>
                           <div className="text-xs text-gray-500 mt-0.5">{s.hospitalName}</div>
                         </>
                       )}
@@ -778,7 +782,10 @@ function SpecialClinicCalendar() {
                           </>
                         ) : (
                           <>
-                            <div className="text-sm font-bold text-gray-800">{s.patientName} &nbsp;{s.clinicType} {s.examRound}차</div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-bold text-gray-800">{s.patientName} &nbsp;{s.clinicType} {s.examRound}차</span>
+                              {s.patientPhone && <span className="text-xs text-gray-500">{s.patientPhone}</span>}
+                            </div>
                             <div className="text-xs text-gray-500 mt-0.5">{s.hospitalName}</div>
                           </>
                         )}
