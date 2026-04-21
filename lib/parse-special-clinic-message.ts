@@ -90,36 +90,66 @@ export function parseSpecialClinicMessage(
     // 마무리 문구 skip
     if (/일정안내\s*완료|재해자\s*안내\s*완료|안내\s*완료/i.test(line)) continue
 
-    // 환자 라인 감지
-    if (!line.startsWith('*') && !line.startsWith('<') && line.includes('(') && line.includes('TF') && /^[가-힣a-zA-Z]/.test(line)) {
-      // 환자명: 첫 '(' 이전 텍스트
-      const nameEnd = line.indexOf('(')
-      currentPatient = line.slice(0, nameEnd).trim()
-      // 숫자 접미사 포함 (김병수6 등)
-      currentPatient = currentPatient.replace(/\s+/g, '')
+    // 환자 라인 감지 — 두 가지 포맷 지원
+    //   (A) "환자명(TF명/팀)"          — 기존 이산TF 포맷
+    //   (B) "환자명 / TF명 (담당자)"   — 통합방 포맷 ("/" 구분자, TF가 괄호 밖)
+    //   (C) "환자명 (영문) / TF명 (담당자)" — 통합방 확장 포맷
+    if (!line.startsWith('*') && !line.startsWith('<') && line.includes('TF') && /^[가-힣a-zA-Z]/.test(line)) {
+      const slashIdx = line.indexOf('/')
+      const firstParenIdx = line.indexOf('(')
+      // 괄호가 '/' 뒤에 있거나, 괄호 내용이 TF 미포함이면 "/" 구분자 포맷으로 시도
+      const useSlashFormat = slashIdx > -1 && (
+        firstParenIdx === -1 ||
+        firstParenIdx > slashIdx ||
+        !line.slice(firstParenIdx, slashIdx).includes('TF')
+      )
 
-      // TF 추출: 괄호 내용 중 TF 포함 첫 번째
-      const parenMatches = line.match(/\(([^)]+)\)/g)
-      if (parenMatches) {
-        for (const pm of parenMatches) {
-          const inner = pm.slice(1, -1)
-          if (inner.includes('TF')) {
-            // 첫 '/' 이전
-            const tfPart = inner.split('/')[0].trim()
-            currentTF = normalizeTfName(tfPart, tfOrg)
-            break
-          }
+      if (useSlashFormat) {
+        const parts = line.split('/').map(p => p.trim())
+        // 환자명: 첫 파트의 '(' 이전 (영문명 괄호 제거)
+        const firstPart = parts[0]
+        const pIdx = firstPart.indexOf('(')
+        const name = (pIdx > 0 ? firstPart.slice(0, pIdx) : firstPart).trim().replace(/\s+/g, '')
+        // TF: 두 번째 이후 파트 중 TF 포함한 첫 번째 (괄호 앞까지)
+        let tfFound = ''
+        for (const part of parts.slice(1)) {
+          const pi = part.indexOf('(')
+          const candidate = (pi > 0 ? part.slice(0, pi) : part).trim()
+          if (candidate.includes('TF')) { tfFound = candidate; break }
+        }
+        if (name && tfFound) {
+          currentPatient = name
+          currentTF = normalizeTfName(tfFound, tfOrg)
+          memo = ''
+          continue
         }
       }
-      memo = ''
-      continue
+
+      // (A) 기존 포맷: "환자명(TF명/팀)"
+      if (firstParenIdx > 0) {
+        currentPatient = line.slice(0, firstParenIdx).trim().replace(/\s+/g, '')
+        const parenMatches = line.match(/\(([^)]+)\)/g)
+        if (parenMatches) {
+          for (const pm of parenMatches) {
+            const inner = pm.slice(1, -1)
+            if (inner.includes('TF')) {
+              const tfPart = inner.split('/')[0].trim()
+              currentTF = normalizeTfName(tfPart, tfOrg)
+              break
+            }
+          }
+        }
+        memo = ''
+        continue
+      }
     }
 
-    // 일정 라인 감지: *로 시작, '차' 포함, ':' 포함
-    const isScheduleLine = /^\*/.test(line) && line.includes('차') && line.includes(':')
+    // 일정 라인 감지: (옵션) *로 시작 + '숫자차' + ':' 포함
+    //   통합방에는 "*" 없이 "1차 종료 : ..." 바로 쓰는 경우도 있음
+    const isScheduleLine = /^\*?\s*\d+\s*차/.test(line) && line.includes(':')
     if (isScheduleLine && currentPatient) {
-      // 회차 추출
-      const roundMatch = line.match(/\*\s*(\d+)\s*차/)
+      // 회차 추출 (별표 유무 무관)
+      const roundMatch = line.match(/\*?\s*(\d+)\s*차/)
       const examRound = roundMatch ? parseInt(roundMatch[1]) : 1
 
       // 종료/완료 여부
