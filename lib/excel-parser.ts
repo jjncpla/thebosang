@@ -23,17 +23,17 @@ export function normalizeTfName(raw: unknown): string | null {
   if (!raw) return null;
   const s = String(raw).trim();
   const MAP: Record<string, string> = {
-    "울산": "울산TF",
+    "울산": "이산울산TF",
     "울동": "울산동부TF",
     "울산동부": "울산동부TF",
     "울산남부": "울산남부TF",
     "울산북부": "울산북부TF",
-    "부산": "부산TF",
+    "부산": "이산부산TF",
     "경남": "경남TF",
     "서울": "서울TF",
     "경기": "경기TF",
     "인천": "인천TF",
-    "대구": "대구TF",
+    "대구": "이산대구TF",
     "광주": "광주TF",
     "대전": "대전TF",
   };

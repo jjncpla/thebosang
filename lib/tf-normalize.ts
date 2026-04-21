@@ -54,7 +54,9 @@ const EXPLICIT_ALIAS: Record<string, string> = {
   '이산부경TF': '더보상부경TF',
   '이산부본TF': '이산부산지역본부TF',
   '부본TF': '이산부산지역본부TF',
-  '이산부산TF': '부산TF',        // 세분화 전 명칭으로 통일
+  '부산TF': '이산부산TF',
+  '울산TF': '이산울산TF',
+  '대구TF': '이산대구TF',
   '원주TF': '이산원주TF',
   '서울마곡TF': '이산마곡TF',
   '의정부지사TF': '이산의정부TF',
