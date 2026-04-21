@@ -1,4 +1,3 @@
-import { auth } from "@/auth"
 import { prisma } from "@/lib/prisma"
 import { canonicalizeTfName } from "@/lib/tf-normalize"
 import { NextResponse } from "next/server"
@@ -14,11 +13,9 @@ import { NextResponse } from "next/server"
  *   '평택TF 강병훈 과장님' → 이산평택TF
  *
  * 처리 방식: distinct tfName 목록만 가져와서 alias별로 updateMany. 60K 레코드 전체 순회 안 함.
+ * 기존 init-calendar-freeform 패턴과 동일하게 auth 없음 (1회성 마이그레이션 + 멱등).
  */
 export async function GET() {
-  const session = await auth()
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-
   // 1. distinct TF 목록 수집
   const distinctRows = await prisma.specialClinicSchedule.findMany({
     select: { tfName: true },
