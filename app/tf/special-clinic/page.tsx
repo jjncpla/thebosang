@@ -92,7 +92,9 @@ function SpecialClinicCalendar() {
   const [selectedBranch, setSelectedBranch] = useState('')
   const [branchPanelOpen, setBranchPanelOpen] = useState(false)
   const branchPanelRef = useRef<HTMLDivElement>(null)
-  const [categoryFilter, setCategoryFilter] = useState('')
+  const [categoryFilters, setCategoryFilters] = useState<string[]>([])
+  const [categoryPanelOpen, setCategoryPanelOpen] = useState(false)
+  const categoryPanelRef = useRef<HTMLDivElement>(null)
   const [statusFilter, setStatusFilter] = useState(searchParams?.get('status') || 'all')
   const [searchQuery, setSearchQuery] = useState('')
   const [debouncedQuery, setDebouncedQuery] = useState('')
@@ -149,6 +151,15 @@ function SpecialClinicCalendar() {
     if (branchPanelOpen) document.addEventListener('mousedown', handleClick)
     return () => document.removeEventListener('mousedown', handleClick)
   }, [branchPanelOpen])
+
+  // 카테고리 패널 외부 클릭 닫기
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (categoryPanelRef.current && !categoryPanelRef.current.contains(e.target as Node)) setCategoryPanelOpen(false)
+    }
+    if (categoryPanelOpen) document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [categoryPanelOpen])
 
   // 데이터 로드 (전체 — 프론트에서 필터링)
   const load = useCallback(async () => {
@@ -213,7 +224,7 @@ function SpecialClinicCalendar() {
   // 프론트 필터링 (TF 복수선택 + 카테고리 + 검색)
   const filteredSchedules = schedules.filter(s => {
     if (selectedTFs.length > 0 && !selectedTFs.includes(s.tfName)) return false
-    if (categoryFilter && s.category !== categoryFilter && s.clinicType !== categoryFilter) return false
+    if (categoryFilters.length > 0 && !categoryFilters.includes(s.category) && !categoryFilters.includes(s.clinicType ?? '')) return false
     if (debouncedQuery) {
       const q = debouncedQuery.toLowerCase()
       const haystack = [s.patientName, s.hospitalName, s.tfName, s.memo, s.title, s.content].filter(Boolean) as string[]
@@ -482,11 +493,39 @@ function SpecialClinicCalendar() {
           )}
         </div>
 
-        <select value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)}
-          className="border rounded px-2 py-1 text-xs">
-          <option value="">전체 카테고리</option>
-          {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-        </select>
+        {/* 카테고리 복수선택 드롭다운 */}
+        <div className="relative" ref={categoryPanelRef}>
+          <button
+            onClick={() => setCategoryPanelOpen(p => !p)}
+            className={`border rounded px-2 py-1 text-xs flex items-center gap-1 hover:bg-gray-50 ${categoryFilters.length > 0 ? 'bg-purple-50 border-purple-300 text-purple-700' : ''}`}
+          >
+            {categoryFilters.length === 0
+              ? '전체 카테고리'
+              : categoryFilters.length === 1
+                ? categoryFilters[0]
+                : `${categoryFilters[0]} 외 ${categoryFilters.length - 1}개`}
+            {' '}<span className="text-gray-400">▼</span>
+          </button>
+          {categoryPanelOpen && (
+            <div className="absolute top-full mt-1 left-0 bg-white border rounded-lg shadow-lg z-40 w-40 py-1">
+              <div className="px-2 py-1 border-b">
+                <button onClick={() => setCategoryFilters([])} className="text-[10px] text-sky-500 hover:underline">전체 초기화</button>
+              </div>
+              {CATEGORIES.map(c => (
+                <label key={c} className="flex items-center gap-2 px-2 py-1 hover:bg-gray-50 cursor-pointer text-xs">
+                  <input
+                    type="checkbox"
+                    checked={categoryFilters.includes(c)}
+                    onChange={() => setCategoryFilters(prev => prev.includes(c) ? prev.filter(x => x !== c) : [...prev, c])}
+                    className="rounded"
+                  />
+                  <span className="w-2 h-2 rounded-sm flex-shrink-0" style={{ backgroundColor: CATEGORY_COLORS[c] || '#64748B' }} />
+                  {c}
+                </label>
+              ))}
+            </div>
+          )}
+        </div>
 
         <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
           className="border rounded px-2 py-1 text-xs">
