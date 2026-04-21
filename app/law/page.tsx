@@ -589,6 +589,32 @@ function InternalRegulationTab() {
   );
 }
 
+// ① ~ ⑳ 원문자 및 법령 항목 기호 앞에서 단락 분리
+function formatArticleContent(raw: string): string[] {
+  // 분리 기준: ①~⑳ 원문자, 또는 줄 앞의 숫자+점(1. 2. ...), 가·나·다 목 기호
+  const SPLIT_RE = /((?:^|\s)(?:[①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳]|\d+\.\s|[가나다라마바사아자차카타파하]\.\s))/g;
+  const parts = raw.split(SPLIT_RE).filter((s) => s.trim().length > 0);
+
+  // 분리된 조각들을 재합산: 기호 + 뒤따르는 내용을 하나의 단락으로
+  const paragraphs: string[] = [];
+  let buffer = "";
+  for (const part of parts) {
+    const trimmed = part.trim();
+    if (!trimmed) continue;
+    const isMarker = /^[①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳]$/.test(trimmed) ||
+                     /^\d+\.$/.test(trimmed) ||
+                     /^[가나다라마바사아자차카타파하]\.$/.test(trimmed);
+    if (isMarker) {
+      if (buffer.trim()) paragraphs.push(buffer.trim());
+      buffer = trimmed + " ";
+    } else {
+      buffer += part;
+    }
+  }
+  if (buffer.trim()) paragraphs.push(buffer.trim());
+  return paragraphs.length > 0 ? paragraphs : [raw];
+}
+
 function ArticleView({
   article,
   onBack,
@@ -596,6 +622,8 @@ function ArticleView({
   article: Article;
   onBack: () => void;
 }) {
+  const paragraphs = formatArticleContent(article.content);
+
   return (
     <div style={{ maxWidth: 760 }}>
       <button
@@ -614,24 +642,36 @@ function ArticleView({
       </button>
       <h2
         style={{
-          fontSize: 18,
+          fontSize: 16,
           fontWeight: 700,
           color: "#111827",
-          marginBottom: 16,
+          marginBottom: 20,
+          paddingBottom: 12,
+          borderBottom: "2px solid #e5e7eb",
         }}
       >
         {article.number}({article.title})
       </h2>
-      <div
-        style={{
-          fontSize: 14,
-          lineHeight: 2,
-          color: "#374151",
-          whiteSpace: "pre-wrap",
-          wordBreak: "keep-all",
-        }}
-      >
-        {article.content}
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        {paragraphs.map((para, i) => {
+          // 첫 단락(조문 서두)은 들여쓰기 없이, 항목 기호 단락은 약간 들여쓰기
+          const isItem = /^[①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳\d]/.test(para);
+          return (
+            <p
+              key={i}
+              style={{
+                fontSize: 14,
+                lineHeight: 1.9,
+                color: "#374151",
+                margin: 0,
+                paddingLeft: isItem ? 8 : 0,
+                wordBreak: "keep-all",
+              }}
+            >
+              {para}
+            </p>
+          );
+        })}
       </div>
     </div>
   );
