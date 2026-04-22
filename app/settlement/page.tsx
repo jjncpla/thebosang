@@ -42,6 +42,205 @@ const EMPTY_FORM: Omit<SettlementItem, "id" | "sortOrder"> = {
   memo: "",
 };
 
+// ─── Text Parser ─────────────────────────────────────────────────────────────
+
+function parseSettlementText(text: string): Array<Omit<SettlementItem, "id" | "sortOrder">> {
+  const lines = text.split("\n");
+  const results: Array<Omit<SettlementItem, "id" | "sortOrder">> = [];
+  let currentTfGroup = "";
+  let currentCategory: Category = "정산예정";
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith("■") || line.startsWith("★ >") || line.startsWith("---")) continue;
+
+    // 섹션 헤더: <TF그룹명 미정산 리스트> 또는 <TF그룹명 정산 예정자>
+    const sectionMatch = line.match(/^<(.+?)\s*(미정산\s*리스트|정산\s*예정자)>/);
+    if (sectionMatch) {
+      currentTfGroup = sectionMatch[1].trim();
+      currentCategory = sectionMatch[2].replace(/\s/g, "").includes("미정산") ? "미정산" : "정산예정";
+      continue;
+    }
+
+    if (!line.startsWith("-") || !currentTfGroup) continue;
+
+    const entryLine = line.slice(1).trim();
+    const isPaid = entryLine.startsWith("★");
+    const withoutStar = isPaid ? entryLine.slice(1).trim() : entryLine;
+
+    // name(grade/branch/manager) : rest
+    const parenMatch = withoutStar.match(/^(.+?)\((.+?)\)\s*:\s*(.+)$/);
+    if (!parenMatch) continue;
+
+    const victimName = parenMatch[1].trim();
+    const innerParts = parenMatch[2].split("/");
+    const grade = innerParts[0]?.trim() || null;
+    const branchName = innerParts[1]?.trim() || null;
+    const managerName = innerParts[2]?.trim() || null;
+    let remainder = parenMatch[3].trim();
+
+    // 날짜 파싱: 2025.06.26. 또는 26.03.24.
+    let dateStr: string | null = null;
+    const dateMatch = remainder.match(/^(\d{2,4})\.(\d{2})\.(\d{2})\./);
+    if (dateMatch) {
+      const year = dateMatch[1].length === 2 ? `20${dateMatch[1]}` : dateMatch[1];
+      dateStr = `${year}-${dateMatch[2]}-${dateMatch[3]}`;
+      remainder = remainder.slice(dateMatch[0].length).trim();
+    }
+
+    // 상태 파싱: (분할 납부중) 등
+    let isInstallment = false;
+    let status: string | null = null;
+    const statusMatch = remainder.match(/^\(([^)]+)\)/);
+    if (statusMatch) {
+      status = statusMatch[1].trim();
+      if (status.replace(/\s/g, "").includes("분할")) isInstallment = true;
+      remainder = remainder.slice(statusMatch[0].length).trim();
+    }
+
+    // 분할납부 금액: 1900/2200
+    let paidAmount: number | null = null;
+    let totalAmount: number | null = null;
+    const amtMatch = remainder.match(/^(\d+)\s*\/\s*(\d+)/);
+    if (amtMatch) {
+      paidAmount = parseInt(amtMatch[1]);
+      totalAmount = parseInt(amtMatch[2]);
+      isInstallment = true;
+    }
+
+    results.push({
+      tfGroup: currentTfGroup,
+      category: currentCategory,
+      isPaid,
+      victimName,
+      grade,
+      branchName,
+      managerName,
+      decisionDate: currentCategory === "미정산" ? dateStr : null,
+      scheduledDate: currentCategory === "정산예정" ? dateStr : null,
+      status,
+      isInstallment,
+      totalAmount,
+      paidAmount,
+      memo: null,
+    });
+  }
+  return results;
+}
+
+// ─── Import Modal ─────────────────────────────────────────────────────────────
+
+function ImportModal({
+  onImport,
+  onClose,
+}: {
+  onImport: (items: Array<Omit<SettlementItem, "id" | "sortOrder">>) => Promise<void>;
+  onClose: () => void;
+}) {
+  const [text, setText] = useState("");
+  const [parsed, setParsed] = useState<Array<Omit<SettlementItem, "id" | "sortOrder">> | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  function handleParse() {
+    if (!text.trim()) { setError("텍스트를 입력해주세요."); return; }
+    const result = parseSettlementText(text);
+    if (result.length === 0) {
+      setError("인식된 항목이 없습니다. 양식을 확인해주세요.\n예: <울산/울동 TF 미정산 리스트>\n- ★김수옥(6급(근골)/울산지사/홍) : 2025.06.26.");
+    } else {
+      setError("");
+      setParsed(result);
+    }
+  }
+
+  async function handleConfirm() {
+    if (!parsed) return;
+    setSaving(true);
+    await onImport(parsed);
+    setSaving(false);
+    onClose();
+  }
+
+  return (
+    <div
+      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }}
+      onClick={(e) => e.target === e.currentTarget && onClose()}
+    >
+      <div style={{ background: "#fff", borderRadius: 10, padding: 28, width: 640, maxWidth: "95vw", maxHeight: "90vh", overflowY: "auto" }}>
+        <h3 style={{ margin: "0 0 6px", fontSize: 16, fontWeight: 700 }}>텍스트 가져오기</h3>
+        <p style={{ margin: "0 0 16px", fontSize: 12, color: "#6b7280" }}>
+          기존 정산 관리 텍스트를 그대로 붙여넣으면 항목을 자동으로 인식합니다.
+        </p>
+
+        {!parsed ? (
+          <>
+            <textarea
+              value={text}
+              onChange={(e) => { setText(e.target.value); setError(""); }}
+              rows={14}
+              placeholder={`<울산/울동 TF 미정산 리스트>\n\n- ★김수옥(6급(근골)/울산지사/홍) : 2025.06.26. (분할 납부중) 1900/2200\n\n<울산동부/울산남부/울산북부/양산TF 정산 예정자>\n\n- 이주영(10급(예)/울산지사/지윤) : 26.03.24.`}
+              style={{ width: "100%", padding: "10px 12px", border: "1.5px solid #d1d5db", borderRadius: 7, fontSize: 12, fontFamily: "monospace", boxSizing: "border-box", resize: "vertical", lineHeight: 1.6 }}
+            />
+            {error && (
+              <pre style={{ margin: "8px 0 0", fontSize: 12, color: "#ef4444", whiteSpace: "pre-wrap" }}>{error}</pre>
+            )}
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 16 }}>
+              <button onClick={onClose} style={btnSecondary}>취소</button>
+              <button onClick={handleParse} style={btnPrimary}>인식하기</button>
+            </div>
+          </>
+        ) : (
+          <>
+            <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 7, padding: "10px 14px", marginBottom: 14 }}>
+              <strong style={{ fontSize: 13, color: "#166534" }}>✓ {parsed.length}개 항목 인식됨</strong>
+            </div>
+            <div style={{ border: "1px solid #e5e7eb", borderRadius: 7, overflow: "hidden", marginBottom: 16 }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                <thead>
+                  <tr style={{ background: "#f9fafb" }}>
+                    {["TF그룹", "구분", "★", "재해자", "등급", "지사", "담당", "날짜", "분할"].map((h) => (
+                      <th key={h} style={{ padding: "7px 8px", textAlign: "left", fontWeight: 600, color: "#374151", borderBottom: "1px solid #e5e7eb" }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {parsed.map((item, i) => (
+                    <tr key={i} style={{ borderBottom: "1px solid #f3f4f6", background: i % 2 === 0 ? "#fff" : "#fafafa" }}>
+                      <td style={{ padding: "6px 8px", maxWidth: 120, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.tfGroup}</td>
+                      <td style={{ padding: "6px 8px" }}>
+                        <span style={{ fontSize: 11, padding: "1px 6px", borderRadius: 10, background: item.category === "미정산" ? "#fef2f2" : "#eff6ff", color: item.category === "미정산" ? "#dc2626" : "#2563eb", fontWeight: 600 }}>
+                          {item.category}
+                        </span>
+                      </td>
+                      <td style={{ padding: "6px 8px", color: item.isPaid ? "#eab308" : "#d1d5db", fontSize: 14 }}>★</td>
+                      <td style={{ padding: "6px 8px", fontWeight: 600 }}>{item.victimName}</td>
+                      <td style={{ padding: "6px 8px", color: "#6b7280" }}>{item.grade || "-"}</td>
+                      <td style={{ padding: "6px 8px", color: "#6b7280" }}>{item.branchName || "-"}</td>
+                      <td style={{ padding: "6px 8px", color: "#6b7280" }}>{item.managerName || "-"}</td>
+                      <td style={{ padding: "6px 8px", color: "#374151", whiteSpace: "nowrap" }}>
+                        {fmtDate(item.decisionDate || item.scheduledDate)}
+                      </td>
+                      <td style={{ padding: "6px 8px", color: "#9333ea" }}>
+                        {item.isInstallment ? `${item.paidAmount ?? "?"}/${item.totalAmount ?? "?"}` : "-"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+              <button onClick={() => setParsed(null)} style={btnSecondary}>다시 붙여넣기</button>
+              <button onClick={handleConfirm} disabled={saving} style={{ ...btnPrimary, opacity: saving ? 0.6 : 1 }}>
+                {saving ? "저장 중..." : `${parsed.length}개 저장`}
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function fmtDate(iso: string | null | undefined) {
@@ -402,6 +601,7 @@ export default function SettlementPage() {
   const [items, setItems] = useState<SettlementItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
+  const [importModalOpen, setImportModalOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<SettlementItem | null>(null);
   const [form, setForm] = useState<Omit<SettlementItem, "id" | "sortOrder">>(EMPTY_FORM);
   const [defaultTfGroup, setDefaultTfGroup] = useState("");
@@ -488,6 +688,19 @@ export default function SettlementPage() {
     load();
   }
 
+  async function handleImport(parsed: Array<Omit<SettlementItem, "id" | "sortOrder">>) {
+    await Promise.all(
+      parsed.map((item) =>
+        fetch("/api/settlement", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(item),
+        })
+      )
+    );
+    load();
+  }
+
   async function handleDelete(id: string) {
     await fetch(`/api/settlement/${id}`, { method: "DELETE" });
     load();
@@ -515,16 +728,21 @@ export default function SettlementPage() {
             ■ {todayKR()} 기준&nbsp;&nbsp;★ = 지급완료
           </p>
         </div>
-        <button
-          onClick={() => {
-            setEditTarget(null);
-            setForm(EMPTY_FORM);
-            setModalOpen(true);
-          }}
-          style={btnPrimary}
-        >
-          + 새 항목 추가
-        </button>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button onClick={() => setImportModalOpen(true)} style={btnSecondary}>
+            📋 텍스트 가져오기
+          </button>
+          <button
+            onClick={() => {
+              setEditTarget(null);
+              setForm(EMPTY_FORM);
+              setModalOpen(true);
+            }}
+            style={btnPrimary}
+          >
+            + 새 항목 추가
+          </button>
+        </div>
       </div>
 
       {loading ? (
@@ -607,6 +825,14 @@ export default function SettlementPage() {
             + 새 TF 그룹에 항목 추가
           </button>
         </div>
+      )}
+
+      {/* Import Modal */}
+      {importModalOpen && (
+        <ImportModal
+          onImport={handleImport}
+          onClose={() => setImportModalOpen(false)}
+        />
       )}
 
       {/* Modal */}
