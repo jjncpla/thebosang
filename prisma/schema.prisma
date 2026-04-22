@@ -1107,9 +1107,10 @@ model SpecialClinicSchedule {
   content         String?   @db.Text
 
   // 특진/재특진 전용
+  caseId         String?  // 사건 상세에서 생성 시 연결 (선택)
   patientName    String?
   hospitalName   String?
-  clinicType     String?  // "특진" | "재특진"
+  clinicType     String?  // "특진" | "재특진" | "재재특진"
   examRound      Int?
   assignedStaff  String?  // 담당자
   attended       Boolean? // 참석 여부
@@ -1126,6 +1127,7 @@ model SpecialClinicSchedule {
   @@index([tfName])
   @@index([scheduledDate])
   @@index([patientName, tfName, clinicType, examRound])
+  @@index([caseId, clinicType, examRound])
 }
 
 model BranchIncentiveUsage {

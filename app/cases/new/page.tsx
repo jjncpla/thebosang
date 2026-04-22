@@ -50,7 +50,9 @@ export default function NewCasePage() {
     subAgent: "",
     branchManager: "",
     salesManager: "",
+    salesManagerId: "",
     caseManager: "",
+    caseManagerId: "",
     salesRoute: "",
     contractDate: "",
     isOneStop: false,
@@ -183,6 +185,7 @@ export default function NewCasePage() {
       router.push(`/patients/${selectedPatient.id}?tab=${caseForm.caseType}`);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "오류");
+    } finally {
       setSubmitting(false);
     }
   };
@@ -345,14 +348,14 @@ export default function NewCasePage() {
               <LabelInput label="영업담당자">
                 <ContactSelector
                   value={caseForm.salesManager}
-                  onChange={(name, mobile) => setCaseForm({ ...caseForm, salesManager: name })}
+                  onChange={(name, _mobile, userId) => setCaseForm({ ...caseForm, salesManager: name, salesManagerId: userId ?? "" })}
                   placeholder="영업담당자 이름 검색"
                 />
               </LabelInput>
               <LabelInput label="실무담당자">
                 <ContactSelector
                   value={caseForm.caseManager}
-                  onChange={(name, mobile) => setCaseForm({ ...caseForm, caseManager: name })}
+                  onChange={(name, _mobile, userId) => setCaseForm({ ...caseForm, caseManager: name, caseManagerId: userId ?? "" })}
                   placeholder="실무담당자 이름 검색"
                 />
               </LabelInput>
