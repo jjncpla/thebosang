@@ -235,7 +235,7 @@ export default function BackfillPage() {
               {(totals.dbMatched > 0 || totals.legacyTagged > 0) && (
                 <div className="text-[11px] text-gray-500">
                   TF 없음 처리: DB 환자 매칭 <b className="text-sky-600">{totals.dbMatched.toLocaleString()}</b>건 /
-                  Legacy 부여 <b className="text-gray-500">{totals.legacyTagged.toLocaleString()}</b>건
+                  미확인TF 부여 <b className="text-gray-500">{totals.legacyTagged.toLocaleString()}</b>건
                 </div>
               )}
             </div>

@@ -123,7 +123,7 @@ export function canonicalizeTfName(raw: string | null | undefined): string {
   let s = raw.trim()
   if (!s) return ''
 
-  // 이미 표준이면 바로 반환 (Legacy / 경북TF / 진폐TF 등도 TF_BY_BRANCH에 포함됨)
+  // 이미 표준이면 바로 반환 (미확인TF / 경북TF / 진폐TF 등도 TF_BY_BRANCH에 포함됨)
   if (STANDARD_SET.has(s)) return s
 
   // 담당자·괄호 등 꼬리 정리
@@ -152,8 +152,7 @@ export function canonicalizeTfName(raw: string | null | undefined): string {
  * 기준: TF_BY_BRANCH에 명시된 이름(ALL_TF_LIST)에 정확히 일치해야 함.
  * → `이산XXX` 또는 `더보상XXX` 접두어가 정확히 하나 붙은 형태만 canonical.
  *
- * Legacy / 경북TF / 진폐TF 같은 KEEP_AS_IS는 canonicalize 단계에선 보존되지만
- * 이 함수는 false 반환 → 사용자 정리 대상(unclassified) 목록에 포함됨.
+ * 미확인TF / 경북TF / 진폐TF 등 "기타" 지사 소속 특수 TF도 TF_BY_BRANCH에 포함되어 canonical로 간주됨.
  */
 export function isCanonicalTf(name: string): boolean {
   return STANDARD_SET.has(name)

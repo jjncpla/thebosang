@@ -62,12 +62,12 @@ function hashColor(name: string): string {
  * @param branchColorOverride DB에서 로드한 지사별 색상 맵 (선택). 있으면 이 값 우선.
  *
  * - TF_BY_BRANCH 에 등록된 TF는 해당 지사 팔레트 기반 (지사 내 순서에 따라 명도 변형)
- * - 'Legacy' / '미분류' 은 회색
+ * - '미확인TF' / '미분류' 은 회색
  * - 미등록 TF 는 해시 기반 고유 색상
  */
 export function getTFColor(tfName: string, branchColorOverride?: Record<string, string>): string {
   if (!tfName) return '#95A5A6'
-  if (tfName === 'Legacy' || tfName === '미분류') return '#95A5A6'
+  if (tfName === '미확인TF' || tfName === 'Legacy' || tfName === '미분류') return '#95A5A6'
 
   const resolveBase = (branch: string): string | undefined => {
     return branchColorOverride?.[branch] ?? BRANCH_BASE_COLORS[branch]
