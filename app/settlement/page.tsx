@@ -1,6 +1,9 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { ALL_TF_LIST } from "@/lib/constants/tf";
+
+const TF_UNASSIGNED = "TF미지정";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -26,7 +29,7 @@ type SettlementItem = {
 };
 
 const EMPTY_FORM: Omit<SettlementItem, "id" | "sortOrder"> = {
-  tfGroup: "",
+  tfGroup: TF_UNASSIGNED,
   category: "정산예정",
   isPaid: false,
   victimName: "",
@@ -47,22 +50,22 @@ const EMPTY_FORM: Omit<SettlementItem, "id" | "sortOrder"> = {
 function parseSettlementText(text: string): Array<Omit<SettlementItem, "id" | "sortOrder">> {
   const lines = text.split("\n");
   const results: Array<Omit<SettlementItem, "id" | "sortOrder">> = [];
-  let currentTfGroup = "";
   let currentCategory: Category = "정산예정";
+  let hasSection = false;
 
   for (const rawLine of lines) {
     const line = rawLine.trim();
     if (!line || line.startsWith("■") || line.startsWith("★ >") || line.startsWith("---")) continue;
 
-    // 섹션 헤더: <TF그룹명 미정산 리스트> 또는 <TF그룹명 정산 예정자>
+    // 섹션 헤더: <... 미정산 리스트> 또는 <... 정산 예정자>
     const sectionMatch = line.match(/^<(.+?)\s*(미정산\s*리스트|정산\s*예정자)>/);
     if (sectionMatch) {
-      currentTfGroup = sectionMatch[1].trim();
       currentCategory = sectionMatch[2].replace(/\s/g, "").includes("미정산") ? "미정산" : "정산예정";
+      hasSection = true;
       continue;
     }
 
-    if (!line.startsWith("-") || !currentTfGroup) continue;
+    if (!line.startsWith("-")) continue;
 
     const entryLine = line.slice(1).trim();
     const isPaid = entryLine.startsWith("★");
@@ -108,9 +111,10 @@ function parseSettlementText(text: string): Array<Omit<SettlementItem, "id" | "s
       isInstallment = true;
     }
 
+    // 항상 TF미지정으로 — 관리자가 직접 TF 배정
     results.push({
-      tfGroup: currentTfGroup,
-      category: currentCategory,
+      tfGroup: TF_UNASSIGNED,
+      category: hasSection ? currentCategory : "정산예정",
       isPaid,
       victimName,
       grade,
@@ -126,6 +130,67 @@ function parseSettlementText(text: string): Array<Omit<SettlementItem, "id" | "s
     });
   }
   return results;
+}
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function fmtDate(iso: string | null | undefined) {
+  if (!iso) return "-";
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "-";
+  const yy = String(d.getFullYear()).slice(2);
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yy}.${mm}.${dd}.`;
+}
+
+function toInput(iso: string | null | undefined) {
+  if (!iso) return "";
+  return iso.slice(0, 10);
+}
+
+function todayKR() {
+  const d = new Date();
+  const week = ["일", "월", "화", "수", "목", "금", "토"][d.getDay()];
+  return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, "0")}.${String(d.getDate()).padStart(2, "0")}. (${week})`;
+}
+
+function entryLabel(item: SettlementItem) {
+  const parts = [item.grade, item.branchName, item.managerName].filter(Boolean);
+  return parts.length ? `(${parts.join("/")})` : "";
+}
+
+// ─── TF Selector ─────────────────────────────────────────────────────────────
+
+function TfSelect({
+  value,
+  onChange,
+  style,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  style?: React.CSSProperties;
+}) {
+  return (
+    <select value={value} onChange={(e) => onChange(e.target.value)} style={{ ...inputStyle, ...style }}>
+      <option value={TF_UNASSIGNED}>{TF_UNASSIGNED}</option>
+      <optgroup label="더보상 TF">
+        {ALL_TF_LIST.filter((tf) => tf.startsWith("더보상")).sort().map((tf) => (
+          <option key={tf} value={tf}>{tf}</option>
+        ))}
+      </optgroup>
+      <optgroup label="이산 TF">
+        {ALL_TF_LIST.filter((tf) => tf.startsWith("이산")).sort().map((tf) => (
+          <option key={tf} value={tf}>{tf}</option>
+        ))}
+      </optgroup>
+      <optgroup label="기타">
+        {ALL_TF_LIST.filter((tf) => !tf.startsWith("더보상") && !tf.startsWith("이산")).sort().map((tf) => (
+          <option key={tf} value={tf}>{tf}</option>
+        ))}
+      </optgroup>
+    </select>
+  );
 }
 
 // ─── Import Modal ─────────────────────────────────────────────────────────────
@@ -175,8 +240,11 @@ function ImportModal({
     >
       <div style={{ background: "#fff", borderRadius: 10, padding: 28, width: 640, maxWidth: "95vw", maxHeight: "90vh", overflowY: "auto" }}>
         <h3 style={{ margin: "0 0 6px", fontSize: 16, fontWeight: 700 }}>텍스트 가져오기</h3>
-        <p style={{ margin: "0 0 16px", fontSize: 12, color: "#6b7280" }}>
+        <p style={{ margin: "0 0 4px", fontSize: 12, color: "#6b7280" }}>
           기존 정산 관리 텍스트를 그대로 붙여넣으면 항목을 자동으로 인식합니다.
+        </p>
+        <p style={{ margin: "0 0 16px", fontSize: 12, color: "#f59e0b", fontWeight: 600 }}>
+          ※ 가져온 항목은 모두 <strong>TF미지정</strong>으로 분류됩니다. 이후 각 항목에서 TF를 직접 지정해주세요.
         </p>
 
         {!parsed ? (
@@ -199,13 +267,13 @@ function ImportModal({
         ) : (
           <>
             <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 7, padding: "10px 14px", marginBottom: 14 }}>
-              <strong style={{ fontSize: 13, color: "#166534" }}>✓ {parsed.length}개 항목 인식됨</strong>
+              <strong style={{ fontSize: 13, color: "#166534" }}>✓ {parsed.length}개 항목 인식됨 — 모두 TF미지정으로 저장됩니다</strong>
             </div>
             <div style={{ border: "1px solid #e5e7eb", borderRadius: 7, overflow: "hidden", marginBottom: 16 }}>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
                 <thead>
                   <tr style={{ background: "#f9fafb" }}>
-                    {["TF그룹", "구분", "★", "재해자", "등급", "지사", "담당", "날짜", "분할"].map((h) => (
+                    {["구분", "★", "재해자", "등급", "지사", "담당", "날짜", "분할납부"].map((h) => (
                       <th key={h} style={{ padding: "7px 8px", textAlign: "left", fontWeight: 600, color: "#374151", borderBottom: "1px solid #e5e7eb" }}>{h}</th>
                     ))}
                   </tr>
@@ -213,7 +281,6 @@ function ImportModal({
                 <tbody>
                   {parsed.map((item, i) => (
                     <tr key={i} style={{ borderBottom: "1px solid #f3f4f6", background: i % 2 === 0 ? "#fff" : "#fafafa" }}>
-                      <td style={{ padding: "6px 8px", maxWidth: 120, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.tfGroup}</td>
                       <td style={{ padding: "6px 8px" }}>
                         <span style={{ fontSize: 11, padding: "1px 6px", borderRadius: 10, background: item.category === "미정산" ? "#fef2f2" : "#eff6ff", color: item.category === "미정산" ? "#dc2626" : "#2563eb", fontWeight: 600 }}>
                           {item.category}
@@ -253,47 +320,16 @@ function ImportModal({
   );
 }
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-
-function fmtDate(iso: string | null | undefined) {
-  if (!iso) return "-";
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return "-";
-  const yy = String(d.getFullYear()).slice(2);
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  return `${yy}.${mm}.${dd}.`;
-}
-
-function toInput(iso: string | null | undefined) {
-  if (!iso) return "";
-  return iso.slice(0, 10);
-}
-
-function todayKR() {
-  const d = new Date();
-  const week = ["일", "월", "화", "수", "목", "금", "토"][d.getDay()];
-  return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, "0")}.${String(d.getDate()).padStart(2, "0")}. (${week})`;
-}
-
-// label: "(6급(근골)/울산지사/홍)"
-function entryLabel(item: SettlementItem) {
-  const parts = [item.grade, item.branchName, item.managerName].filter(Boolean);
-  return parts.length ? `(${parts.join("/")})` : "";
-}
-
 // ─── Modal ───────────────────────────────────────────────────────────────────
 
 function Modal({
   form,
-  tfGroups,
   onChange,
   onSave,
   onClose,
   isEdit,
 }: {
   form: Omit<SettlementItem, "id" | "sortOrder">;
-  tfGroups: string[];
   onChange: (f: Omit<SettlementItem, "id" | "sortOrder">) => void;
   onSave: () => void;
   onClose: () => void;
@@ -303,34 +339,17 @@ function Modal({
 
   return (
     <div
-      style={{
-        position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)",
-        display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000,
-      }}
+      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }}
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
-      <div style={{
-        background: "#fff", borderRadius: 10, padding: 28, width: 480, maxWidth: "95vw",
-        maxHeight: "90vh", overflowY: "auto",
-      }}>
+      <div style={{ background: "#fff", borderRadius: 10, padding: 28, width: 480, maxWidth: "95vw", maxHeight: "90vh", overflowY: "auto" }}>
         <h3 style={{ margin: "0 0 20px", fontSize: 16, fontWeight: 700 }}>
           {isEdit ? "항목 수정" : "항목 추가"}
         </h3>
 
-        {/* TF 그룹 */}
-        <label style={labelStyle}>TF 그룹 *</label>
-        <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
-          <input
-            list="tf-group-list"
-            value={form.tfGroup}
-            onChange={(e) => set("tfGroup", e.target.value)}
-            placeholder="예: 울산/울동 TF"
-            style={{ ...inputStyle, flex: 1 }}
-          />
-          <datalist id="tf-group-list">
-            {tfGroups.map((g) => <option key={g} value={g} />)}
-          </datalist>
-        </div>
+        {/* TF 선택 */}
+        <label style={labelStyle}>TF *</label>
+        <TfSelect value={form.tfGroup} onChange={(v) => set("tfGroup", v)} style={{ marginBottom: 12 }} />
 
         {/* 구분 */}
         <label style={labelStyle}>구분 *</label>
@@ -497,12 +516,17 @@ function EntryRow({
   onEdit,
   onDelete,
   onTogglePaid,
+  onAssignTf,
+  isUnassigned,
 }: {
   item: SettlementItem;
   onEdit: () => void;
   onDelete: () => void;
   onTogglePaid: () => void;
+  onAssignTf: (tf: string) => void;
+  isUnassigned: boolean;
 }) {
+  const [tfSelectOpen, setTfSelectOpen] = useState(false);
   const dateStr = item.category === "미정산" ? fmtDate(item.decisionDate) : fmtDate(item.scheduledDate);
 
   return (
@@ -515,35 +539,58 @@ function EntryRow({
       <button
         onClick={onTogglePaid}
         title={item.isPaid ? "지급완료 해제" : "지급완료 표시"}
-        style={{
-          background: "none", border: "none", cursor: "pointer",
-          fontSize: 16, lineHeight: 1, padding: 0, marginTop: 1,
-          color: item.isPaid ? "#eab308" : "#d1d5db",
-        }}
+        style={{ background: "none", border: "none", cursor: "pointer", fontSize: 16, lineHeight: 1, padding: 0, marginTop: 1, color: item.isPaid ? "#eab308" : "#d1d5db" }}
       >★</button>
 
       {/* content */}
       <span style={{ flex: 1, fontFamily: "monospace", fontSize: 13, lineHeight: 1.6 }}>
         <span style={{ fontWeight: 600 }}>{item.victimName}</span>
         <span style={{ color: "#6b7280" }}>{entryLabel(item)}</span>
-        {dateStr !== "-" && (
-          <span style={{ color: "#374151" }}> : {dateStr}</span>
-        )}
+        {dateStr !== "-" && <span style={{ color: "#374151" }}> : {dateStr}</span>}
         {item.isInstallment && (
           <span style={{ color: "#9333ea", fontWeight: 500 }}>
             {" "}(분할 납부중)
-            {item.paidAmount != null && item.totalAmount != null && (
-              <> {item.paidAmount}/{item.totalAmount}</>
-            )}
+            {item.paidAmount != null && item.totalAmount != null && <> {item.paidAmount}/{item.totalAmount}</>}
           </span>
         )}
         {item.status && !item.isInstallment && (
           <span style={{ color: "#6b7280" }}> ({item.status})</span>
         )}
-        {item.memo && (
-          <span style={{ color: "#9ca3af", fontSize: 12 }}> — {item.memo}</span>
-        )}
+        {item.memo && <span style={{ color: "#9ca3af", fontSize: 12 }}> — {item.memo}</span>}
       </span>
+
+      {/* TF미지정 전용: TF 지정 인라인 셀렉트 */}
+      {isUnassigned && (
+        <div style={{ flexShrink: 0 }}>
+          {tfSelectOpen ? (
+            <select
+              autoFocus
+              defaultValue=""
+              onChange={(e) => { if (e.target.value) { onAssignTf(e.target.value); setTfSelectOpen(false); } }}
+              onBlur={() => setTfSelectOpen(false)}
+              style={{ fontSize: 11, padding: "2px 4px", border: "1px solid #2563eb", borderRadius: 4 }}
+            >
+              <option value="" disabled>TF 선택...</option>
+              {ALL_TF_LIST.filter((tf) => tf.startsWith("더보상")).sort().map((tf) => (
+                <option key={tf} value={tf}>{tf}</option>
+              ))}
+              {ALL_TF_LIST.filter((tf) => tf.startsWith("이산")).sort().map((tf) => (
+                <option key={tf} value={tf}>{tf}</option>
+              ))}
+              {ALL_TF_LIST.filter((tf) => !tf.startsWith("더보상") && !tf.startsWith("이산")).sort().map((tf) => (
+                <option key={tf} value={tf}>{tf}</option>
+              ))}
+            </select>
+          ) : (
+            <button
+              onClick={() => setTfSelectOpen(true)}
+              style={{ ...actionBtn, color: "#2563eb", borderColor: "#bfdbfe", background: "#eff6ff", fontWeight: 600 }}
+            >
+              TF 지정
+            </button>
+          )}
+        </div>
+      )}
 
       {/* actions */}
       <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
@@ -565,23 +612,26 @@ function Section({
   onEdit,
   onDelete,
   onTogglePaid,
+  onAssignTf,
   onAdd,
+  isUnassigned,
 }: {
   title: string;
   items: SettlementItem[];
   onEdit: (item: SettlementItem) => void;
   onDelete: (id: string) => void;
   onTogglePaid: (item: SettlementItem) => void;
+  onAssignTf: (item: SettlementItem, tf: string) => void;
   onAdd: () => void;
+  isUnassigned: boolean;
 }) {
   return (
     <div style={{ marginBottom: 20 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
         <span style={{ fontSize: 13, fontWeight: 700, color: "#1e40af" }}>{title}</span>
-        <span style={{
-          fontSize: 11, background: "#eff6ff", color: "#2563eb",
-          borderRadius: 10, padding: "1px 8px", fontWeight: 600,
-        }}>{items.length}건</span>
+        <span style={{ fontSize: 11, background: "#eff6ff", color: "#2563eb", borderRadius: 10, padding: "1px 8px", fontWeight: 600 }}>
+          {items.length}건
+        </span>
       </div>
       {items.length === 0 ? (
         <p style={{ fontSize: 12, color: "#9ca3af", margin: "0 0 4px 24px" }}>항목 없음</p>
@@ -593,13 +643,12 @@ function Section({
             onEdit={() => onEdit(item)}
             onDelete={() => onDelete(item.id)}
             onTogglePaid={() => onTogglePaid(item)}
+            onAssignTf={(tf) => onAssignTf(item, tf)}
+            isUnassigned={isUnassigned}
           />
         ))
       )}
-      <button onClick={onAdd} style={{
-        marginTop: 4, marginLeft: 24, fontSize: 12, color: "#2563eb",
-        background: "none", border: "none", cursor: "pointer", padding: 0,
-      }}>
+      <button onClick={onAdd} style={{ marginTop: 4, marginLeft: 24, fontSize: 12, color: "#2563eb", background: "none", border: "none", cursor: "pointer", padding: 0 }}>
         + 항목 추가
       </button>
       <div style={{ marginTop: 8, borderTop: "1px dashed #e5e7eb" }} />
@@ -616,52 +665,32 @@ export default function SettlementPage() {
   const [importModalOpen, setImportModalOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<SettlementItem | null>(null);
   const [form, setForm] = useState<Omit<SettlementItem, "id" | "sortOrder">>(EMPTY_FORM);
-  const [defaultTfGroup, setDefaultTfGroup] = useState("");
-  const [defaultCategory, setDefaultCategory] = useState<Category>("정산예정");
 
   const load = useCallback(async () => {
     const res = await fetch("/api/settlement");
     const data = await res.json();
-    setItems(data);
+    setItems(Array.isArray(data) ? data : []);
     setLoading(false);
   }, []);
 
   useEffect(() => { load(); }, [load]);
 
-  // TF 그룹 목록 (기존 + 기본 목록)
-  const tfGroups = Array.from(new Set([
-    ...items.map((i) => i.tfGroup),
-    "울산/울동 TF",
-    "울산동부/울산남부/울산북부/양산TF",
-    "부산/부중 TF",
-    "창원 TF",
-    "포항/구미 TF",
-    "대구 TF",
-    "서울북부 TF",
-    "동해 TF",
-    "안산 TF",
-    "의정부 TF",
-    "대전 TF",
-    "수원 TF",
-    "경인 TF",
-    "구로 TF",
-  ])).filter(Boolean);
-
-  // 그룹별 데이터
-  const groupedTfs = Array.from(new Set(items.map((i) => i.tfGroup))).sort();
+  // 실제 TF 목록: DB에 있는 것 중 ALL_TF_LIST에 속한 것만 (순서 유지)
+  const activeTfs = ALL_TF_LIST.filter((tf) =>
+    items.some((i) => i.tfGroup === tf)
+  );
+  const hasUnassigned = items.some((i) => !i.tfGroup || i.tfGroup === TF_UNASSIGNED || !ALL_TF_LIST.includes(i.tfGroup));
 
   function openAdd(tfGroup: string, category: Category) {
     setEditTarget(null);
     setForm({ ...EMPTY_FORM, tfGroup, category });
-    setDefaultTfGroup(tfGroup);
-    setDefaultCategory(category);
     setModalOpen(true);
   }
 
   function openEdit(item: SettlementItem) {
     setEditTarget(item);
     setForm({
-      tfGroup: item.tfGroup,
+      tfGroup: item.tfGroup ?? TF_UNASSIGNED,
       category: item.category,
       isPaid: item.isPaid,
       victimName: item.victimName,
@@ -681,7 +710,6 @@ export default function SettlementPage() {
 
   async function handleSave() {
     if (!form.victimName.trim()) { alert("재해자명을 입력해주세요."); return; }
-    if (!form.tfGroup.trim()) { alert("TF 그룹을 입력해주세요."); return; }
 
     if (editTarget) {
       await fetch(`/api/settlement/${editTarget.id}`, {
@@ -727,8 +755,77 @@ export default function SettlementPage() {
     load();
   }
 
-  const getItems = (tfGroup: string, category: Category) =>
-    items.filter((i) => i.tfGroup === tfGroup && i.category === category);
+  async function handleAssignTf(item: SettlementItem, tf: string) {
+    await fetch(`/api/settlement/${item.id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tfGroup: tf }),
+    });
+    load();
+  }
+
+  const getItems = (tf: string, category: Category) =>
+    items.filter((i) => i.tfGroup === tf && i.category === category);
+
+  const getUnassignedItems = (category: Category) =>
+    items.filter((i) => (
+      (!i.tfGroup || i.tfGroup === TF_UNASSIGNED || !ALL_TF_LIST.includes(i.tfGroup))
+      && i.category === category
+    ));
+
+  const renderTfCard = (tf: string, isUnassigned = false) => {
+    const unsettled = isUnassigned ? getUnassignedItems("미정산") : getItems(tf, "미정산");
+    const upcoming = isUnassigned ? getUnassignedItems("정산예정") : getItems(tf, "정산예정");
+    const totalCount = unsettled.length + upcoming.length;
+    if (totalCount === 0) return null;
+
+    return (
+      <div
+        key={tf}
+        style={{
+          background: "#fff", borderRadius: 10,
+          border: isUnassigned ? "2px dashed #fbbf24" : "1px solid #e5e7eb",
+          padding: "16px 20px", marginBottom: 16,
+          boxShadow: isUnassigned ? "none" : "0 1px 3px rgba(0,0,0,0.06)",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: 10, paddingBottom: 12, marginBottom: 14, borderBottom: `2px solid ${isUnassigned ? "#fef3c7" : "#f3f4f6"}` }}>
+          <span style={{ fontSize: 15, fontWeight: 800, color: isUnassigned ? "#d97706" : "#111827" }}>
+            {isUnassigned ? "⚠ TF미지정" : tf}
+          </span>
+          <span style={{ fontSize: 11, background: isUnassigned ? "#fef3c7" : "#f3f4f6", color: isUnassigned ? "#92400e" : "#6b7280", borderRadius: 10, padding: "2px 8px" }}>
+            총 {totalCount}건
+          </span>
+          {isUnassigned && (
+            <span style={{ fontSize: 11, color: "#b45309" }}>— 각 항목의 [TF 지정] 버튼으로 TF를 배정해주세요</span>
+          )}
+        </div>
+
+        <Section
+          title={`〈${isUnassigned ? "TF미지정" : tf} 미정산 리스트〉`}
+          items={unsettled}
+          onEdit={openEdit}
+          onDelete={handleDelete}
+          onTogglePaid={handleTogglePaid}
+          onAssignTf={handleAssignTf}
+          onAdd={() => openAdd(isUnassigned ? TF_UNASSIGNED : tf, "미정산")}
+          isUnassigned={isUnassigned}
+        />
+        <Section
+          title={`〈${isUnassigned ? "TF미지정" : tf} 정산 예정자〉`}
+          items={upcoming}
+          onEdit={openEdit}
+          onDelete={handleDelete}
+          onTogglePaid={handleTogglePaid}
+          onAssignTf={handleAssignTf}
+          onAdd={() => openAdd(isUnassigned ? TF_UNASSIGNED : tf, "정산예정")}
+          isUnassigned={isUnassigned}
+        />
+      </div>
+    );
+  };
+
+  const isEmpty = !loading && activeTfs.length === 0 && !hasUnassigned;
 
   return (
     <div style={{ maxWidth: 860, margin: "0 auto", padding: "24px 16px" }}>
@@ -745,11 +842,7 @@ export default function SettlementPage() {
             📋 텍스트 가져오기
           </button>
           <button
-            onClick={() => {
-              setEditTarget(null);
-              setForm(EMPTY_FORM);
-              setModalOpen(true);
-            }}
+            onClick={() => { setEditTarget(null); setForm(EMPTY_FORM); setModalOpen(true); }}
             style={btnPrimary}
           >
             + 새 항목 추가
@@ -759,99 +852,40 @@ export default function SettlementPage() {
 
       {loading ? (
         <p style={{ color: "#6b7280", textAlign: "center", marginTop: 60 }}>불러오는 중...</p>
-      ) : groupedTfs.length === 0 ? (
-        <div style={{
-          textAlign: "center", padding: "60px 0", background: "#f9fafb",
-          borderRadius: 10, border: "2px dashed #e5e7eb",
-        }}>
-          <p style={{ color: "#9ca3af", fontSize: 15, margin: "0 0 16px" }}>
-            등록된 정산 항목이 없습니다
-          </p>
-          <button
-            onClick={() => { setEditTarget(null); setForm(EMPTY_FORM); setModalOpen(true); }}
-            style={btnPrimary}
-          >
-            첫 항목 추가하기
-          </button>
+      ) : isEmpty ? (
+        <div style={{ textAlign: "center", padding: "60px 0", background: "#f9fafb", borderRadius: 10, border: "2px dashed #e5e7eb" }}>
+          <p style={{ color: "#9ca3af", fontSize: 15, margin: "0 0 16px" }}>등록된 정산 항목이 없습니다</p>
+          <div style={{ display: "flex", gap: 8, justifyContent: "center" }}>
+            <button onClick={() => setImportModalOpen(true)} style={btnSecondary}>📋 텍스트 가져오기</button>
+            <button onClick={() => { setEditTarget(null); setForm(EMPTY_FORM); setModalOpen(true); }} style={btnPrimary}>첫 항목 추가하기</button>
+          </div>
         </div>
       ) : (
-        groupedTfs.map((tfGroup) => {
-          const unsettled = getItems(tfGroup, "미정산");
-          const upcoming = getItems(tfGroup, "정산예정");
-          const totalCount = unsettled.length + upcoming.length;
+        <>
+          {/* TF별 카드 (ALL_TF_LIST 순서 유지) */}
+          {activeTfs.map((tf) => renderTfCard(tf))}
 
-          return (
-            <div
-              key={tfGroup}
-              style={{
-                background: "#fff", borderRadius: 10, border: "1px solid #e5e7eb",
-                padding: "16px 20px", marginBottom: 16,
-                boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
-              }}
+          {/* TF미지정 섹션 — 항상 맨 아래 */}
+          {hasUnassigned && renderTfCard(TF_UNASSIGNED, true)}
+
+          <div style={{ textAlign: "center", marginTop: 8 }}>
+            <button
+              onClick={() => { setEditTarget(null); setForm(EMPTY_FORM); setModalOpen(true); }}
+              style={{ ...btnSecondary, fontSize: 13 }}
             >
-              {/* TF 그룹 헤더 */}
-              <div style={{
-                display: "flex", alignItems: "center", gap: 10,
-                paddingBottom: 12, marginBottom: 14, borderBottom: "2px solid #f3f4f6",
-              }}>
-                <span style={{ fontSize: 15, fontWeight: 800, color: "#111827" }}>
-                  &lt;{tfGroup}&gt;
-                </span>
-                <span style={{
-                  fontSize: 11, background: "#f3f4f6", color: "#6b7280",
-                  borderRadius: 10, padding: "2px 8px",
-                }}>총 {totalCount}건</span>
-              </div>
-
-              {/* 미정산 리스트 */}
-              <Section
-                title={`〈${tfGroup} 미정산 리스트〉`}
-                items={unsettled}
-                onEdit={openEdit}
-                onDelete={handleDelete}
-                onTogglePaid={handleTogglePaid}
-                onAdd={() => openAdd(tfGroup, "미정산")}
-              />
-
-              {/* 정산 예정자 */}
-              <Section
-                title={`〈${tfGroup} 정산 예정자〉`}
-                items={upcoming}
-                onEdit={openEdit}
-                onDelete={handleDelete}
-                onTogglePaid={handleTogglePaid}
-                onAdd={() => openAdd(tfGroup, "정산예정")}
-              />
-            </div>
-          );
-        })
+              + 새 항목 추가
+            </button>
+          </div>
+        </>
       )}
 
-      {/* 새 TF 그룹 추가 버튼 */}
-      {groupedTfs.length > 0 && (
-        <div style={{ textAlign: "center", marginTop: 8 }}>
-          <button
-            onClick={() => { setEditTarget(null); setForm(EMPTY_FORM); setModalOpen(true); }}
-            style={{ ...btnSecondary, fontSize: 13 }}
-          >
-            + 새 TF 그룹에 항목 추가
-          </button>
-        </div>
-      )}
-
-      {/* Import Modal */}
       {importModalOpen && (
-        <ImportModal
-          onImport={handleImport}
-          onClose={() => setImportModalOpen(false)}
-        />
+        <ImportModal onImport={handleImport} onClose={() => setImportModalOpen(false)} />
       )}
 
-      {/* Modal */}
       {modalOpen && (
         <Modal
           form={form}
-          tfGroups={tfGroups}
           onChange={setForm}
           onSave={handleSave}
           onClose={() => setModalOpen(false)}
