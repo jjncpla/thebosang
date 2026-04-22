@@ -285,6 +285,124 @@ export function readHCellSheet(
   return parseHCellWorksheet(wsXml, strs, headerRow, dataStartRow);
 }
 
+/**
+ * 상담내역 임포트용 자동 감지 파서.
+ * 파일 형식(HCell / 일반 xlsx)과 헤더 행 위치를 자동으로 탐지한다.
+ * "성명"과 "연락처" 컬럼이 모두 있는 행을 헤더로 판단한다.
+ *
+ * @param buffer  업로드된 xlsx Buffer
+ * @param sheetHints  시트명 후보 (없으면 첫 번째 시트)
+ * @returns rows (헤더명 → 셀 값)
+ */
+export function readConsultationSheet(
+  buffer: Buffer,
+  sheetHints: string[] = []
+): Record<string, unknown>[] {
+  // ─ 1. HCell 여부 확인: sharedStrings.xml에 hs: 네임스페이스가 있으면 HCell ─
+  const wb = XLSX.read(buffer, { type: "buffer", bookFiles: true });
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const files = (wb as any).files as Record<string, { content: Uint8Array }> | undefined;
+  const sstContent = files?.["xl/sharedStrings.xml"]?.content
+    ? Buffer.from(files["xl/sharedStrings.xml"].content).toString("utf8", 0, 500)
+    : "";
+  // HCell 판별: sharedStrings의 루트 태그가 x: prefix를 가지면 HCell
+  const isHCell = sstContent.includes("<x:sst") || sstContent.includes("hs:");
+
+  // ─ 2. 대상 시트 인덱스 결정 ─
+  let targetIdx = 0;
+  for (const hint of sheetHints) {
+    const found = wb.SheetNames.indexOf(hint);
+    if (found >= 0) { targetIdx = found; break; }
+  }
+
+  // ─ 3. 첫 10행을 읽어서 헤더 행 자동 감지 ─
+  // 헤더 기준: "성명"과 "연락처"가 동시에 존재하는 행
+  function detectHeader(rows10: Record<string, unknown>[][]): number {
+    for (let i = 0; i < rows10.length; i++) {
+      const vals = rows10[i].map((v) => (v != null ? String(v).trim() : ""));
+      const hasName = vals.some((v) => v === "성명");
+      const hasPhone = vals.some((v) => v === "연락처");
+      if (hasName && hasPhone) return i;
+    }
+    return -1;
+  }
+
+  if (isHCell) {
+    // HCell: XML 직접 파싱, 헤더 감지 후 재파싱
+    const sharedStrs = parseHCellSharedStrings(
+      Buffer.from(files!["xl/sharedStrings.xml"].content).toString("utf8")
+    );
+
+    // 시트 파일 경로 결정
+    let wsFileName = `xl/worksheets/sheet${targetIdx + 1}.xml`;
+    const wbRelsFile = files!["xl/_rels/workbook.xml.rels"];
+    if (wbRelsFile?.content) {
+      const relsXml = Buffer.from(wbRelsFile.content).toString("utf8");
+      const relMap: Record<string, string> = {};
+      const relRe = /Id="(rId\d+)"[^>]*Target="worksheets\/([^"]+)"/g;
+      let rm: RegExpExecArray | null;
+      while ((rm = relRe.exec(relsXml)) !== null) relMap[rm[1]] = rm[2];
+      const wbFile = files!["xl/workbook.xml"];
+      if (wbFile?.content) {
+        const wbXml = Buffer.from(wbFile.content).toString("utf8");
+        const sheetRe = /<(?:\w+:)?sheet\s[^>]*r:id="(rId\d+)"/g;
+        const rIds: string[] = [];
+        let sm: RegExpExecArray | null;
+        while ((sm = sheetRe.exec(wbXml)) !== null) rIds.push(sm[1]);
+        const rId = rIds[targetIdx];
+        if (rId && relMap[rId]) wsFileName = `xl/worksheets/${relMap[rId]}`;
+      }
+    }
+
+    const wsFile = files![wsFileName];
+    if (!wsFile?.content) return [];
+    const wsXml = Buffer.from(wsFile.content).toString("utf8");
+
+    // 처음 10행을 배열로 읽어 헤더 감지
+    const preview = parseHCellWorksheet(wsXml, sharedStrs, 0, 0)
+      .slice(0, 10)
+      .map((row) => Object.values(row));
+    const headerRow = detectHeader(preview as Record<string, unknown>[][]);
+    if (headerRow < 0) return [];
+
+    return parseHCellWorksheet(wsXml, sharedStrs, headerRow, headerRow + 1);
+  } else {
+    // 일반 xlsx: XLSX 라이브러리로 파싱
+    const ws =
+      wb.Sheets[wb.SheetNames[targetIdx]] ??
+      wb.Sheets[wb.SheetNames[0]];
+    if (!ws) return [];
+
+    const raw = XLSX.utils.sheet_to_json(ws, {
+      header: 1,
+      defval: null,
+    }) as unknown[][];
+
+    // 헤더 행 감지
+    const headerRow = detectHeader(raw as Record<string, unknown>[][]);
+    if (headerRow < 0) return [];
+
+    const headers = (raw[headerRow] as unknown[]).map((h) =>
+      h != null ? String(h).trim() : ""
+    );
+
+    const results: Record<string, unknown>[] = [];
+    for (let i = headerRow + 1; i < raw.length; i++) {
+      const rowArr = raw[i] as unknown[];
+      const hasData = rowArr.some(
+        (v) => v !== null && v !== undefined && v !== ""
+      );
+      if (!hasData) continue;
+      const row: Record<string, unknown> = {};
+      headers.forEach((h, j) => {
+        if (h) row[h] = rowArr[j] ?? null;
+      });
+      results.push(row);
+    }
+    return results;
+  }
+}
+
 /** 워크북에서 특정 시트를 JSON 배열로 추출
  *  headerRow: 0-indexed 헤더 행 번호
  *  dataStartRow: 0-indexed 데이터 시작 행
