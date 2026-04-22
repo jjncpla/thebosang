@@ -1133,8 +1133,9 @@ model SpecialClinicSchedule {
   hospitalName   String?
   clinicType     String?  // "특진" | "재특진" | "재재특진"
   examRound      Int?
-  assignedStaff  String?  // 담당자
+  assignedStaff  String?  // 담당자 (= HearingLossDetail.specialExam${round}Attendee 와 싱크)
   attended       Boolean? // 참석 여부
+  isPickup       Boolean? @default(false) // 픽업 필요 (= HearingLossDetail.{special|reSpecial|re2Special}ClinicPickup 와 싱크)
 
   // 텔레그램 수신
   sender          String?

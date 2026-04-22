@@ -28,6 +28,7 @@ interface Schedule {
   memo: string | null
   assignedStaff: string | null
   attended: boolean | null
+  isPickup: boolean | null
   createdAt: string
 }
 
@@ -68,6 +69,12 @@ function eventColor(s: Schedule, colorMap?: Record<string, string>) {
 function eventTitle(s: Schedule) {
   if (isFreeform(s.category)) return s.title || s.category
   return s.patientName || ''
+}
+/** 특진/재특진 일정의 담당자 라벨 — 없으면 '미배정' */
+function attendeeLabel(s: Schedule): string {
+  if (isFreeform(s.category)) return ''
+  const n = (s.assignedStaff ?? '').trim()
+  return n || '미배정'
 }
 
 // ─── 메인 컴포넌트 ────────────────────────────────────────────────
@@ -756,8 +763,12 @@ function SpecialClinicCalendar() {
                             <>
                               <div className="text-[9px] text-gray-500 truncate pl-2.5">
                                 {s.clinicType} {s.examRound}차 {fmtTime(s.scheduledHour, s.scheduledMinute)}
+                                {s.isPickup && <span className="ml-1 text-amber-600">🚗</span>}
                               </div>
-                              <div className="text-[9px] text-gray-400 truncate pl-2.5">{s.hospitalName}</div>
+                              <div className="text-[9px] text-gray-400 truncate pl-2.5">
+                                <span className={!s.assignedStaff ? 'italic text-gray-300' : ''}>{attendeeLabel(s)}</span>
+                                {s.hospitalName && <span className="ml-1 text-gray-400">· {s.hospitalName}</span>}
+                              </div>
                             </>
                           )}
                         </button>
@@ -837,8 +848,12 @@ function SpecialClinicCalendar() {
                           <>
                             <div className="text-[9px] text-gray-500 pl-2.5">
                               {s.clinicType} {s.examRound}차
+                              {s.isPickup && <span className="ml-1 text-amber-600">🚗</span>}
                             </div>
-                            <div className="text-[9px] text-gray-400 truncate pl-2.5">{s.hospitalName}</div>
+                            <div className="text-[9px] text-gray-400 truncate pl-2.5">
+                              <span className={!s.assignedStaff ? 'italic text-gray-300' : ''}>{attendeeLabel(s)}</span>
+                              {s.hospitalName && <span className="ml-1">· {s.hospitalName}</span>}
+                            </div>
                           </>
                         )}
                         {!s.isAllDay && s.scheduledHour != null && (
@@ -902,11 +917,15 @@ function SpecialClinicCalendar() {
                         </>
                       ) : (
                         <>
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 flex-wrap">
                             <span className="text-sm font-bold text-gray-800">{s.patientName} &nbsp;{s.clinicType} {s.examRound}차</span>
                             {s.patientPhone && <span className="text-xs text-gray-500">{s.patientPhone}</span>}
+                            {s.isPickup && <span className="text-[11px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded">🚗 픽업</span>}
                           </div>
-                          <div className="text-xs text-gray-500 mt-0.5">{s.hospitalName}</div>
+                          <div className="text-xs text-gray-500 mt-0.5">
+                            담당: <span className={!s.assignedStaff ? 'italic text-gray-400' : ''}>{attendeeLabel(s)}</span>
+                            {s.hospitalName && <> · {s.hospitalName}</>}
+                          </div>
                         </>
                       )}
                       <div className="flex gap-2 mt-2">
@@ -950,11 +969,15 @@ function SpecialClinicCalendar() {
                           </>
                         ) : (
                           <>
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 flex-wrap">
                               <span className="text-sm font-bold text-gray-800">{s.patientName} &nbsp;{s.clinicType} {s.examRound}차</span>
                               {s.patientPhone && <span className="text-xs text-gray-500">{s.patientPhone}</span>}
+                              {s.isPickup && <span className="text-[11px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded">🚗 픽업</span>}
                             </div>
-                            <div className="text-xs text-gray-500 mt-0.5">{s.hospitalName}</div>
+                            <div className="text-xs text-gray-500 mt-0.5">
+                              담당: <span className={!s.assignedStaff ? 'italic text-gray-400' : ''}>{attendeeLabel(s)}</span>
+                              {s.hospitalName && <> · {s.hospitalName}</>}
+                            </div>
                           </>
                         )}
                         <div className="flex gap-2 mt-2">
@@ -1073,6 +1096,8 @@ function SpecialClinicCalendar() {
                   <>
                     <span className="text-gray-500">{s.clinicType} {s.examRound}차</span>
                     <span className="text-gray-400 truncate">{s.hospitalName}</span>
+                    <span className={`text-[11px] ${s.assignedStaff ? 'text-gray-500' : 'text-gray-300 italic'}`}>{attendeeLabel(s)}</span>
+                    {s.isPickup && <span className="text-[10px] text-amber-600">🚗</span>}
                   </>
                 )}
                 <span className="ml-auto text-[10px]" style={{ color: eventColor(s, branchColorMap) }}>{s.tfName || s.category}</span>
@@ -1123,10 +1148,16 @@ function SpecialClinicCalendar() {
               </>
             ) : (
               <>
-                <div className="text-sm font-bold text-gray-800">
-                  {selected.patientName} &nbsp;{selected.clinicType} {selected.examRound}차
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="text-sm font-bold text-gray-800">
+                    {selected.patientName} &nbsp;{selected.clinicType} {selected.examRound}차
+                  </span>
+                  {selected.isPickup && <span className="text-[11px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded">🚗 픽업</span>}
                 </div>
                 <div className="text-xs text-gray-600">{selected.hospitalName}</div>
+                <div className="text-xs text-gray-600">
+                  담당: <span className={!selected.assignedStaff ? 'italic text-gray-400' : ''}>{attendeeLabel(selected)}</span>
+                </div>
               </>
             )}
 
@@ -1228,6 +1259,7 @@ function InputModal({
         content: target.content || '',
         assignedStaff: target.assignedStaff || '',
         attended: target.attended ?? null,
+        isPickup: target.isPickup ?? false,
       }
     }
     return {
@@ -1244,6 +1276,7 @@ function InputModal({
       content: '',
       assignedStaff: '',
       attended: null as boolean | null,
+      isPickup: false,
     }
   }
   const [form, setForm] = useState(() => initForm(editTarget))
@@ -1295,6 +1328,7 @@ function InputModal({
         examRound: form.examRound,
         assignedStaff: form.assignedStaff || null,
         attended: form.attended,
+        isPickup: form.isPickup ?? false,
         title: null,
         content: null,
       })
@@ -1443,6 +1477,20 @@ function InputModal({
                       </label>
                     ))}
                   </div>
+                </div>
+                <div className="col-span-2 bg-amber-50 border border-amber-200 rounded px-2 py-1.5">
+                  <label className="flex items-center gap-2 cursor-pointer text-sm">
+                    <input
+                      type="checkbox"
+                      checked={!!form.isPickup}
+                      onChange={e => setForm(f => ({ ...f, isPickup: e.target.checked }))}
+                      className="w-4 h-4"
+                    />
+                    <span>🚗 <b>픽업 필요</b></span>
+                    <span className="text-[11px] text-gray-500 ml-auto">
+                      사건 상세 페이지의 픽업 여부와 자동 동기화됨
+                    </span>
+                  </label>
                 </div>
                 <div className="col-span-2">
                   <label className="text-xs text-gray-500">메모</label>

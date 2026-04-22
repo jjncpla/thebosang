@@ -5,11 +5,11 @@ import { syncFromHearingLossDecision } from "@/lib/case-sync";
 // 특진일정 → SpecialClinicSchedule 싱크
 // clinicType별 필드 정의
 const EXAM_SCHEDULE_FIELDS = [
-  // [clinicType, examRound, dateField, attendeeField]
-  ...([1,2,3,4,5] as const).map(r => [`특진`, r, `specialExam${r}Date`, `specialExam${r}Attendee`] as const),
-  ...([1,2,3] as const).map(r => [`재특진`, r, `reSpecialExam${r}Date`, `reSpecialExam${r}Attendee`] as const),
-  ...([1,2,3] as const).map(r => [`재재특진`, r, `re2SpecialExam${r}Date`, `re2SpecialExam${r}Attendee`] as const),
-] as [string, number, string, string][];
+  // [clinicType, examRound, dateField, attendeeField, pickupField]
+  ...([1,2,3,4,5] as const).map(r => [`특진`, r, `specialExam${r}Date`, `specialExam${r}Attendee`, `specialClinicPickup`] as const),
+  ...([1,2,3] as const).map(r => [`재특진`, r, `reSpecialExam${r}Date`, `reSpecialExam${r}Attendee`, `reSpecialClinicPickup`] as const),
+  ...([1,2,3] as const).map(r => [`재재특진`, r, `re2SpecialExam${r}Date`, `re2SpecialExam${r}Attendee`, `re2SpecialClinicPickup`] as const),
+] as [string, number, string, string, string][];
 
 async function syncSpecialExamSchedules(caseId: string, detail: Record<string, unknown>) {
   // Case + Patient 정보 조회
@@ -22,9 +22,10 @@ async function syncSpecialExamSchedules(caseId: string, detail: Record<string, u
   const patientName = caseData.patient?.name ?? "";
   const tfName = caseData.tfName ?? "";
 
-  for (const [clinicType, examRound, dateField, attendeeField] of EXAM_SCHEDULE_FIELDS) {
+  for (const [clinicType, examRound, dateField, attendeeField, pickupField] of EXAM_SCHEDULE_FIELDS) {
     const dateVal = detail[dateField];
     const attendee = typeof detail[attendeeField] === "string" ? detail[attendeeField] as string : null;
+    const isPickup = typeof detail[pickupField] === "boolean" ? detail[pickupField] as boolean : null;
 
     if (!dateVal || typeof dateVal !== "string") {
       // 날짜가 지워진 경우 → scheduled 상태의 레코드 삭제
@@ -56,6 +57,7 @@ async function syncSpecialExamSchedules(caseId: string, detail: Record<string, u
           patientName,
           tfName,
           assignedStaff: attendee,
+          ...(isPickup !== null ? { isPickup } : {}),
         },
       });
     } else {
@@ -73,6 +75,7 @@ async function syncSpecialExamSchedules(caseId: string, detail: Record<string, u
           patientName,
           tfName,
           assignedStaff: attendee,
+          isPickup: isPickup ?? false,
         },
       });
     }

@@ -2,6 +2,81 @@ import { auth } from "@/auth"
 import { prisma } from "@/lib/prisma"
 import { NextRequest, NextResponse } from "next/server"
 
+/**
+ * 캘린더 일정 편집 → HearingLossDetail 역방향 싱크.
+ * - assignedStaff → specialExam${N}Attendee (또는 reSpecial/re2Special)
+ * - isPickup → specialClinicPickup / reSpecialClinicPickup / re2SpecialClinicPickup (사건 단위)
+ *
+ * 매칭: (1) schedule.caseId 우선, (2) 없으면 patientName으로 Patient→Case 찾기
+ */
+async function syncToHearingLoss(updated: {
+  caseId: string | null
+  patientName: string | null
+  clinicType: string | null
+  examRound: number | null
+  assignedStaff: string | null
+  isPickup: boolean | null
+}) {
+  if (!updated.clinicType || !updated.examRound) return
+  if (updated.clinicType !== '특진' && updated.clinicType !== '재특진' && updated.clinicType !== '재재특진') return
+  const round = updated.examRound
+  if (round < 1 || round > 5) return
+
+  // 1) Case 찾기
+  let caseId: string | null = updated.caseId
+  if (!caseId && updated.patientName) {
+    // 동명이인 체크
+    const patients = await prisma.patient.findMany({
+      where: { name: updated.patientName },
+      select: { id: true },
+    })
+    if (patients.length === 1) {
+      const c = await prisma.case.findFirst({
+        where: { patientId: patients[0].id, caseType: 'HEARING_LOSS' },
+        select: { id: true },
+      })
+      caseId = c?.id ?? null
+    }
+  }
+  if (!caseId) return
+
+  // 2) HearingLossDetail 업데이트 — 필드 키 조립
+  const prefix =
+    updated.clinicType === '특진' ? 'specialExam'
+    : updated.clinicType === '재특진' ? 'reSpecialExam'
+    : 're2SpecialExam'
+  const pickupField =
+    updated.clinicType === '특진' ? 'specialClinicPickup'
+    : updated.clinicType === '재특진' ? 'reSpecialClinicPickup'
+    : 're2SpecialClinicPickup'
+
+  const data: Record<string, unknown> = {}
+  if (updated.assignedStaff !== undefined && updated.assignedStaff !== null) {
+    data[`${prefix}${round}Attendee`] = updated.assignedStaff
+  }
+  if (updated.isPickup !== undefined && updated.isPickup !== null) {
+    data[pickupField] = updated.isPickup
+  }
+  if (Object.keys(data).length === 0) return
+
+  await prisma.hearingLossDetail.updateMany({
+    where: { caseId },
+    data,
+  })
+
+  // 3) 같은 사건·clinicType의 다른 회차 일정에도 isPickup 일괄 반영 (사건 단위 픽업 정책)
+  if (updated.isPickup !== undefined && updated.isPickup !== null) {
+    await prisma.specialClinicSchedule.updateMany({
+      where: {
+        caseId,
+        clinicType: updated.clinicType,
+        NOT: { examRound: round },  // 자기 자신 제외 (이미 업데이트됨)
+      },
+      data: { isPickup: updated.isPickup },
+    })
+  }
+}
+
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth()
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
@@ -9,29 +84,18 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   const body = await req.json()
   const updated = await prisma.specialClinicSchedule.update({ where: { id }, data: body })
 
-  // 특진/재특진 담당자 → HearingLossDetail 자동 반영
-  if (updated.patientName && updated.assignedStaff && (updated.clinicType === '특진' || updated.clinicType === '재특진') && updated.examRound) {
-    const round = updated.examRound
-    const fieldKey = updated.clinicType === '특진'
-      ? `specialExam${round}Attendee`
-      : `reSpecialExam${round}Attendee`
-
-    // patientName으로 환자 찾기 → 사건 → HearingLossDetail 업데이트
-    if (round >= 1 && round <= 5) {
-      const patient = await prisma.patient.findFirst({ where: { name: updated.patientName }, select: { id: true } })
-      if (patient) {
-        const hearingCase = await prisma.case.findFirst({
-          where: { patientId: patient.id, caseType: 'NOISE' },
-          select: { id: true },
-        })
-        if (hearingCase) {
-          await prisma.hearingLossDetail.updateMany({
-            where: { caseId: hearingCase.id },
-            data: { [fieldKey]: updated.assignedStaff },
-          })
-        }
-      }
-    }
+  // HearingLossDetail / 다른 회차 schedule로 싱크
+  try {
+    await syncToHearingLoss({
+      caseId: updated.caseId,
+      patientName: updated.patientName,
+      clinicType: updated.clinicType,
+      examRound: updated.examRound,
+      assignedStaff: updated.assignedStaff,
+      isPickup: updated.isPickup,
+    })
+  } catch (e) {
+    console.error('[special-clinic PUT sync failed]', e)
   }
 
   return NextResponse.json(updated)

@@ -54,6 +54,7 @@ export async function GET(req: NextRequest) {
       memo: true,
       assignedStaff: true,
       attended: true,
+      isPickup: true,
       createdAt: true,
     },
   })
