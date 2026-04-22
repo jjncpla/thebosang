@@ -99,7 +99,9 @@ function SpecialClinicCalendar() {
   const [hospitalPanelOpen, setHospitalPanelOpen] = useState(false)
   const hospitalPanelRef = useRef<HTMLDivElement>(null)
   const [hospitalSearch, setHospitalSearch] = useState('')
-  const [statusFilter, setStatusFilter] = useState(searchParams?.get('status') || 'all')
+  const [statusFilters, setStatusFilters] = useState<string[]>([])
+  const [statusPanelOpen, setStatusPanelOpen] = useState(false)
+  const statusPanelRef = useRef<HTMLDivElement>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [debouncedQuery, setDebouncedQuery] = useState('')
 
@@ -153,9 +155,8 @@ function SpecialClinicCalendar() {
     const params = new URLSearchParams()
     params.set('year', String(year))
     params.set('month', String(month))
-    if (statusFilter !== 'all') params.set('status', statusFilter)
     router.replace(`/tf/special-clinic?${params}`, { scroll: false })
-  }, [year, month, statusFilter, router])
+  }, [year, month, router])
 
   // 검색 debounce
   useEffect(() => {
@@ -199,12 +200,21 @@ function SpecialClinicCalendar() {
     return () => document.removeEventListener('mousedown', handleClick)
   }, [hospitalPanelOpen])
 
+  // 상태 패널 외부 클릭 닫기
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (statusPanelRef.current && !statusPanelRef.current.contains(e.target as Node)) setStatusPanelOpen(false)
+    }
+    if (statusPanelOpen) document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [statusPanelOpen])
+
   // 데이터 로드 (전체 — 프론트에서 필터링)
   const load = useCallback(async () => {
     setLoading(true)
     const qs = new URLSearchParams({
       month: `${year}-${pad(month)}`,
-      status: statusFilter,
+      status: 'all',
     })
     const res = await fetch(`/api/tf/special-clinic?${qs}`)
     if (res.ok) {
@@ -212,7 +222,7 @@ function SpecialClinicCalendar() {
       setSchedules(data)
     }
     setLoading(false)
-  }, [year, month, statusFilter])
+  }, [year, month])
 
   useEffect(() => { load() }, [load])
 
@@ -264,11 +274,12 @@ function SpecialClinicCalendar() {
     schedules.filter(s => s.hospitalName && !isFreeform(s.category)).map(s => s.hospitalName!)
   )].sort((a, b) => a.localeCompare(b, 'ko'))
 
-  // 프론트 필터링 (TF 복수선택 + 카테고리 + 병원 + 검색)
+  // 프론트 필터링 (TF 복수선택 + 카테고리 + 병원 + 상태 + 검색)
   const filteredSchedules = schedules.filter(s => {
     if (selectedTFs.length > 0 && !selectedTFs.includes(s.tfName)) return false
     if (categoryFilters.length > 0 && !categoryFilters.includes(s.category) && !categoryFilters.includes(s.clinicType ?? '')) return false
     if (hospitalFilters.length > 0 && (!s.hospitalName || !hospitalFilters.includes(s.hospitalName))) return false
+    if (statusFilters.length > 0 && !statusFilters.includes(s.status)) return false
     if (debouncedQuery) {
       const q = debouncedQuery.toLowerCase()
       const haystack = [s.patientName, s.hospitalName, s.tfName, s.memo, s.title, s.content].filter(Boolean) as string[]
@@ -619,13 +630,37 @@ function SpecialClinicCalendar() {
           )}
         </div>
 
-        <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
-          className="border rounded px-2 py-1 text-xs">
-          <option value="all">전체 상태</option>
-          <option value="scheduled">예정</option>
-          <option value="done">완료</option>
-          <option value="cancelled">취소</option>
-        </select>
+        {/* 상태 복수선택 드롭다운 */}
+        <div className="relative" ref={statusPanelRef}>
+          <button
+            onClick={() => setStatusPanelOpen(p => !p)}
+            className={`border rounded px-2 py-1 text-xs flex items-center gap-1 hover:bg-gray-50 ${statusFilters.length > 0 ? 'bg-blue-50 border-blue-300 text-blue-700' : ''}`}
+          >
+            {statusFilters.length === 0
+              ? '전체 상태'
+              : statusFilters.map(s => STATUS_LABELS[s] ?? s).join(' · ')}
+            {' '}<span className="text-gray-400">▼</span>
+          </button>
+          {statusPanelOpen && (
+            <div className="absolute top-full mt-1 left-0 bg-white border rounded-lg shadow-lg z-40 w-32 py-1">
+              <div className="px-2 py-1 border-b">
+                <button onClick={() => setStatusFilters([])} className="text-[10px] text-sky-500 hover:underline">전체 초기화</button>
+              </div>
+              {(['scheduled', 'done', 'cancelled', 'unknown'] as const).map(st => (
+                <label key={st} className="flex items-center gap-2 px-2 py-1 hover:bg-gray-50 cursor-pointer text-xs">
+                  <input
+                    type="checkbox"
+                    checked={statusFilters.includes(st)}
+                    onChange={() => setStatusFilters(prev => prev.includes(st) ? prev.filter(x => x !== st) : [...prev, st])}
+                    className="rounded"
+                  />
+                  <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: STATUS_COLORS[st] }} />
+                  {STATUS_LABELS[st]}
+                </label>
+              ))}
+            </div>
+          )}
+        </div>
 
         {loading && <span className="text-xs text-gray-400">로딩...</span>}
 
