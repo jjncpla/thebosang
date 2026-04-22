@@ -126,6 +126,8 @@ export async function POST(req: NextRequest) {
       receptionDate,
       isOneStop,
       memo,
+      salesManagerId,
+      caseManagerId,
     } = body;
 
     if (!patientId) {
@@ -144,6 +146,8 @@ export async function POST(req: NextRequest) {
         receptionDate: receptionDate ? new Date(receptionDate) : null,
         isOneStop: isOneStop ?? false,
         memo: memo ?? null,
+        salesManagerId: salesManagerId || null,
+        caseManagerId: caseManagerId || null,
       },
       include: {
         patient: { select: { id: true, name: true, ssn: true, phone: true } },

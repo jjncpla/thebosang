@@ -119,6 +119,7 @@ type FormData = {
   ssn: string;
   address: string;
   caseTypes: string[];
+  managerId: string;
   managerName: string;
   routeMain: string;
   routeSub: string;
@@ -136,6 +137,7 @@ const emptyForm: FormData = {
   ssn: "",
   address: "",
   caseTypes: [],
+  managerId: "",
   managerName: "",
   routeMain: "",
   routeSub: "",
@@ -167,6 +169,7 @@ function ConsultationModal({
       ssn: initial.ssn ?? "",
       address: initial.address ?? "",
       caseTypes: initial.caseTypes,
+      managerId: initial.managerId ?? initial.manager?.id ?? "",
       managerName: initial.managerName ?? initial.manager?.name ?? "",
       routeMain: initial.routeMain ?? "",
       routeSub: initial.routeSub ?? "",
@@ -231,7 +234,7 @@ function ConsultationModal({
           </div>
           <div>
             <label style={labelStyle}>주민번호</label>
-            <input style={inputStyle} value={form.ssn} onChange={(e) => set("ssn", e.target.value)} placeholder="선택 입력" />
+            <input style={inputStyle} value={form.ssn} onChange={(e) => set("ssn", e.target.value)} placeholder="예: 950203-1234567" />
           </div>
           <div>
             <label style={labelStyle}>주소</label>
@@ -268,7 +271,7 @@ function ConsultationModal({
             <label style={labelStyle}>담당자</label>
             <ContactSelector
               value={form.managerName}
-              onChange={(name) => set("managerName", name)}
+              onChange={(name, _mobile, userId) => { set("managerName", name); set("managerId", userId ?? ""); }}
               placeholder="담당자 이름 검색"
               firmType="TBOSANG"
             />
