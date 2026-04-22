@@ -3,12 +3,12 @@ import { prisma } from "@/lib/prisma";
 import { syncFromHearingLossDecision } from "@/lib/case-sync";
 
 // 특진일정 → SpecialClinicSchedule 싱크
-// clinicType별 필드 정의
+// clinicType별 필드 정의 (회차별 pickup)
 const EXAM_SCHEDULE_FIELDS = [
-  // [clinicType, examRound, dateField, attendeeField, pickupField]
-  ...([1,2,3,4,5] as const).map(r => [`특진`, r, `specialExam${r}Date`, `specialExam${r}Attendee`, `specialClinicPickup`] as const),
-  ...([1,2,3] as const).map(r => [`재특진`, r, `reSpecialExam${r}Date`, `reSpecialExam${r}Attendee`, `reSpecialClinicPickup`] as const),
-  ...([1,2,3] as const).map(r => [`재재특진`, r, `re2SpecialExam${r}Date`, `re2SpecialExam${r}Attendee`, `re2SpecialClinicPickup`] as const),
+  // [clinicType, examRound, dateField, attendeeField, pickupField(회차별)]
+  ...([1,2,3,4,5] as const).map(r => [`특진`, r, `specialExam${r}Date`, `specialExam${r}Attendee`, `specialExam${r}Pickup`] as const),
+  ...([1,2,3] as const).map(r => [`재특진`, r, `reSpecialExam${r}Date`, `reSpecialExam${r}Attendee`, `reSpecialExam${r}Pickup`] as const),
+  ...([1,2,3] as const).map(r => [`재재특진`, r, `re2SpecialExam${r}Date`, `re2SpecialExam${r}Attendee`, `re2SpecialExam${r}Pickup`] as const),
 ] as [string, number, string, string, string][];
 
 async function syncSpecialExamSchedules(caseId: string, detail: Record<string, unknown>) {

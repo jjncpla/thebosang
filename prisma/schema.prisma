@@ -134,56 +134,67 @@ model HearingLossDetail {
   specialClinic                  String?
   examClinicSelectionSubmittedAt DateTime?
 
-  // 특진 일정 관리
+  // 특진 일정 관리 (회차별 — 픽업 포함)
   specialExam1Date      DateTime?
   specialExam1Contact   String?
   specialExam1Attendee  String?
+  specialExam1Pickup    Boolean?
   specialExam2Date      DateTime?
   specialExam2Contact   String?
   specialExam2Attendee  String?
+  specialExam2Pickup    Boolean?
   specialExam3Date      DateTime?
   specialExam3Contact   String?
   specialExam3Attendee  String?
+  specialExam3Pickup    Boolean?
   specialExam4Date      DateTime?
   specialExam4Contact   String?
   specialExam4Attendee  String?
+  specialExam4Pickup    Boolean?
   specialExam5Date      DateTime?
   specialExam5Contact   String?
   specialExam5Attendee  String?
+  specialExam5Pickup    Boolean?
 
-  // 특진병원 픽업/비고
+  // 특진병원 비고 (픽업은 회차별이라 specialClinicPickup은 deprecated — 하위호환용 유지)
   specialClinicPickup Boolean?
   specialClinicNote   String?
 
   // 재특진 병원
   reSpecialClinic       String?
-  reSpecialClinicPickup Boolean?
+  reSpecialClinicPickup Boolean?  // deprecated, 회차별 reSpecialExamNPickup 사용
   reSpecialClinicNote   String?
 
   reSpecialExam1Date     DateTime?
   reSpecialExam1Contact  String?
   reSpecialExam1Attendee String?
+  reSpecialExam1Pickup   Boolean?
   reSpecialExam2Date     DateTime?
   reSpecialExam2Contact  String?
   reSpecialExam2Attendee String?
+  reSpecialExam2Pickup   Boolean?
   reSpecialExam3Date     DateTime?
   reSpecialExam3Contact  String?
   reSpecialExam3Attendee String?
+  reSpecialExam3Pickup   Boolean?
 
   // 재재특진 병원
   re2SpecialClinic       String?
-  re2SpecialClinicPickup Boolean?
+  re2SpecialClinicPickup Boolean?  // deprecated, 회차별 re2SpecialExamNPickup 사용
   re2SpecialClinicNote   String?
 
   re2SpecialExam1Date     DateTime?
   re2SpecialExam1Contact  String?
   re2SpecialExam1Attendee String?
+  re2SpecialExam1Pickup   Boolean?
   re2SpecialExam2Date     DateTime?
   re2SpecialExam2Contact  String?
   re2SpecialExam2Attendee String?
+  re2SpecialExam2Pickup   Boolean?
   re2SpecialExam3Date     DateTime?
   re2SpecialExam3Contact  String?
   re2SpecialExam3Attendee String?
+  re2SpecialExam3Pickup   Boolean?
 
   // 전문조사
   expertRequestReceivedAt          DateTime?

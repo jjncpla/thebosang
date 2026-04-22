@@ -3,9 +3,9 @@ import { prisma } from "@/lib/prisma"
 import { NextRequest, NextResponse } from "next/server"
 
 /**
- * 캘린더 일정 편집 → HearingLossDetail 역방향 싱크.
+ * 캘린더 일정 편집 → HearingLossDetail 역방향 싱크 (회차별 독립).
  * - assignedStaff → specialExam${N}Attendee (또는 reSpecial/re2Special)
- * - isPickup → specialClinicPickup / reSpecialClinicPickup / re2SpecialClinicPickup (사건 단위)
+ * - isPickup → specialExam${N}Pickup (회차별 독립)
  *
  * 매칭: (1) schedule.caseId 우선, (2) 없으면 patientName으로 Patient→Case 찾기
  */
@@ -25,7 +25,6 @@ async function syncToHearingLoss(updated: {
   // 1) Case 찾기
   let caseId: string | null = updated.caseId
   if (!caseId && updated.patientName) {
-    // 동명이인 체크
     const patients = await prisma.patient.findMany({
       where: { name: updated.patientName },
       select: { id: true },
@@ -40,22 +39,18 @@ async function syncToHearingLoss(updated: {
   }
   if (!caseId) return
 
-  // 2) HearingLossDetail 업데이트 — 필드 키 조립
+  // 2) HearingLossDetail 업데이트 — 회차별 필드
   const prefix =
     updated.clinicType === '특진' ? 'specialExam'
     : updated.clinicType === '재특진' ? 'reSpecialExam'
     : 're2SpecialExam'
-  const pickupField =
-    updated.clinicType === '특진' ? 'specialClinicPickup'
-    : updated.clinicType === '재특진' ? 'reSpecialClinicPickup'
-    : 're2SpecialClinicPickup'
 
   const data: Record<string, unknown> = {}
   if (updated.assignedStaff !== undefined && updated.assignedStaff !== null) {
     data[`${prefix}${round}Attendee`] = updated.assignedStaff
   }
   if (updated.isPickup !== undefined && updated.isPickup !== null) {
-    data[pickupField] = updated.isPickup
+    data[`${prefix}${round}Pickup`] = updated.isPickup
   }
   if (Object.keys(data).length === 0) return
 
@@ -63,18 +58,6 @@ async function syncToHearingLoss(updated: {
     where: { caseId },
     data,
   })
-
-  // 3) 같은 사건·clinicType의 다른 회차 일정에도 isPickup 일괄 반영 (사건 단위 픽업 정책)
-  if (updated.isPickup !== undefined && updated.isPickup !== null) {
-    await prisma.specialClinicSchedule.updateMany({
-      where: {
-        caseId,
-        clinicType: updated.clinicType,
-        NOT: { examRound: round },  // 자기 자신 제외 (이미 업데이트됨)
-      },
-      data: { isPickup: updated.isPickup },
-    })
-  }
 }
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {

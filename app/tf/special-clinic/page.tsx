@@ -1488,7 +1488,7 @@ function InputModal({
                     />
                     <span>🚗 <b>픽업 필요</b></span>
                     <span className="text-[11px] text-gray-500 ml-auto">
-                      사건 상세 페이지의 픽업 여부와 자동 동기화됨
+                      사건 상세 페이지의 {form.clinicType} {form.examRound}차 픽업과 동기화
                     </span>
                   </label>
                 </div>
