@@ -638,6 +638,35 @@ function HearingLossTab({ caseId, initial }: { caseId: string; initial: HearingL
   const setD = (key: keyof HearingLossDetail, val: unknown) =>
     setDetail((prev) => ({ ...prev, [key]: val }));
 
+  /** 여러 픽업 필드를 한 번에 토글 — 하나라도 false면 전부 true, 모두 true면 전부 false */
+  const togglePickupAll = (keys: (keyof HearingLossDetail)[]) => {
+    const allChecked = keys.every(k => !!detail[k])
+    const next = !allChecked
+    setDetail(prev => {
+      const d = { ...prev }
+      for (const k of keys) (d as Record<string, unknown>)[k as string] = next
+      return d
+    })
+  }
+  const PickupToggleButton = ({ keys }: { keys: (keyof HearingLossDetail)[] }) => {
+    const allChecked = keys.every(k => !!detail[k])
+    return (
+      <button
+        type="button"
+        onClick={() => togglePickupAll(keys)}
+        style={{
+          marginLeft: 8, padding: '2px 8px', fontSize: 11,
+          border: '1px solid #d1d5db', borderRadius: 4,
+          background: allChecked ? '#fef3c7' : 'white',
+          color: allChecked ? '#92400e' : '#6b7280',
+          cursor: 'pointer',
+        }}
+      >
+        🚗 {allChecked ? '픽업 전체 해제' : '픽업 전체 체크'}
+      </button>
+    )
+  }
+
   const updateHlField = async (key: keyof HearingLossDetail, val: unknown) => {
     setD(key, val);
     await fetch(`/api/cases/${caseId}/hearing-loss`, {
@@ -997,7 +1026,10 @@ function HearingLossTab({ caseId, initial }: { caseId: string; initial: HearingL
               <DField label="선택확인서 제출일" k="examClinicSelectionSubmittedAt" type="date" />
               <DField label="비고" k="specialClinicNote" />
             </div>
-            <SectionTitle>최초특진 일정 및 참석</SectionTitle>
+            <SectionTitle>
+              최초특진 일정 및 참석
+              <PickupToggleButton keys={initialExamRounds.map(r => `specialExam${r}Pickup` as keyof HearingLossDetail)} />
+            </SectionTitle>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 12 }}>
               {initialExamRounds.map((r) => (
                 <React.Fragment key={`sched-${r}`}>
@@ -1030,7 +1062,10 @@ function HearingLossTab({ caseId, initial }: { caseId: string; initial: HearingL
                 <DField label="재특진병원명" k="reSpecialClinic" />
                 <DField label="비고" k="reSpecialClinicNote" />
               </div>
-              <SectionTitle>재특진 일정 및 참석</SectionTitle>
+              <SectionTitle>
+                재특진 일정 및 참석
+                <PickupToggleButton keys={[1,2,3].map(r => `reSpecialExam${r}Pickup` as keyof HearingLossDetail)} />
+              </SectionTitle>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 12 }}>
                 {[1, 2, 3].map((r) => (
                   <React.Fragment key={`resched-${r}`}>
@@ -1063,7 +1098,10 @@ function HearingLossTab({ caseId, initial }: { caseId: string; initial: HearingL
                   <DField label="재재특진병원명" k="re2SpecialClinic" />
                   <DField label="비고" k="re2SpecialClinicNote" />
                 </div>
-                <SectionTitle>재재특진 일정 및 참석</SectionTitle>
+                <SectionTitle>
+                  재재특진 일정 및 참석
+                  <PickupToggleButton keys={[1,2,3].map(r => `re2SpecialExam${r}Pickup` as keyof HearingLossDetail)} />
+                </SectionTitle>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 12 }}>
                   {[1, 2, 3].map((r) => (
                     <React.Fragment key={`re2sched-${r}`}>
