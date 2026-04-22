@@ -6,6 +6,7 @@ import { CASE_TYPE_LABELS } from "@/lib/constants/case";
 import { useBranches } from "@/lib/hooks/useBranches";
 import { ALL_STAFF } from "@/lib/constants/staff";
 import ContactSelector from "@/components/ui/ContactSelector";
+import DateSegmentInput from "@/components/ui/DateSegmentInput";
 
 const S = { fontFamily: "'Malgun Gothic', 'Apple SD Gothic Neo', 'Segoe UI', sans-serif" };
 
@@ -366,7 +367,11 @@ export default function NewCasePage() {
                 </select>
               </LabelInput>
               <LabelInput label="약정일자">
-                <input type="date" style={inputStyle} value={caseForm.contractDate} onChange={(e) => setCaseForm({ ...caseForm, contractDate: e.target.value })} />
+                <DateSegmentInput
+                  style={inputStyle}
+                  value={caseForm.contractDate}
+                  onChange={(v) => setCaseForm({ ...caseForm, contractDate: v ?? "" })}
+                />
               </LabelInput>
               <div style={{ gridColumn: "1 / -1" }}>
                 <LabelInput label="메모">
