@@ -12,7 +12,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "items must be a non-empty array" }, { status: 400 });
     }
 
-    const created = await (prisma as any).settlementTracker.createMany({ data: items });
+    const normalized = items.map((item: any) => ({
+      ...item,
+      decisionDate: item.decisionDate ? new Date(item.decisionDate) : null,
+      scheduledDate: item.scheduledDate ? new Date(item.scheduledDate) : null,
+    }));
+    const created = await (prisma as any).settlementTracker.createMany({ data: normalized });
     return NextResponse.json({ count: created.count }, { status: 201 });
   } catch (err: any) {
     console.error("[settlement/bulk POST]", err);
