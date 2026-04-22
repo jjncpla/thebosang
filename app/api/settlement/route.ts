@@ -17,6 +17,11 @@ export async function POST(req: NextRequest) {
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await req.json();
-  const item = await (prisma as any).settlementTracker.create({ data: body });
+  const data = {
+    ...body,
+    decisionDate: body.decisionDate ? new Date(body.decisionDate) : null,
+    scheduledDate: body.scheduledDate ? new Date(body.scheduledDate) : null,
+  };
+  const item = await (prisma as any).settlementTracker.create({ data });
   return NextResponse.json(item, { status: 201 });
 }
