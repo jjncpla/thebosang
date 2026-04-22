@@ -141,6 +141,7 @@ function ImportModal({
   const [parsed, setParsed] = useState<Array<Omit<SettlementItem, "id" | "sortOrder">> | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [saveError, setSaveError] = useState("");
 
   function handleParse() {
     if (!text.trim()) { setError("텍스트를 입력해주세요."); return; }
@@ -156,9 +157,15 @@ function ImportModal({
   async function handleConfirm() {
     if (!parsed) return;
     setSaving(true);
-    await onImport(parsed);
-    setSaving(false);
-    onClose();
+    setSaveError("");
+    try {
+      await onImport(parsed);
+      onClose();
+    } catch (err: any) {
+      setSaveError(err.message ?? "저장 중 오류가 발생했습니다.");
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -228,6 +235,11 @@ function ImportModal({
                 </tbody>
               </table>
             </div>
+            {saveError && (
+              <div style={{ marginBottom: 12, padding: "8px 12px", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 6, fontSize: 12, color: "#dc2626" }}>
+                ⚠ 저장 실패: {saveError}
+              </div>
+            )}
             <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
               <button onClick={() => setParsed(null)} style={btnSecondary}>다시 붙여넣기</button>
               <button onClick={handleConfirm} disabled={saving} style={{ ...btnPrimary, opacity: saving ? 0.6 : 1 }}>
@@ -689,16 +701,16 @@ export default function SettlementPage() {
   }
 
   async function handleImport(parsed: Array<Omit<SettlementItem, "id" | "sortOrder">>) {
-    await Promise.all(
-      parsed.map((item) =>
-        fetch("/api/settlement", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(item),
-        })
-      )
-    );
-    load();
+    const res = await fetch("/api/settlement/bulk", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(parsed),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+      throw new Error(err.error ?? `HTTP ${res.status}`);
+    }
+    await load();
   }
 
   async function handleDelete(id: string) {
