@@ -979,15 +979,16 @@ function SpecialClinicCalendar() {
 
       {/* TF 범례 사이드바 — 더보상 / 이산 구분 */}
       {(() => {
-        // 범례는 3가지 소스의 합집합
-        //   (1) 현재 월에 실제 일정이 있는 TF (기본)
-        //   (2) 사용자가 체크한 TF — 일정 없어도 노출 (선택 상태 표시)
-        //   (3) 선택된 지사의 관할 TF 전체 — 지사 단위로 보고 싶을 때 누락 없음
-        const activeTfs = [...new Set([
-          ...schedules.map(s => s.tfName).filter(Boolean),
-          ...selectedTFs,
-          ...(selectedBranch ? (TF_BY_BRANCH[selectedBranch] || []) : []),
-        ])].sort()
+        // 범례는 항상 등록된 전체 TF를 표시 — 지사 선택·필터와 독립적
+        //   (1) TF_BY_BRANCH에 등록된 모든 TF (관할 기준)
+        //   (2) 현재 월 일정에 있지만 관할 미등록 orphan TF (데이터 보정 여지 노출)
+        // 선택 상태는 opacity로만 구분 (아래 isActive 참고)
+        const allRegistered = Object.values(TF_BY_BRANCH).flat() as string[]
+        const allRegisteredSet = new Set(allRegistered)
+        const orphanFromSchedules = schedules
+          .map(s => s.tfName)
+          .filter((t): t is string => !!t && !allRegisteredSet.has(t))
+        const activeTfs = [...new Set([...allRegistered, ...orphanFromSchedules])].sort()
         if (activeTfs.length === 0) return null
         const bosangTfs = activeTfs.filter(tf => !tf.startsWith('이산'))
         const isanTfs = activeTfs.filter(tf => tf.startsWith('이산'))
