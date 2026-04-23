@@ -74,6 +74,7 @@ model Case {
 
   // 관할 근로복지공단 지사 (서식 자동생성용)
   kwcOfficeName   String?   // 관할 공단 지사명 (예: "울산", "부산동부") → "근로복지공단 {{kwcOfficeName}}장 귀하"
+  kwcOfficerName  String?   // 근로복지공단 지사담당자 이름
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

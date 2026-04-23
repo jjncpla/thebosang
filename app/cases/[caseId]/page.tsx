@@ -149,6 +149,7 @@ type CaseData = {
   isOneStop: boolean;
   memo: string | null;
   kwcOfficeName: string | null;
+  kwcOfficerName: string | null;
   createdAt: string;
   updatedAt: string;
   hearingLoss: HearingLossDetail | null;
@@ -1585,6 +1586,8 @@ function BasicInfoTab({ caseData, onUpdated }: { caseData: CaseData; onUpdated: 
     caseManagerId: caseData.caseManagerUserId ?? caseData.caseManagerId ?? null as string | null,
     branchManagerId: caseData.branchManagerUserId ?? caseData.branchManagerId ?? null as string | null,
     salesRoute: caseData.salesRoute ?? "",
+    kwcOfficeName: caseData.kwcOfficeName ?? "",
+    kwcOfficerName: caseData.kwcOfficerName ?? "",
     contractDate: toInputDate(caseData.contractDate),
     receptionDate: toInputDate(caseData.receptionDate),
     isOneStop: caseData.isOneStop,
@@ -1627,6 +1630,7 @@ function BasicInfoTab({ caseData, onUpdated }: { caseData: CaseData; onUpdated: 
             <InfoRow label="사건번호">{caseData.caseNumber ?? "-"}</InfoRow>
             <InfoRow label="TF명">{caseData.tfName ?? "-"}</InfoRow>
             <InfoRow label="관할공단">{caseData.kwcOfficeName ?? "-"}</InfoRow>
+            <InfoRow label="지사담당자">{caseData.kwcOfficerName ?? "-"}</InfoRow>
           </InfoCard>
           <InfoCard title="담당자 정보">
             <InfoRow label="영업담당">{caseData.salesManager ?? "-"}</InfoRow>
@@ -1685,6 +1689,7 @@ function BasicInfoTab({ caseData, onUpdated }: { caseData: CaseData; onUpdated: 
         {([
           ["사건번호", "caseNumber"], ["TF명", "tfName"],
           ["지사장", "branchManager"], ["부지사", "subAgent"],
+          ["관할공단", "kwcOfficeName"], ["지사담당자", "kwcOfficerName"],
         ] as [string, keyof typeof form][]).map(([label, key]) => (
           <div key={key} style={{ display: "flex", flexDirection: "column", gap: 3 }}>
             <label style={{ fontSize: 12, color: "#6b7280" }}>{label}</label>
