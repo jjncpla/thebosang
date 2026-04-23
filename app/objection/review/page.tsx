@@ -271,6 +271,8 @@ export default function ObjectionReviewPage() {
   const [filterProgress, setFilterProgress] = useState("");
   const [filterCaseType, setFilterCaseType] = useState("");
   const [filterInfo, setFilterInfo] = useState(""); // "" | 요청 | 확보 | 확보대기 (요청+요청중)
+  const [filterApproval, setFilterApproval] = useState(""); // "" | 승인 | 불승인 | 일부승인
+  const [filterInfoStatus, setFilterInfoStatus] = useState(""); // "" | __EMPTY__ | 요청 | 요청중 | 확보 | 평임확보 | 평임 부존재 | 불필요
   const [searchReview, setSearchReview] = useState("");
   // 페이지네이션: 기본 200행, 필요시 "더 보기"
   const PAGE_SIZE = 200;
@@ -327,7 +329,7 @@ export default function ObjectionReviewPage() {
   useEffect(() => { if (tab === "wage") fetchWages(); }, [tab, fetchWages]);
 
   // 필터 변경 시 페이지 리밋 초기화
-  useEffect(() => { setPageLimit(PAGE_SIZE); }, [filterBranch, filterTf, filterProgress, filterCaseType, filterInfo, searchReview]);
+  useEffect(() => { setPageLimit(PAGE_SIZE); }, [filterBranch, filterTf, filterProgress, filterCaseType, filterInfo, filterApproval, filterInfoStatus, searchReview]);
 
   // 클라이언트 사이드 필터 적용
   // 최초총현황은 미검토/검토중/종결 건만 노출 (이의제기 진행·평정청구 진행은 기일관리 페이지로 이관)
@@ -340,6 +342,11 @@ export default function ObjectionReviewPage() {
     if (filterProgress === "미검토" && r.progressStatus && r.progressStatus !== "") return false;
     if (filterProgress === "검토중" && r.progressStatus !== "검토중") return false;
     if (filterProgress === "종결" && r.progressStatus !== "종결") return false;
+    // 승인여부 필터
+    if (filterApproval && r.approvalStatus !== filterApproval) return false;
+    // 정공여부 필터 (단일값) — 공란 포함
+    if (filterInfoStatus === "__EMPTY__" && r.infoDisclosureStatus) return false;
+    if (filterInfoStatus && filterInfoStatus !== "__EMPTY__" && r.infoDisclosureStatus !== filterInfoStatus) return false;
     if (filterInfo === "요청중" && !(r.infoDisclosureStatus === "요청" || r.infoDisclosureStatus === "요청중")) return false;
     if (filterInfo === "확보") {
       const s = r.infoDisclosureStatus;
@@ -443,7 +450,22 @@ export default function ObjectionReviewPage() {
                 progressOptions={PROGRESS_FILTER_OPTIONS}
                 progressLabel="사건진행여부"
               />
-              <div style={{ display: "flex", gap: 10, marginTop: 10, alignItems: "flex-end" }}>
+              <div style={{ display: "flex", gap: 10, marginTop: 10, alignItems: "flex-end", flexWrap: "wrap" }}>
+                <div>
+                  <div style={{ fontSize: 11, color: "#6b7280", fontWeight: 700, marginBottom: 4 }}>승인여부</div>
+                  <select value={filterApproval} onChange={e => setFilterApproval(e.target.value)} style={{ border: "1px solid #e5e7eb", borderRadius: 6, padding: "6px 10px", fontSize: 12, color: "#374151", background: "white" }}>
+                    <option value="">전체</option>
+                    {APPROVAL_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <div style={{ fontSize: 11, color: "#6b7280", fontWeight: 700, marginBottom: 4 }}>정공여부</div>
+                  <select value={filterInfoStatus} onChange={e => setFilterInfoStatus(e.target.value)} style={{ border: "1px solid #e5e7eb", borderRadius: 6, padding: "6px 10px", fontSize: 12, color: "#374151", background: "white" }}>
+                    <option value="">전체</option>
+                    <option value="__EMPTY__">(공란)</option>
+                    {INFO_DISCLOSURE_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
+                  </select>
+                </div>
                 <div>
                   <div style={{ fontSize: 11, color: "#6b7280", fontWeight: 700, marginBottom: 4 }}>사건분류</div>
                   <select value={filterCaseType} onChange={e => setFilterCaseType(e.target.value)} style={{ border: "1px solid #e5e7eb", borderRadius: 6, padding: "6px 10px", fontSize: 12, color: "#374151", background: "white" }}>
