@@ -696,6 +696,8 @@ export default function CasesPage() {
 
   const [filterKwcOffice, setFilterKwcOffice] = useState("");
   const [filterKwcOfficer, setFilterKwcOfficer] = useState("");
+  const [kwcOfficeOptions, setKwcOfficeOptions] = useState<string[]>([]);
+  const [kwcOfficerOptions, setKwcOfficerOptions] = useState<string[]>([]);
 
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
   const [deleteModal, setDeleteModal] = useState(false);
@@ -738,6 +740,16 @@ export default function CasesPage() {
   useEffect(() => {
     fetchCases();
   }, [fetchCases]);
+
+  useEffect(() => {
+    fetch("/api/cases/filter-options")
+      .then((r) => r.json())
+      .then((data) => {
+        setKwcOfficeOptions(data.kwcOfficeNames ?? []);
+        setKwcOfficerOptions(data.kwcOfficerNames ?? []);
+      })
+      .catch(() => {});
+  }, []);
 
   const updateFilter = (updates: Record<string, string>) => {
     setActiveFilters((prev) => ({ ...prev, ...updates }));
@@ -881,23 +893,29 @@ export default function CasesPage() {
           )}
           <div>
             <label style={{ fontSize: 11, color: "#6b7280", fontWeight: 700, display: "block", marginBottom: 4 }}>공단 관할지사</label>
-            <input
-              type="text"
+            <select
               value={filterKwcOffice}
               onChange={(e) => setFilterKwcOffice(e.target.value)}
-              placeholder="예: 울산, 부산동부..."
-              style={{ border: "1px solid #e5e7eb", borderRadius: 6, padding: "6px 12px", fontSize: 13, color: "#374151", background: "#f9fafb", outline: "none", width: 160 }}
-            />
+              style={{ border: "1px solid #e5e7eb", borderRadius: 6, padding: "6px 12px", fontSize: 13, color: "#374151", background: "#f9fafb", cursor: "pointer", minWidth: 160 }}
+            >
+              <option value="">전체</option>
+              {kwcOfficeOptions.map((o) => (
+                <option key={o} value={o}>{o}</option>
+              ))}
+            </select>
           </div>
           <div>
             <label style={{ fontSize: 11, color: "#6b7280", fontWeight: 700, display: "block", marginBottom: 4 }}>지사담당자</label>
-            <input
-              type="text"
+            <select
               value={filterKwcOfficer}
               onChange={(e) => setFilterKwcOfficer(e.target.value)}
-              placeholder="담당자 이름..."
-              style={{ border: "1px solid #e5e7eb", borderRadius: 6, padding: "6px 12px", fontSize: 13, color: "#374151", background: "#f9fafb", outline: "none", width: 140 }}
-            />
+              style={{ border: "1px solid #e5e7eb", borderRadius: 6, padding: "6px 12px", fontSize: 13, color: "#374151", background: "#f9fafb", cursor: "pointer", minWidth: 140 }}
+            >
+              <option value="">전체</option>
+              {kwcOfficerOptions.map((o) => (
+                <option key={o} value={o}>{o}</option>
+              ))}
+            </select>
           </div>
         </div>
       </div>
