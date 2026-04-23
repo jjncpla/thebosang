@@ -277,6 +277,9 @@ export default function ObjectionReviewPage() {
   // 페이지네이션: 기본 200행, 필요시 "더 보기"
   const PAGE_SIZE = 200;
   const [pageLimit, setPageLimit] = useState(PAGE_SIZE);
+  // 다중선택
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkSaving, setBulkSaving] = useState(false);
   const [reviewModal, setReviewModal] = useState(false);
   const [reviewTarget, setReviewTarget] = useState<ReviewItem | null>(null);
 
@@ -481,11 +484,68 @@ export default function ObjectionReviewPage() {
               </div>
             </div>
 
+            {/* 일괄 변경 바 */}
+            {selectedIds.size > 0 && (
+              <div style={{ background: "#eff6ff", border: "1px solid #93c5fd", borderRadius: 8, padding: "10px 14px", marginBottom: 10, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                <span style={{ fontSize: 13, fontWeight: 700, color: "#1d4ed8" }}>{selectedIds.size}건 선택됨</span>
+                <span style={{ fontSize: 12, color: "#6b7280" }}>사건진행여부 일괄 변경 →</span>
+                {["종결", "검토중", "이의제기 진행", "평정청구 진행"].map(status => (
+                  <button
+                    key={status}
+                    disabled={bulkSaving}
+                    onClick={async () => {
+                      if (!confirm(`선택한 ${selectedIds.size}건을 '${status}'으로 변경하시겠습니까?`)) return;
+                      setBulkSaving(true);
+                      try {
+                        const res = await fetch("/api/objection/review/bulk-update", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ ids: Array.from(selectedIds), progressStatus: status }),
+                        });
+                        if (!res.ok) { alert("변경 실패"); return; }
+                        setSelectedIds(new Set());
+                        await fetchReviews();
+                      } finally {
+                        setBulkSaving(false);
+                      }
+                    }}
+                    style={{ padding: "6px 14px", fontSize: 12, fontWeight: 600, border: "1px solid #29ABE2", borderRadius: 6, background: "white", color: "#29ABE2", cursor: bulkSaving ? "not-allowed" : "pointer", opacity: bulkSaving ? 0.5 : 1 }}
+                  >
+                    {status}
+                  </button>
+                ))}
+                <button
+                  onClick={() => setSelectedIds(new Set())}
+                  style={{ marginLeft: "auto", padding: "6px 12px", fontSize: 12, border: "1px solid #e5e7eb", borderRadius: 6, background: "white", color: "#6b7280", cursor: "pointer" }}
+                >
+                  선택 해제
+                </button>
+              </div>
+            )}
+
             {/* Table */}
             <div style={{ overflowX: "auto" }}>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                 <thead>
                   <tr style={{ background: "#f8fafc", borderBottom: "2px solid #e5e7eb" }}>
+                    <th style={{ padding: "9px 10px", width: 32 }}>
+                      <input
+                        type="checkbox"
+                        checked={(() => {
+                          const visible = filteredReviews.slice(0, pageLimit).filter(i => !i.isAutoFilled);
+                          return visible.length > 0 && visible.every(i => selectedIds.has(i.id));
+                        })()}
+                        onChange={e => {
+                          const visibleIds = filteredReviews.slice(0, pageLimit).filter(i => !i.isAutoFilled).map(i => i.id);
+                          if (e.target.checked) {
+                            setSelectedIds(prev => { const next = new Set(prev); visibleIds.forEach(id => next.add(id)); return next; });
+                          } else {
+                            setSelectedIds(prev => { const next = new Set(prev); visibleIds.forEach(id => next.delete(id)); return next; });
+                          }
+                        }}
+                        style={{ cursor: "pointer" }}
+                      />
+                    </th>
                     {["승인여부", "TF", "성명", "사건분류", "처분일", "제척도래일", "사건진행여부", "담당자", "정공여부", "관리"].map(h => (
                       <th key={h} style={{ padding: "9px 12px", textAlign: "left", fontSize: 11, fontWeight: 700, color: "#6b7280", whiteSpace: "nowrap" }}>{h}</th>
                     ))}
@@ -493,7 +553,7 @@ export default function ObjectionReviewPage() {
                 </thead>
                 <tbody>
                   {filteredReviews.length === 0 && (
-                    <tr><td colSpan={10} style={{ padding: "40px 16px", textAlign: "center", color: "#9ca3af", fontSize: 13 }}>데이터가 없습니다</td></tr>
+                    <tr><td colSpan={11} style={{ padding: "40px 16px", textAlign: "center", color: "#9ca3af", fontSize: 13 }}>데이터가 없습니다</td></tr>
                   )}
                   {filteredReviews.slice(0, pageLimit).map(item => {
                     const deadline = addDays(item.decisionDate, 90);
@@ -502,6 +562,23 @@ export default function ObjectionReviewPage() {
                     const rowStyle = item.isAutoFilled ? { background: "#eff6ff" } : getRowStyle(item);
                     return (
                       <tr key={item.id} onClick={() => { if (!item.isAutoFilled) { setReviewTarget(item); setReviewModal(true); } }} style={{ ...rowStyle, borderBottom: "1px solid #f1f5f9", cursor: item.isAutoFilled ? "default" : "pointer" }} onMouseEnter={e => { if (!rowStyle.background) e.currentTarget.style.background = "#f8fafc"; }} onMouseLeave={e => { e.currentTarget.style.background = (rowStyle.background as string) ?? "white"; }}>
+                        <td style={{ padding: "10px 10px" }} onClick={e => e.stopPropagation()}>
+                          {!item.isAutoFilled && (
+                            <input
+                              type="checkbox"
+                              checked={selectedIds.has(item.id)}
+                              onChange={e => {
+                                setSelectedIds(prev => {
+                                  const next = new Set(prev);
+                                  if (e.target.checked) next.add(item.id);
+                                  else next.delete(item.id);
+                                  return next;
+                                });
+                              }}
+                              style={{ cursor: "pointer" }}
+                            />
+                          )}
+                        </td>
                         <td style={{ padding: "10px 12px" }}>
                           {item.isAutoFilled
                             ? <span style={{ display: "inline-block", padding: "2px 8px", borderRadius: 999, fontSize: 11, fontWeight: 700, background: "#DCEEFA", color: "#1480B0", border: "1px solid #50BDEA" }}>결정수령</span>
