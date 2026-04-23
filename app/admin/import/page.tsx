@@ -95,6 +95,27 @@ export default function ImportPage() {
   const [wageDeleteConfirm, setWageDeleteConfirm] = useState(false);
   const [wageDeleteConfirming, setWageDeleteConfirming] = useState(false);
 
+  // ─── 전체 싱크 상태 ────────────────────────────────────────────────────
+  const [syncLoading, setSyncLoading] = useState(false);
+  const [syncResult, setSyncResult] = useState<{ reviewAutoLinked: number; caseAutoLinked: number; objectionCaseSynced: number; objectionReviewSynced: number; errors: string[] } | null>(null);
+  const [syncError, setSyncError] = useState<string | null>(null);
+
+  const runSyncAll = async () => {
+    setSyncLoading(true);
+    setSyncResult(null);
+    setSyncError(null);
+    try {
+      const res = await fetch("/api/admin/sync-all-cases", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) { setSyncError(data.error ?? "싱크 오류"); return; }
+      setSyncResult(data.stats);
+    } catch (e) {
+      setSyncError(e instanceof Error ? e.message : "네트워크 오류");
+    } finally {
+      setSyncLoading(false);
+    }
+  };
+
   // ─── HL 검증+임포트 상태 (기존 file/selectedTf/selectedBranch 재사용) ───
   const [hlVerifying, setHlVerifying] = useState(false);
   const [hlImporting, setHlImporting] = useState(false);
@@ -925,6 +946,42 @@ export default function ImportPage() {
           confirming={wageDeleteConfirming}
         />
       )}
+
+      {/* ─── 전체 싱크 ──────────────────────────────────────────── */}
+      <div style={{ marginBottom: 32 }}>
+        <h2 style={{ fontSize: 18, fontWeight: 800, color: "#111827", margin: "0 0 16px 0" }}>전체 싱크 (기일관리 → 처분검토 → 사건목록)</h2>
+        <div style={{ background: "white", borderRadius: 10, border: "1px solid #e5e7eb", padding: 20, boxShadow: "0 1px 3px rgba(0,0,0,0.05)" }}>
+          <div style={{ fontSize: 13, color: "#374151", lineHeight: 1.8, marginBottom: 16 }}>
+            <strong>신뢰도 순서: 기일관리 &gt; 처분검토 &gt; 사건목록</strong>
+            <br />① 미링크 ObjectionReview/ObjectionCase 레코드를 Case에 자동 연결
+            <br />② 기일관리(ObjectionCase) → 처분검토(ObjectionReview) → 사건목록(Case.status) 순으로 일괄 싱크
+          </div>
+          <button
+            onClick={runSyncAll}
+            disabled={syncLoading}
+            style={{ background: syncLoading ? "#9ca3af" : "#0d9488", color: "white", border: "none", borderRadius: 6, padding: "9px 20px", fontSize: 13, fontWeight: 700, cursor: syncLoading ? "not-allowed" : "pointer", display: "flex", alignItems: "center", gap: 8 }}
+          >
+            {syncLoading && <span style={{ display: "inline-block", width: 13, height: 13, border: "2px solid rgba(255,255,255,0.3)", borderTopColor: "white", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />}
+            {syncLoading ? "싱크 실행 중..." : "🔄 전체 싱크 실행"}
+          </button>
+          {syncError && <div style={{ fontSize: 12, color: "#dc2626", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 6, padding: "8px 12px", marginTop: 12 }}>⚠ {syncError}</div>}
+          {syncResult && (
+            <div style={{ fontSize: 13, background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 6, padding: "12px 16px", marginTop: 12, lineHeight: 2 }}>
+              ✅ <strong>싱크 완료</strong>
+              <br />• 미링크 처분검토 자동 연결: <strong>{syncResult.reviewAutoLinked}건</strong>
+              <br />• 미링크 기일관리 자동 연결: <strong>{syncResult.caseAutoLinked}건</strong>
+              <br />• 기일관리 싱크: <strong>{syncResult.objectionCaseSynced}건</strong>
+              <br />• 처분검토 싱크: <strong>{syncResult.objectionReviewSynced}건</strong>
+              {syncResult.errors.length > 0 && (
+                <div style={{ color: "#dc2626", marginTop: 8 }}>
+                  오류 {syncResult.errors.length}건:<br />
+                  {syncResult.errors.slice(0, 5).map((e, i) => <span key={i}>• {e}<br /></span>)}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
 
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
