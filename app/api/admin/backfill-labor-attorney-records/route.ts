@@ -10,12 +10,17 @@ export const maxDuration = 300;
  * POST /api/admin/backfill-labor-attorney-records
  *
  * 처분 결정 완료된 Case들에 대해 공인노무사 업무처리부 PDF를 일괄 생성/저장
- * query: skipExisting=true|false (default true) — 이미 첨부된 건 스킵
+ * Railway 요청 타임아웃(~30초) 회피를 위해 배치로 제한 — 반복 호출 필요
+ *
+ * query:
+ *   limit=20         — 한 번에 처리할 건수 (default 20)
+ *   skipExisting=true — 이미 첨부된 건 스킵 (default true)
  */
 export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+  const limit = Math.max(1, Math.min(100, Number(req.nextUrl.searchParams.get("limit") ?? "20")));
   const skipExisting = req.nextUrl.searchParams.get("skipExisting") !== "false";
 
   const targets = await prisma.case.findMany({
@@ -29,33 +34,40 @@ export async function POST(req: NextRequest) {
     select: { id: true },
   });
 
-  const existing = skipExisting
-    ? await prisma.caseAttachment.findMany({
-        where: { category: "LABOR_ATTORNEY_RECORD", caseId: { in: targets.map(t => t.id) } },
-        select: { caseId: true },
-      })
-    : [];
-  const existingSet = new Set(existing.map(e => e.caseId));
+  // 이미 생성된 것 제외
+  const existingSet = new Set<string>();
+  if (skipExisting) {
+    const existing = await prisma.caseAttachment.findMany({
+      where: { category: "LABOR_ATTORNEY_RECORD", caseId: { in: targets.map(t => t.id) } },
+      select: { caseId: true },
+    });
+    existing.forEach(e => existingSet.add(e.caseId));
+  }
 
-  let done = 0, skipped = 0, failed = 0;
+  const pending = targets.filter(t => !existingSet.has(t.id));
+  const batch = pending.slice(0, limit);
+
+  let done = 0, failed = 0;
   const errors: string[] = [];
-  for (const c of targets) {
-    if (existingSet.has(c.id)) { skipped++; continue; }
+  for (const c of batch) {
     try {
       const res = await generateAndStoreLaborAttorneyRecord(c.id);
       if (res.created) done++;
       else failed++;
     } catch (e) {
       failed++;
-      errors.push(`${c.id}: ${String(e).slice(0, 100)}`);
+      errors.push(`${c.id}: ${String(e).slice(0, 80)}`);
     }
   }
 
   return NextResponse.json({
-    total: targets.length,
+    totalTargets: targets.length,
+    alreadyStored: existingSet.size,
+    remaining: Math.max(0, pending.length - done - failed),
+    processedThisCall: batch.length,
     created: done,
-    skipped,
     failed,
-    errorsSample: errors.slice(0, 5),
+    errorsSample: errors.slice(0, 3),
+    hasMore: pending.length > limit,
   });
 }
