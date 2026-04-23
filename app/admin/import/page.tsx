@@ -97,7 +97,7 @@ export default function ImportPage() {
 
   // ─── 전체 싱크 상태 ────────────────────────────────────────────────────
   const [syncLoading, setSyncLoading] = useState(false);
-  const [syncResult, setSyncResult] = useState<{ reviewAutoLinked: number; caseAutoLinked: number; objectionCaseSynced: number; objectionReviewSynced: number; errors: string[] } | null>(null);
+  const [syncResult, setSyncResult] = useState<{ reviewAutoLinked: number; caseAutoLinked: number; caseStatusUpdated: number; hlDecisionUpdated: number; errors: string[] } | null>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
 
   const runSyncAll = async () => {
@@ -970,8 +970,8 @@ export default function ImportPage() {
               ✅ <strong>싱크 완료</strong>
               <br />• 미링크 처분검토 자동 연결: <strong>{syncResult.reviewAutoLinked}건</strong>
               <br />• 미링크 기일관리 자동 연결: <strong>{syncResult.caseAutoLinked}건</strong>
-              <br />• 기일관리 싱크: <strong>{syncResult.objectionCaseSynced}건</strong>
-              <br />• 처분검토 싱크: <strong>{syncResult.objectionReviewSynced}건</strong>
+              <br />• 사건 상태 업데이트: <strong>{syncResult.caseStatusUpdated}건</strong>
+              <br />• 처분결과 업데이트: <strong>{syncResult.hlDecisionUpdated}건</strong>
               {syncResult.errors.length > 0 && (
                 <div style={{ color: "#dc2626", marginTop: 8 }}>
                   오류 {syncResult.errors.length}건:<br />
