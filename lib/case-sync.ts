@@ -13,6 +13,19 @@
  *  - ObjectionCase.progressStatus 종결 → ObjectionReview.progressStatus 종결 → Case.status CLOSED
  */
 import { prisma } from "@/lib/prisma";
+import { generateAndStoreLaborAttorneyRecord } from "@/lib/pdf/labor-attorney-record";
+
+/**
+ * 처분결정(승인/불승인/반려)이 확정된 사건에 대해 공인노무사 업무처리부 PDF 자동 생성
+ * 실패해도 메인 흐름을 깨지 않도록 try-catch
+ */
+async function autoGenerateLaborAttorneyRecord(caseId: string) {
+  try {
+    await generateAndStoreLaborAttorneyRecord(caseId);
+  } catch (e) {
+    console.error("[autoGenerateLaborAttorneyRecord]", caseId, e);
+  }
+}
 
 export const PROGRESS_TO_CASE_STATUS: Record<string, string> = {
   "검토중": "REVIEWING",
@@ -94,6 +107,8 @@ export async function syncFromCaseStatus(caseId: string) {
         });
       }
     }
+    // 결정 확정 → 업무처리부 자동 생성
+    await autoGenerateLaborAttorneyRecord(caseId);
     return;
   }
 
@@ -121,6 +136,11 @@ export async function syncFromCaseStatus(caseId: string) {
     }).catch(() => {});
   }
   await prisma.objectionReview.delete({ where: { id: review.id } }).catch(() => {});
+
+  // 반려/파기로 closedReason이 지정된 경우에도 업무처리부 생성 (보관용)
+  if (caseInfo.closedReason === "반려" || caseInfo.closedReason === "파기") {
+    await autoGenerateLaborAttorneyRecord(caseId);
+  }
 }
 
 /**
@@ -187,6 +207,9 @@ export async function syncFromHearingLossDecision(
       },
     });
   }
+
+  // 결정 확정 → 업무처리부 자동 생성
+  await autoGenerateLaborAttorneyRecord(caseId);
 }
 
 /**
@@ -236,6 +259,11 @@ export async function syncFromObjectionReview(reviewId: string) {
         await prisma.case.update({ where: { id: review.caseId }, data: { status: targetStatus } });
       }
     }
+  }
+
+  // 승인/불승인/일부승인 → 업무처리부 자동 생성
+  if (decisionType) {
+    await autoGenerateLaborAttorneyRecord(review.caseId);
   }
 }
 

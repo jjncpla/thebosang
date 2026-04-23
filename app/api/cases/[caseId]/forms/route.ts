@@ -10,6 +10,7 @@ import {
   loadBlankForm,
   drawText,
 } from "@/lib/pdf/formUtils";
+import { generateLaborAttorneyRecord } from "@/lib/pdf/labor-attorney-record";
 
 export const runtime = "nodejs";
 
@@ -414,50 +415,15 @@ export async function GET(
       }
 
       case "LABOR_ATTORNEY_RECORD": {
-        const pdfDoc = await loadBlankForm("labor_attorney_record.pdf");
-        const font = await loadKoreanFont(pdfDoc);
-        const page = pdfDoc.getPages()[0];
-
-        const CASE_TYPE_KO: Record<string, string> = {
-          HEARING_LOSS:         "소음성 난청",
-          COPD:                 "COPD(만성폐쇄성폐질환)",
-          PNEUMOCONIOSIS:       "진폐",
-          MUSCULOSKELETAL:      "근골격계",
-          OCCUPATIONAL_ACCIDENT:"업무상 사고",
-          OCCUPATIONAL_CANCER:  "직업성 암",
-          BEREAVED:             "유족급여",
-          OTHER:                "기타",
-        };
-
-        const ssn = patient.ssn ?? "";
-        const birthDateStr = ssn.length >= 6
-          ? `${ssn.slice(0, 2)}.${ssn.slice(2, 4)}.${ssn.slice(4, 6)}`
-          : "";
-
-        const cdf = parseDateFields(caseData.contractDate ?? new Date());
-        const contractDateStr = `${cdf.연도}.${cdf.월자}.${cdf.일자}`;
-
-        const contractAmount = req.nextUrl.searchParams.get("contractAmount") ?? "";
-        const advanceAmount  = req.nextUrl.searchParams.get("advanceAmount") ?? "";
-
-        const caseDesc = CASE_TYPE_KO[caseData.caseType ?? ""] ?? caseData.caseType ?? "";
-
-        const statusLabel: Record<string, string> = {
-          APPROVED: "승인", REJECTED: "불승인", CLOSED: "종결",
-        };
-        const resultLabel = statusLabel[(caseData as any).status ?? ""] ?? "진행 중";
-
-        drawText(page, `노무법인 더보상 ${manager?.branchName ?? ""}`, 120.5, 695, font, 9);
-        drawText(page, patient.name ?? "",    132.5, 670, font, 9);
-        drawText(page, birthDateStr,          399,   671, font, 9);
-        drawText(page, patient.address ?? "", 149,   642, font, 8);
-        drawText(page, contractDateStr,       163,   609, font, 9);
-        drawText(page, contractAmount,        268,   581, font, 9);
-        drawText(page, advanceAmount,         493,   580, font, 9);
-        drawText(page, caseDesc,              67,    516, font, 9);
-        drawText(page, resultLabel,           66,    366, font, 9);
-
-        pdfBytes = await pdfDoc.save();
+        // 공유 모듈로 위임 (자동 생성/백필과 동일 코드 사용)
+        const generated = await generateLaborAttorneyRecord(caseId, {
+          contractAmount: req.nextUrl.searchParams.get("contractAmount") ?? undefined,
+          advanceAmount:  req.nextUrl.searchParams.get("advanceAmount") ?? undefined,
+        });
+        if (!generated) {
+          return NextResponse.json({ error: "사건 없음" }, { status: 404 });
+        }
+        pdfBytes = generated;
         break;
       }
 
