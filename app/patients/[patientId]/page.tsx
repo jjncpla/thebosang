@@ -171,6 +171,7 @@ type CaseData = {
   isOneStop: boolean;
   memo: string | null;
   kwcOfficeName: string | null;
+  kwcOfficerName: string | null;
   workHistory: WorkHistoryItem[] | null;
   workHistoryDaily: WorkHistoryDailyEntry[] | null;
   workHistoryRaw: WorkHistoryRaw | null;
@@ -1620,6 +1621,7 @@ function CaseCommonInfoSection({ caseItem, onUpdated }: { caseItem: CaseData; on
     isOneStop: caseItem.isOneStop,
     memo: caseItem.memo ?? "",
     kwcOfficeName: caseItem.kwcOfficeName ?? "",
+    kwcOfficerName: caseItem.kwcOfficerName ?? "",
   });
   const [closedReason, setClosedReason] = useState(caseItem.closedReason ?? "");
   const [savingClosed, setSavingClosed] = useState(false);
@@ -1675,6 +1677,7 @@ function CaseCommonInfoSection({ caseItem, onUpdated }: { caseItem: CaseData; on
           receptionDate: form.receptionDate || null,
           isOneStop: form.isOneStop, memo: form.memo,
           kwcOfficeName: form.kwcOfficeName || null,
+          kwcOfficerName: form.kwcOfficerName || null,
         }),
       });
       if (!res.ok) throw new Error();
@@ -1733,6 +1736,7 @@ function CaseCommonInfoSection({ caseItem, onUpdated }: { caseItem: CaseData; on
                 {([
                   ["TF명", caseItem.tfName ?? "-"],
                   ["관할공단", caseItem.kwcOfficeName ?? "-"],
+                  ["지사담당자", caseItem.kwcOfficerName ?? "-"],
                   ["영업담당", caseItem.salesManager ?? "-"],
                   ["실무담당", caseItem.caseManager ?? "-"],
                   ["영업경로", caseItem.salesRoute ?? "-"],
@@ -1853,7 +1857,10 @@ function CaseCommonInfoSection({ caseItem, onUpdated }: { caseItem: CaseData; on
                 <label style={{ fontSize: 11, color: "#9ca3af" }}>관할 공단</label>
                 <input style={inputStyle} value={form.kwcOfficeName} placeholder="예: 울산, 부산동부" onChange={(e) => setForm({ ...form, kwcOfficeName: e.target.value })} />
               </div>
-              <div />
+              <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                <label style={{ fontSize: 11, color: "#9ca3af" }}>지사담당자</label>
+                <input style={inputStyle} value={form.kwcOfficerName} placeholder="담당자 이름" onChange={(e) => setForm({ ...form, kwcOfficerName: e.target.value })} />
+              </div>
               <div style={{ gridColumn: "1 / -1", display: "flex", flexDirection: "column", gap: 3 }}>
                 <label style={{ fontSize: 11, color: "#9ca3af" }}>메모</label>
                 <textarea style={{ ...inputStyle, minHeight: 60, resize: "vertical" }} value={form.memo} onChange={(e) => setForm({ ...form, memo: e.target.value })} />
