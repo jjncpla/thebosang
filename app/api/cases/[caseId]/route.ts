@@ -113,8 +113,11 @@ export async function PATCH(
       },
     });
 
-    // status가 APPROVED/REJECTED로 바뀌면 HL.decisionType + ObjectionReview 싱크
-    if (updated.caseType === "HEARING_LOSS" && (updated.status === "APPROVED" || updated.status === "REJECTED")) {
+    // status가 어떤 값으로든 바뀌면 싱크 — APPROVED/REJECTED는 Review 보장, 그 외는 스테일 Review 정리
+    if (updated.caseType === "HEARING_LOSS" && status !== undefined) {
+      await syncFromCaseStatus(caseId);
+    } else if (updated.caseType === "HEARING_LOSS" && autoStatus) {
+      // 자동 전이로 status가 바뀐 경우도 반영
       await syncFromCaseStatus(caseId);
     }
 

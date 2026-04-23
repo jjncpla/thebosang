@@ -35,9 +35,14 @@ export function decisionTypeToApproval(dt: string | null | undefined): "승인" 
 }
 
 /**
- * Case.status 변경 시 HL.decisionType + ObjectionReview 싱크
- * - Case.status가 APPROVED/REJECTED이면 HL.decisionType도 맞춤
- * - Review 없으면 생성/연결
+ * Case.status 변경 시 HL.decisionType + ObjectionReview 싱크 (양방향)
+ *
+ * 규칙:
+ *  - APPROVED/REJECTED: HL.decisionType 맞추고 Review 보장
+ *  - OBJECTION/WAGE_CORRECTION: Review 유지 (이의제기 흐름)
+ *  - CLOSED: ObjectionCase 기록 있으면 Review 유지, 없으면 결정 철회로 간주
+ *  - 그 외 (CONSULTING/DECISION_RECEIVED/반려/파기 등): 결정 철회 →
+ *    ObjectionCase 없으면 Review 삭제 + HL.decisionType=null
  */
 export async function syncFromCaseStatus(caseId: string) {
   const caseInfo = await prisma.case.findUnique({
@@ -50,47 +55,72 @@ export async function syncFromCaseStatus(caseId: string) {
   if (!caseInfo || caseInfo.caseType !== "HEARING_LOSS") return;
 
   const status = caseInfo.status;
-  if (status !== "APPROVED" && status !== "REJECTED") return;
 
-  // 1) HL.decisionType 맞춤
-  if (caseInfo.hearingLoss?.decisionType !== status) {
-    await prisma.hearingLossDetail.upsert({
-      where: { caseId },
-      create: { caseId, decisionType: status },
-      update: { decisionType: status },
-    });
-  }
-
-  // 2) Review 연결/생성
-  const approval = status === "APPROVED" ? "승인" : "불승인";
-  let review = await prisma.objectionReview.findFirst({ where: { caseId } });
-  if (!review) {
-    review = await prisma.objectionReview.findFirst({
-      where: {
-        caseType: "HEARING_LOSS",
-        tfName: caseInfo.tfName ?? "",
-        patientName: caseInfo.patient?.name ?? "",
-      },
-    });
-    if (review) {
-      await prisma.objectionReview.update({
-        where: { id: review.id },
-        data: { caseId: review.caseId ?? caseId, approvalStatus: review.approvalStatus || approval },
-      });
-    } else {
-      await prisma.objectionReview.create({
-        data: {
-          caseId,
-          tfName: caseInfo.tfName ?? "",
-          patientName: caseInfo.patient?.name ?? "",
-          caseType: "HEARING_LOSS",
-          approvalStatus: approval,
-          progressStatus: "",
-          decisionDate: caseInfo.hearingLoss?.decisionReceivedAt ?? null,
-        },
+  // ── (1) 결정 상태인 경우: HL + Review 보장 ───────────────────
+  if (status === "APPROVED" || status === "REJECTED") {
+    if (caseInfo.hearingLoss?.decisionType !== status) {
+      await prisma.hearingLossDetail.upsert({
+        where: { caseId },
+        create: { caseId, decisionType: status },
+        update: { decisionType: status },
       });
     }
+    const approval = status === "APPROVED" ? "승인" : "불승인";
+    let review = await prisma.objectionReview.findFirst({ where: { caseId } });
+    if (!review) {
+      review = await prisma.objectionReview.findFirst({
+        where: {
+          caseType: "HEARING_LOSS",
+          tfName: caseInfo.tfName ?? "",
+          patientName: caseInfo.patient?.name ?? "",
+        },
+      });
+      if (review) {
+        await prisma.objectionReview.update({
+          where: { id: review.id },
+          data: { caseId: review.caseId ?? caseId, approvalStatus: review.approvalStatus || approval },
+        });
+      } else {
+        await prisma.objectionReview.create({
+          data: {
+            caseId,
+            tfName: caseInfo.tfName ?? "",
+            patientName: caseInfo.patient?.name ?? "",
+            caseType: "HEARING_LOSS",
+            approvalStatus: approval,
+            progressStatus: "",
+            decisionDate: caseInfo.hearingLoss?.decisionReceivedAt ?? null,
+          },
+        });
+      }
+    }
+    return;
   }
+
+  // ── (2) 이의제기 흐름 상태: Review 보존 ─────────────────────
+  if (status === "OBJECTION" || status === "WAGE_CORRECTION") return;
+
+  // ── (3) 나머지 상태 (CLOSED, CONSULTING, 반려, 파기 등) ─────
+  // Review가 있고 → ObjectionCase 기록 여부로 판단
+  const review = await prisma.objectionReview.findFirst({ where: { caseId } });
+  if (!review) return;
+
+  const hasObjectionCase = await prisma.objectionCase.findFirst({
+    where: { OR: [{ caseId }, { reviewId: review.id }] },
+  });
+  // 이의제기 활동이 있었던 건: 그대로 보존
+  if (hasObjectionCase) return;
+  // CLOSED에 Review.progressStatus=종결이면 정상 종결로 간주 — 보호
+  if (status === "CLOSED" && review.progressStatus === "종결") return;
+
+  // → 결정이 철회되었거나 잘못 입력된 건 → Review 삭제 + HL.decisionType 리셋
+  if (caseInfo.hearingLoss?.decisionType) {
+    await prisma.hearingLossDetail.update({
+      where: { caseId },
+      data: { decisionType: null },
+    }).catch(() => {});
+  }
+  await prisma.objectionReview.delete({ where: { id: review.id } }).catch(() => {});
 }
 
 /**
