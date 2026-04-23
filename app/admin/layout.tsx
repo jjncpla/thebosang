@@ -28,6 +28,8 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           <NavTab href="/admin/contacts" label="인사카드 / 계정관리" />
           <NavTab href="/admin/branches" label="지사 관리" />
           <NavTab href="/admin/telegram-chatrooms" label="텔레그램 채팅방 관리" />
+          <NavTab href="/admin/db" label="사건 DB" />
+          <NavTab href="/admin/forms" label="양식 관리" />
         </div>
       </div>
 

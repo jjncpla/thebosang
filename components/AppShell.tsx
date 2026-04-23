@@ -35,6 +35,7 @@ const MENU_ITEMS: MenuItem[] = [
   { id: "todo", label: "To Do List", icon: "☑", path: "/todo" },
   { id: "law", label: "법령 및 규정", icon: "📜", path: "/law" },
   { id: "grade", label: "실무 참고 정보", icon: "📊", path: "/grade" },
+  { id: "tf-special-clinic", label: "통합 캘린더", icon: "📅", path: "/tf/special-clinic" },
   {
     id: "cases",
     label: "사건 관리",
@@ -43,12 +44,9 @@ const MENU_ITEMS: MenuItem[] = [
       { id: "consultation", label: "상담 관리", path: "/consultation" },
       { id: "cases-list", label: "사건 목록", path: "/cases" },
       { id: "patients-list", label: "재해자 목록", path: "/patients" },
-      { id: "cases-db", label: "사건 DB", path: "/cases/db" },
-      { id: "cases-import", label: "데이터 임포트", path: "/cases/import" },
       { id: "settlement", label: "정산 관리", path: "/settlement" },
     ],
   },
-  { id: "forms", label: "양식 관리", icon: "📋", path: "/forms", restricted: "admin" },
   { id: "inquiry", label: "사건 조회", icon: "🔍", path: "/inquiry" },
   { id: "cases-view", label: "사건 조회", icon: "🔍", path: "/cases-view" },
   {
@@ -58,16 +56,6 @@ const MENU_ITEMS: MenuItem[] = [
     children: [
       { id: "objection-review", label: "처분 검토", path: "/objection/review" },
       { id: "objection-deadline", label: "기일 관리", path: "/objection/deadline" },
-      { id: "objection-document", label: "이유서·의견서", path: "/objection/document" },
-    ],
-  },
-  {
-    id: "tf",
-    label: "TF 업무",
-    icon: "📡",
-    children: [
-      { id: "tf-monitor", label: "담당TF 모니터링", path: "/tf-monitor" },
-      { id: "tf-special-clinic", label: "통합 캘린더", path: "/tf/special-clinic" },
     ],
   },
   { id: "branch", label: "지사장 관리·운영", icon: "🏢", path: "/branch", restricted: "org" },
@@ -286,11 +274,6 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 {item.children && isOpen && (
                   <div className="nav-sub">
                     {item.children
-                      .filter((child) => {
-                        if (child.id === "cases-db") return role === "ADMIN";
-                        if (child.id === "cases-import") return role === "ADMIN";
-                        return true;
-                      })
                       .map((child) => {
                         const childActive =
                           !!pathname &&
