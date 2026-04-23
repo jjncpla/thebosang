@@ -307,21 +307,15 @@ export default function ObjectionReviewPage() {
   };
 
   const fetchReviews = useCallback(async () => {
+    // 전체 행 fetch — progressStatus 필터는 클라이언트 측에서 적용
+    // (stat 카드 집계가 다른 필터의 영향을 받지 않도록)
     const p = new URLSearchParams();
     if (filterTf) p.set("tfName", filterTf);
-    // 송무 인계 = 송무 검토 + 송무 인계 둘 다 포함 → 별도 처리
-    if (filterProgress === "송무 인계") {
-      // fetch 둘 다 가져온 후 클라이언트에서 합치기 — 이미 전체를 가져와서 클라이언트 필터
-    } else if (filterProgress === "미검토") {
-      // progressStatus null or empty → 전체 가져와서 클라이언트 필터
-    } else if (filterProgress) {
-      p.set("progressStatus", filterProgress);
-    }
     if (filterCaseType) p.set("caseType", filterCaseType);
     if (searchReview) p.set("search", searchReview);
     const res = await fetch(`/api/objection/review?${p}`);
     if (res.ok) setReviews(await res.json());
-  }, [filterTf, filterProgress, filterCaseType, searchReview]);
+  }, [filterTf, filterCaseType, searchReview]);
 
   const fetchWages = useCallback(async () => {
     const p = new URLSearchParams();
@@ -345,7 +339,10 @@ export default function ObjectionReviewPage() {
     // 자동인입(isAutoFilled=true)은 항상 표시, 그 외는 허용 상태만
     if (!r.isAutoFilled && !ALLOWED_STATUSES_ON_REVIEW.includes(r.progressStatus || "")) return false;
 
-    if (filterProgress === "미검토" && (r.progressStatus && r.progressStatus !== "")) return false;
+    // progressStatus 필터 (API가 아닌 클라이언트에서 처리)
+    if (filterProgress === "미검토" && r.progressStatus && r.progressStatus !== "") return false;
+    if (filterProgress === "검토중" && r.progressStatus !== "검토중") return false;
+    if (filterProgress === "종결" && r.progressStatus !== "종결") return false;
     if (filterInfo === "요청중" && !(r.infoDisclosureStatus === "요청" || r.infoDisclosureStatus === "요청중")) return false;
     if (filterInfo === "확보") {
       const s = r.infoDisclosureStatus;
