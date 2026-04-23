@@ -37,10 +37,16 @@ export async function DELETE(
   const { caseId, attachmentId } = await params
   const attachment = await (prisma as any).caseAttachment.findUnique({
     where: { id: attachmentId },
-    select: { id: true, caseId: true, uploadedById: true },
+    select: { id: true, caseId: true, uploadedById: true, category: true },
   })
   if (!attachment || attachment.caseId !== caseId) {
     return NextResponse.json({ error: '파일 없음' }, { status: 404 })
+  }
+
+  // 자동 생성 카테고리는 삭제 차단 (업무처리부 등)
+  const AUTO_GENERATED = new Set(['LABOR_ATTORNEY_RECORD'])
+  if (AUTO_GENERATED.has(attachment.category ?? '')) {
+    return NextResponse.json({ error: '자동 생성된 파일은 삭제할 수 없습니다' }, { status: 403 })
   }
 
   const role = (session.user as any).role

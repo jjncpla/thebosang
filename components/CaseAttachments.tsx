@@ -19,11 +19,16 @@ const CATEGORIES = [
   { value: 'RECEIVED', label: '수신' },
   { value: 'INTERNAL', label: '내부' },
   { value: 'OTHER', label: '기타' },
+  { value: 'LABOR_ATTORNEY_RECORD', label: '업무처리부' },
 ]
 
 const CATEGORY_LABELS: Record<string, string> = {
   SENT: '발신', RECEIVED: '수신', INTERNAL: '내부', OTHER: '기타',
+  LABOR_ATTORNEY_RECORD: '업무처리부',
 }
+
+// 자동 생성되는 카테고리 — 사용자가 수동 업로드·삭제 불가
+const AUTO_GENERATED_CATEGORIES = new Set(['LABOR_ATTORNEY_RECORD'])
 
 function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes}B`
@@ -145,7 +150,7 @@ export default function CaseAttachments({ caseId }: { caseId: string }) {
           <div style={{ flex: 1 }}>
             <label style={labelStyle}>분류</label>
             <select value={uploadCategory} onChange={e => setUploadCategory(e.target.value)} style={{ ...selectStyle, width: '100%' }}>
-              {CATEGORIES.filter(c => c.value).map(c => (
+              {CATEGORIES.filter(c => c.value && !AUTO_GENERATED_CATEGORIES.has(c.value)).map(c => (
                 <option key={c.value} value={c.value}>{c.label}</option>
               ))}
             </select>
@@ -249,13 +254,20 @@ export default function CaseAttachments({ caseId }: { caseId: string }) {
                   >
                     다운로드
                   </a>
-                  <button
-                    onClick={() => handleDelete(a)}
-                    disabled={deleting === a.id}
-                    style={{ padding: '3px 7px', fontSize: 10, border: '1px solid #fecaca', borderRadius: 4, color: '#dc2626', background: 'white', cursor: 'pointer' }}
-                  >
-                    삭제
-                  </button>
+                  {!AUTO_GENERATED_CATEGORIES.has(a.category ?? '') && (
+                    <button
+                      onClick={() => handleDelete(a)}
+                      disabled={deleting === a.id}
+                      style={{ padding: '3px 7px', fontSize: 10, border: '1px solid #fecaca', borderRadius: 4, color: '#dc2626', background: 'white', cursor: 'pointer' }}
+                    >
+                      삭제
+                    </button>
+                  )}
+                  {AUTO_GENERATED_CATEGORIES.has(a.category ?? '') && (
+                    <span style={{ padding: '3px 7px', fontSize: 10, border: '1px solid #fde68a', borderRadius: 4, color: '#92400e', background: '#fffbeb' }}>
+                      🔒 자동
+                    </span>
+                  )}
                 </div>
               </div>
             ))}
