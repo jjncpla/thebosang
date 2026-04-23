@@ -33,6 +33,8 @@ type Case = {
   salesManager: string | null;
   caseManager: string | null;
   receptionDate: string | null;
+  kwcOfficeName: string | null;
+  kwcOfficerName: string | null;
   createdAt: string;
   hearingLoss: HearingLoss | null;
   copd: DetailStatus;
@@ -692,6 +694,9 @@ export default function CasesPage() {
   const [search, setSearch] = useState("");
   const [showJurisdiction, setShowJurisdiction] = useState(false);
 
+  const [filterKwcOffice, setFilterKwcOffice] = useState("");
+  const [filterKwcOfficer, setFilterKwcOfficer] = useState("");
+
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
   const [deleteModal, setDeleteModal] = useState(false);
   const [deleteConfirming, setDeleteConfirming] = useState(false);
@@ -712,6 +717,8 @@ export default function CasesPage() {
       if (selectedCaseType) params.set("caseType", selectedCaseType);
       if (filterStatus) params.set("status", filterStatus);
       if (search) params.set("search", search);
+      if (filterKwcOffice) params.set("kwcOfficeName", filterKwcOffice);
+      if (filterKwcOfficer) params.set("kwcOfficerName", filterKwcOfficer);
 
       for (const [k, v] of Object.entries(activeFilters)) {
         if (v) params.set(k, v);
@@ -726,7 +733,7 @@ export default function CasesPage() {
     } finally {
       setLoading(false);
     }
-  }, [selectedTf, selectedCaseType, filterStatus, search, activeFilters]);
+  }, [selectedTf, selectedCaseType, filterStatus, search, activeFilters, filterKwcOffice, filterKwcOfficer]);
 
   useEffect(() => {
     fetchCases();
@@ -776,7 +783,7 @@ export default function CasesPage() {
   // ─── Columns ─────────────────────────────────────────────────────────────
   const isHearingLoss = selectedCaseType === "HEARING_LOSS";
   const COLUMNS = isHearingLoss
-    ? ["연번", "성명", "TF", "영업담당자", "실무담당자", "진행상황", "초진병원", "특진병원", "처분결과", "장해등급", "접수일자"]
+    ? ["연번", "성명", "TF", "영업담당자", "실무담당자", "진행상황", "초진병원", "특진병원", "처분결과", "장해등급", "공단지사", "지사담당자", "접수일자"]
     : ["연번", "성명", "사건유형", "TF", "담당자", "진행상황", "접수일자"];
 
   return (
@@ -872,6 +879,26 @@ export default function CasesPage() {
               </select>
             </div>
           )}
+          <div>
+            <label style={{ fontSize: 11, color: "#6b7280", fontWeight: 700, display: "block", marginBottom: 4 }}>공단 관할지사</label>
+            <input
+              type="text"
+              value={filterKwcOffice}
+              onChange={(e) => setFilterKwcOffice(e.target.value)}
+              placeholder="예: 울산, 부산동부..."
+              style={{ border: "1px solid #e5e7eb", borderRadius: 6, padding: "6px 12px", fontSize: 13, color: "#374151", background: "#f9fafb", outline: "none", width: 160 }}
+            />
+          </div>
+          <div>
+            <label style={{ fontSize: 11, color: "#6b7280", fontWeight: 700, display: "block", marginBottom: 4 }}>지사담당자</label>
+            <input
+              type="text"
+              value={filterKwcOfficer}
+              onChange={(e) => setFilterKwcOfficer(e.target.value)}
+              placeholder="담당자 이름..."
+              style={{ border: "1px solid #e5e7eb", borderRadius: 6, padding: "6px 12px", fontSize: 13, color: "#374151", background: "#f9fafb", outline: "none", width: 140 }}
+            />
+          </div>
         </div>
       </div>
 
@@ -1044,6 +1071,8 @@ export default function CasesPage() {
                     <td style={{ padding: "12px 16px", color: "#374151" }}>
                       {c.hearingLoss?.grade != null ? `${c.hearingLoss.grade}급` : "-"}
                     </td>
+                    <td style={{ padding: "12px 16px", color: "#6b7280" }}>{c.kwcOfficeName ?? "-"}</td>
+                    <td style={{ padding: "12px 16px", color: "#6b7280" }}>{c.kwcOfficerName ?? "-"}</td>
                     <td style={{ padding: "12px 16px", color: "#9ca3af", fontFamily: "monospace", fontSize: 12 }}>{formatDate(c.receptionDate ?? c.createdAt)}</td>
                   </>
                 ) : (
