@@ -102,30 +102,25 @@ type HearingLossDetail = {
   infoDisclosureReceivedAt: string | null;
   rejectionReason: string | null;
   reviewMemo: string | null;
-  specialExam1Date: string | null;
-  specialExam1Contact: string | null;
-  specialExam1Attendee: string | null;
-  specialExam2Date: string | null;
-  specialExam2Contact: string | null;
-  specialExam2Attendee: string | null;
-  specialExam3Date: string | null;
-  specialExam3Contact: string | null;
-  specialExam3Attendee: string | null;
-  specialExam4Date: string | null;
-  specialExam4Contact: string | null;
-  specialExam4Attendee: string | null;
-  specialExam5Date: string | null;
-  specialExam5Contact: string | null;
-  specialExam5Attendee: string | null;
-  reSpecialExam1Date: string | null;
-  reSpecialExam1Contact: string | null;
-  reSpecialExam1Attendee: string | null;
-  reSpecialExam2Date: string | null;
-  reSpecialExam2Contact: string | null;
-  reSpecialExam2Attendee: string | null;
-  reSpecialExam3Date: string | null;
-  reSpecialExam3Contact: string | null;
-  reSpecialExam3Attendee: string | null;
+  specialExam1Date: string | null; specialExam1Contact: string | null; specialExam1Attendee: string | null; specialExam1Pickup: boolean | null;
+  specialExam2Date: string | null; specialExam2Contact: string | null; specialExam2Attendee: string | null; specialExam2Pickup: boolean | null;
+  specialExam3Date: string | null; specialExam3Contact: string | null; specialExam3Attendee: string | null; specialExam3Pickup: boolean | null;
+  specialExam4Date: string | null; specialExam4Contact: string | null; specialExam4Attendee: string | null; specialExam4Pickup: boolean | null;
+  specialExam5Date: string | null; specialExam5Contact: string | null; specialExam5Attendee: string | null; specialExam5Pickup: boolean | null;
+  specialClinicPickup: boolean | null; // deprecated (회차별로 이관됨)
+  specialClinicNote: string | null;
+  reSpecialClinic: string | null;
+  reSpecialClinicPickup: boolean | null; // deprecated
+  reSpecialClinicNote: string | null;
+  reSpecialExam1Date: string | null; reSpecialExam1Contact: string | null; reSpecialExam1Attendee: string | null; reSpecialExam1Pickup: boolean | null;
+  reSpecialExam2Date: string | null; reSpecialExam2Contact: string | null; reSpecialExam2Attendee: string | null; reSpecialExam2Pickup: boolean | null;
+  reSpecialExam3Date: string | null; reSpecialExam3Contact: string | null; reSpecialExam3Attendee: string | null; reSpecialExam3Pickup: boolean | null;
+  re2SpecialClinic: string | null;
+  re2SpecialClinicPickup: boolean | null; // deprecated
+  re2SpecialClinicNote: string | null;
+  re2SpecialExam1Date: string | null; re2SpecialExam1Contact: string | null; re2SpecialExam1Attendee: string | null; re2SpecialExam1Pickup: boolean | null;
+  re2SpecialExam2Date: string | null; re2SpecialExam2Contact: string | null; re2SpecialExam2Attendee: string | null; re2SpecialExam2Pickup: boolean | null;
+  re2SpecialExam3Date: string | null; re2SpecialExam3Contact: string | null; re2SpecialExam3Attendee: string | null; re2SpecialExam3Pickup: boolean | null;
   exams: HearingLossExam[];
 };
 
@@ -154,6 +149,7 @@ type CaseData = {
   isOneStop: boolean;
   memo: string | null;
   kwcOfficeName: string | null;
+  kwcOfficerName: string | null;
   createdAt: string;
   updatedAt: string;
   hearingLoss: HearingLossDetail | null;
@@ -281,14 +277,20 @@ const EMPTY_DETAIL: HearingLossDetail = {
   compensationPaidAt: null, wageReviewMemo: null, adaptedWorkplaceReviewMemo: null,
   infoDisclosureRequestedAt: null, infoDisclosureReceivedAt: null,
   rejectionReason: null, reviewMemo: null,
-  specialExam1Date: null, specialExam1Contact: null, specialExam1Attendee: null,
-  specialExam2Date: null, specialExam2Contact: null, specialExam2Attendee: null,
-  specialExam3Date: null, specialExam3Contact: null, specialExam3Attendee: null,
-  specialExam4Date: null, specialExam4Contact: null, specialExam4Attendee: null,
-  specialExam5Date: null, specialExam5Contact: null, specialExam5Attendee: null,
-  reSpecialExam1Date: null, reSpecialExam1Contact: null, reSpecialExam1Attendee: null,
-  reSpecialExam2Date: null, reSpecialExam2Contact: null, reSpecialExam2Attendee: null,
-  reSpecialExam3Date: null, reSpecialExam3Contact: null, reSpecialExam3Attendee: null,
+  specialExam1Date: null, specialExam1Contact: null, specialExam1Attendee: null, specialExam1Pickup: null,
+  specialExam2Date: null, specialExam2Contact: null, specialExam2Attendee: null, specialExam2Pickup: null,
+  specialExam3Date: null, specialExam3Contact: null, specialExam3Attendee: null, specialExam3Pickup: null,
+  specialExam4Date: null, specialExam4Contact: null, specialExam4Attendee: null, specialExam4Pickup: null,
+  specialExam5Date: null, specialExam5Contact: null, specialExam5Attendee: null, specialExam5Pickup: null,
+  specialClinicPickup: null, specialClinicNote: null,
+  reSpecialClinic: null, reSpecialClinicPickup: null, reSpecialClinicNote: null,
+  reSpecialExam1Date: null, reSpecialExam1Contact: null, reSpecialExam1Attendee: null, reSpecialExam1Pickup: null,
+  reSpecialExam2Date: null, reSpecialExam2Contact: null, reSpecialExam2Attendee: null, reSpecialExam2Pickup: null,
+  reSpecialExam3Date: null, reSpecialExam3Contact: null, reSpecialExam3Attendee: null, reSpecialExam3Pickup: null,
+  re2SpecialClinic: null, re2SpecialClinicPickup: null, re2SpecialClinicNote: null,
+  re2SpecialExam1Date: null, re2SpecialExam1Contact: null, re2SpecialExam1Attendee: null, re2SpecialExam1Pickup: null,
+  re2SpecialExam2Date: null, re2SpecialExam2Contact: null, re2SpecialExam2Attendee: null, re2SpecialExam2Pickup: null,
+  re2SpecialExam3Date: null, re2SpecialExam3Contact: null, re2SpecialExam3Attendee: null, re2SpecialExam3Pickup: null,
   exams: [],
 };
 
@@ -947,15 +949,26 @@ function HearingLossTab({ caseId, initial, status, onStatusChange }: { caseId: s
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 20 }}>
               <DField label="특진병원명" k="specialClinic" />
               <DField label="선택확인서 제출일" k="examClinicSelectionSubmittedAt" type="date" />
+              <DField label="비고" k="specialClinicNote" />
             </div>
 
             <SectionTitle>최초특진 일정 및 참석</SectionTitle>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 12 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 12 }}>
               {initialExamRounds.map((r) => (
                 <React.Fragment key={`sched-${r}`}>
                   <DField label={`${r}차 특진일정`} k={`specialExam${r}Date` as keyof HearingLossDetail} type="datetime-local" />
                   <DField label={`${r}차 연락담당자`} k={`specialExam${r}Contact` as keyof HearingLossDetail} />
                   <DField label={`${r}차 참석자`} k={`specialExam${r}Attendee` as keyof HearingLossDetail} />
+                  <Field label={`${r}차 픽업`}>
+                    <label style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 4 }}>
+                      <input
+                        type="checkbox"
+                        checked={!!detail[`specialExam${r}Pickup` as keyof HearingLossDetail]}
+                        onChange={(e) => setD(`specialExam${r}Pickup` as keyof HearingLossDetail, e.target.checked)}
+                      />
+                      <span style={{ fontSize: 13 }}>🚗 필요</span>
+                    </label>
+                  </Field>
                 </React.Fragment>
               ))}
             </div>
@@ -970,11 +983,30 @@ function HearingLossTab({ caseId, initial, status, onStatusChange }: { caseId: s
 
             {showReExam && (
               <>
+                <SectionTitle>재특진병원 선택</SectionTitle>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 12, marginBottom: 20 }}>
+                  <DField label="재특진병원명" k="reSpecialClinic" />
+                  <DField label="비고" k="reSpecialClinicNote" />
+                </div>
                 <SectionTitle>재특진 일정 및 참석</SectionTitle>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 12 }}>
-                  <DField label="재특진일정" k="reSpecialExam1Date" type="datetime-local" />
-                  <DField label="연락담당자" k="reSpecialExam1Contact" />
-                  <DField label="참석자" k="reSpecialExam1Attendee" />
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 12 }}>
+                  {[1, 2, 3].map((r) => (
+                    <React.Fragment key={`resched-${r}`}>
+                      <DField label={`${r}차 재특진일정`} k={`reSpecialExam${r}Date` as keyof HearingLossDetail} type="datetime-local" />
+                      <DField label={`${r}차 연락담당자`} k={`reSpecialExam${r}Contact` as keyof HearingLossDetail} />
+                      <DField label={`${r}차 참석자`} k={`reSpecialExam${r}Attendee` as keyof HearingLossDetail} />
+                      <Field label={`${r}차 픽업`}>
+                        <label style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 4 }}>
+                          <input
+                            type="checkbox"
+                            checked={!!detail[`reSpecialExam${r}Pickup` as keyof HearingLossDetail]}
+                            onChange={(e) => setD(`reSpecialExam${r}Pickup` as keyof HearingLossDetail, e.target.checked)}
+                          />
+                          <span style={{ fontSize: 13 }}>🚗 필요</span>
+                        </label>
+                      </Field>
+                    </React.Fragment>
+                  ))}
                 </div>
                 <SectionTitle>재특진 검사결과</SectionTitle>
                 <ExamRoundBlock caseId={caseId} examSet="RE" round={1} label="상세검사결과" exams={exams} setExams={setExams} />
@@ -985,6 +1017,31 @@ function HearingLossTab({ caseId, initial, status, onStatusChange }: { caseId: s
                 </div>
                 {showReReExam && (
                   <>
+                    <SectionTitle>재재특진병원 선택</SectionTitle>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 12, marginBottom: 20 }}>
+                      <DField label="재재특진병원명" k="re2SpecialClinic" />
+                      <DField label="비고" k="re2SpecialClinicNote" />
+                    </div>
+                    <SectionTitle>재재특진 일정 및 참석</SectionTitle>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 12 }}>
+                      {[1, 2, 3].map((r) => (
+                        <React.Fragment key={`re2sched-${r}`}>
+                          <DField label={`${r}차 재재특진일정`} k={`re2SpecialExam${r}Date` as keyof HearingLossDetail} type="datetime-local" />
+                          <DField label={`${r}차 연락담당자`} k={`re2SpecialExam${r}Contact` as keyof HearingLossDetail} />
+                          <DField label={`${r}차 참석자`} k={`re2SpecialExam${r}Attendee` as keyof HearingLossDetail} />
+                          <Field label={`${r}차 픽업`}>
+                            <label style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 4 }}>
+                              <input
+                                type="checkbox"
+                                checked={!!detail[`re2SpecialExam${r}Pickup` as keyof HearingLossDetail]}
+                                onChange={(e) => setD(`re2SpecialExam${r}Pickup` as keyof HearingLossDetail, e.target.checked)}
+                              />
+                              <span style={{ fontSize: 13 }}>🚗 필요</span>
+                            </label>
+                          </Field>
+                        </React.Fragment>
+                      ))}
+                    </div>
                     <SectionTitle>재재특진 검사결과</SectionTitle>
                     <ExamRoundBlock caseId={caseId} examSet="RE2" round={1} label="상세검사결과" exams={exams} setExams={setExams} />
                   </>
@@ -1529,6 +1586,8 @@ function BasicInfoTab({ caseData, onUpdated }: { caseData: CaseData; onUpdated: 
     caseManagerId: caseData.caseManagerUserId ?? caseData.caseManagerId ?? null as string | null,
     branchManagerId: caseData.branchManagerUserId ?? caseData.branchManagerId ?? null as string | null,
     salesRoute: caseData.salesRoute ?? "",
+    kwcOfficeName: caseData.kwcOfficeName ?? "",
+    kwcOfficerName: caseData.kwcOfficerName ?? "",
     contractDate: toInputDate(caseData.contractDate),
     receptionDate: toInputDate(caseData.receptionDate),
     isOneStop: caseData.isOneStop,
@@ -1571,6 +1630,7 @@ function BasicInfoTab({ caseData, onUpdated }: { caseData: CaseData; onUpdated: 
             <InfoRow label="사건번호">{caseData.caseNumber ?? "-"}</InfoRow>
             <InfoRow label="TF명">{caseData.tfName ?? "-"}</InfoRow>
             <InfoRow label="관할공단">{caseData.kwcOfficeName ?? "-"}</InfoRow>
+            <InfoRow label="지사담당자">{caseData.kwcOfficerName ?? "-"}</InfoRow>
           </InfoCard>
           <InfoCard title="담당자 정보">
             <InfoRow label="영업담당">{caseData.salesManager ?? "-"}</InfoRow>
@@ -1629,6 +1689,7 @@ function BasicInfoTab({ caseData, onUpdated }: { caseData: CaseData; onUpdated: 
         {([
           ["사건번호", "caseNumber"], ["TF명", "tfName"],
           ["지사장", "branchManager"], ["부지사", "subAgent"],
+          ["관할공단", "kwcOfficeName"], ["지사담당자", "kwcOfficerName"],
         ] as [string, keyof typeof form][]).map(([label, key]) => (
           <div key={key} style={{ display: "flex", flexDirection: "column", gap: 3 }}>
             <label style={{ fontSize: 12, color: "#6b7280" }}>{label}</label>

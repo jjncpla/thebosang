@@ -90,6 +90,7 @@ export async function PATCH(
         ...(status !== undefined ? { status } : autoStatus ? { status: autoStatus } : {}),
         ...(memo !== undefined && { memo }),
         ...(body.kwcOfficeName !== undefined && { kwcOfficeName: body.kwcOfficeName || null }),
+        ...(body.kwcOfficerName !== undefined && { kwcOfficerName: body.kwcOfficerName || null }),
         ...(salesManagerId !== undefined && { salesManagerId: salesManagerId || null }),
         ...(caseManagerId !== undefined && { caseManagerId: caseManagerId || null }),
         ...(branchManagerId !== undefined && { branchManagerId: branchManagerId || null }),

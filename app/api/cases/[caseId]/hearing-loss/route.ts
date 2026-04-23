@@ -2,6 +2,86 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { syncFromHearingLossDecision } from "@/lib/case-sync";
 
+// 특진일정 → SpecialClinicSchedule 싱크
+// clinicType별 필드 정의 (회차별 pickup)
+const EXAM_SCHEDULE_FIELDS = [
+  // [clinicType, examRound, dateField, attendeeField, pickupField(회차별)]
+  ...([1,2,3,4,5] as const).map(r => [`특진`, r, `specialExam${r}Date`, `specialExam${r}Attendee`, `specialExam${r}Pickup`] as const),
+  ...([1,2,3] as const).map(r => [`재특진`, r, `reSpecialExam${r}Date`, `reSpecialExam${r}Attendee`, `reSpecialExam${r}Pickup`] as const),
+  ...([1,2,3] as const).map(r => [`재재특진`, r, `re2SpecialExam${r}Date`, `re2SpecialExam${r}Attendee`, `re2SpecialExam${r}Pickup`] as const),
+] as [string, number, string, string, string][];
+
+async function syncSpecialExamSchedules(caseId: string, detail: Record<string, unknown>) {
+  // Case + Patient 정보 조회
+  const caseData = await prisma.case.findUnique({
+    where: { id: caseId },
+    select: { tfName: true, patient: { select: { name: true } } },
+  });
+  if (!caseData) return;
+
+  const patientName = caseData.patient?.name ?? "";
+  const tfName = caseData.tfName ?? "";
+
+  for (const [clinicType, examRound, dateField, attendeeField, pickupField] of EXAM_SCHEDULE_FIELDS) {
+    const dateVal = detail[dateField];
+    const attendee = typeof detail[attendeeField] === "string" ? detail[attendeeField] as string : null;
+    const isPickup = typeof detail[pickupField] === "boolean" ? detail[pickupField] as boolean : null;
+
+    if (!dateVal || typeof dateVal !== "string") {
+      // 날짜가 지워진 경우 → scheduled 상태의 레코드 삭제
+      await prisma.specialClinicSchedule.deleteMany({
+        where: { caseId, clinicType, examRound, status: "scheduled" },
+      });
+      continue;
+    }
+
+    const d = new Date(dateVal);
+    if (isNaN(d.getTime())) continue;
+
+    const scheduledHour = d.getUTCHours();
+    const scheduledMinute = d.getUTCMinutes();
+
+    // 기존 레코드 찾기
+    const existing = await prisma.specialClinicSchedule.findFirst({
+      where: { caseId, clinicType, examRound },
+    });
+
+    if (existing) {
+      await prisma.specialClinicSchedule.update({
+        where: { id: existing.id },
+        data: {
+          scheduledDate: d,
+          scheduledHour,
+          scheduledMinute,
+          isAllDay: false,
+          patientName,
+          tfName,
+          assignedStaff: attendee,
+          ...(isPickup !== null ? { isPickup } : {}),
+        },
+      });
+    } else {
+      await prisma.specialClinicSchedule.create({
+        data: {
+          caseId,
+          clinicType,
+          examRound,
+          category: "특진",
+          scheduledDate: d,
+          scheduledHour,
+          scheduledMinute,
+          isAllDay: false,
+          status: "scheduled",
+          patientName,
+          tfName,
+          assignedStaff: attendee,
+          isPickup: isPickup ?? false,
+        },
+      });
+    }
+  }
+}
+
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ caseId: string }> }
@@ -90,6 +170,9 @@ export async function PUT(
     if (detail.decisionType && detail.decisionType !== existingDetail?.decisionType) {
       await syncFromHearingLossDecision(caseId, detail.decisionType, detail.decisionReceivedAt);
     }
+
+    // 특진일정 → 통합캘린더(SpecialClinicSchedule) 싱크
+    await syncSpecialExamSchedules(caseId, detail);
 
     return NextResponse.json(detail);
   } catch (err) {

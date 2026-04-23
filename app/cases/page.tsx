@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CASE_TYPE_LABELS, CASE_STATUS_LABELS, CASE_STATUS_COLORS, DEFAULT_STATUS_COLOR } from "@/lib/constants/case";
 import { useBranches } from "@/lib/hooks/useBranches";
@@ -33,6 +33,8 @@ type Case = {
   salesManager: string | null;
   caseManager: string | null;
   receptionDate: string | null;
+  kwcOfficeName: string | null;
+  kwcOfficerName: string | null;
   createdAt: string;
   hearingLoss: HearingLoss | null;
   copd: DetailStatus;
@@ -689,8 +691,14 @@ export default function CasesPage() {
   const [selectedCaseType, setSelectedCaseType] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
   const [activeFilters, setActiveFilters] = useState<Record<string, string>>({});
+  const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const [showJurisdiction, setShowJurisdiction] = useState(false);
+
+  const [filterKwcOffice, setFilterKwcOffice] = useState("");
+  const [filterKwcOfficer, setFilterKwcOfficer] = useState("");
+  const [kwcOfficeOptions, setKwcOfficeOptions] = useState<string[]>([]);
+  const [kwcOfficerOptions, setKwcOfficerOptions] = useState<string[]>([]);
 
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
   const [deleteModal, setDeleteModal] = useState(false);
@@ -698,12 +706,25 @@ export default function CasesPage() {
   const [showBodyPanel, setShowBodyPanel] = useState(false);
   const [selectedBodyPart, setSelectedBodyPart] = useState<string | null>(null);
 
+  // debounce: 400ms 후에만 실제 API 쿼리에 반영
+  useEffect(() => {
+    const timer = setTimeout(() => setSearch(searchInput), 400);
+    return () => clearTimeout(timer);
+  }, [searchInput]);
+
   const tfList = selectedBranch ? TF_BY_BRANCH[selectedBranch] ?? [] : [];
   const filterFields: FilterField[] = selectedCaseType
     ? FILTER_DEFINITIONS_BY_TYPE[selectedCaseType] ?? []
     : [];
 
+  const abortRef = useRef<AbortController | null>(null);
+
   const fetchCases = useCallback(async () => {
+    // 이전 요청 취소 (race condition 방지)
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+
     setLoading(true);
     setError(null);
     try {
@@ -712,25 +733,38 @@ export default function CasesPage() {
       if (selectedCaseType) params.set("caseType", selectedCaseType);
       if (filterStatus) params.set("status", filterStatus);
       if (search) params.set("search", search);
+      if (filterKwcOffice) params.set("kwcOfficeName", filterKwcOffice);
+      if (filterKwcOfficer) params.set("kwcOfficerName", filterKwcOfficer);
 
       for (const [k, v] of Object.entries(activeFilters)) {
         if (v) params.set(k, v);
       }
 
-      const res = await fetch(`/api/cases?${params}`);
+      const res = await fetch(`/api/cases?${params}`, { signal: controller.signal });
       if (!res.ok) throw new Error(`서버 오류 (${res.status})`);
       const data: Case[] = await res.json();
       setCases(data);
     } catch (e: unknown) {
+      if ((e as Error).name === "AbortError") return;
       setError(e instanceof Error ? e.message : "알 수 없는 오류");
     } finally {
       setLoading(false);
     }
-  }, [selectedTf, selectedCaseType, filterStatus, search, activeFilters]);
+  }, [selectedTf, selectedCaseType, filterStatus, search, activeFilters, filterKwcOffice, filterKwcOfficer]);
 
   useEffect(() => {
     fetchCases();
   }, [fetchCases]);
+
+  useEffect(() => {
+    fetch("/api/cases/filter-options")
+      .then((r) => r.json())
+      .then((data) => {
+        setKwcOfficeOptions(data.kwcOfficeNames ?? []);
+        setKwcOfficerOptions(data.kwcOfficerNames ?? []);
+      })
+      .catch(() => {});
+  }, []);
 
   const updateFilter = (updates: Record<string, string>) => {
     setActiveFilters((prev) => ({ ...prev, ...updates }));
@@ -738,6 +772,7 @@ export default function CasesPage() {
 
   const resetFilters = () => {
     setActiveFilters({});
+    setSearchInput("");
     setSearch("");
   };
 
@@ -776,7 +811,7 @@ export default function CasesPage() {
   // ─── Columns ─────────────────────────────────────────────────────────────
   const isHearingLoss = selectedCaseType === "HEARING_LOSS";
   const COLUMNS = isHearingLoss
-    ? ["연번", "성명", "TF", "영업담당자", "실무담당자", "진행상황", "초진병원", "특진병원", "처분결과", "장해등급", "접수일자"]
+    ? ["연번", "성명", "TF", "영업담당자", "실무담당자", "진행상황", "초진병원", "특진병원", "처분결과", "장해등급", "공단지사", "지사담당자", "접수일자"]
     : ["연번", "성명", "사건유형", "TF", "담당자", "진행상황", "접수일자"];
 
   return (
@@ -872,6 +907,32 @@ export default function CasesPage() {
               </select>
             </div>
           )}
+          <div>
+            <label style={{ fontSize: 11, color: "#6b7280", fontWeight: 700, display: "block", marginBottom: 4 }}>공단 관할지사</label>
+            <select
+              value={filterKwcOffice}
+              onChange={(e) => setFilterKwcOffice(e.target.value)}
+              style={{ border: "1px solid #e5e7eb", borderRadius: 6, padding: "6px 12px", fontSize: 13, color: "#374151", background: "#f9fafb", cursor: "pointer", minWidth: 160 }}
+            >
+              <option value="">전체</option>
+              {kwcOfficeOptions.map((o) => (
+                <option key={o} value={o}>{o}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label style={{ fontSize: 11, color: "#6b7280", fontWeight: 700, display: "block", marginBottom: 4 }}>지사담당자</label>
+            <select
+              value={filterKwcOfficer}
+              onChange={(e) => setFilterKwcOfficer(e.target.value)}
+              style={{ border: "1px solid #e5e7eb", borderRadius: 6, padding: "6px 12px", fontSize: 13, color: "#374151", background: "#f9fafb", cursor: "pointer", minWidth: 140 }}
+            >
+              <option value="">전체</option>
+              {kwcOfficerOptions.map((o) => (
+                <option key={o} value={o}>{o}</option>
+              ))}
+            </select>
+          </div>
         </div>
       </div>
 
@@ -964,8 +1025,8 @@ export default function CasesPage() {
         <input
           type="text"
           placeholder="이름, 주민번호, 전화번호 뒷 4자리 검색..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          value={searchInput}
+          onChange={(e) => setSearchInput(e.target.value)}
           style={{ border: "1px solid #e5e7eb", borderRadius: 6, padding: "6px 12px", fontSize: 13, color: "#374151", outline: "none", width: 280, background: "#f9fafb" }}
         />
         <select
@@ -1044,6 +1105,8 @@ export default function CasesPage() {
                     <td style={{ padding: "12px 16px", color: "#374151" }}>
                       {c.hearingLoss?.grade != null ? `${c.hearingLoss.grade}급` : "-"}
                     </td>
+                    <td style={{ padding: "12px 16px", color: "#6b7280" }}>{c.kwcOfficeName ?? "-"}</td>
+                    <td style={{ padding: "12px 16px", color: "#6b7280" }}>{c.kwcOfficerName ?? "-"}</td>
                     <td style={{ padding: "12px 16px", color: "#9ca3af", fontFamily: "monospace", fontSize: 12 }}>{formatDate(c.receptionDate ?? c.createdAt)}</td>
                   </>
                 ) : (

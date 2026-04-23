@@ -21,10 +21,20 @@ type SearchResult = {
   patient: { id: string; name: string; ssn: string | null } | null;
 };
 
+type EmpResult = {
+  id: string;
+  name: string;
+  branch: string;
+  title: string;
+  jobGrade: string;
+  mobile: string;
+  hireDate: string | null;
+};
+
 const MENU_ITEMS: MenuItem[] = [
   { id: "todo", label: "To Do List", icon: "☑", path: "/todo" },
   { id: "law", label: "법령 및 규정", icon: "📜", path: "/law" },
-  { id: "grade", label: "장해등급·평균임금", icon: "📊", path: "/grade" },
+  { id: "grade", label: "실무 참고 정보", icon: "📊", path: "/grade" },
   {
     id: "cases",
     label: "사건 관리",
@@ -35,6 +45,7 @@ const MENU_ITEMS: MenuItem[] = [
       { id: "patients-list", label: "재해자 목록", path: "/patients" },
       { id: "cases-db", label: "사건 DB", path: "/cases/db" },
       { id: "cases-import", label: "데이터 임포트", path: "/cases/import" },
+      { id: "settlement", label: "정산 관리", path: "/settlement" },
     ],
   },
   { id: "forms", label: "양식 관리", icon: "📋", path: "/forms", restricted: "admin" },
@@ -87,6 +98,12 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const [searchOpen, setSearchOpen] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
   const searchBoxRef = useRef<HTMLDivElement>(null);
+
+  const [empQuery, setEmpQuery] = useState("");
+  const [empResults, setEmpResults] = useState<EmpResult[]>([]);
+  const [empOpen, setEmpOpen] = useState(false);
+  const empRef = useRef<HTMLInputElement>(null);
+  const empBoxRef = useRef<HTMLDivElement>(null);
   const pathname = usePathname();
   const router = useRouter();
   const { data: session } = useSession();
@@ -120,18 +137,21 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     return () => window.removeEventListener("keydown", handler);
   }, []);
 
-  // Click outside to close dropdown
+  // Click outside to close dropdowns
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (searchBoxRef.current && !searchBoxRef.current.contains(e.target as Node)) {
         setSearchOpen(false);
+      }
+      if (empBoxRef.current && !empBoxRef.current.contains(e.target as Node)) {
+        setEmpOpen(false);
       }
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  // Debounced search
+  // Debounced case search
   const doSearch = useCallback(async (q: string) => {
     if (q.trim().length < 2) { setSearchResults([]); return; }
     try {
@@ -147,6 +167,24 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     const t = setTimeout(() => doSearch(searchQuery), 250);
     return () => clearTimeout(t);
   }, [searchQuery, doSearch]);
+
+  // Debounced employee search
+  const doEmpSearch = useCallback(async (q: string) => {
+    if (q.trim().length < 1) { setEmpResults([]); return; }
+    try {
+      const params = new URLSearchParams({ firmType: "TBOSANG", search: q });
+      const res = await fetch(`/api/contacts?${params}`);
+      if (res.ok) {
+        const data = await res.json();
+        setEmpResults((data.contacts || []).slice(0, 8));
+      }
+    } catch { setEmpResults([]); }
+  }, []);
+
+  useEffect(() => {
+    const t = setTimeout(() => doEmpSearch(empQuery), 250);
+    return () => clearTimeout(t);
+  }, [empQuery, doEmpSearch]);
 
   const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter" && searchQuery.trim()) {
@@ -295,9 +333,15 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
       {/* ── Main area ── */}
       <div className="main-area">
-        {/* Topbar */}
-        <header className="topbar">
-          <div className="crumbs">
+        {/* Topbar — 홈('/') 에서는 히어로와 이어지도록 딥그린 */}
+        <header
+          className="topbar"
+          style={pathname === "/" ? {
+            background: "var(--deep)",
+            borderBottom: "none",
+          } : undefined}
+        >
+          <div className="crumbs" style={pathname === "/" ? { color: "rgba(255,255,255,.6)" } : undefined}>
             <span>TBSS</span>
             {section && (
               <>
@@ -308,14 +352,26 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             {section !== title && (
               <>
                 <span className="sep">/</span>
-                <span className="cur">{title}</span>
+                <span className={pathname === "/" ? "" : "cur"}
+                  style={pathname === "/" ? { color: "rgba(255,255,255,.9)", fontWeight: 500 } : undefined}
+                >{title}</span>
               </>
             )}
           </div>
 
           {/* Functional search */}
-          <div ref={searchBoxRef} className="search-box" style={{ position: "relative" }}>
-            <span style={{ fontSize: 13, color: "var(--ink-400)", flexShrink: 0 }}>🔍</span>
+          <div
+            ref={searchBoxRef}
+            className="search-box"
+            style={{
+              position: "relative",
+              ...(pathname === "/" ? {
+                background: "rgba(255,255,255,.1)",
+                border: "1px solid rgba(255,255,255,.18)",
+              } : {}),
+            }}
+          >
+            <span style={{ fontSize: 13, color: pathname === "/" ? "rgba(255,255,255,.6)" : "var(--ink-400)", flexShrink: 0 }}>🔍</span>
             <input
               ref={searchRef}
               type="text"
@@ -330,15 +386,15 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 outline: "none",
                 background: "transparent",
                 fontSize: 13,
-                color: "var(--ink-700)",
+                color: pathname === "/" ? "rgba(255,255,255,.9)" : "var(--ink-700)",
                 minWidth: 0,
               }}
             />
             <span
               style={{
                 fontSize: 11,
-                color: "var(--ink-400)",
-                border: "1px solid var(--paper-line)",
+                color: pathname === "/" ? "rgba(255,255,255,.45)" : "var(--ink-400)",
+                border: `1px solid ${pathname === "/" ? "rgba(255,255,255,.2)" : "var(--paper-line)"}`,
                 padding: "1px 6px",
                 borderRadius: 3,
                 flexShrink: 0,
@@ -442,13 +498,95 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             )}
           </div>
 
+          {/* Employee search */}
+          <div
+            ref={empBoxRef}
+            style={{
+              position: "relative",
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              background: pathname === "/" ? "rgba(255,255,255,.1)" : "var(--surface)",
+              border: `1px solid ${pathname === "/" ? "rgba(255,255,255,.18)" : "var(--paper-line)"}`,
+              borderRadius: 8,
+              padding: "5px 10px",
+              minWidth: 180,
+            }}
+          >
+            <span style={{ fontSize: 12, color: pathname === "/" ? "rgba(255,255,255,.6)" : "var(--ink-400)", flexShrink: 0 }}>👤</span>
+            <input
+              ref={empRef}
+              type="text"
+              value={empQuery}
+              onChange={(e) => { setEmpQuery(e.target.value); setEmpOpen(true); }}
+              onFocus={() => setEmpOpen(true)}
+              onKeyDown={(e) => { if (e.key === "Escape") { setEmpOpen(false); empRef.current?.blur(); } }}
+              placeholder="임직원 검색"
+              style={{
+                flex: 1,
+                border: "none",
+                outline: "none",
+                background: "transparent",
+                fontSize: 13,
+                color: pathname === "/" ? "rgba(255,255,255,.9)" : "var(--ink-700)",
+                minWidth: 0,
+              }}
+            />
+            {empOpen && empQuery.trim().length >= 1 && (
+              <div style={{
+                position: "absolute",
+                top: "calc(100% + 6px)",
+                left: 0,
+                right: 0,
+                background: "#fff",
+                border: "1px solid var(--paper-line)",
+                borderRadius: 8,
+                boxShadow: "0 8px 24px rgba(0,0,0,.12)",
+                zIndex: 200,
+                minWidth: 360,
+                maxHeight: 360,
+                overflowY: "auto",
+              }}>
+                {empResults.length === 0 ? (
+                  <div style={{ padding: "14px 16px", fontSize: 13, color: "var(--ink-400)" }}>검색 결과가 없습니다.</div>
+                ) : (
+                  empResults.map((c) => (
+                    <div key={c.id} style={{
+                      padding: "10px 14px",
+                      borderBottom: "1px solid var(--paper-line)",
+                      fontSize: 13,
+                      color: "var(--ink-700)",
+                    }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 3 }}>
+                        <span style={{ fontWeight: 700, color: "var(--ink-900)" }}>{c.name}</span>
+                        <span style={{ fontSize: 11, background: "#f0fdf4", color: "#065f46", padding: "1px 6px", borderRadius: 4, border: "1px solid #d1fae5" }}>{c.jobGrade}</span>
+                        <span style={{ fontSize: 11, color: "var(--ink-400)" }}>{c.title}</span>
+                      </div>
+                      <div style={{ display: "flex", gap: 12, fontSize: 11, color: "var(--ink-400)" }}>
+                        <span>{c.branch}</span>
+                        <span>{c.mobile || "-"}</span>
+                        <span>{c.hireDate ? c.hireDate.slice(0, 10) : "-"}</span>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
+
           <div className="right">
             {session?.user && (
-              <div className="user-chip">
+              <div
+                className="user-chip"
+                style={pathname === "/" ? {
+                  background: "rgba(255,255,255,.1)",
+                  border: "1px solid rgba(255,255,255,.18)",
+                } : undefined}
+              >
                 <div className="avatar">{userInitial}</div>
                 <div className="who">
-                  <b>{userName}</b>
-                  <span>{userBranch || role}</span>
+                  <b style={pathname === "/" ? { color: "#fff" } : undefined}>{userName}</b>
+                  <span style={pathname === "/" ? { color: "rgba(255,255,255,.55)" } : undefined}>{userBranch || role}</span>
                 </div>
               </div>
             )}
@@ -456,12 +594,14 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               className="btn btn-ghost btn-sm"
               onClick={() => router.push("/mypage/password")}
               title="비밀번호 변경"
+              style={pathname === "/" ? { color: "rgba(255,255,255,.75)", borderColor: "rgba(255,255,255,.2)" } : undefined}
             >
               비밀번호 변경
             </button>
             <button
               className="btn btn-ghost btn-sm"
               onClick={() => signOut({ callbackUrl: `${window.location.origin}/login` })}
+              style={pathname === "/" ? { color: "rgba(255,255,255,.75)", borderColor: "rgba(255,255,255,.2)" } : undefined}
             >
               로그아웃
             </button>

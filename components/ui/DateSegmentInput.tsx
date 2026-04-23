@@ -38,6 +38,7 @@ export default function DateSegmentInput({ value, onChange, includeTime = false,
   const [hour, setHour] = useState(p.hour);
   const [minute, setMinute] = useState(p.minute);
 
+  const yearRef = useRef<HTMLInputElement>(null);
   const monthRef = useRef<HTMLInputElement>(null);
   const dayRef = useRef<HTMLInputElement>(null);
   const hourRef = useRef<HTMLInputElement>(null);
@@ -81,13 +82,14 @@ export default function DateSegmentInput({ value, onChange, includeTime = false,
   return (
     <div className="date-seg" style={{ ...style, display: "flex", alignItems: "center", gap: 1 }}>
       <input
-        value={year} placeholder="" maxLength={4} type="text" inputMode="numeric"
+        ref={yearRef} value={year} placeholder="" maxLength={4} type="text" inputMode="numeric"
         style={{ ...seg, width: 38 }}
         onChange={(e) => {
           const v = only(e.target.value).slice(0, 4);
           setYear(v);
-          emit(v, month, day, hour, minute);
+          if (v.length === 4) { emit(v, month, day, hour, minute); monthRef.current?.focus(); }
         }}
+        onBlur={() => emit(year, month, day, hour, minute)}
       />
       <span style={unit}>년</span>
       <span style={sep}>-</span>
@@ -97,7 +99,7 @@ export default function DateSegmentInput({ value, onChange, includeTime = false,
         onChange={(e) => {
           const v = only(e.target.value).slice(0, 2);
           setMonth(v);
-          emit(year, v, day, hour, minute);
+          if (v.length === 2) { emit(year, v, day, hour, minute); dayRef.current?.focus(); }
         }}
         onBlur={(e) => {
           if (!e.target.value) return;
@@ -114,7 +116,7 @@ export default function DateSegmentInput({ value, onChange, includeTime = false,
         onChange={(e) => {
           const v = only(e.target.value).slice(0, 2);
           setDay(v);
-          emit(year, month, v, hour, minute);
+          if (v.length === 2) { emit(year, month, v, hour, minute); if (includeTime) hourRef.current?.focus(); }
         }}
         onBlur={(e) => {
           if (!e.target.value) return;
@@ -133,7 +135,7 @@ export default function DateSegmentInput({ value, onChange, includeTime = false,
             onChange={(e) => {
               const v = only(e.target.value).slice(0, 2);
               setHour(v);
-              emit(year, month, day, v, minute);
+              if (v.length === 2) { emit(year, month, day, v, minute); minuteRef.current?.focus(); }
             }}
             onBlur={(e) => {
               if (!e.target.value) return;
@@ -150,7 +152,7 @@ export default function DateSegmentInput({ value, onChange, includeTime = false,
             onChange={(e) => {
               const v = only(e.target.value).slice(0, 2);
               setMinute(v);
-              emit(year, month, day, hour, v);
+              if (v.length === 2) emit(year, month, day, hour, v);
             }}
             onBlur={(e) => {
               if (!e.target.value) return;

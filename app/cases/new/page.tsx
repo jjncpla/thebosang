@@ -6,6 +6,7 @@ import { CASE_TYPE_LABELS } from "@/lib/constants/case";
 import { useBranches } from "@/lib/hooks/useBranches";
 import { ALL_STAFF } from "@/lib/constants/staff";
 import ContactSelector from "@/components/ui/ContactSelector";
+import DateSegmentInput from "@/components/ui/DateSegmentInput";
 
 const S = { fontFamily: "'Malgun Gothic', 'Apple SD Gothic Neo', 'Segoe UI', sans-serif" };
 
@@ -50,7 +51,9 @@ export default function NewCasePage() {
     subAgent: "",
     branchManager: "",
     salesManager: "",
+    salesManagerId: "",
     caseManager: "",
+    caseManagerId: "",
     salesRoute: "",
     contractDate: "",
     isOneStop: false,
@@ -183,6 +186,7 @@ export default function NewCasePage() {
       router.push(`/patients/${selectedPatient.id}?tab=${caseForm.caseType}`);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "오류");
+    } finally {
       setSubmitting(false);
     }
   };
@@ -345,14 +349,14 @@ export default function NewCasePage() {
               <LabelInput label="영업담당자">
                 <ContactSelector
                   value={caseForm.salesManager}
-                  onChange={(name, mobile) => setCaseForm({ ...caseForm, salesManager: name })}
+                  onChange={(name, _mobile, userId) => setCaseForm({ ...caseForm, salesManager: name, salesManagerId: userId ?? "" })}
                   placeholder="영업담당자 이름 검색"
                 />
               </LabelInput>
               <LabelInput label="실무담당자">
                 <ContactSelector
                   value={caseForm.caseManager}
-                  onChange={(name, mobile) => setCaseForm({ ...caseForm, caseManager: name })}
+                  onChange={(name, _mobile, userId) => setCaseForm({ ...caseForm, caseManager: name, caseManagerId: userId ?? "" })}
                   placeholder="실무담당자 이름 검색"
                 />
               </LabelInput>
@@ -363,7 +367,11 @@ export default function NewCasePage() {
                 </select>
               </LabelInput>
               <LabelInput label="약정일자">
-                <input type="date" style={inputStyle} value={caseForm.contractDate} onChange={(e) => setCaseForm({ ...caseForm, contractDate: e.target.value })} />
+                <DateSegmentInput
+                  style={inputStyle}
+                  value={caseForm.contractDate}
+                  onChange={(v) => setCaseForm({ ...caseForm, contractDate: v ?? "" })}
+                />
               </LabelInput>
               <div style={{ gridColumn: "1 / -1" }}>
                 <LabelInput label="메모">

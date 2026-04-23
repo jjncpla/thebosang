@@ -74,6 +74,7 @@ model Case {
 
   // 관할 근로복지공단 지사 (서식 자동생성용)
   kwcOfficeName   String?   // 관할 공단 지사명 (예: "울산", "부산동부") → "근로복지공단 {{kwcOfficeName}}장 귀하"
+  kwcOfficerName  String?   // 근로복지공단 지사담당자 이름
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -134,35 +135,67 @@ model HearingLossDetail {
   specialClinic                  String?
   examClinicSelectionSubmittedAt DateTime?
 
-  // 특진 일정 관리
+  // 특진 일정 관리 (회차별 — 픽업 포함)
   specialExam1Date      DateTime?
   specialExam1Contact   String?
   specialExam1Attendee  String?
+  specialExam1Pickup    Boolean?
   specialExam2Date      DateTime?
   specialExam2Contact   String?
   specialExam2Attendee  String?
+  specialExam2Pickup    Boolean?
   specialExam3Date      DateTime?
   specialExam3Contact   String?
   specialExam3Attendee  String?
+  specialExam3Pickup    Boolean?
   specialExam4Date      DateTime?
   specialExam4Contact   String?
   specialExam4Attendee  String?
+  specialExam4Pickup    Boolean?
   specialExam5Date      DateTime?
   specialExam5Contact   String?
   specialExam5Attendee  String?
+  specialExam5Pickup    Boolean?
+
+  // 특진병원 비고 (픽업은 회차별이라 specialClinicPickup은 deprecated — 하위호환용 유지)
+  specialClinicPickup Boolean?
+  specialClinicNote   String?
 
   // 재특진 병원
-  reSpecialClinic String?
+  reSpecialClinic       String?
+  reSpecialClinicPickup Boolean?  // deprecated, 회차별 reSpecialExamNPickup 사용
+  reSpecialClinicNote   String?
 
-  reSpecialExam1Date    DateTime?
-  reSpecialExam1Contact String?
+  reSpecialExam1Date     DateTime?
+  reSpecialExam1Contact  String?
   reSpecialExam1Attendee String?
-  reSpecialExam2Date    DateTime?
-  reSpecialExam2Contact String?
+  reSpecialExam1Pickup   Boolean?
+  reSpecialExam2Date     DateTime?
+  reSpecialExam2Contact  String?
   reSpecialExam2Attendee String?
-  reSpecialExam3Date    DateTime?
-  reSpecialExam3Contact String?
+  reSpecialExam2Pickup   Boolean?
+  reSpecialExam3Date     DateTime?
+  reSpecialExam3Contact  String?
   reSpecialExam3Attendee String?
+  reSpecialExam3Pickup   Boolean?
+
+  // 재재특진 병원
+  re2SpecialClinic       String?
+  re2SpecialClinicPickup Boolean?  // deprecated, 회차별 re2SpecialExamNPickup 사용
+  re2SpecialClinicNote   String?
+
+  re2SpecialExam1Date     DateTime?
+  re2SpecialExam1Contact  String?
+  re2SpecialExam1Attendee String?
+  re2SpecialExam1Pickup   Boolean?
+  re2SpecialExam2Date     DateTime?
+  re2SpecialExam2Contact  String?
+  re2SpecialExam2Attendee String?
+  re2SpecialExam2Pickup   Boolean?
+  re2SpecialExam3Date     DateTime?
+  re2SpecialExam3Contact  String?
+  re2SpecialExam3Attendee String?
+  re2SpecialExam3Pickup   Boolean?
 
   // 전문조사
   expertRequestReceivedAt          DateTime?
@@ -937,6 +970,27 @@ model SettlementAllocation {
   createdAt          DateTime         @default(now())
 }
 
+model SettlementTracker {
+  id            String    @id @default(cuid())
+  tfGroup       String    // TF 그룹명 (예: "울산/울동 TF")
+  category      String    // "미정산" | "정산예정"
+  isPaid        Boolean   @default(false)  // ★ 지급완료 여부
+  victimName    String
+  grade         String?   // 등급/유형 (예: "6급(근골)", "유족급여,장례비")
+  branchName    String?   // 지사명
+  managerName   String?   // 담당자 약칭
+  decisionDate  DateTime? // 결정·지급일
+  scheduledDate DateTime? // 정산 예정일
+  status        String?   // 상태 (분할 납부중, 정산완료 등)
+  isInstallment Boolean   @default(false)
+  totalAmount   Int?      // 총 정산금 (만원)
+  paidAmount    Int?      // 기납부액 (만원)
+  memo          String?
+  sortOrder     Int       @default(0)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
 model StaffRoster {
   id           String   @id @default(cuid())
   branchName   String
@@ -998,6 +1052,7 @@ model Branch {
   fax             String?
   region          String?
   assignedTFs     Json?
+  colorBase       String?  // 지사 대표 색(hex, 예: "#006838"). 소속 TF 색 계열의 베이스
   branchManagerId String?
   firmType        String   @default("TBOSANG")
   isActive        Boolean  @default(true)
@@ -1008,6 +1063,17 @@ model Branch {
   updatedAt       DateTime @updatedAt
 
   @@map("branches")
+}
+
+/// TF별 메타데이터(메모/설명). 지사-TF 매핑은 Branch.assignedTFs에 있고, 여기는 TF 이름에 대한 설명만 저장.
+model TfMeta {
+  id        String   @id @default(cuid())
+  tfName    String   @unique
+  memo      String?  @db.Text    // 사용자 정리안 메모 (예: "대구달서/수성으로 세분화되기 전 명칭")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("tf_metas")
 }
 
 model IsanOffice {
@@ -1074,10 +1140,14 @@ model SpecialClinicSchedule {
   content         String?   @db.Text
 
   // 특진/재특진 전용
-  patientName     String?
-  hospitalName    String?
-  clinicType      String?   // "특진" | "재특진"
-  examRound       Int?
+  caseId         String?  // 사건 상세에서 생성 시 연결 (선택)
+  patientName    String?
+  hospitalName   String?
+  clinicType     String?  // "특진" | "재특진" | "재재특진"
+  examRound      Int?
+  assignedStaff  String?  // 담당자 (= HearingLossDetail.specialExam${round}Attendee 와 싱크)
+  attended       Boolean? // 참석 여부
+  isPickup       Boolean? @default(false) // 픽업 필요 (= HearingLossDetail.{special|reSpecial|re2Special}ClinicPickup 와 싱크)
 
   // 텔레그램 수신
   sender          String?
@@ -1091,6 +1161,7 @@ model SpecialClinicSchedule {
   @@index([tfName])
   @@index([scheduledDate])
   @@index([patientName, tfName, clinicType, examRound])
+  @@index([caseId, clinicType, examRound])
 }
 
 model BranchIncentiveUsage {

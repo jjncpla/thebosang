@@ -9,6 +9,8 @@ export async function GET(req: NextRequest) {
   const search = sp.get("search") ?? "";
   const salesRoute = sp.get("salesRoute") ?? "";
   const isOneStop = sp.get("isOneStop") ?? "";
+  const kwcOfficeName = sp.get("kwcOfficeName") ?? "";
+  const kwcOfficerName = sp.get("kwcOfficerName") ?? "";
   const salesManagerId = sp.get("salesManagerId") ?? "";
   const caseManagerId = sp.get("caseManagerId") ?? "";
   const contractDateFrom = sp.get("contractDate_from") ?? "";
@@ -80,6 +82,8 @@ export async function GET(req: NextRequest) {
           },
         }),
         ...(hasHlFilter && { hearingLoss: hlWhere }),
+        ...(kwcOfficeName && { kwcOfficeName: { contains: kwcOfficeName } }),
+        ...(kwcOfficerName && { kwcOfficerName: { contains: kwcOfficerName } }),
         ...(salesManagerId && { salesManagerId }),
         ...(caseManagerId && { caseManagerId }),
       },
@@ -126,6 +130,8 @@ export async function POST(req: NextRequest) {
       receptionDate,
       isOneStop,
       memo,
+      salesManagerId,
+      caseManagerId,
     } = body;
 
     if (!patientId) {
@@ -144,6 +150,8 @@ export async function POST(req: NextRequest) {
         receptionDate: receptionDate ? new Date(receptionDate) : null,
         isOneStop: isOneStop ?? false,
         memo: memo ?? null,
+        salesManagerId: salesManagerId || null,
+        caseManagerId: caseManagerId || null,
       },
       include: {
         patient: { select: { id: true, name: true, ssn: true, phone: true } },

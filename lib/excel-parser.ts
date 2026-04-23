@@ -23,17 +23,17 @@ export function normalizeTfName(raw: unknown): string | null {
   if (!raw) return null;
   const s = String(raw).trim();
   const MAP: Record<string, string> = {
-    "울산": "울산TF",
+    "울산": "이산울산TF",
     "울동": "울산동부TF",
     "울산동부": "울산동부TF",
     "울산남부": "울산남부TF",
     "울산북부": "울산북부TF",
-    "부산": "부산TF",
+    "부산": "이산부산TF",
     "경남": "경남TF",
     "서울": "서울TF",
     "경기": "경기TF",
     "인천": "인천TF",
-    "대구": "대구TF",
+    "대구": "이산대구TF",
     "광주": "광주TF",
     "대전": "대전TF",
   };
@@ -92,6 +92,315 @@ export function parseClaimField(value: unknown): {
 /** arrayBuffer → 워크북 */
 export function readWorkbook(buffer: Buffer): XLSX.WorkBook {
   return XLSX.read(buffer, { type: "buffer", cellDates: true });
+}
+
+// ── HCell (한컴셀) xlsx 전용 파서 ──────────────────────────────────────────
+// XLSX 라이브러리가 hs: 네임스페이스 태그를 처리하지 못하는 문제를 우회.
+// bookFiles 옵션으로 raw zip 엔트리에 직접 접근해 XML을 자체 파싱한다.
+
+function colLetterToIndex(col: string): number {
+  let idx = 0;
+  for (let i = 0; i < col.length; i++) {
+    idx = idx * 26 + col.charCodeAt(i) - 64;
+  }
+  return idx - 1;
+}
+
+function parseHCellSharedStrings(xml: string): string[] {
+  // hs: 네임스페이스 태그 제거 (한컴셀 전용 서식 태그)
+  const clean = xml
+    .replace(/<hs:[^>]*\/>/g, "")
+    .replace(/<hs:[^>]*>[\s\S]*?<\/hs:[^>]*>/g, "");
+  const strs: string[] = [];
+  const siRe = /<(?:\w+:)?si>([\s\S]*?)<\/(?:\w+:)?si>/g;
+  let m: RegExpExecArray | null;
+  while ((m = siRe.exec(clean)) !== null) {
+    let text = "";
+    const tRe = /<(?:\w+:)?t(?:\s[^>]*)?>([^<]*)<\/(?:\w+:)?t>/g;
+    let tm: RegExpExecArray | null;
+    while ((tm = tRe.exec(m[1])) !== null) text += tm[1];
+    strs.push(text);
+  }
+  return strs;
+}
+
+function excelSerialToDate(serial: number): Date {
+  // Excel 날짜 시리얼 → JS Date (UTC)
+  const epoch = new Date(Date.UTC(1899, 11, 30));
+  return new Date(epoch.getTime() + serial * 86400000);
+}
+
+function parseHCellWorksheet(
+  xml: string,
+  strs: string[],
+  headerRow: number,   // 0-indexed
+  dataStartRow: number // 0-indexed
+): Record<string, unknown>[] {
+  // 각 행을 파싱: <x:row r="N" ...>...</x:row>
+  const rowRe = /<(?:\w+:)?row\s[^>]*r="(\d+)"[^>]*>([\s\S]*?)<\/(?:\w+:)?row>/g;
+  const cellRe = /<(?:\w+:)?c\s[^>]*r="([A-Z]+)(\d+)"([^>]*)>([\s\S]*?)<\/(?:\w+:)?c>/g;
+  const vRe = /<(?:\w+:)?v[^>]*>([^<]*)<\/(?:\w+:)?v>/;
+  const fRe = /<(?:\w+:)?f[^>]*>([^<]*)<\/(?:\w+:)?f>/;
+
+  const rowMap: Map<number, Record<number, unknown>> = new Map();
+
+  let rm: RegExpExecArray | null;
+  while ((rm = rowRe.exec(xml)) !== null) {
+    const rowIdx = parseInt(rm[1], 10) - 1; // 0-indexed
+    if (rowIdx < headerRow) continue;
+
+    const colMap: Record<number, unknown> = {};
+    const rowXml = rm[2];
+    const cellReLocal = new RegExp(cellRe.source, "g");
+    let cm: RegExpExecArray | null;
+    while ((cm = cellReLocal.exec(rowXml)) !== null) {
+      const colLetter = cm[1];
+      const colIdx = colLetterToIndex(colLetter);
+      const attrs = cm[3];
+      const cellBody = cm[4];
+      const isSharedStr = /t\s*=\s*["']s["']/.test(attrs);
+      const isInlineStr = /t\s*=\s*["']inlineStr["']/.test(attrs);
+      const isDate = /s\s*=\s*["']\d+["']/.test(attrs); // 스타일 있으면 날짜일 수 있음
+
+      if (isSharedStr) {
+        const vMatch = vRe.exec(cellBody);
+        const idx = vMatch ? parseInt(vMatch[1], 10) : -1;
+        colMap[colIdx] = idx >= 0 ? (strs[idx] ?? null) : null;
+      } else if (isInlineStr) {
+        const tMatch = /<(?:\w+:)?t[^>]*>([^<]*)<\/(?:\w+:)?t>/.exec(cellBody);
+        colMap[colIdx] = tMatch ? tMatch[1] : null;
+      } else {
+        const vMatch = vRe.exec(cellBody);
+        if (!vMatch) { colMap[colIdx] = null; continue; }
+        const raw = vMatch[1].trim();
+        const num = parseFloat(raw);
+        colMap[colIdx] = isNaN(num) ? raw : num;
+      }
+    }
+    rowMap.set(rowIdx, colMap);
+  }
+
+  const headerColMap = rowMap.get(headerRow);
+  if (!headerColMap) return [];
+
+  // 헤더: colIdx → 헤더명
+  const headers: Record<number, string> = {};
+  for (const [ci, val] of Object.entries(headerColMap)) {
+    const h = val != null ? String(val).trim() : "";
+    if (h) headers[Number(ci)] = h;
+  }
+
+  const results: Record<string, unknown>[] = [];
+  for (const [rowIdx, colMap] of rowMap.entries()) {
+    if (rowIdx < dataStartRow) continue;
+
+    const hasData = Object.values(colMap).some(
+      (v) => v !== null && v !== undefined && v !== ""
+    );
+    if (!hasData) continue;
+
+    const row: Record<string, unknown> = {};
+    for (const [ci, headerName] of Object.entries(headers)) {
+      const val = colMap[Number(ci)] ?? null;
+      // 숫자가 날짜처럼 보이면 변환 (Excel 날짜 시리얼 범위: 1~2958465)
+      if (typeof val === "number" && val > 1000 && val < 2958465) {
+        row[headerName] = excelSerialToDate(val);
+      } else {
+        row[headerName] = val;
+      }
+    }
+    results.push(row);
+  }
+  return results;
+}
+
+/**
+ * HCell(한컴셀) xlsx 파일에서 특정 시트를 row 배열로 읽는다.
+ * 시트명이 없으면 첫 번째 시트를 사용한다.
+ * @param buffer  업로드된 xlsx Buffer
+ * @param sheetName  시트명 (없으면 첫 번째 시트)
+ * @param headerRow  헤더 행 번호 (0-indexed)
+ * @param dataStartRow  데이터 시작 행 번호 (0-indexed)
+ */
+export function readHCellSheet(
+  buffer: Buffer,
+  sheetName: string | null,
+  headerRow: number,
+  dataStartRow: number
+): Record<string, unknown>[] {
+  // bookFiles 로 raw zip 엔트리 접근
+  const wb = XLSX.read(buffer, { type: "buffer", bookFiles: true });
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const files = (wb as any).files as Record<string, { content: Uint8Array }> | undefined;
+
+  // 일반 xlsx 파일(files 없음)이면 기존 방식 사용
+  if (!files || Object.keys(files).length === 0) {
+    return sheetToRows(wb, sheetName ?? 0, headerRow, dataStartRow);
+  }
+
+  // 대상 시트 인덱스 결정
+  let targetIdx = 0;
+  if (sheetName) {
+    const found = wb.SheetNames.indexOf(sheetName);
+    targetIdx = found >= 0 ? found : 0;
+  }
+
+  // sharedStrings 파싱
+  const sstFile = files["xl/sharedStrings.xml"];
+  const strs: string[] = sstFile?.content
+    ? parseHCellSharedStrings(Buffer.from(sstFile.content).toString("utf8"))
+    : [];
+
+  // 워크시트 XML 파싱
+  // workbook.xml.rels 에서 시트 인덱스 → 파일명 매핑 시도
+  const wbRelsFile = files["xl/_rels/workbook.xml.rels"];
+  let wsFileName = `xl/worksheets/sheet${targetIdx + 1}.xml`;
+
+  if (wbRelsFile?.content) {
+    const relsXml = Buffer.from(wbRelsFile.content).toString("utf8");
+    // 각 시트의 r:id 순서대로 Target 추출
+    const relRe = /Id="(rId\d+)"[^>]*Target="worksheets\/([^"]+)"/g;
+    const relMap: Record<string, string> = {};
+    let rm: RegExpExecArray | null;
+    while ((rm = relRe.exec(relsXml)) !== null) {
+      relMap[rm[1]] = rm[2];
+    }
+    // workbook.xml 에서 시트 순서대로 rId 추출
+    const wbFile = files["xl/workbook.xml"];
+    if (wbFile?.content) {
+      const wbXml = Buffer.from(wbFile.content).toString("utf8");
+      const sheetRe = /<(?:\w+:)?sheet\s[^>]*r:id="(rId\d+)"/g;
+      const rIds: string[] = [];
+      let sm: RegExpExecArray | null;
+      while ((sm = sheetRe.exec(wbXml)) !== null) rIds.push(sm[1]);
+      const rId = rIds[targetIdx];
+      if (rId && relMap[rId]) wsFileName = `xl/worksheets/${relMap[rId]}`;
+    }
+  }
+
+  const wsFile = files[wsFileName];
+  if (!wsFile?.content) return [];
+
+  const wsXml = Buffer.from(wsFile.content).toString("utf8");
+  return parseHCellWorksheet(wsXml, strs, headerRow, dataStartRow);
+}
+
+/**
+ * 상담내역 임포트용 자동 감지 파서.
+ * 파일 형식(HCell / 일반 xlsx)과 헤더 행 위치를 자동으로 탐지한다.
+ * "성명"과 "연락처" 컬럼이 모두 있는 행을 헤더로 판단한다.
+ *
+ * @param buffer  업로드된 xlsx Buffer
+ * @param sheetHints  시트명 후보 (없으면 첫 번째 시트)
+ * @returns rows (헤더명 → 셀 값)
+ */
+export function readConsultationSheet(
+  buffer: Buffer,
+  sheetHints: string[] = []
+): Record<string, unknown>[] {
+  // ─ 1. HCell 여부 확인: sharedStrings.xml에 hs: 네임스페이스가 있으면 HCell ─
+  const wb = XLSX.read(buffer, { type: "buffer", bookFiles: true });
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const files = (wb as any).files as Record<string, { content: Uint8Array }> | undefined;
+  const sstContent = files?.["xl/sharedStrings.xml"]?.content
+    ? Buffer.from(files["xl/sharedStrings.xml"].content).toString("utf8", 0, 500)
+    : "";
+  // HCell 판별: sharedStrings의 루트 태그가 x: prefix를 가지면 HCell
+  const isHCell = sstContent.includes("<x:sst") || sstContent.includes("hs:");
+
+  // ─ 2. 대상 시트 인덱스 결정 ─
+  let targetIdx = 0;
+  for (const hint of sheetHints) {
+    const found = wb.SheetNames.indexOf(hint);
+    if (found >= 0) { targetIdx = found; break; }
+  }
+
+  // ─ 3. 첫 10행을 읽어서 헤더 행 자동 감지 ─
+  // 헤더 기준: "성명"과 "연락처"가 동시에 존재하는 행
+  function detectHeader(rows10: Record<string, unknown>[][]): number {
+    for (let i = 0; i < rows10.length; i++) {
+      const vals = rows10[i].map((v) => (v != null ? String(v).trim() : ""));
+      const hasName = vals.some((v) => v === "성명");
+      const hasPhone = vals.some((v) => v === "연락처");
+      if (hasName && hasPhone) return i;
+    }
+    return -1;
+  }
+
+  if (isHCell) {
+    // HCell: XML 직접 파싱, 헤더 감지 후 재파싱
+    const sharedStrs = parseHCellSharedStrings(
+      Buffer.from(files!["xl/sharedStrings.xml"].content).toString("utf8")
+    );
+
+    // 시트 파일 경로 결정
+    let wsFileName = `xl/worksheets/sheet${targetIdx + 1}.xml`;
+    const wbRelsFile = files!["xl/_rels/workbook.xml.rels"];
+    if (wbRelsFile?.content) {
+      const relsXml = Buffer.from(wbRelsFile.content).toString("utf8");
+      const relMap: Record<string, string> = {};
+      const relRe = /Id="(rId\d+)"[^>]*Target="worksheets\/([^"]+)"/g;
+      let rm: RegExpExecArray | null;
+      while ((rm = relRe.exec(relsXml)) !== null) relMap[rm[1]] = rm[2];
+      const wbFile = files!["xl/workbook.xml"];
+      if (wbFile?.content) {
+        const wbXml = Buffer.from(wbFile.content).toString("utf8");
+        const sheetRe = /<(?:\w+:)?sheet\s[^>]*r:id="(rId\d+)"/g;
+        const rIds: string[] = [];
+        let sm: RegExpExecArray | null;
+        while ((sm = sheetRe.exec(wbXml)) !== null) rIds.push(sm[1]);
+        const rId = rIds[targetIdx];
+        if (rId && relMap[rId]) wsFileName = `xl/worksheets/${relMap[rId]}`;
+      }
+    }
+
+    const wsFile = files![wsFileName];
+    if (!wsFile?.content) return [];
+    const wsXml = Buffer.from(wsFile.content).toString("utf8");
+
+    // 처음 10행을 배열로 읽어 헤더 감지
+    const preview = parseHCellWorksheet(wsXml, sharedStrs, 0, 0)
+      .slice(0, 10)
+      .map((row) => Object.values(row));
+    const headerRow = detectHeader(preview as Record<string, unknown>[][]);
+    if (headerRow < 0) return [];
+
+    return parseHCellWorksheet(wsXml, sharedStrs, headerRow, headerRow + 1);
+  } else {
+    // 일반 xlsx: XLSX 라이브러리로 파싱
+    const ws =
+      wb.Sheets[wb.SheetNames[targetIdx]] ??
+      wb.Sheets[wb.SheetNames[0]];
+    if (!ws) return [];
+
+    const raw = XLSX.utils.sheet_to_json(ws, {
+      header: 1,
+      defval: null,
+    }) as unknown[][];
+
+    // 헤더 행 감지
+    const headerRow = detectHeader(raw as Record<string, unknown>[][]);
+    if (headerRow < 0) return [];
+
+    const headers = (raw[headerRow] as unknown[]).map((h) =>
+      h != null ? String(h).trim() : ""
+    );
+
+    const results: Record<string, unknown>[] = [];
+    for (let i = headerRow + 1; i < raw.length; i++) {
+      const rowArr = raw[i] as unknown[];
+      const hasData = rowArr.some(
+        (v) => v !== null && v !== undefined && v !== ""
+      );
+      if (!hasData) continue;
+      const row: Record<string, unknown> = {};
+      headers.forEach((h, j) => {
+        if (h) row[h] = rowArr[j] ?? null;
+      });
+      results.push(row);
+    }
+    return results;
+  }
 }
 
 /** 워크북에서 특정 시트를 JSON 배열로 추출
