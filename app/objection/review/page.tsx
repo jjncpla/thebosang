@@ -163,7 +163,8 @@ function ReviewModal({ initial, onClose, onSave }: {
           <div><label style={labelStyle}>승인여부</label><select style={inputStyle} value={form.approvalStatus} onChange={e => set("approvalStatus", e.target.value)}>{APPROVAL_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}</select></div>
           <div>
             <label style={labelStyle}>사건진행여부</label>
-            <select style={{ ...inputStyle, opacity: form.approvalStatus === "승인" ? 0.6 : 1, background: form.approvalStatus === "승인" ? "#f1f5f9" : "#f9fafb" }} value={form.progressStatus} onChange={e => set("progressStatus", e.target.value)} disabled={form.approvalStatus === "승인"}>
+            <select style={{ ...inputStyle, opacity: form.approvalStatus === "승인" ? 0.6 : 1, background: form.approvalStatus === "승인" ? "#f1f5f9" : "#f9fafb" }} value={form.progressStatus ?? ""} onChange={e => set("progressStatus", e.target.value)} disabled={form.approvalStatus === "승인"}>
+              <option value="">(미검토)</option>
               {PROGRESS_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
             </select>
             {form.approvalStatus === "승인" && (
