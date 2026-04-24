@@ -27,4 +27,4 @@ COPY . .
 RUN npm run build
 
 EXPOSE 3000
-CMD ["/bin/sh", "-c", "npx prisma db push --skip-generate --accept-data-loss || true; npm run start"]
+CMD ["/bin/sh", "-c", "npx prisma db push --skip-generate || true; npm run start"]
