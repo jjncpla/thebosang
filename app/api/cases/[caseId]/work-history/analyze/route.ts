@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/auth"
 import { prisma } from "@/lib/prisma"
-// pdf-parse v1.1.1 is CJS — use require to avoid ESM interop issues
+// pdf-parse 메인 진입점은 빌드 시 test PDF 파일을 열려다 실패하므로 내부 경로 직접 사용
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const pdfParse: (buf: Buffer) => Promise<{ text: string }> = require("pdf-parse")
+const pdfParse: (buf: Buffer) => Promise<{ text: string }> = require("pdf-parse/lib/pdf-parse.js")
 
 export const maxDuration = 300
 
