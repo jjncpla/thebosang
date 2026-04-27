@@ -7,16 +7,19 @@ import { useCallback, useEffect, useRef, useState } from "react";
 type JichimItem = {
   id: string;
   label: string;
-  pages?: number;
-  updatedAt?: string;
-  available: boolean;
+};
+
+type JichimSubcategory = {
+  id: string;
+  label: string;
+  items: JichimItem[];
 };
 
 type JichimCategory = {
   id: string;
   label: string;
   color: { bg: string; text: string; border: string };
-  items: JichimItem[];
+  subcategories: JichimSubcategory[];
 };
 
 type Article = {
@@ -403,56 +406,124 @@ function LawTab() {
 
 const JICHIM_CATEGORIES: JichimCategory[] = [
   {
-    id: "disease",
-    label: "질병별",
+    id: "general",
+    label: "산재 일반",
     color: { bg: "#dbeafe", text: "#1d4ed8", border: "#93c5fd" },
-    items: [
-      { id: "noise-hearing",  label: "소음성 난청 업무처리 기준",                            pages: 56,  updatedAt: "2021-12-30", available: false },
-      { id: "pneumo-work",    label: "진폐관련업무",                                         pages: 28,  available: false },
-      { id: "pneumo-12",      label: "진폐 1·2",                                            pages: 40,  available: false },
-      { id: "pneumo-bereave", label: "진폐환자 유족급여 지급 기준에 관한 지침",               pages: 2,   updatedAt: "2009-05-25", available: false },
-      { id: "pneumo-rehab",   label: "진폐 요양 중 장해 인정 관련 세부 업무처리요령",         pages: 40,  updatedAt: "2021-05",    available: false },
-      { id: "copd",           label: "만성폐쇄성폐질환 업무처리 지침",                        pages: 17,  updatedAt: "2014-03-31", available: false },
-      { id: "cerebro",        label: "뇌혈관·심장질병 업무상 질병 조사 및 판정 지침",         pages: 77,  updatedAt: "2021-01-13", available: false },
-      { id: "msk-principle",  label: "6대 근골격계 상병 업무관련성 추정의 원칙 적용기준",     pages: 11,  available: false },
-      { id: "msk-judge",      label: "근골격계질병 업무상 질병 조사 및 판정 지침",            pages: 102, updatedAt: "2021-01-13", available: false },
-      { id: "occ-cancer",     label: "직업성 암 재해조사 및 판단 요령",                       pages: 116, updatedAt: "2018-11-01", available: false },
-      { id: "occ-cancer-fix", label: "직업성 암 처리 절차 개선",                             pages: 2,   available: false },
+    subcategories: [
+      {
+        id: "yoyang",
+        label: "요양",
+        items: [
+          { id: "individual-yoyang",  label: "개별요양급여 업무처리 지침" },
+          { id: "add-injury",         label: "추가상병 및 재요양 업무처리 기준" },
+          { id: "nursing-care",       label: "간병료 지급기준 업무처리지침" },
+          { id: "remote-work",        label: "재택근무 중 업무상 재해 인정기준" },
+          { id: "sick-leave-qa",      label: "휴업급여 지급 관련 자문 요령 및 취소·패소 사례 전파" },
+        ],
+      },
+      {
+        id: "bosang",
+        label: "보상",
+        items: [
+          { id: "compensation-practice", label: "보상 실무" },
+          { id: "disability-regrade",    label: "장해등급 재판정 운영지침" },
+          { id: "disability-adjust",     label: "장해등급 조정에 관한 시행지침" },
+        ],
+      },
+      {
+        id: "avgwage",
+        label: "평균임금",
+        items: [
+          { id: "avg-wage",            label: "직업병에 걸린 사람에 대한 평균임금 산정 지침" },
+          { id: "treatment-decision",  label: "요양 결정시 적용업무 관련 판단에 관한 처리지침" },
+          { id: "daily-worker-wage",   label: "일용근로자 평균임금 산정 업무처리요령" },
+          { id: "pneumo-wage",         label: "진폐요양 중 장해인정에 따른 장해급여(위로금) 산정 평균임금 적용관련 업무처리기준" },
+          { id: "insurance-law-wage",  label: "산재보험법 시행령 개정 관련 업무처리요령" },
+          { id: "commute",             label: "출퇴근재해 업무처리지침" },
+          { id: "truck-driver",        label: "계약내용과 다른 업무수행중 발생한 화물자동차 운전자 사고 업무처리 요령" },
+          { id: "break-time",          label: "휴게시간 중 사고에 대한 처리요령" },
+          { id: "overseas",            label: "해외파견(자) 산재보험 적용여부 판단 기준" },
+        ],
+      },
     ],
   },
   {
-    id: "recognition",
-    label: "재해 인정",
+    id: "disease",
+    label: "상병별 상세",
     color: { bg: "#dcfce7", text: "#15803d", border: "#86efac" },
-    items: [
-      { id: "commute",     label: "출퇴근 재해 업무처리지침",                              pages: 25, updatedAt: "2017-12-28", available: false },
-      { id: "remote-work", label: "재택근무 중 업무상 재해 인정기준",                      pages: 7,  available: false },
-      { id: "break-time",  label: "휴게시간 사고에 대한 처리요령",                         pages: 7,  available: false },
-      { id: "overseas",    label: "해외파견 산재보험 적용여부 판단기준",                    pages: 3,  available: false },
-      { id: "add-injury",  label: "추가상병 및 재요양 업무처리 기준",                       pages: 8,  updatedAt: "2018-05-17", available: false },
-      { id: "treatment-decision", label: "요양결정시 적용업무 관련 판단에 관한 처리지침",  pages: 7,  updatedAt: "2007-11-21", available: false },
-      { id: "crps",        label: "복합부위통증증후군 업무처리 지침",                       pages: 14, updatedAt: "2014-08-28", available: false },
-    ],
-  },
-  {
-    id: "compensation",
-    label: "보상·장해",
-    color: { bg: "#fff7ed", text: "#c2410c", border: "#fdba74" },
-    items: [
-      { id: "disability-guide",  label: "장해등급 판정기준 해설",                              pages: 267, updatedAt: "2010-03",    available: false },
-      { id: "disability-adjust", label: "장해등급 조정에 관한 시행지침",                        pages: 9,   updatedAt: "2018-12-27", available: false },
-      { id: "nursing-care",      label: "간병료 지급기준 업무처리 지침",                        pages: 24,  updatedAt: "2017-08-22", available: false },
-      { id: "avg-wage",          label: "직업병에 걸린 사람에 대한 평균임금 산정 지침",         pages: 9,   updatedAt: "2021-06-01", available: false },
-    ],
-  },
-  {
-    id: "special-worker",
-    label: "특수형태근로자",
-    color: { bg: "#f3e8ff", text: "#7e22ce", border: "#d8b4fe" },
-    items: [
-      { id: "special-worker-qa",      label: "특수형태근로종사자 산재보험 적용 관련 Q&A",   pages: 11, available: false },
-      { id: "driver-employee",        label: "지입차주 근로자성 판단기준",                  pages: 1,  available: false },
-      { id: "driver-insurance",       label: "지입차주 산재보험 적용여부 판단기준",          pages: 1,  available: false },
+    subcategories: [
+      {
+        id: "noise-hearing",
+        label: "소음성 난청",
+        items: [
+          { id: "noise-1",            label: "소음성 난청 업무처리 기준 1지침" },
+          { id: "noise-2",            label: "소음성 난청 업무처리 기준 2지침" },
+          { id: "noise-3",            label: "소음성 난청 업무처리 기준 3지침" },
+          { id: "noise-4",            label: "소음성 난청 업무처리 기준 4지침" },
+          { id: "noise-disability",   label: "소음성 난청 장해판정 가이드라인" },
+          { id: "noise-onestop",      label: "소음성 난청 소속병원 원스톱 장해판정 운영 계획·수립·시행" },
+          { id: "noise-incomplete",   label: "소음성 난청 청력검사 특별진찰 미완료자의 장해판정방법" },
+          { id: "noise-hearing-aid",  label: "소음성 난청 업무상 질병 승인자 보청기 지급 관련사항" },
+        ],
+      },
+      {
+        id: "copd",
+        label: "COPD",
+        items: [
+          { id: "copd-guide",  label: "COPD 만성폐쇄성폐질환 업무처리 지침" },
+        ],
+      },
+      {
+        id: "pneumo",
+        label: "진폐",
+        items: [
+          { id: "pneumo-rehab",    label: "진폐 요양 중 장해 인정 관련 세부 업무처리규정" },
+          { id: "pneumo-1",        label: "진폐 1" },
+          { id: "pneumo-2",        label: "진폐 2" },
+          { id: "pneumo-bereave",  label: "진폐환자 유족급여 지급기준에 관한 지침" },
+        ],
+      },
+      {
+        id: "msk",
+        label: "근골격계 질환",
+        items: [
+          { id: "msk-judge",      label: "근골격계질병 업무상 질병 조사 및 판정 지침" },
+          { id: "msk-principle",  label: "6대 근골격계 상병의 업무관련성 추정의 원칙 적용기준" },
+          { id: "crps",           label: "복합부위통증증후군 업무처리 지침" },
+          { id: "msk-high-freq",  label: "발생빈도가 높은 근골격계 상병 업무상질병 조사 및 판정 지침" },
+          { id: "local-pain",     label: "국소부위 동통 장해등급 인정기준" },
+        ],
+      },
+      {
+        id: "mental",
+        label: "정신 질환",
+        items: [
+          { id: "mental-1",  label: "정신질병 업무관련성 조사 지침 1지침" },
+          { id: "mental-2",  label: "정신질병 업무관련성 조사 지침 2지침" },
+        ],
+      },
+      {
+        id: "cerebro",
+        label: "뇌심혈관계 질환",
+        items: [
+          { id: "cerebro-guide",  label: "뇌혈관질병·심장질병 업무상 질병 조사 및 판정 지침" },
+        ],
+      },
+      {
+        id: "occ-cancer",
+        label: "직업성 암",
+        items: [
+          { id: "cancer-guide",  label: "직업성암 재해조사 및 판단요령" },
+          { id: "cancer-fix",    label: "직업성 암 처리절차 개선" },
+        ],
+      },
+      {
+        id: "asbestos",
+        label: "석면폐증",
+        items: [
+          { id: "asbestos-guide",  label: "석면폐증 업무처리 지침" },
+        ],
+      },
     ],
   },
 ];
@@ -675,13 +746,17 @@ function JichimTab() {
     });
   };
 
+  // 모든 item 순회 헬퍼
+  const allItems = () =>
+    JICHIM_CATEGORIES.flatMap((cat) =>
+      cat.subcategories.flatMap((sub) =>
+        sub.items.map((item) => ({ item, cat, sub }))
+      )
+    );
+
   const searchResults =
     search.trim().length >= 1
-      ? JICHIM_CATEGORIES.flatMap((cat) =>
-          cat.items
-            .filter((item) => item.label.includes(search.trim()))
-            .map((item) => ({ ...item, catLabel: cat.label, catColor: cat.color }))
-        )
+      ? allItems().filter(({ item }) => item.label.includes(search.trim()))
       : [];
 
   const selectedCat = selectedCatId
@@ -729,16 +804,16 @@ function JichimTab() {
             />
           </div>
 
-          {/* Search results OR category tree */}
+          {/* Search results OR 3단계 트리 */}
           {search.trim().length >= 1 ? (
             <div style={{ flex: 1, overflowY: "auto" }}>
               {searchResults.length === 0 ? (
                 <div style={{ padding: 14, fontSize: 12, color: "#9ca3af" }}>검색 결과 없음</div>
               ) : (
-                searchResults.map((item) => (
+                searchResults.map(({ item, cat, sub }) => (
                   <button
                     key={item.id}
-                    onClick={() => handleSelectItem(item, JICHIM_CATEGORIES.find(c => c.items.some(i => i.id === item.id))!.id)}
+                    onClick={() => handleSelectItem(item, cat.id)}
                     style={{
                       display: "block",
                       width: "100%",
@@ -751,8 +826,8 @@ function JichimTab() {
                       borderBottom: "1px solid #f3f4f6",
                     }}
                   >
-                    <div style={{ fontSize: 10, color: item.catColor.text, marginBottom: 2 }}>
-                      {item.catLabel}
+                    <div style={{ fontSize: 10, color: cat.color.text, marginBottom: 2 }}>
+                      {cat.label} › {sub.label}
                     </div>
                     <div style={{ color: "#111827", lineHeight: 1.4 }}>{item.label}</div>
                   </button>
@@ -762,106 +837,96 @@ function JichimTab() {
           ) : (
             <div style={{ flex: 1, overflowY: "auto" }}>
               {JICHIM_CATEGORIES.map((cat) => {
-                const isExpanded = expandedCats.has(cat.id);
-                const isCatActive = cat.items.some((i) => i.id === selectedItem?.id);
+                const isCatExpanded = expandedCats.has(cat.id);
+                const isCatActive = cat.subcategories.some((sub) =>
+                  sub.items.some((i) => i.id === selectedItem?.id)
+                );
+                const totalItems = cat.subcategories.reduce((s, sub) => s + sub.items.length, 0);
                 return (
                   <div key={cat.id}>
+                    {/* 대분류 */}
                     <button
                       onClick={() => toggleCat(cat.id)}
                       style={{
-                        display: "flex",
-                        alignItems: "center",
-                        width: "100%",
-                        textAlign: "left",
-                        padding: "9px 14px",
-                        fontSize: 12,
-                        fontWeight: 700,
-                        border: "none",
+                        display: "flex", alignItems: "center", width: "100%", textAlign: "left",
+                        padding: "9px 14px", fontSize: 12, fontWeight: 700, border: "none",
                         cursor: "pointer",
-                        background: isCatActive ? "#eff6ff" : "transparent",
+                        background: isCatActive ? "#eff6ff" : "#f3f4f6",
                         color: isCatActive ? "#1d4ed8" : "#111827",
-                        gap: 8,
-                        borderBottom: "1px solid #e5e7eb",
+                        gap: 8, borderBottom: "1px solid #e5e7eb",
                       }}
                     >
-                      <span
-                        style={{
-                          fontSize: 11,
-                          padding: "1px 8px",
-                          borderRadius: 10,
-                          background: cat.color.bg,
-                          color: cat.color.text,
-                          border: `1px solid ${cat.color.border}`,
-                          fontWeight: 700,
-                          flexShrink: 0,
-                        }}
-                      >
+                      <span style={{
+                        fontSize: 11, padding: "1px 8px", borderRadius: 10,
+                        background: cat.color.bg, color: cat.color.text,
+                        border: `1px solid ${cat.color.border}`, fontWeight: 700, flexShrink: 0,
+                      }}>
                         {cat.label}
                       </span>
-                      <span style={{ fontSize: 11, color: "#9ca3af" }}>
-                        {cat.items.length}건
-                      </span>
-                      <span
-                        style={{
-                          fontSize: 9,
-                          marginLeft: "auto",
-                          color: "#9ca3af",
-                          transform: isExpanded ? "rotate(90deg)" : "none",
-                          display: "inline-block",
-                          transition: "transform 0.15s",
-                        }}
-                      >
-                        ▶
-                      </span>
+                      <span style={{ fontSize: 11, color: "#9ca3af" }}>{totalItems}건</span>
+                      <span style={{
+                        fontSize: 9, marginLeft: "auto", color: "#9ca3af",
+                        transform: isCatExpanded ? "rotate(90deg)" : "none",
+                        display: "inline-block", transition: "transform 0.15s",
+                      }}>▶</span>
                     </button>
 
-                    {isExpanded && (
-                      <div style={{ background: "#fff" }}>
-                        {cat.items.map((item) => {
-                          const isActive = selectedItem?.id === item.id;
-                          return (
-                            <button
-                              key={item.id}
-                              onClick={() => handleSelectItem(item, cat.id)}
-                              style={{
-                                display: "flex",
-                                alignItems: "flex-start",
-                                width: "100%",
-                                textAlign: "left",
-                                padding: "7px 14px 7px 20px",
-                                fontSize: 12,
-                                border: "none",
-                                cursor: "pointer",
-                                background: isActive ? "#eff6ff" : "transparent",
-                                color: isActive ? "#1d4ed8" : "#374151",
-                                fontWeight: isActive ? 600 : 400,
-                                borderLeft: isActive ? `3px solid ${cat.color.text}` : "3px solid transparent",
-                                borderBottom: "1px solid #f9fafb",
-                                gap: 6,
-                                lineHeight: 1.45,
-                              }}
-                            >
-                              <span style={{ flex: 1, lineHeight: 1.45 }}>{item.label}</span>
-                              {!loadingList && !isAvailable(item.id) && (
-                                <span
-                                  style={{
-                                    fontSize: 9,
-                                    padding: "1px 5px",
-                                    borderRadius: 3,
-                                    background: "#f3f4f6",
-                                    color: "#9ca3af",
-                                    flexShrink: 0,
-                                    marginTop: 2,
-                                  }}
-                                >
-                                  미등록
-                                </span>
-                              )}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    )}
+                    {isCatExpanded && cat.subcategories.map((sub) => {
+                      const isSubExpanded = expandedCats.has(`${cat.id}__${sub.id}`);
+                      const isSubActive = sub.items.some((i) => i.id === selectedItem?.id);
+                      return (
+                        <div key={sub.id}>
+                          {/* 소분류 */}
+                          <button
+                            onClick={() => toggleCat(`${cat.id}__${sub.id}`)}
+                            style={{
+                              display: "flex", alignItems: "center", width: "100%", textAlign: "left",
+                              padding: "7px 14px 7px 18px", fontSize: 11, fontWeight: 600,
+                              border: "none", cursor: "pointer",
+                              background: isSubActive ? "#eff6ff" : "#fafafa",
+                              color: isSubActive ? "#1d4ed8" : "#374151",
+                              gap: 6, borderBottom: "1px solid #f3f4f6",
+                            }}
+                          >
+                            <span style={{
+                              fontSize: 8, transform: isSubExpanded ? "rotate(90deg)" : "none",
+                              display: "inline-block", transition: "transform 0.15s", color: "#9ca3af",
+                            }}>▶</span>
+                            <span style={{ flex: 1 }}>{sub.label}</span>
+                            <span style={{ fontSize: 10, color: "#d1d5db" }}>{sub.items.length}</span>
+                          </button>
+
+                          {/* 지침 목록 */}
+                          {isSubExpanded && sub.items.map((item) => {
+                            const isActive = selectedItem?.id === item.id;
+                            return (
+                              <button
+                                key={item.id}
+                                onClick={() => handleSelectItem(item, cat.id)}
+                                style={{
+                                  display: "flex", alignItems: "flex-start", width: "100%",
+                                  textAlign: "left", padding: "6px 12px 6px 28px",
+                                  fontSize: 11, border: "none", cursor: "pointer",
+                                  background: isActive ? "#dbeafe" : "#fff",
+                                  color: isActive ? "#1d4ed8" : "#4b5563",
+                                  fontWeight: isActive ? 600 : 400,
+                                  borderLeft: isActive ? `3px solid ${cat.color.text}` : "3px solid transparent",
+                                  borderBottom: "1px solid #f9fafb", gap: 5,
+                                }}
+                              >
+                                <span style={{ flex: 1, lineHeight: 1.45 }}>{item.label}</span>
+                                {!loadingList && !isAvailable(item.id) && (
+                                  <span style={{
+                                    fontSize: 9, padding: "1px 4px", borderRadius: 3,
+                                    background: "#f3f4f6", color: "#9ca3af", flexShrink: 0, marginTop: 2,
+                                  }}>미등록</span>
+                                )}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      );
+                    })}
                   </div>
                 );
               })}
@@ -875,29 +940,16 @@ function JichimTab() {
         {/* Toolbar */}
         <div
           style={{
-            padding: "8px 12px",
-            borderBottom: "1px solid #e5e7eb",
-            background: "#fff",
-            display: "flex",
-            alignItems: "center",
-            gap: 10,
-            flexShrink: 0,
+            padding: "8px 12px", borderBottom: "1px solid #e5e7eb", background: "#fff",
+            display: "flex", alignItems: "center", gap: 10, flexShrink: 0,
           }}
         >
           <button
             onClick={() => setSidebarOpen((v) => !v)}
             style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 4,
-              padding: "4px 8px",
-              fontSize: 12,
-              border: "1px solid #e5e7eb",
-              borderRadius: 5,
-              background: "#f9fafb",
-              color: "#4b5563",
-              cursor: "pointer",
-              flexShrink: 0,
+              display: "flex", alignItems: "center", gap: 4, padding: "4px 8px",
+              fontSize: 12, border: "1px solid #e5e7eb", borderRadius: 5,
+              background: "#f9fafb", color: "#4b5563", cursor: "pointer", flexShrink: 0,
             }}
           >
             <span style={{ fontSize: 11 }}>{sidebarOpen ? "◀" : "▶"}</span>
@@ -906,42 +958,19 @@ function JichimTab() {
 
           {selectedItem && selectedCat && (
             <>
-              <span
-                style={{
-                  fontSize: 11,
-                  padding: "1px 7px",
-                  borderRadius: 10,
-                  background: selectedCat.color.bg,
-                  color: selectedCat.color.text,
-                  border: `1px solid ${selectedCat.color.border}`,
-                  fontWeight: 700,
-                  flexShrink: 0,
-                }}
-              >
+              <span style={{
+                fontSize: 11, padding: "1px 7px", borderRadius: 10,
+                background: selectedCat.color.bg, color: selectedCat.color.text,
+                border: `1px solid ${selectedCat.color.border}`, fontWeight: 700, flexShrink: 0,
+              }}>
                 {selectedCat.label}
               </span>
-              <span
-                style={{
-                  fontSize: 13,
-                  fontWeight: 600,
-                  color: "#111827",
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                  whiteSpace: "nowrap",
-                }}
-              >
+              <span style={{
+                fontSize: 13, fontWeight: 600, color: "#111827",
+                overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+              }}>
                 {selectedItem.label}
               </span>
-              {selectedItem.pages && (
-                <span style={{ fontSize: 11, color: "#9ca3af", flexShrink: 0 }}>
-                  {selectedItem.pages}p
-                </span>
-              )}
-              {selectedItem.updatedAt && (
-                <span style={{ fontSize: 11, color: "#9ca3af", flexShrink: 0 }}>
-                  ({selectedItem.updatedAt})
-                </span>
-              )}
             </>
           )}
         </div>
