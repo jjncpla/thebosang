@@ -381,13 +381,6 @@ export function WorkHistorySection({
           >
             📄 PDF 파일 선택
           </button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            multiple
-            style={{ position: "absolute", opacity: 0, pointerEvents: "none", width: 0, height: 0 }}
-            onChange={handleFilesSelected}
-          />
           <span style={{ fontSize: 11, color: "#1d4ed8", flex: 1 }}>
             건강보험·고용보험·국민연금 PDF를 선택하면 종류를 지정할 수 있습니다
           </span>
@@ -766,6 +759,15 @@ export function WorkHistorySection({
 
   return (
     <>
+      {/* 파일 인풋: 항상 마운트 (드로어 조건부 렌더링 밖에 위치) */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        multiple
+        style={{ display: "none" }}
+        onChange={handleFilesSelected}
+      />
+
       {/* 섹션 헤더 + 컴팩트 요약 */}
       <div style={{ fontSize: 13, fontWeight: 700, color: "#374151", padding: "14px 0 8px 0", borderBottom: "2px solid #e5e7eb", marginBottom: 12 }}>직업력</div>
 
