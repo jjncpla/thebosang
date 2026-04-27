@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import pdfParse from "pdf-parse";
+// @ts-expect-error pdf-parse subpath import has no types
+import pdfParse from "pdf-parse/lib/pdf-parse.js";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
