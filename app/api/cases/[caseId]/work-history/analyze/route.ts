@@ -81,8 +81,8 @@ export async function POST(
       return NextResponse.json({ error: "파일이 없습니다" }, { status: 400 })
     }
 
-    const SIZE_LIMIT = 3 * 1024 * 1024
-    const CHUNK_PAGES = 5
+    const SIZE_LIMIT = 1 * 1024 * 1024
+    const CHUNK_PAGES = 3
     const pdfContents: { name: string; base64: string; docType: string }[] = []
 
     for (let fileIdx = 0; fileIdx < files.length; fileIdx++) {
@@ -141,7 +141,7 @@ export async function POST(
       const claudeRes = await callClaudeWithRetry(
         {
           model: "claude-sonnet-4-6",
-          max_tokens: 4096,
+          max_tokens: 8192,
           messages: [{ role: "user", content: userContent }],
         },
         apiKey
