@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import pdfParse from "pdf-parse";
-
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
@@ -116,6 +114,7 @@ export async function POST(req: NextRequest) {
   }
 
   const buffer = Buffer.from(await file.arrayBuffer());
+  const { default: pdfParse } = await import("pdf-parse");
   const parsed = await pdfParse(buffer);
   const content = parsePdfText(title, parsed.text);
 
