@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-// @ts-expect-error pdf-parse has no types
 import pdfParse from "pdf-parse";
 
 export const maxDuration = 60;
