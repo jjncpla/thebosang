@@ -1,9 +1,34 @@
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/auth"
 import { prisma } from "@/lib/prisma"
-import { PDFDocument } from "pdf-lib"
+import { DocumentProcessorServiceClient } from "@google-cloud/documentai"
 
 export const maxDuration = 300
+
+// Google Document AI 클라이언트 초기화
+function getDocAIClient() {
+  const b64 = process.env.GOOGLE_CREDENTIALS_B64
+  if (!b64) throw new Error("GOOGLE_CREDENTIALS_B64 not set")
+  const credentials = JSON.parse(Buffer.from(b64, "base64").toString("utf-8"))
+  return new DocumentProcessorServiceClient({ credentials })
+}
+
+async function ocrPdfWithDocAI(pdfBase64: string): Promise<string> {
+  const client = getDocAIClient()
+  const processorName = process.env.GOOGLE_DOCAI_PROCESSOR
+  if (!processorName) throw new Error("GOOGLE_DOCAI_PROCESSOR not set")
+
+  const [result] = await client.processDocument({
+    name: processorName,
+    rawDocument: {
+      content: pdfBase64,
+      mimeType: "application/pdf",
+    },
+  })
+
+  const text = result.document?.text ?? ""
+  return text
+}
 
 async function callClaudeWithRetry(body: object, apiKey: string, maxRetries = 3): Promise<Response> {
   let lastError: Error | null = null
@@ -19,10 +44,9 @@ async function callClaudeWithRetry(body: object, apiKey: string, maxRetries = 3)
         "Content-Type": "application/json",
         "x-api-key": apiKey,
         "anthropic-version": "2023-06-01",
-        "anthropic-beta": "pdfs-2024-09-25",
       },
       body: JSON.stringify(body),
-      signal: AbortSignal.timeout(90000),
+      signal: AbortSignal.timeout(60000),
     })
     if (res.status === 429) {
       lastError = new Error("rate_limit")
@@ -82,84 +106,75 @@ export async function POST(
     const apiKey = process.env.ANTHROPIC_API_KEY
     if (!apiKey) return NextResponse.json({ error: "API key missing" }, { status: 500 })
 
-    // 파일을 청크로 분할 (5페이지씩 — 응답 토큰 초과 방지)
-    const SIZE_LIMIT = 1 * 1024 * 1024
-    const CHUNK_PAGES = 5
-    const chunks: { name: string; base64: string; docType: string }[] = []
+    const mergedSources: Record<string, unknown[]> = { 고용산재: [], 건보: [], 소득금액: [], 연금: [] }
+    const allDailyEntries: unknown[] = []
+    let extractedName = ""
 
     for (let i = 0; i < files.length; i++) {
       const file = files[i]
       const docType = docTypes[i] ?? ""
       const buffer = await file.arrayBuffer()
+      const pdfBase64 = Buffer.from(buffer).toString("base64")
 
-      if (buffer.byteLength <= SIZE_LIMIT) {
-        chunks.push({ name: file.name, base64: Buffer.from(buffer).toString("base64"), docType })
-      } else {
-        const srcDoc = await PDFDocument.load(buffer)
-        const totalPages = srcDoc.getPageCount()
-        const STEP = CHUNK_PAGES - 1
-        for (let start = 0; start < totalPages; start += STEP) {
-          const end = Math.min(start + CHUNK_PAGES, totalPages)
-          const chunkDoc = await PDFDocument.create()
-          const copied = await chunkDoc.copyPages(srcDoc, Array.from({ length: end - start }, (_, k) => start + k))
-          copied.forEach((p) => chunkDoc.addPage(p))
-          const bytes = await chunkDoc.save()
-          chunks.push({ name: `${file.name} (p${start + 1}-${end})`, base64: Buffer.from(bytes).toString("base64"), docType })
-        }
+      console.log(`[${file.name}] Document AI OCR 시작...`)
+      let ocrText = ""
+      try {
+        ocrText = await ocrPdfWithDocAI(pdfBase64)
+        console.log(`[${file.name}] OCR 완료 — ${ocrText.length}자`)
+      } catch (ocrErr) {
+        console.error(`[${file.name}] OCR 오류:`, ocrErr)
+        return NextResponse.json({ error: `OCR 실패: ${String(ocrErr)}` }, { status: 500 })
       }
-    }
 
-    console.log(`처리할 청크 수: ${chunks.length}`)
+      if (!ocrText || ocrText.trim().length < 10) {
+        console.warn(`[${file.name}] OCR 결과 없음`)
+        continue
+      }
 
-    const mergedSources: Record<string, unknown[]> = { 고용산재: [], 건보: [], 소득금액: [], 연금: [] }
-    const allDailyEntries: unknown[] = []
-    let extractedName = ""
+      const promptText = getPromptForDocType(docType)
+      const fullPrompt = `${promptText}\n\n--- 문서 텍스트 ---\n${ocrText}`
 
-    const processChunk = async (chunk: { name: string; base64: string; docType: string }) => {
-      const promptText = getPromptForDocType(chunk.docType)
+      console.log(`[${file.name}] Claude 분석 시작...`)
       const claudeRes = await callClaudeWithRetry(
         {
-          model: "claude-sonnet-4-6",
+          model: "claude-haiku-4-5-20251001",
           max_tokens: 8192,
           messages: [{
             role: "user",
-            content: [
-              { type: "document", source: { type: "base64", media_type: "application/pdf", data: chunk.base64 } },
-              { type: "text", text: promptText },
-            ],
+            content: fullPrompt,
           }],
         },
         apiKey
       )
+
       if (!claudeRes.ok) {
-        console.error(`Claude API 오류 (${chunk.name}):`, await claudeRes.text())
-        return null
+        console.error(`[${file.name}] Claude API 오류:`, await claudeRes.text())
+        continue
       }
+
       const data = await claudeRes.json()
       const rawText: string = data.content?.[0]?.text ?? ""
+
       try {
         const m = rawText.match(/\{[\s\S]*\}/)
         if (!m) throw new Error("JSON not found")
-        const parsed = JSON.parse(m[0]) as { name?: string; sources: Record<string, unknown[]>; dailyEntries?: unknown[] }
-        console.log(`추출 완료: ${chunk.name} — 고용산재:${parsed.sources?.고용산재?.length ?? 0} 일용직:${parsed.dailyEntries?.length ?? 0}`)
-        return parsed
+        const parsed = JSON.parse(m[0]) as {
+          name?: string
+          sources: Record<string, unknown[]>
+          dailyEntries?: unknown[]
+        }
+        console.log(`[${file.name}] 추출 완료 — 고용산재:${parsed.sources?.고용산재?.length ?? 0} 일용직:${parsed.dailyEntries?.length ?? 0}`)
+
+        if (parsed.name && !extractedName) extractedName = parsed.name
+        for (const key of ["고용산재", "건보", "소득금액", "연금"] as const) {
+          if (parsed.sources?.[key]?.length > 0) {
+            mergedSources[key] = mergedSources[key].concat(parsed.sources[key])
+          }
+        }
+        if (parsed.dailyEntries?.length) allDailyEntries.push(...parsed.dailyEntries)
       } catch {
-        console.error(`JSON 파싱 오류 (${chunk.name}):`, rawText.slice(0, 300))
-        return null
+        console.error(`[${file.name}] JSON 파싱 오류:`, rawText.slice(0, 300))
       }
-    }
-
-    // 모든 청크 병렬 처리
-    const results = await Promise.allSettled(chunks.map(processChunk))
-
-    for (const result of results) {
-      if (result.status !== "fulfilled" || !result.value) continue
-      const parsed = result.value
-      if (parsed.name && !extractedName) extractedName = parsed.name
-      for (const key of ["고용산재", "건보", "소득금액", "연금"] as const) {
-        if (parsed.sources?.[key]?.length > 0) mergedSources[key] = mergedSources[key].concat(parsed.sources[key])
-      }
-      if (parsed.dailyEntries?.length) allDailyEntries.push(...parsed.dailyEntries)
     }
 
     await prisma.case.update({
