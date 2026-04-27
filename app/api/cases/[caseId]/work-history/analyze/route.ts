@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/auth"
 import { prisma } from "@/lib/prisma"
-import { PDFDocument } from "pdf-lib"
 
 export const maxDuration = 300
 
@@ -82,98 +81,61 @@ export async function POST(
     const apiKey = process.env.ANTHROPIC_API_KEY
     if (!apiKey) return NextResponse.json({ error: "API key missing" }, { status: 500 })
 
-    // 파일을 청크로 분할 (5페이지씩 — 응답 토큰 초과 방지)
-    const SIZE_LIMIT = 1 * 1024 * 1024
-    const CHUNK_PAGES = 5
-    const chunks: { name: string; base64: string; docType: string }[] = []
+    // 프론트엔드에서 청크 분리 후 전송하므로 서버는 단일 파일만 처리
+    const file = files[0]
+    const docType = docTypes[0] ?? ""
+    const buffer = await file.arrayBuffer()
+    const base64 = Buffer.from(buffer).toString("base64")
 
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i]
-      const docType = docTypes[i] ?? ""
-      const buffer = await file.arrayBuffer()
+    console.log(`처리 중: ${file.name} (${Math.round(buffer.byteLength / 1024)}KB)`)
 
-      if (buffer.byteLength <= SIZE_LIMIT) {
-        chunks.push({ name: file.name, base64: Buffer.from(buffer).toString("base64"), docType })
-      } else {
-        const srcDoc = await PDFDocument.load(buffer)
-        const totalPages = srcDoc.getPageCount()
-        const STEP = CHUNK_PAGES - 1
-        for (let start = 0; start < totalPages; start += STEP) {
-          const end = Math.min(start + CHUNK_PAGES, totalPages)
-          const chunkDoc = await PDFDocument.create()
-          const copied = await chunkDoc.copyPages(srcDoc, Array.from({ length: end - start }, (_, k) => start + k))
-          copied.forEach((p) => chunkDoc.addPage(p))
-          const bytes = await chunkDoc.save()
-          chunks.push({ name: `${file.name} (p${start + 1}-${end})`, base64: Buffer.from(bytes).toString("base64"), docType })
-        }
-      }
+    const promptText = getPromptForDocType(docType)
+    const claudeRes = await callClaudeWithRetry(
+      {
+        model: "claude-sonnet-4-6",
+        max_tokens: 8192,
+        messages: [{
+          role: "user",
+          content: [
+            { type: "document", source: { type: "base64", media_type: "application/pdf", data: base64 } },
+            { type: "text", text: promptText },
+          ],
+        }],
+      },
+      apiKey
+    )
+
+    if (!claudeRes.ok) {
+      const errText = await claudeRes.text()
+      console.error(`Claude API 오류 (${file.name}):`, errText)
+      return NextResponse.json({ error: `Claude API 오류: ${errText}` }, { status: 500 })
     }
 
-    console.log(`처리할 청크 수: ${chunks.length}`)
+    const data = await claudeRes.json()
+    const rawText: string = data.content?.[0]?.text ?? ""
 
-    const mergedSources: Record<string, unknown[]> = { 고용산재: [], 건보: [], 소득금액: [], 연금: [] }
-    const allDailyEntries: unknown[] = []
-    let extractedName = ""
-
-    const processChunk = async (chunk: { name: string; base64: string; docType: string }) => {
-      const promptText = getPromptForDocType(chunk.docType)
-      const claudeRes = await callClaudeWithRetry(
-        {
-          model: "claude-sonnet-4-6",
-          max_tokens: 8192,
-          messages: [{
-            role: "user",
-            content: [
-              { type: "document", source: { type: "base64", media_type: "application/pdf", data: chunk.base64 } },
-              { type: "text", text: promptText },
-            ],
-          }],
-        },
-        apiKey
-      )
-      if (!claudeRes.ok) {
-        console.error(`Claude API 오류 (${chunk.name}):`, await claudeRes.text())
-        return null
-      }
-      const data = await claudeRes.json()
-      const rawText: string = data.content?.[0]?.text ?? ""
-      try {
-        const m = rawText.match(/\{[\s\S]*\}/)
-        if (!m) throw new Error("JSON not found")
-        const parsed = JSON.parse(m[0]) as { name?: string; sources: Record<string, unknown[]>; dailyEntries?: unknown[] }
-        console.log(`추출 완료: ${chunk.name} — 고용산재:${parsed.sources?.고용산재?.length ?? 0} 건보:${parsed.sources?.건보?.length ?? 0} 연금:${parsed.sources?.연금?.length ?? 0} 일용직:${parsed.dailyEntries?.length ?? 0}`)
-        return parsed
-      } catch {
-        console.error(`JSON 파싱 오류 (${chunk.name}):`, rawText.slice(0, 300))
-        return null
-      }
+    let parsed: { name?: string; sources: Record<string, unknown[]>; dailyEntries?: unknown[] } = {
+      name: "",
+      sources: { 고용산재: [], 건보: [], 소득금액: [], 연금: [] },
+      dailyEntries: [],
     }
 
-    // 청크를 2개씩 순차 병렬 처리 (rate limit 방지)
-    const CONCURRENCY = 2
-    const results: PromiseSettledResult<Awaited<ReturnType<typeof processChunk>>>[] = []
-    for (let i = 0; i < chunks.length; i += CONCURRENCY) {
-      const batch = chunks.slice(i, i + CONCURRENCY)
-      const batchResults = await Promise.allSettled(batch.map(processChunk))
-      results.push(...batchResults)
+    try {
+      const m = rawText.match(/\{[\s\S]*\}/)
+      if (!m) throw new Error("JSON not found")
+      parsed = JSON.parse(m[0])
+      console.log(`추출 완료: ${file.name} — 고용산재:${parsed.sources?.고용산재?.length ?? 0} 건보:${parsed.sources?.건보?.length ?? 0} 연금:${parsed.sources?.연금?.length ?? 0} 일용직:${parsed.dailyEntries?.length ?? 0}`)
+    } catch {
+      console.error(`JSON 파싱 오류 (${file.name}):`, rawText.slice(0, 300))
     }
 
-    for (const result of results) {
-      if (result.status !== "fulfilled" || !result.value) continue
-      const parsed = result.value
-      if (parsed.name && !extractedName) extractedName = parsed.name
-      for (const key of ["고용산재", "건보", "소득금액", "연금"] as const) {
-        if (parsed.sources?.[key]?.length > 0) mergedSources[key] = mergedSources[key].concat(parsed.sources[key])
-      }
-      if (parsed.dailyEntries?.length) allDailyEntries.push(...parsed.dailyEntries)
-    }
-
-    await prisma.case.update({
-      where: { id: caseId },
-      data: { workHistoryRaw: mergedSources as object },
+    // DB에는 누적 저장이 아닌 프론트에서 관리하므로 응답만 반환
+    return NextResponse.json({
+      success: true,
+      sources: parsed.sources ?? { 고용산재: [], 건보: [], 소득금액: [], 연금: [] },
+      dailyEntries: parsed.dailyEntries ?? [],
+      name: parsed.name ?? "",
     })
-
-    return NextResponse.json({ success: true, sources: mergedSources, dailyEntries: allDailyEntries, name: extractedName })
   } catch (err) {
     console.error("Unhandled error:", err)
     return NextResponse.json({ error: String(err) }, { status: 500 })

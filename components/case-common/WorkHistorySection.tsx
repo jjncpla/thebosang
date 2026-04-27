@@ -155,23 +155,47 @@ function WorkHistoryDrawerContent({
     try {
       for (let i = 0; i < valid.length; i++) {
         const { file, docType } = valid[i];
-        const formData = new FormData();
-        formData.append("files", file);
-        formData.append("docTypes", docType);
-        const res = await fetch(`/api/cases/${caseId}/work-history/analyze`, { method: "POST", body: formData });
-        if (!res.ok) { const err = await res.json(); throw new Error(err.error ?? "분석 실패"); }
-        const data = await res.json();
-        if (data.name && !extractedName) extractedName = data.name;
-        ["고용산재", "건보", "소득금액", "연금", "건근공"].forEach((src) => {
-          if (data.sources?.[src]?.length > 0) {
-            (accRaw as Record<string, unknown[]>)[src] = [
-              ...((accRaw as Record<string, unknown[]>)[src] ?? []),
-              ...data.sources[src],
-            ];
+
+        // 1MB 초과 시 5페이지 청크로 분할하여 각각 별도 요청
+        const SIZE_LIMIT = 1 * 1024 * 1024;
+        const chunksToSend: File[] = [];
+        if (file.size > SIZE_LIMIT) {
+          const { PDFDocument } = await import("pdf-lib");
+          const buffer = await file.arrayBuffer();
+          const srcDoc = await PDFDocument.load(buffer);
+          const totalPages = srcDoc.getPageCount();
+          const CHUNK_PAGES = 5;
+          for (let start = 0; start < totalPages; start += CHUNK_PAGES) {
+            const end = Math.min(start + CHUNK_PAGES, totalPages);
+            const chunkDoc = await PDFDocument.create();
+            const copied = await chunkDoc.copyPages(srcDoc, Array.from({ length: end - start }, (_, k) => start + k));
+            copied.forEach(p => chunkDoc.addPage(p));
+            const bytes = await chunkDoc.save();
+            chunksToSend.push(new File([bytes.buffer as ArrayBuffer], `${file.name} (p${start + 1}-${end})`, { type: "application/pdf" }));
           }
-        });
-        if (data.dailyEntries?.length > 0) accDaily.push(...data.dailyEntries);
-      }
+        } else {
+          chunksToSend.push(file);
+        }
+
+        for (const chunk of chunksToSend) {
+          const formData = new FormData();
+          formData.append("files", chunk);
+          formData.append("docTypes", docType);
+          const res = await fetch(`/api/cases/${caseId}/work-history/analyze`, { method: "POST", body: formData });
+          if (!res.ok) { const err = await res.json(); throw new Error(err.error ?? "분석 실패"); }
+          const data = await res.json();
+          if (data.name && !extractedName) extractedName = data.name;
+          ["고용산재", "건보", "소득금액", "연금", "건근공"].forEach((src) => {
+            if (data.sources?.[src]?.length > 0) {
+              (accRaw as Record<string, unknown[]>)[src] = [
+                ...((accRaw as Record<string, unknown[]>)[src] ?? []),
+                ...data.sources[src],
+              ];
+            }
+          });
+          if (data.dailyEntries?.length > 0) accDaily.push(...data.dailyEntries);
+        } // chunksToSend loop
+      } // valid files loop
       onChange({ workHistoryRaw: accRaw });
       onChangeDaily(accDaily);
       const firstWithData = ['고용산재', '건보', '연금', '건근공', '일용직'].find(src => (accRaw as Record<string, unknown[]>)[src]?.length > 0);
