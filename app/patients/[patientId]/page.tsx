@@ -1008,7 +1008,7 @@ function HearingLossTab({ caseId, initial }: { caseId: string; initial: HearingL
           <div style={{ padding: 20 }}>
             <SectionTitle>접수/청구</SectionTitle>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 20 }}>
-              <DField label="청구서 발송일" k="claimSubmittedAt" type="date" />
+              <DField label="접수일" k="claimSubmittedAt" type="date" />
             </div>
             <SectionTitle>특진진찰요구서</SectionTitle>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 20 }}>

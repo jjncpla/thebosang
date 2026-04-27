@@ -296,22 +296,11 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           })}
         </nav>
 
-        {/* User */}
-        {session?.user && (
-          <div className="sidebar-user" style={{ marginTop: "auto", marginBottom: 8 }}>
-            <div className="avatar">{userInitial}</div>
-            <div className="who">
-              <b>{userName}</b>
-              <span>{userBranch}</span>
-            </div>
-          </div>
-        )}
-
         {/* Footer */}
         <div className="foot">
           v2.4.0 · 2026.04
           <br />
-          문의 : 전산실 내선 208
+          문의 : 이정준 노무사 010-9248-5596
         </div>
       </aside>
 
