@@ -141,7 +141,7 @@ export async function POST(
         const m = rawText.match(/\{[\s\S]*\}/)
         if (!m) throw new Error("JSON not found")
         const parsed = JSON.parse(m[0]) as { name?: string; sources: Record<string, unknown[]>; dailyEntries?: unknown[] }
-        console.log(`추출 완료: ${chunk.name} — 고용산재:${parsed.sources?.고용산재?.length ?? 0} 일용직:${parsed.dailyEntries?.length ?? 0}`)
+        console.log(`추출 완료: ${chunk.name} — 고용산재:${parsed.sources?.고용산재?.length ?? 0} 건보:${parsed.sources?.건보?.length ?? 0} 연금:${parsed.sources?.연금?.length ?? 0} 일용직:${parsed.dailyEntries?.length ?? 0}`)
         return parsed
       } catch {
         console.error(`JSON 파싱 오류 (${chunk.name}):`, rawText.slice(0, 300))
@@ -149,8 +149,14 @@ export async function POST(
       }
     }
 
-    // 모든 청크 병렬 처리
-    const results = await Promise.allSettled(chunks.map(processChunk))
+    // 청크를 2개씩 순차 병렬 처리 (rate limit 방지)
+    const CONCURRENCY = 2
+    const results: PromiseSettledResult<Awaited<ReturnType<typeof processChunk>>>[] = []
+    for (let i = 0; i < chunks.length; i += CONCURRENCY) {
+      const batch = chunks.slice(i, i + CONCURRENCY)
+      const batchResults = await Promise.allSettled(batch.map(processChunk))
+      results.push(...batchResults)
+    }
 
     for (const result of results) {
       if (result.status !== "fulfilled" || !result.value) continue
