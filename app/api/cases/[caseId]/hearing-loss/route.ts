@@ -41,15 +41,22 @@ async function syncSpecialExamSchedules(caseId: string, detail: Record<string, u
     const scheduledHour = d.getUTCHours();
     const scheduledMinute = d.getUTCMinutes();
 
-    // 기존 레코드 찾기
-    const existing = await prisma.specialClinicSchedule.findFirst({
+    // 기존 레코드 찾기: caseId로 먼저, 없으면 patientName+tfName으로 fallback
+    // (텔레그램 웹훅이 caseId 없이 먼저 생성한 경우 중복 방지)
+    let existing = await prisma.specialClinicSchedule.findFirst({
       where: { caseId, clinicType, examRound },
     });
+    if (!existing && patientName && tfName) {
+      existing = await prisma.specialClinicSchedule.findFirst({
+        where: { patientName, tfName, clinicType, examRound, caseId: null },
+      });
+    }
 
     if (existing) {
       await prisma.specialClinicSchedule.update({
         where: { id: existing.id },
         data: {
+          caseId,
           scheduledDate: d,
           scheduledHour,
           scheduledMinute,

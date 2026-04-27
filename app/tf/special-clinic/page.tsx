@@ -18,6 +18,7 @@ interface Schedule {
   title: string | null
   content: string | null
   scheduledDate: string | null
+  scheduledEndDate: string | null
   isAllDay: boolean
   scheduledHour: number | null
   scheduledMinute: number | null
@@ -457,9 +458,17 @@ function SpecialClinicCalendar() {
 
   function getSchedulesForDay(day: number) {
     const target = new Date(year, month - 1, day)
+    target.setHours(0, 0, 0, 0)
     return filteredSchedules.filter(s => {
       if (!s.scheduledDate) return false
-      return isSameDay(new Date(s.scheduledDate), target)
+      const start = new Date(s.scheduledDate)
+      start.setHours(0, 0, 0, 0)
+      if (s.scheduledEndDate) {
+        const end = new Date(s.scheduledEndDate)
+        end.setHours(0, 0, 0, 0)
+        return target >= start && target <= end
+      }
+      return isSameDay(start, target)
     })
   }
 
@@ -533,7 +542,19 @@ function SpecialClinicCalendar() {
   function prevDay() { setCurrentDay(d => { const n = new Date(d); n.setDate(n.getDate() - 1); return n }) }
   function nextDay() { setCurrentDay(d => { const n = new Date(d); n.setDate(n.getDate() + 1); return n }) }
   function getSchedulesForDate(d: Date) {
-    return filteredSchedules.filter(s => s.scheduledDate && isSameDay(new Date(s.scheduledDate), d))
+    const target = new Date(d)
+    target.setHours(0, 0, 0, 0)
+    return filteredSchedules.filter(s => {
+      if (!s.scheduledDate) return false
+      const start = new Date(s.scheduledDate)
+      start.setHours(0, 0, 0, 0)
+      if (s.scheduledEndDate) {
+        const end = new Date(s.scheduledEndDate)
+        end.setHours(0, 0, 0, 0)
+        return target >= start && target <= end
+      }
+      return isSameDay(start, target)
+    })
   }
 
   // 날짜 클릭 → 일별 뷰로
@@ -1078,7 +1099,7 @@ function SpecialClinicCalendar() {
         {viewMode === 'week' && (
           <div className="grid grid-cols-7 border-b last:border-b-0" style={{ minHeight: 300 }}>
             {getWeekDays().map((wd, di) => {
-              const wdSchedules = filteredSchedules.filter(s => s.scheduledDate && isSameDay(new Date(s.scheduledDate), wd))
+              const wdSchedules = getSchedulesForDate(wd)
               const isToday = isSameDay(wd, now)
               const dk = dateKey(wd.getFullYear(), wd.getMonth() + 1, wd.getDate())
               const holidayName = holidays[dk]
@@ -1533,6 +1554,8 @@ function InputModal({
     if (target) {
       const d = target.scheduledDate ? new Date(target.scheduledDate) : null
       const dateStr = d ? `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}` : `${defaultYear}-${pad(defaultMonth)}-01`
+      const de = target.scheduledEndDate ? new Date(target.scheduledEndDate) : null
+      const endDateStr = de ? `${de.getFullYear()}-${pad(de.getMonth() + 1)}-${pad(de.getDate())}` : ''
       const timeStr = !target.isAllDay && target.scheduledHour != null
         ? `${pad(target.scheduledHour)}:${pad(target.scheduledMinute ?? 0)}`
         : ''
@@ -1540,6 +1563,7 @@ function InputModal({
         category: target.category || '특진',
         tfName: target.tfName || '',
         scheduledDate: dateStr,
+        scheduledEndDate: endDateStr,
         scheduledTime: timeStr,
         memo: target.memo || '',
         patientName: target.patientName || '',
@@ -1557,6 +1581,7 @@ function InputModal({
       category: '특진',
       tfName: '',
       scheduledDate: defaultDate || `${defaultYear}-${pad(defaultMonth)}-01`,
+      scheduledEndDate: '',
       scheduledTime: '',
       memo: '',
       patientName: '',
@@ -1595,6 +1620,7 @@ function InputModal({
       category: form.category,
       tfName: form.tfName || '',
       scheduledDate: new Date(form.scheduledDate),
+      scheduledEndDate: form.scheduledEndDate ? new Date(form.scheduledEndDate) : null,
       isAllDay: !hasTime,
       scheduledHour: h,
       scheduledMinute: m ?? 0,
@@ -1746,8 +1772,12 @@ function InputModal({
                   </select>
                 </div>
                 <div>
-                  <label className="text-xs text-gray-500">날짜</label>
+                  <label className="text-xs text-gray-500">시작일</label>
                   <input type="date" value={form.scheduledDate} onChange={e => setForm(f => ({ ...f, scheduledDate: e.target.value }))} className={inputCls} />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-500">종료일 <span className="text-gray-400">(2박3일 등 복수일)</span></label>
+                  <input type="date" value={form.scheduledEndDate} onChange={e => setForm(f => ({ ...f, scheduledEndDate: e.target.value }))} className={inputCls} />
                 </div>
                 <div>
                   <label className="text-xs text-gray-500">시간 (선택)</label>

@@ -1152,6 +1152,7 @@ model SpecialClinicSchedule {
   category        String    @default("특진") // "특진" | "재특진" | "영업" | "자료보완" | "교육" | "회의" | "질판위" | "상담" | "약정" | "기타"
   tfName          String    @default("")
   scheduledDate   DateTime?
+  scheduledEndDate DateTime? // 종료일 (진폐 2박3일 등 멀티데이 일정용)
   isAllDay        Boolean   @default(true)
   scheduledHour   Int?
   scheduledMinute Int?      @default(0)
