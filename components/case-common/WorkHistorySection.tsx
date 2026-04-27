@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef } from "react";
+import React, { useState } from "react";
 import { WorkHistoryItem, WorkHistoryRaw, WorkHistoryRawEntry, WorkHistoryDailyEntry } from "./WorkHistoryTypes";
 
 interface WorkHistorySectionProps {
@@ -84,7 +84,6 @@ export function WorkHistorySection({
   onSaveLastDate,
 }: WorkHistorySectionProps) {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analyzeError, setAnalyzeError] = useState<string | null>(null);
   const [pendingFiles, setPendingFiles] = useState<{ file: File; docType: string }[]>([]);
@@ -374,13 +373,15 @@ export function WorkHistorySection({
       {/* PDF 자동 분석 */}
       <div style={{ marginBottom: 12 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", background: "#eff6ff", borderRadius: 8, border: "1px solid #bfdbfe", flexWrap: "wrap" }}>
-          <button
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "#2563eb", color: "white", borderRadius: 6, padding: "6px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer", border: "none" }}
-          >
+          <label style={{ position: "relative", display: "inline-flex", alignItems: "center", gap: 6, background: "#2563eb", color: "white", borderRadius: 6, padding: "6px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer", overflow: "hidden" }}>
             📄 PDF 파일 선택
-          </button>
+            <input
+              type="file"
+              multiple
+              onChange={handleFilesSelected}
+              style={{ position: "absolute", inset: 0, opacity: 0, cursor: "pointer", width: "100%", height: "100%", fontSize: 0 }}
+            />
+          </label>
           <span style={{ fontSize: 11, color: "#1d4ed8", flex: 1 }}>
             건강보험·고용보험·국민연금 PDF를 선택하면 종류를 지정할 수 있습니다
           </span>
@@ -759,15 +760,6 @@ export function WorkHistorySection({
 
   return (
     <>
-      {/* 파일 인풋: 항상 마운트 (드로어 조건부 렌더링 밖에 위치) */}
-      <input
-        ref={fileInputRef}
-        type="file"
-        multiple
-        style={{ display: "none" }}
-        onChange={handleFilesSelected}
-      />
-
       {/* 섹션 헤더 + 컴팩트 요약 */}
       <div style={{ fontSize: 13, fontWeight: 700, color: "#374151", padding: "14px 0 8px 0", borderBottom: "2px solid #e5e7eb", marginBottom: 12 }}>직업력</div>
 
