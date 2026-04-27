@@ -4,6 +4,21 @@ import { useEffect, useState } from "react";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
+type JichimItem = {
+  id: string;
+  label: string;
+  pages?: number;
+  updatedAt?: string;
+  available: boolean;
+};
+
+type JichimCategory = {
+  id: string;
+  label: string;
+  color: { bg: string; text: string; border: string };
+  items: JichimItem[];
+};
+
 type Article = {
   id: string;
   number: string;
@@ -378,6 +393,435 @@ function LawTab() {
             title={selectedItem.name}
             sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-top-navigation"
           />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── 공단 지침 데이터 (안 2: 질병별 / 재해 인정 / 보상·장해 / 특수형태) ─────────
+
+const JICHIM_CATEGORIES: JichimCategory[] = [
+  {
+    id: "disease",
+    label: "질병별",
+    color: { bg: "#dbeafe", text: "#1d4ed8", border: "#93c5fd" },
+    items: [
+      { id: "noise-hearing",  label: "소음성 난청 업무처리 기준",                            pages: 56,  updatedAt: "2021-12-30", available: false },
+      { id: "pneumo-work",    label: "진폐관련업무",                                         pages: 28,  available: false },
+      { id: "pneumo-12",      label: "진폐 1·2",                                            pages: 40,  available: false },
+      { id: "pneumo-bereave", label: "진폐환자 유족급여 지급 기준에 관한 지침",               pages: 2,   updatedAt: "2009-05-25", available: false },
+      { id: "pneumo-rehab",   label: "진폐 요양 중 장해 인정 관련 세부 업무처리요령",         pages: 40,  updatedAt: "2021-05",    available: false },
+      { id: "copd",           label: "만성폐쇄성폐질환 업무처리 지침",                        pages: 17,  updatedAt: "2014-03-31", available: false },
+      { id: "cerebro",        label: "뇌혈관·심장질병 업무상 질병 조사 및 판정 지침",         pages: 77,  updatedAt: "2021-01-13", available: false },
+      { id: "msk-principle",  label: "6대 근골격계 상병 업무관련성 추정의 원칙 적용기준",     pages: 11,  available: false },
+      { id: "msk-judge",      label: "근골격계질병 업무상 질병 조사 및 판정 지침",            pages: 102, updatedAt: "2021-01-13", available: false },
+      { id: "occ-cancer",     label: "직업성 암 재해조사 및 판단 요령",                       pages: 116, updatedAt: "2018-11-01", available: false },
+      { id: "occ-cancer-fix", label: "직업성 암 처리 절차 개선",                             pages: 2,   available: false },
+    ],
+  },
+  {
+    id: "recognition",
+    label: "재해 인정",
+    color: { bg: "#dcfce7", text: "#15803d", border: "#86efac" },
+    items: [
+      { id: "commute",     label: "출퇴근 재해 업무처리지침",                              pages: 25, updatedAt: "2017-12-28", available: false },
+      { id: "remote-work", label: "재택근무 중 업무상 재해 인정기준",                      pages: 7,  available: false },
+      { id: "break-time",  label: "휴게시간 사고에 대한 처리요령",                         pages: 7,  available: false },
+      { id: "overseas",    label: "해외파견 산재보험 적용여부 판단기준",                    pages: 3,  available: false },
+      { id: "add-injury",  label: "추가상병 및 재요양 업무처리 기준",                       pages: 8,  updatedAt: "2018-05-17", available: false },
+      { id: "treatment-decision", label: "요양결정시 적용업무 관련 판단에 관한 처리지침",  pages: 7,  updatedAt: "2007-11-21", available: false },
+      { id: "crps",        label: "복합부위통증증후군 업무처리 지침",                       pages: 14, updatedAt: "2014-08-28", available: false },
+    ],
+  },
+  {
+    id: "compensation",
+    label: "보상·장해",
+    color: { bg: "#fff7ed", text: "#c2410c", border: "#fdba74" },
+    items: [
+      { id: "disability-guide",  label: "장해등급 판정기준 해설",                              pages: 267, updatedAt: "2010-03",    available: false },
+      { id: "disability-adjust", label: "장해등급 조정에 관한 시행지침",                        pages: 9,   updatedAt: "2018-12-27", available: false },
+      { id: "nursing-care",      label: "간병료 지급기준 업무처리 지침",                        pages: 24,  updatedAt: "2017-08-22", available: false },
+      { id: "avg-wage",          label: "직업병에 걸린 사람에 대한 평균임금 산정 지침",         pages: 9,   updatedAt: "2021-06-01", available: false },
+    ],
+  },
+  {
+    id: "special-worker",
+    label: "특수형태근로자",
+    color: { bg: "#f3e8ff", text: "#7e22ce", border: "#d8b4fe" },
+    items: [
+      { id: "special-worker-qa",      label: "특수형태근로종사자 산재보험 적용 관련 Q&A",   pages: 11, available: false },
+      { id: "driver-employee",        label: "지입차주 근로자성 판단기준",                  pages: 1,  available: false },
+      { id: "driver-insurance",       label: "지입차주 산재보험 적용여부 판단기준",          pages: 1,  available: false },
+    ],
+  },
+];
+
+// ─── JichimTab ────────────────────────────────────────────────────────────────
+
+function JichimTab() {
+  const [selectedItem, setSelectedItem] = useState<JichimItem | null>(null);
+  const [selectedCatId, setSelectedCatId] = useState<string | null>(null);
+  const [expandedCats, setExpandedCats] = useState<Set<string>>(new Set(["disease"]));
+  const [search, setSearch] = useState("");
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+
+  const toggleCat = (catId: string) => {
+    setExpandedCats((prev) => {
+      const next = new Set(prev);
+      next.has(catId) ? next.delete(catId) : next.add(catId);
+      return next;
+    });
+  };
+
+  const searchResults =
+    search.trim().length >= 1
+      ? JICHIM_CATEGORIES.flatMap((cat) =>
+          cat.items
+            .filter((item) => item.label.includes(search.trim()))
+            .map((item) => ({ ...item, catLabel: cat.label, catColor: cat.color }))
+        )
+      : [];
+
+  const selectedCat = selectedCatId
+    ? JICHIM_CATEGORIES.find((c) => c.id === selectedCatId) ?? null
+    : null;
+
+  const handleSelectItem = (item: JichimItem, catId: string) => {
+    setSelectedItem(item);
+    setSelectedCatId(catId);
+    setSearch("");
+  };
+
+  return (
+    <div style={{ display: "flex", height: "calc(100vh - 160px)", gap: 0 }}>
+      {/* Left sidebar */}
+      {sidebarOpen && (
+        <div
+          style={{
+            width: 270,
+            flexShrink: 0,
+            borderRight: "1px solid #e5e7eb",
+            overflowY: "auto",
+            background: "#f9fafb",
+            display: "flex",
+            flexDirection: "column",
+          }}
+        >
+          {/* Search */}
+          <div style={{ padding: "10px 12px", borderBottom: "1px solid #e5e7eb", flexShrink: 0 }}>
+            <input
+              type="text"
+              placeholder="지침 검색..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              style={{
+                width: "100%",
+                padding: "6px 10px",
+                fontSize: 12,
+                border: "1px solid #d1d5db",
+                borderRadius: 6,
+                outline: "none",
+                boxSizing: "border-box",
+              }}
+            />
+          </div>
+
+          {/* Search results OR category tree */}
+          {search.trim().length >= 1 ? (
+            <div style={{ flex: 1, overflowY: "auto" }}>
+              {searchResults.length === 0 ? (
+                <div style={{ padding: 14, fontSize: 12, color: "#9ca3af" }}>검색 결과 없음</div>
+              ) : (
+                searchResults.map((item) => (
+                  <button
+                    key={item.id}
+                    onClick={() => handleSelectItem(item, JICHIM_CATEGORIES.find(c => c.items.some(i => i.id === item.id))!.id)}
+                    style={{
+                      display: "block",
+                      width: "100%",
+                      textAlign: "left",
+                      padding: "8px 14px",
+                      fontSize: 12,
+                      border: "none",
+                      cursor: "pointer",
+                      background: "transparent",
+                      borderBottom: "1px solid #f3f4f6",
+                    }}
+                  >
+                    <div style={{ fontSize: 10, color: item.catColor.text, marginBottom: 2 }}>
+                      {item.catLabel}
+                    </div>
+                    <div style={{ color: "#111827", lineHeight: 1.4 }}>{item.label}</div>
+                  </button>
+                ))
+              )}
+            </div>
+          ) : (
+            <div style={{ flex: 1, overflowY: "auto" }}>
+              {JICHIM_CATEGORIES.map((cat) => {
+                const isExpanded = expandedCats.has(cat.id);
+                const isCatActive = cat.items.some((i) => i.id === selectedItem?.id);
+                return (
+                  <div key={cat.id}>
+                    <button
+                      onClick={() => toggleCat(cat.id)}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        width: "100%",
+                        textAlign: "left",
+                        padding: "9px 14px",
+                        fontSize: 12,
+                        fontWeight: 700,
+                        border: "none",
+                        cursor: "pointer",
+                        background: isCatActive ? "#eff6ff" : "transparent",
+                        color: isCatActive ? "#1d4ed8" : "#111827",
+                        gap: 8,
+                        borderBottom: "1px solid #e5e7eb",
+                      }}
+                    >
+                      <span
+                        style={{
+                          fontSize: 11,
+                          padding: "1px 8px",
+                          borderRadius: 10,
+                          background: cat.color.bg,
+                          color: cat.color.text,
+                          border: `1px solid ${cat.color.border}`,
+                          fontWeight: 700,
+                          flexShrink: 0,
+                        }}
+                      >
+                        {cat.label}
+                      </span>
+                      <span style={{ fontSize: 11, color: "#9ca3af" }}>
+                        {cat.items.length}건
+                      </span>
+                      <span
+                        style={{
+                          fontSize: 9,
+                          marginLeft: "auto",
+                          color: "#9ca3af",
+                          transform: isExpanded ? "rotate(90deg)" : "none",
+                          display: "inline-block",
+                          transition: "transform 0.15s",
+                        }}
+                      >
+                        ▶
+                      </span>
+                    </button>
+
+                    {isExpanded && (
+                      <div style={{ background: "#fff" }}>
+                        {cat.items.map((item) => {
+                          const isActive = selectedItem?.id === item.id;
+                          return (
+                            <button
+                              key={item.id}
+                              onClick={() => handleSelectItem(item, cat.id)}
+                              style={{
+                                display: "flex",
+                                alignItems: "flex-start",
+                                width: "100%",
+                                textAlign: "left",
+                                padding: "7px 14px 7px 20px",
+                                fontSize: 12,
+                                border: "none",
+                                cursor: "pointer",
+                                background: isActive ? "#eff6ff" : "transparent",
+                                color: isActive ? "#1d4ed8" : "#374151",
+                                fontWeight: isActive ? 600 : 400,
+                                borderLeft: isActive ? `3px solid ${cat.color.text}` : "3px solid transparent",
+                                borderBottom: "1px solid #f9fafb",
+                                gap: 6,
+                                lineHeight: 1.45,
+                              }}
+                            >
+                              <span style={{ flex: 1, lineHeight: 1.45 }}>{item.label}</span>
+                              {!item.available && (
+                                <span
+                                  style={{
+                                    fontSize: 9,
+                                    padding: "1px 5px",
+                                    borderRadius: 3,
+                                    background: "#f3f4f6",
+                                    color: "#9ca3af",
+                                    flexShrink: 0,
+                                    marginTop: 2,
+                                  }}
+                                >
+                                  준비중
+                                </span>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Right content */}
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
+        {/* Toolbar */}
+        <div
+          style={{
+            padding: "8px 12px",
+            borderBottom: "1px solid #e5e7eb",
+            background: "#fff",
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+            flexShrink: 0,
+          }}
+        >
+          <button
+            onClick={() => setSidebarOpen((v) => !v)}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 4,
+              padding: "4px 8px",
+              fontSize: 12,
+              border: "1px solid #e5e7eb",
+              borderRadius: 5,
+              background: "#f9fafb",
+              color: "#4b5563",
+              cursor: "pointer",
+              flexShrink: 0,
+            }}
+          >
+            <span style={{ fontSize: 11 }}>{sidebarOpen ? "◀" : "▶"}</span>
+            <span>{sidebarOpen ? "목록 접기" : "목록 펼치기"}</span>
+          </button>
+
+          {selectedItem && selectedCat && (
+            <>
+              <span
+                style={{
+                  fontSize: 11,
+                  padding: "1px 7px",
+                  borderRadius: 10,
+                  background: selectedCat.color.bg,
+                  color: selectedCat.color.text,
+                  border: `1px solid ${selectedCat.color.border}`,
+                  fontWeight: 700,
+                  flexShrink: 0,
+                }}
+              >
+                {selectedCat.label}
+              </span>
+              <span
+                style={{
+                  fontSize: 13,
+                  fontWeight: 600,
+                  color: "#111827",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {selectedItem.label}
+              </span>
+              {selectedItem.pages && (
+                <span style={{ fontSize: 11, color: "#9ca3af", flexShrink: 0 }}>
+                  {selectedItem.pages}p
+                </span>
+              )}
+              {selectedItem.updatedAt && (
+                <span style={{ fontSize: 11, color: "#9ca3af", flexShrink: 0 }}>
+                  ({selectedItem.updatedAt})
+                </span>
+              )}
+            </>
+          )}
+        </div>
+
+        {/* PDF viewer or placeholder */}
+        <div
+          style={{
+            flex: 1,
+            overflow: "hidden",
+            position: "relative",
+            background: "#f9fafb",
+          }}
+        >
+          {!selectedItem ? (
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                height: "100%",
+                color: "#9ca3af",
+                fontSize: 14,
+                flexDirection: "column",
+                gap: 8,
+              }}
+            >
+              <span style={{ fontSize: 40, lineHeight: 1 }}>□</span>
+              <span>좌측 목록에서 지침을 선택하세요</span>
+            </div>
+          ) : !selectedItem.available ? (
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                height: "100%",
+                flexDirection: "column",
+                gap: 12,
+              }}
+            >
+              <div
+                style={{
+                  padding: "24px 32px",
+                  background: "#fff",
+                  border: "1px solid #e5e7eb",
+                  borderRadius: 10,
+                  textAlign: "center",
+                  maxWidth: 400,
+                }}
+              >
+                <div style={{ fontSize: 13, fontWeight: 700, color: "#374151", marginBottom: 8 }}>
+                  {selectedItem.label}
+                </div>
+                <div style={{ fontSize: 12, color: "#9ca3af", marginBottom: 16 }}>
+                  PDF 파일이 아직 등록되지 않았습니다.
+                </div>
+                <div
+                  style={{
+                    fontSize: 11,
+                    color: "#6b7280",
+                    background: "#f3f4f6",
+                    padding: "8px 12px",
+                    borderRadius: 6,
+                    fontFamily: "monospace",
+                    wordBreak: "break-all",
+                  }}
+                >
+                  /public/data/jichim/{selectedItem.id}.pdf
+                </div>
+                <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 8 }}>
+                  위 경로에 파일을 추가하면 자동으로 표시됩니다.
+                </div>
+              </div>
+            </div>
+          ) : (
+            <iframe
+              key={selectedItem.id}
+              src={`/data/jichim/${selectedItem.id}.pdf`}
+              style={{ width: "100%", height: "100%", border: "none", display: "block" }}
+              title={selectedItem.label}
+            />
+          )}
         </div>
       </div>
     </div>
@@ -780,6 +1224,7 @@ function ChapterView({
 const TABS = [
   { id: "law",      label: "관련 법령" },
   { id: "internal", label: "근로복지공단 내부규정" },
+  { id: "jichim",   label: "근로복지공단 지침" },
 ] as const;
 
 type TabId = (typeof TABS)[number]["id"];
@@ -828,6 +1273,7 @@ export default function LawPage() {
       <div style={{ flex: 1, overflow: "hidden" }}>
         {activeTab === "law"      && <LawTab />}
         {activeTab === "internal" && <InternalRegulationTab />}
+        {activeTab === "jichim"   && <JichimTab />}
       </div>
     </div>
   );
