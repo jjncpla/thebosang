@@ -1087,20 +1087,25 @@ function SpecialClinicCalendar() {
 
               return (
                 <div key={di}
-                  className={`border-r last:border-r-0 p-1.5 flex flex-col ${isCurrentMonth ? 'bg-white' : 'bg-gray-50/50'}`}
+                  className={`group border-r last:border-r-0 p-1.5 flex flex-col ${isCurrentMonth ? 'bg-white' : 'bg-gray-50/50'}`}
                   style={{ minHeight: 120 }}
                   onDragOver={e => { e.preventDefault(); e.currentTarget.style.backgroundColor = '#eff6ff' }}
                   onDragLeave={e => { e.currentTarget.style.backgroundColor = '' }}
                   onDrop={e => { e.preventDefault(); e.currentTarget.style.backgroundColor = ''; handleDrop(wd) }}
                 >
-                  <div className="mb-1">
+                  <div className="flex items-center gap-1 mb-1">
                     <div
                       onClick={() => goToDay(wd)}
                       className={`text-xs cursor-pointer hover:underline ${isToday ? 'bg-[#29ABE2] text-white w-5 h-5 rounded-full flex items-center justify-center font-bold' : (di === 0 || isHoliday) ? 'text-red-400' : di === 6 ? 'text-blue-400' : isCurrentMonth ? 'text-gray-600' : 'text-gray-300'}`}
                     >
                       {wd.getDate()}
                     </div>
-                    {holidayName && <div className="text-[9px] text-red-400">{holidayName}</div>}
+                    {holidayName && <div className="text-[9px] text-red-400 truncate">{holidayName}</div>}
+                    <button
+                      onClick={(e) => { e.stopPropagation(); openManualModal(dk) }}
+                      className="ml-auto w-4 h-4 text-[10px] text-gray-400 hover:text-[#29ABE2] opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
+                      title="이 날 일정 추가"
+                    >+</button>
                   </div>
                   <div className="flex-1 space-y-0.5 overflow-y-auto">
                     {wdSchedules.map(s => {
