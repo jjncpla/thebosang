@@ -1,0 +1,83 @@
+{
+  "runs": 5,
+  "chunkPages": 5,
+  "concurrency": 4,
+  "summary": [
+    {
+      "label": "김옥자 자격득실",
+      "runs": 5,
+      "avg": 11.529,
+      "min": 10.827,
+      "max": 12.732,
+      "consistent": true,
+      "sampleCounts": {
+        "고용산재": 0,
+        "건보": 6,
+        "연금": 0,
+        "일용직": 0
+      }
+    },
+    {
+      "label": "김옥자 국민연금",
+      "runs": 5,
+      "avg": 6.6896,
+      "min": 5.851,
+      "max": 7.723,
+      "consistent": false,
+      "sampleCounts": {
+        "고용산재": 0,
+        "건보": 0,
+        "연금": 2,
+        "일용직": 0
+      }
+    },
+    {
+      "label": "김옥자 고용보험",
+      "runs": 5,
+      "avg": 26.6616,
+      "min": 26.382,
+      "max": 27.03,
+      "consistent": false,
+      "sampleCounts": {
+        "고용산재": 3,
+        "건보": 0,
+        "연금": 0,
+        "일용직": 48
+      }
+    },
+    {
+      "label": "안세윤 자격득실",
+      "runs": 5,
+      "avg": 6.0078000000000005,
+      "min": 5.79,
+      "max": 6.239,
+      "consistent": true,
+      "sampleCounts": {
+        "고용산재": 0,
+        "건보": 2,
+        "연금": 0,
+        "일용직": 0
+      }
+    },
+    {
+      "label": "안세윤 국민연금",
+      "runs": 5,
+      "avg": 5.5652,
+      "min": 5.342,
+      "max": 5.808,
+      "consistent": true,
+      "sampleCounts": {
+        "고용산재": 0,
+        "건보": 0,
+        "연금": 0,
+        "일용직": 0
+      }
+    },
+    {
+      "label": "안세윤 고용보험 (헤비)",
+      "runs": 0,
+      "error": "all failed"
+    }
+  ],
+  "ts": "2026-04-27T22:41:02.369Z"
+}
