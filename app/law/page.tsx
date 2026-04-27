@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -459,12 +459,213 @@ const JICHIM_CATEGORIES: JichimCategory[] = [
 
 // ─── JichimTab ────────────────────────────────────────────────────────────────
 
+// ─── JichimUploadPanel ────────────────────────────────────────────────────────
+
+function JichimUploadPanel({
+  item,
+  onUploaded,
+}: {
+  item: JichimItem;
+  onUploaded: () => void;
+}) {
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleUpload = async () => {
+    const file = fileRef.current?.files?.[0];
+    if (!file) { setError("PDF 파일을 선택하세요"); return; }
+    if (!file.name.endsWith(".pdf")) { setError("PDF 파일만 업로드 가능합니다"); return; }
+
+    setUploading(true);
+    setError(null);
+    const fd = new FormData();
+    fd.append("itemId", item.id);
+    fd.append("title", item.label);
+    fd.append("file", file);
+
+    const res = await fetch("/api/jichim/upload", { method: "POST", body: fd });
+    setUploading(false);
+    if (!res.ok) {
+      const j = await res.json().catch(() => ({}));
+      setError(j.error ?? "업로드 실패");
+    } else {
+      onUploaded();
+    }
+  };
+
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        height: "100%",
+        background: "#f9fafb",
+      }}
+    >
+      <div
+        style={{
+          padding: "32px 40px",
+          background: "#fff",
+          border: "1px solid #e5e7eb",
+          borderRadius: 12,
+          textAlign: "center",
+          maxWidth: 440,
+          width: "100%",
+        }}
+      >
+        <div style={{ fontSize: 14, fontWeight: 700, color: "#111827", marginBottom: 6 }}>
+          {item.label}
+        </div>
+        <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 24 }}>
+          PDF 파일을 업로드하면 챕터별로 자동 정리됩니다.
+        </div>
+
+        <input
+          ref={fileRef}
+          type="file"
+          accept=".pdf"
+          style={{ display: "none" }}
+          onChange={() => setError(null)}
+        />
+        <button
+          onClick={() => fileRef.current?.click()}
+          style={{
+            display: "block",
+            width: "100%",
+            padding: "10px 0",
+            fontSize: 13,
+            border: "2px dashed #d1d5db",
+            borderRadius: 8,
+            background: "#f9fafb",
+            color: "#6b7280",
+            cursor: "pointer",
+            marginBottom: 16,
+          }}
+        >
+          {fileRef.current?.files?.[0]?.name ?? "PDF 파일 선택..."}
+        </button>
+
+        {error && (
+          <div style={{ fontSize: 12, color: "#ef4444", marginBottom: 12 }}>{error}</div>
+        )}
+
+        <button
+          onClick={handleUpload}
+          disabled={uploading}
+          style={{
+            display: "block",
+            width: "100%",
+            padding: "10px 0",
+            fontSize: 13,
+            fontWeight: 700,
+            border: "none",
+            borderRadius: 8,
+            background: uploading ? "#9ca3af" : "#1d4ed8",
+            color: "#fff",
+            cursor: uploading ? "not-allowed" : "pointer",
+          }}
+        >
+          {uploading ? "파싱 중..." : "업로드 및 저장"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── JichimContentPanel ───────────────────────────────────────────────────────
+
+function JichimContentPanel({
+  item,
+  onDelete,
+}: {
+  item: JichimItem;
+  onDelete: () => void;
+}) {
+  const [regulation, setRegulation] = useState<Regulation | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [deleting, setDeleting] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    const res = await fetch(`/api/jichim/${item.id}`);
+    if (res.ok) setRegulation(await res.json());
+    setLoading(false);
+  }, [item.id]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const handleDelete = async () => {
+    if (!confirm("이 지침을 삭제하시겠습니까? 다시 업로드할 수 있습니다.")) return;
+    setDeleting(true);
+    await fetch(`/api/jichim/${item.id}`, { method: "DELETE" });
+    onDelete();
+  };
+
+  if (loading) return (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "#9ca3af", fontSize: 14 }}>
+      불러오는 중...
+    </div>
+  );
+
+  if (!regulation) return (
+    <div style={{ padding: 32, color: "#ef4444", fontSize: 14 }}>데이터를 불러오지 못했습니다.</div>
+  );
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
+      {/* 삭제 버튼 영역 */}
+      <div style={{ padding: "6px 16px", borderBottom: "1px solid #f3f4f6", background: "#fafafa", display: "flex", justifyContent: "flex-end" }}>
+        <button
+          onClick={handleDelete}
+          disabled={deleting}
+          style={{ fontSize: 11, color: "#9ca3af", background: "none", border: "none", cursor: "pointer", padding: "2px 6px" }}
+        >
+          {deleting ? "삭제 중..." : "지침 삭제 (재업로드 가능)"}
+        </button>
+      </div>
+      <RegulationPanel dataUrl={`/api/jichim/${item.id}`} />
+    </div>
+  );
+}
+
+// ─── JichimTab ────────────────────────────────────────────────────────────────
+
 function JichimTab() {
   const [selectedItem, setSelectedItem] = useState<JichimItem | null>(null);
   const [selectedCatId, setSelectedCatId] = useState<string | null>(null);
   const [expandedCats, setExpandedCats] = useState<Set<string>>(new Set(["disease"]));
   const [search, setSearch] = useState("");
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [uploadedIds, setUploadedIds] = useState<Set<string>>(new Set());
+  const [loadingList, setLoadingList] = useState(true);
+  const [contentKey, setContentKey] = useState(0);
+
+  // 등록된 지침 목록 로드
+  useEffect(() => {
+    fetch("/api/jichim/list")
+      .then((r) => r.json())
+      .then((ids: string[]) => setUploadedIds(new Set(ids)))
+      .catch(() => {})
+      .finally(() => setLoadingList(false));
+  }, []);
+
+  const isAvailable = (itemId: string) => uploadedIds.has(itemId);
+
+  const handleUploaded = () => {
+    setUploadedIds((prev) => new Set([...prev, selectedItem!.id]));
+    setContentKey((k) => k + 1);
+  };
+
+  const handleDeleted = () => {
+    setUploadedIds((prev) => {
+      const next = new Set(prev);
+      next.delete(selectedItem!.id);
+      return next;
+    });
+    setContentKey((k) => k + 1);
+  };
 
   const toggleCat = (catId: string) => {
     setExpandedCats((prev) => {
@@ -491,6 +692,7 @@ function JichimTab() {
     setSelectedItem(item);
     setSelectedCatId(catId);
     setSearch("");
+    setContentKey((k) => k + 1);
   };
 
   return (
@@ -640,7 +842,7 @@ function JichimTab() {
                               }}
                             >
                               <span style={{ flex: 1, lineHeight: 1.45 }}>{item.label}</span>
-                              {!item.available && (
+                              {!loadingList && !isAvailable(item.id) && (
                                 <span
                                   style={{
                                     fontSize: 9,
@@ -652,7 +854,7 @@ function JichimTab() {
                                     marginTop: 2,
                                   }}
                                 >
-                                  준비중
+                                  미등록
                                 </span>
                               )}
                             </button>
@@ -744,15 +946,8 @@ function JichimTab() {
           )}
         </div>
 
-        {/* PDF viewer or placeholder */}
-        <div
-          style={{
-            flex: 1,
-            overflow: "hidden",
-            position: "relative",
-            background: "#f9fafb",
-          }}
-        >
+        {/* 콘텐츠 영역 */}
+        <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>
           {!selectedItem ? (
             <div
               style={{
@@ -766,60 +961,20 @@ function JichimTab() {
                 gap: 8,
               }}
             >
-              <span style={{ fontSize: 40, lineHeight: 1 }}>□</span>
+              <span style={{ fontSize: 14, color: "#d1d5db" }}>▣</span>
               <span>좌측 목록에서 지침을 선택하세요</span>
             </div>
-          ) : !selectedItem.available ? (
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                height: "100%",
-                flexDirection: "column",
-                gap: 12,
-              }}
-            >
-              <div
-                style={{
-                  padding: "24px 32px",
-                  background: "#fff",
-                  border: "1px solid #e5e7eb",
-                  borderRadius: 10,
-                  textAlign: "center",
-                  maxWidth: 400,
-                }}
-              >
-                <div style={{ fontSize: 13, fontWeight: 700, color: "#374151", marginBottom: 8 }}>
-                  {selectedItem.label}
-                </div>
-                <div style={{ fontSize: 12, color: "#9ca3af", marginBottom: 16 }}>
-                  PDF 파일이 아직 등록되지 않았습니다.
-                </div>
-                <div
-                  style={{
-                    fontSize: 11,
-                    color: "#6b7280",
-                    background: "#f3f4f6",
-                    padding: "8px 12px",
-                    borderRadius: 6,
-                    fontFamily: "monospace",
-                    wordBreak: "break-all",
-                  }}
-                >
-                  /public/data/jichim/{selectedItem.id}.pdf
-                </div>
-                <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 8 }}>
-                  위 경로에 파일을 추가하면 자동으로 표시됩니다.
-                </div>
-              </div>
-            </div>
+          ) : isAvailable(selectedItem.id) ? (
+            <JichimContentPanel
+              key={`content-${selectedItem.id}-${contentKey}`}
+              item={selectedItem}
+              onDelete={handleDeleted}
+            />
           ) : (
-            <iframe
-              key={selectedItem.id}
-              src={`/data/jichim/${selectedItem.id}.pdf`}
-              style={{ width: "100%", height: "100%", border: "none", display: "block" }}
-              title={selectedItem.label}
+            <JichimUploadPanel
+              key={`upload-${selectedItem.id}-${contentKey}`}
+              item={selectedItem}
+              onUploaded={handleUploaded}
             />
           )}
         </div>
