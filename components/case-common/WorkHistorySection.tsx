@@ -83,6 +83,7 @@ function WorkHistoryDrawerContent({
   const [pendingFiles, setPendingFiles] = useState<{ file: File; docType: string }[]>([]);
   const [showFileSelector, setShowFileSelector] = useState(false);
   const [showMemoModal, setShowMemoModal] = useState(false);
+  const [confirmClear, setConfirmClear] = useState(false);
   const [mergeResult, setMergeResult] = useState<{
     regularMonths: number; noiseMonths: number; dailyMonths: number; totalMonths: number;
   } | null>(null);
@@ -185,10 +186,11 @@ function WorkHistoryDrawerContent({
   };
 
   const handleClearAll = () => {
-    if (!window.confirm("직업력 데이터를 전체 초기화합니다. 계속하시겠습니까?")) return;
+    if (!confirmClear) { setConfirmClear(true); return; }
     onChange({ workHistory: [], workHistoryRaw: { 고용산재: [], 건보: [], 소득금액: [], 연금: [], 건근공: [], 일용직: [] }, workHistoryMemo: null, lastNoiseWorkEndDate: null });
     onChangeDaily([]);
     setMergeResult(null);
+    setConfirmClear(false);
   };
 
   const mergeWorkHistory = async () => {
@@ -303,7 +305,15 @@ function WorkHistoryDrawerContent({
                 style={{ position: "absolute", inset: 0, opacity: 0, cursor: "pointer", width: "100%", height: "100%", fontSize: 0 }} />
             </label>
             <span style={{ fontSize: 11, color: "#1d4ed8", flex: 1 }}>건강보험·고용보험·국민연금 PDF를 선택하면 종류를 지정할 수 있습니다</span>
-            <button onClick={handleClearAll} style={{ background: "white", color: "#dc2626", border: "1px solid #fca5a5", borderRadius: 6, padding: "6px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>🗑 전체 초기화</button>
+            {confirmClear ? (
+              <span style={{ display: "inline-flex", gap: 4, alignItems: "center" }}>
+                <span style={{ fontSize: 11, color: "#dc2626", fontWeight: 600 }}>정말 초기화?</span>
+                <button onClick={handleClearAll} style={{ background: "#dc2626", color: "white", border: "none", borderRadius: 6, padding: "4px 10px", fontSize: 11, fontWeight: 700, cursor: "pointer" }}>확인</button>
+                <button onClick={() => setConfirmClear(false)} style={{ background: "white", color: "#6b7280", border: "1px solid #d1d5db", borderRadius: 6, padding: "4px 8px", fontSize: 11, cursor: "pointer" }}>취소</button>
+              </span>
+            ) : (
+              <button onClick={handleClearAll} style={{ background: "white", color: "#dc2626", border: "1px solid #fca5a5", borderRadius: 6, padding: "6px 12px", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>🗑 전체 초기화</button>
+            )}
             {analyzeError && <span style={{ fontSize: 11, color: "#dc2626", width: "100%" }}>⚠ {analyzeError}</span>}
           </div>
 
