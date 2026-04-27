@@ -375,7 +375,7 @@ export function WorkHistorySection({
         <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", background: "#eff6ff", borderRadius: 8, border: "1px solid #bfdbfe", flexWrap: "wrap" }}>
           <label style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "#2563eb", color: "white", borderRadius: 6, padding: "6px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
             📄 PDF 파일 선택
-            <input type="file" accept="application/pdf" multiple style={{ display: "none" }} onChange={handleFilesSelected} />
+            <input type="file" accept=".pdf,.PDF" multiple style={{ display: "none" }} onChange={handleFilesSelected} />
           </label>
           <span style={{ fontSize: 11, color: "#1d4ed8", flex: 1 }}>
             건강보험·고용보험·국민연금 PDF를 선택하면 종류를 지정할 수 있습니다
