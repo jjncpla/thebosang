@@ -109,6 +109,10 @@ function SpecialClinicCalendar() {
   const [statusFilters, setStatusFilters] = useState<string[]>([])
   const [statusPanelOpen, setStatusPanelOpen] = useState(false)
   const statusPanelRef = useRef<HTMLDivElement>(null)
+  const [staffFilters, setStaffFilters] = useState<string[]>([])
+  const [staffPanelOpen, setStaffPanelOpen] = useState(false)
+  const staffPanelRef = useRef<HTMLDivElement>(null)
+  const [staffSearch, setStaffSearch] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
   const [debouncedQuery, setDebouncedQuery] = useState('')
 
@@ -216,6 +220,15 @@ function SpecialClinicCalendar() {
     return () => document.removeEventListener('mousedown', handleClick)
   }, [statusPanelOpen])
 
+  // 담당자 패널 외부 클릭 닫기
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (staffPanelRef.current && !staffPanelRef.current.contains(e.target as Node)) setStaffPanelOpen(false)
+    }
+    if (staffPanelOpen) document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [staffPanelOpen])
+
   // 데이터 로드 (전체 — 프론트에서 필터링)
   const load = useCallback(async () => {
     setLoading(true)
@@ -281,15 +294,29 @@ function SpecialClinicCalendar() {
     schedules.filter(s => s.hospitalName && !isFreeform(s.category)).map(s => s.hospitalName!)
   )].sort((a, b) => a.localeCompare(b, 'ko'))
 
-  // 프론트 필터링 (TF 복수선택 + 카테고리 + 병원 + 상태 + 검색)
+  // 이달 담당자 목록 (특진/재특진 assignedStaff, 가나다 정렬)
+  const staffList = [...new Set(
+    schedules
+      .filter(s => !isFreeform(s.category) && s.assignedStaff && s.assignedStaff.trim())
+      .map(s => s.assignedStaff!.trim())
+  )].sort((a, b) => a.localeCompare(b, 'ko'))
+
+  // 프론트 필터링 (TF 복수선택 + 카테고리 + 병원 + 상태 + 담당자 + 검색)
   const filteredSchedules = schedules.filter(s => {
     if (selectedTFs.length > 0 && !selectedTFs.includes(s.tfName)) return false
     if (categoryFilters.length > 0 && !categoryFilters.includes(s.category) && !categoryFilters.includes(s.clinicType ?? '')) return false
     if (hospitalFilters.length > 0 && (!s.hospitalName || !hospitalFilters.includes(s.hospitalName))) return false
     if (statusFilters.length > 0 && !statusFilters.includes(s.status)) return false
+    if (staffFilters.length > 0) {
+      // '미배정' 가상 항목 지원 — assignedStaff가 비어있으면 매칭
+      const staff = s.assignedStaff?.trim() || ''
+      const matchUnassigned = staffFilters.includes('__UNASSIGNED__') && !staff
+      const matchNamed = staff && staffFilters.includes(staff)
+      if (!matchUnassigned && !matchNamed) return false
+    }
     if (debouncedQuery) {
       const q = debouncedQuery.toLowerCase()
-      const haystack = [s.patientName, s.hospitalName, s.tfName, s.memo, s.title, s.content].filter(Boolean) as string[]
+      const haystack = [s.patientName, s.hospitalName, s.tfName, s.memo, s.title, s.content, s.assignedStaff].filter(Boolean) as string[]
       if (!haystack.some(f => f.toLowerCase().includes(q))) return false
     }
     return true
@@ -669,6 +696,71 @@ function SpecialClinicCalendar() {
           )}
         </div>
 
+        {/* 담당자 복수선택 드롭다운 */}
+        <div className="relative" ref={staffPanelRef}>
+          <button
+            onClick={() => setStaffPanelOpen(p => !p)}
+            className={`border rounded px-2 py-1 text-xs flex items-center gap-1 hover:bg-gray-50 ${staffFilters.length > 0 ? 'bg-amber-50 border-amber-300 text-amber-700' : ''}`}
+          >
+            {staffFilters.length === 0
+              ? '전체 담당자'
+              : staffFilters.length === 1
+                ? (staffFilters[0] === '__UNASSIGNED__' ? '미배정' : staffFilters[0])
+                : `${staffFilters[0] === '__UNASSIGNED__' ? '미배정' : staffFilters[0]} 외 ${staffFilters.length - 1}명`}
+            {' '}<span className="text-gray-400">▼</span>
+          </button>
+          {staffPanelOpen && (
+            <div className="absolute top-full mt-1 left-0 bg-white border rounded-lg shadow-lg z-40 w-56 py-1">
+              <div className="flex gap-1 px-2 py-1 border-b">
+                <button onClick={() => setStaffFilters([])} className="text-[10px] text-sky-500 hover:underline">전체 초기화</button>
+                <button onClick={() => setStaffFilters([...staffList])} className="text-[10px] text-sky-500 hover:underline ml-auto">모두 선택</button>
+              </div>
+              <div className="px-2 py-1 border-b">
+                <input
+                  type="text"
+                  value={staffSearch}
+                  onChange={e => setStaffSearch(e.target.value)}
+                  placeholder="담당자 검색..."
+                  className="w-full border rounded px-1.5 py-0.5 text-xs focus:outline-none focus:border-amber-400"
+                />
+              </div>
+              <div className="max-h-64 overflow-y-auto">
+                {/* 미배정 */}
+                {(!staffSearch || '미배정'.includes(staffSearch)) && (
+                  <label className="flex items-center gap-2 px-2 py-1 hover:bg-gray-50 cursor-pointer text-xs">
+                    <input
+                      type="checkbox"
+                      checked={staffFilters.includes('__UNASSIGNED__')}
+                      onChange={() => setStaffFilters(prev => prev.includes('__UNASSIGNED__')
+                        ? prev.filter(x => x !== '__UNASSIGNED__')
+                        : [...prev, '__UNASSIGNED__']
+                      )}
+                      className="rounded"
+                    />
+                    <span className="italic text-gray-400">미배정</span>
+                  </label>
+                )}
+                {staffList.length === 0 && (
+                  <div className="px-2 py-2 text-[11px] text-gray-400 text-center">이달 등록된 담당자 없음</div>
+                )}
+                {staffList
+                  .filter(name => !staffSearch || name.toLowerCase().includes(staffSearch.toLowerCase()))
+                  .map(name => (
+                    <label key={name} className="flex items-center gap-2 px-2 py-1 hover:bg-gray-50 cursor-pointer text-xs">
+                      <input
+                        type="checkbox"
+                        checked={staffFilters.includes(name)}
+                        onChange={() => setStaffFilters(prev => prev.includes(name) ? prev.filter(x => x !== name) : [...prev, name])}
+                        className="rounded"
+                      />
+                      <span>{name}</span>
+                    </label>
+                  ))}
+              </div>
+            </div>
+          )}
+        </div>
+
         {loading && <span className="text-xs text-gray-400">로딩...</span>}
 
         <div className="ml-auto">
@@ -676,8 +768,8 @@ function SpecialClinicCalendar() {
             type="text"
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
-            placeholder="재해자명, 병원명, TF명 검색..."
-            className="border rounded px-2 py-1 text-xs w-52 focus:outline-none focus:border-sky-400"
+            placeholder="재해자명, 병원명, TF명, 담당자 검색..."
+            className="border rounded px-2 py-1 text-xs w-60 focus:outline-none focus:border-sky-400"
           />
         </div>
       </div>
