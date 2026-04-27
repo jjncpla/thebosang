@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import React, { useState } from "react";
 import { WorkHistoryItem, WorkHistoryRaw, WorkHistoryRawEntry, WorkHistoryDailyEntry } from "./WorkHistoryTypes";
@@ -36,6 +36,42 @@ function calcDuration(totalMonths: number): string {
   return y > 0 && m > 0 ? `${y}년 ${m}개월` : y > 0 ? `${y}년` : `${m}개월`;
 }
 
+// 회사명 정규화 (법인 접두/접미사 제거 후 소문자 비교용)
+function normalizeCompany(name: string): string {
+  return name
+    .trim()
+    .replace(/^(주식회사|유한회사|합자회사|합명회사)\s+/, "")
+    .replace(/\s+(주식회사|유한회사|합자회사|합명회사)$/, "")
+    .replace(/^\(주\)\s*/, "")
+    .replace(/\s*\(주\)$/, "")
+    .replace(/^\(유\)\s*/, "")
+    .replace(/\s*\(유\)$/, "")
+    .replace(/^\(합\)\s*/, "")
+    .replace(/\s*\(합\)$/, "")
+    .replace(/\s+/g, "")
+    .toLowerCase();
+}
+
+// 구간 배열의 합집합(union) 개월수 계산 — 동시 재직 중복 방지
+function calcUnionMonths(intervals: { start: number; end: number }[]): number {
+  if (!intervals.length) return 0;
+  const sorted = [...intervals].sort((a, b) => a.start - b.start);
+  let total = 0;
+  let curStart = sorted[0].start;
+  let curEnd = sorted[0].end;
+  for (const iv of sorted.slice(1)) {
+    if (iv.start <= curEnd + 1) {
+      curEnd = Math.max(curEnd, iv.end);
+    } else {
+      total += curEnd - curStart + 1;
+      curStart = iv.start;
+      curEnd = iv.end;
+    }
+  }
+  total += curEnd - curStart + 1;
+  return total;
+}
+
 export function WorkHistorySection({
   caseId,
   workHistory,
@@ -47,12 +83,18 @@ export function WorkHistorySection({
   onChangeDaily,
   onSaveLastDate,
 }: WorkHistorySectionProps) {
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analyzeError, setAnalyzeError] = useState<string | null>(null);
   const [pendingFiles, setPendingFiles] = useState<{ file: File; docType: string }[]>([]);
   const [showFileSelector, setShowFileSelector] = useState(false);
   const [showMemoModal, setShowMemoModal] = useState(false);
-  const [mergeResult, setMergeResult] = useState<{ regularMonths: number; dailyMonths: number; totalMonths: number } | null>(null);
+  const [mergeResult, setMergeResult] = useState<{
+    regularMonths: number;
+    noiseMonths: number;
+    dailyMonths: number;
+    totalMonths: number;
+  } | null>(null);
 
   const RAW_SOURCES = ["고용산재", "건보", "소득금액", "연금", "건근공", "일용직"] as const;
   type RawSource = typeof RAW_SOURCES[number];
@@ -130,7 +172,6 @@ export function WorkHistorySection({
 
   const handleAnalyze = async () => {
     const valid = pendingFiles.filter(f => f.docType !== "");
-    console.log('handleAnalyze called, valid:', valid.length, 'pending:', pendingFiles.length, pendingFiles.map(f => f.docType));
     if (valid.length === 0) { setAnalyzeError("문서 종류를 선택해주세요"); return; }
     setIsAnalyzing(true);
     setAnalyzeError(null);
@@ -140,7 +181,6 @@ export function WorkHistorySection({
       const res = await fetch(`/api/cases/${caseId}/work-history/analyze`, { method: "POST", body: formData });
       if (!res.ok) { const err = await res.json(); throw new Error(err.error ?? "분석 실패"); }
       const data = await res.json();
-      console.log('API response sources:', JSON.stringify(data.sources), 'daily:', data.dailyEntries?.length)
 
       const newRaw = { ...workHistoryRaw };
       ["고용산재", "건보", "소득금액", "연금", "건근공"].forEach((src) => {
@@ -148,13 +188,12 @@ export function WorkHistorySection({
           (newRaw as Record<string, unknown>)[src] = data.sources[src];
         }
       });
-      console.log('newRaw after update:', JSON.stringify(Object.fromEntries(Object.entries(newRaw).map(([k,v]) => [k, Array.isArray(v) ? v.length : v]))));
       onChange({ workHistoryRaw: newRaw });
 
       if (data.dailyEntries?.length > 0) {
         onChangeDaily([...workHistoryDaily, ...data.dailyEntries]);
       }
-      const firstWithData = ['고용산재','건보','연금','건근공','일용직'].find(src => (newRaw as Record<string,unknown[]>)[src]?.length > 0);
+      const firstWithData = ['고용산재', '건보', '연금', '건근공', '일용직'].find(src => (newRaw as Record<string, unknown[]>)[src]?.length > 0);
       if (firstWithData) setActiveRawSource(firstWithData as RawSource);
       setPendingFiles([]);
       setShowFileSelector(false);
@@ -174,91 +213,144 @@ export function WorkHistorySection({
   };
 
   const mergeWorkHistory = async () => {
+    const toM = (y: number, m: number) => y * 12 + m;
+
     const all: (WorkHistoryRawEntry & { source: string })[] = [];
-    // 일용직 탭 제외하고 상용직 소스만 합산
     const regularSources = ["고용산재", "건보", "소득금액", "연금", "건근공"] as const;
     regularSources.forEach((src) => {
       (workHistoryRaw[src] ?? []).forEach((entry) => all.push({ ...entry, source: src }));
     });
 
-    const toMonths = (y: number, m: number) => y * 12 + m;
+    const memoLines: string[] = [];
+    let merged: WorkHistoryItem[] = [];
 
     if (all.length > 0) {
-      all.sort((a, b) => toMonths(a.startYear, a.startMonth) - toMonths(b.startYear, b.startMonth));
+      all.sort((a, b) => toM(a.startYear, a.startMonth) - toM(b.startYear, b.startMonth));
 
-      const memoLines: string[] = [];
-      const filtered: typeof all = [];
+      // Step 1: 회사명 정규화 후 같은 회사 구간 병합
+      const byNormCompany = new Map<string, typeof all>();
+      for (const entry of all) {
+        const key = normalizeCompany(entry.company);
+        if (!byNormCompany.has(key)) byNormCompany.set(key, []);
+        byNormCompany.get(key)!.push(entry);
+      }
 
-      for (let i = 0; i < all.length; i++) {
-        const b = all[i];
-        const bStart = toMonths(b.startYear, b.startMonth);
-        const bEnd = toMonths(b.endYear, b.endMonth);
-        const isContained = all.some((a, j) => {
+      const sourcePriority = ["고용산재", "건보", "연금", "소득금액", "건근공"];
+      const companyMerged: typeof all = [];
+
+      for (const entries of byNormCompany.values()) {
+        // 신뢰도 높은 소스의 회사명 사용
+        const bestEntry = entries.reduce((best, e) =>
+          sourcePriority.indexOf(e.source) < sourcePriority.indexOf(best.source) ? e : best
+        );
+        const canonicalName = bestEntry.company;
+
+        // 시간순 정렬 후 구간 병합
+        const sorted = [...entries].sort((a, b) => toM(a.startYear, a.startMonth) - toM(b.startYear, b.startMonth));
+        let curr = { ...sorted[0], company: canonicalName };
+
+        for (const entry of sorted.slice(1)) {
+          const currEnd = toM(curr.endYear, curr.endMonth);
+          const entryStart = toM(entry.startYear, entry.startMonth);
+          const entryEnd = toM(entry.endYear, entry.endMonth);
+          if (entryStart <= currEnd + 1) {
+            // 겹치거나 인접 → 구간 확장
+            if (entryEnd > currEnd) {
+              curr.endYear = entry.endYear;
+              curr.endMonth = entry.endMonth;
+            }
+            curr.noiseExposure = curr.noiseExposure || entry.noiseExposure;
+            if (!curr.department && entry.department) curr.department = entry.department;
+            if (!curr.jobType && entry.jobType) curr.jobType = entry.jobType;
+          } else {
+            companyMerged.push(curr);
+            curr = { ...entry, company: canonicalName };
+          }
+        }
+        companyMerged.push(curr);
+      }
+      companyMerged.sort((a, b) => toM(a.startYear, a.startMonth) - toM(b.startYear, b.startMonth));
+
+      // Step 2: 다른 회사 포함이력 처리 (정규화된 이름 기준)
+      const filtered: typeof companyMerged = [];
+      for (let i = 0; i < companyMerged.length; i++) {
+        const b = companyMerged[i];
+        const bNorm = normalizeCompany(b.company);
+        const bStart = toM(b.startYear, b.startMonth);
+        const bEnd = toM(b.endYear, b.endMonth);
+        const isContained = companyMerged.some((a, j) => {
           if (i === j) return false;
-          if (a.company.trim() === b.company.trim()) return false;
-          const aStart = toMonths(a.startYear, a.startMonth);
-          const aEnd = toMonths(a.endYear, a.endMonth);
+          if (normalizeCompany(a.company) === bNorm) return false;
+          const aStart = toM(a.startYear, a.startMonth);
+          const aEnd = toM(a.endYear, a.endMonth);
           return aStart <= bStart && aEnd >= bEnd;
         });
         if (isContained) {
-          memoLines.push(`[포함이력] ${b.company} (${b.startYear}.${String(b.startMonth).padStart(2,"0")} ~ ${b.endYear}.${String(b.endMonth).padStart(2,"0")}) — 상위 사업장 재직기간 내 포함됨 [출처: ${b.source}]`);
+          memoLines.push(
+            `[포함이력] ${b.company} (${b.startYear}.${String(b.startMonth).padStart(2, "0")} ~ ${b.endYear}.${String(b.endMonth).padStart(2, "0")}) — 상위 사업장 재직기간 내 포함됨 [출처: ${b.source}]`
+          );
         } else {
           filtered.push(b);
         }
       }
 
-      const deduped: typeof filtered = [];
-      for (const entry of filtered) {
-        const eStart = toMonths(entry.startYear, entry.startMonth);
-        const eEnd = toMonths(entry.endYear, entry.endMonth);
-        const isDuplicate = deduped.some((existing) => {
-          if (existing.company.trim() !== entry.company.trim()) return false;
-          const xStart = toMonths(existing.startYear, existing.startMonth);
-          const xEnd = toMonths(existing.endYear, existing.endMonth);
-          return xStart <= eStart && xEnd >= eEnd;
-        });
-        if (!isDuplicate) deduped.push(entry);
-      }
-
-      const merged: WorkHistoryItem[] = deduped.map(({ source, ...entry }) => ({ ...entry, workHours: entry.workHours || "", source }));
-      const updates: Parameters<typeof onChange>[0] = { workHistory: merged };
-
-      if (memoLines.length > 0) {
-        const existingMemo = workHistoryMemo ?? "";
-        updates.workHistoryMemo = existingMemo ? existingMemo + "\n\n" + memoLines.join("\n") : memoLines.join("\n");
-      }
-
-      if (merged.length > 0) {
-        const last = merged.reduce((prev, cur) => toMonths(cur.endYear, cur.endMonth) > toMonths(prev.endYear, prev.endMonth) ? cur : prev);
-        updates.lastNoiseWorkEndDate = `${last.endYear}-${String(last.endMonth).padStart(2, "0")}-01`;
-        if (onSaveLastDate) {
-          try { await onSaveLastDate(new Date(last.endYear, last.endMonth - 1, 1).toISOString()); } catch (e) { console.error(e); }
-        }
-      }
-
-      onChange(updates);
-
-      // 합산 결과 계산
-      const regularTotal = merged.reduce((sum, row) => {
-        const m = (row.endYear - row.startYear) * 12 + (row.endMonth - row.startMonth) + 1;
-        return sum + Math.max(0, m);
-      }, 0);
-      const dailyTotal = workHistoryDaily.reduce((sum, r) => sum + Number(r.convertedMonths || 0), 0);
-      setMergeResult({ regularMonths: regularTotal, dailyMonths: dailyTotal, totalMonths: regularTotal + dailyTotal });
-    } else {
-      // 상용직 없고 일용직만 있는 경우
-      const dailyTotal = workHistoryDaily.reduce((sum, r) => sum + Number(r.convertedMonths || 0), 0);
-      setMergeResult({ regularMonths: 0, dailyMonths: dailyTotal, totalMonths: dailyTotal });
+      merged = filtered.map(({ source, ...entry }) => ({ ...entry, workHours: entry.workHours || "", source }));
     }
+
+    const updates: Parameters<typeof onChange>[0] = { workHistory: merged };
+
+    if (memoLines.length > 0) {
+      const existingMemo = workHistoryMemo ?? "";
+      updates.workHistoryMemo = existingMemo
+        ? existingMemo + "\n\n" + memoLines.join("\n")
+        : memoLines.join("\n");
+    }
+
+    if (merged.length > 0) {
+      // 소음 노출 항목 중 마지막 종료일 → 소음작업 중단일
+      const noiseEntries = merged.filter(e => e.noiseExposure);
+      const referenceEntries = noiseEntries.length > 0 ? noiseEntries : merged;
+      const last = referenceEntries.reduce((prev, cur) =>
+        toM(cur.endYear, cur.endMonth) > toM(prev.endYear, prev.endMonth) ? cur : prev
+      );
+      updates.lastNoiseWorkEndDate = `${last.endYear}-${String(last.endMonth).padStart(2, "0")}-01`;
+      if (onSaveLastDate) {
+        try { await onSaveLastDate(new Date(last.endYear, last.endMonth - 1, 1).toISOString()); } catch (e) { console.error(e); }
+      }
+    }
+
+    onChange(updates);
+
+    // 합계 계산 — union 기반 (동시 재직 중복 제거)
+    const allIntervals = merged.map(e => ({ start: toM(e.startYear, e.startMonth), end: toM(e.endYear, e.endMonth) }));
+    const noiseIntervals = merged
+      .filter(e => e.noiseExposure)
+      .map(e => ({ start: toM(e.startYear, e.startMonth), end: toM(e.endYear, e.endMonth) }));
+
+    const regularUnionMonths = calcUnionMonths(allIntervals);
+    const noiseUnionMonths = calcUnionMonths(noiseIntervals);
+    const dailyTotal = workHistoryDaily.reduce((sum, r) => sum + Number(r.convertedMonths || 0), 0);
+
+    setMergeResult({
+      regularMonths: regularUnionMonths,
+      noiseMonths: noiseUnionMonths,
+      dailyMonths: dailyTotal,
+      totalMonths: regularUnionMonths + dailyTotal,
+    });
   };
 
-  return (
+  // 컴팩트 요약 계산
+  const totalRawEntries = RAW_SOURCES.reduce((sum, src) => sum + (workHistoryRaw[src]?.length ?? 0), 0);
+  const noiseEntryCount = workHistory.filter(e => e.noiseExposure).length;
+
+  // 드로어 내부 콘텐츠
+  const drawerContent = (
     <>
       {/* 메모 모달 */}
       {showMemoModal && (
         <>
-          <div onClick={() => setShowMemoModal(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 999 }} />
-          <div style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)", background: "white", borderRadius: 12, padding: 24, zIndex: 1000, width: "min(600px, 90vw)", boxShadow: "0 20px 60px rgba(0,0,0,0.25)" }}>
+          <div onClick={() => setShowMemoModal(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 1100 }} />
+          <div style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)", background: "white", borderRadius: 12, padding: 24, zIndex: 1101, width: "min(600px, 90vw)", boxShadow: "0 20px 60px rgba(0,0,0,0.25)" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
               <span style={{ fontSize: 14, fontWeight: 700, color: "#374151" }}>특이사항</span>
               <button onClick={() => setShowMemoModal(false)} style={{ background: "none", border: "none", fontSize: 18, cursor: "pointer", color: "#6b7280" }}>✕</button>
@@ -275,8 +367,6 @@ export function WorkHistorySection({
           </div>
         </>
       )}
-
-      <div style={{ fontSize: 13, fontWeight: 700, color: "#374151", padding: "14px 0 8px 0", borderBottom: "2px solid #e5e7eb", marginBottom: 12 }}>직업력</div>
 
       {/* PDF 자동 분석 */}
       <div style={{ marginBottom: 12 }}>
@@ -349,14 +439,14 @@ export function WorkHistorySection({
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
           <thead>
             <tr style={{ background: "#f9fafb" }}>
-              {["사업장명", "직종", "작업내용", "시작연월", "종료연월", ""].map((h) => (
-                <th key={h} style={{ padding: "5px 6px", border: "1px solid #e5e7eb", fontWeight: 600, color: "#6b7280", whiteSpace: "nowrap" }}>{h}</th>
+              {["사업장명", "직종", "작업내용", "시작연월", "종료연월", "소음노출", ""].map((h) => (
+                <th key={h} style={{ padding: "5px 6px", border: "1px solid #e5e7eb", fontWeight: 600, color: h === "소음노출" ? "#dc2626" : "#6b7280", whiteSpace: "nowrap" }}>{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {(workHistoryRaw[activeRawSource] ?? []).map((row, i) => (
-              <tr key={i}>
+              <tr key={i} style={{ background: row.noiseExposure ? "#fff7f7" : undefined }}>
                 {(["company", "department", "jobType"] as (keyof WorkHistoryRawEntry)[]).map((k) => (
                   <td key={k} style={{ padding: 3, border: "1px solid #f1f5f9" }}>
                     <input style={{ ...inputStyle, minWidth: 75, fontSize: 12 }} value={String(row[k] ?? "")} onChange={(e) => setRawField(activeRawSource, i, k, e.target.value)} />
@@ -383,12 +473,21 @@ export function WorkHistorySection({
                   </div>
                 </td>
                 <td style={{ padding: 3, border: "1px solid #f1f5f9", textAlign: "center" }}>
+                  <input
+                    type="checkbox"
+                    checked={row.noiseExposure}
+                    onChange={(e) => setRawField(activeRawSource, i, "noiseExposure", e.target.checked)}
+                    style={{ cursor: "pointer", width: 16, height: 16, accentColor: "#dc2626" }}
+                    title="소음 노출 여부"
+                  />
+                </td>
+                <td style={{ padding: 3, border: "1px solid #f1f5f9", textAlign: "center" }}>
                   <button onClick={() => removeRawRow(activeRawSource, i)} style={{ background: "none", border: "none", color: "#dc2626", cursor: "pointer", fontSize: 14 }}>✕</button>
                 </td>
               </tr>
             ))}
             {(workHistoryRaw[activeRawSource]?.length ?? 0) === 0 && (
-              <tr><td colSpan={6} style={{ padding: "12px", textAlign: "center", color: "#9ca3af", fontSize: 12 }}>데이터 없음</td></tr>
+              <tr><td colSpan={7} style={{ padding: "12px", textAlign: "center", color: "#9ca3af", fontSize: 12 }}>데이터 없음</td></tr>
             )}
           </tbody>
         </table>
@@ -407,16 +506,22 @@ export function WorkHistorySection({
             <span style={{ fontSize: 12, color: "#15803d" }}>
               상용직: <strong>{calcDuration(mergeResult.regularMonths)}</strong>
             </span>
+            {mergeResult.noiseMonths > 0 && (
+              <span style={{ fontSize: 12, color: "#dc2626", background: "#fee2e2", padding: "2px 8px", borderRadius: 6 }}>
+                소음노출: <strong>{calcDuration(mergeResult.noiseMonths)}</strong>
+              </span>
+            )}
             <span style={{ fontSize: 12, color: "#92400e" }}>
               일용직: <strong>{calcDuration(mergeResult.dailyMonths)}</strong>
             </span>
             <span style={{ fontSize: 13, color: "#111827", fontWeight: 700, background: "#dcfce7", padding: "3px 10px", borderRadius: 6 }}>
               최종 합계: {calcDuration(mergeResult.totalMonths)}
             </span>
+            <span style={{ fontSize: 10, color: "#9ca3af" }}>※동시재직 중복 제거된 union 기준</span>
           </div>
         ) : (
           <span style={{ fontSize: 12, color: "#15803d" }}>
-            총 {RAW_SOURCES.reduce((sum, src) => sum + (workHistoryRaw[src]?.length ?? 0), 0)}개 항목 + 일용직 {workHistoryDaily.length}건 → 합산하여 최종 직업력 생성
+            총 {totalRawEntries}개 항목 + 일용직 {workHistoryDaily.length}건 → 합산하여 최종 직업력 생성
           </span>
         )}
       </div>
@@ -428,8 +533,8 @@ export function WorkHistorySection({
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
             <thead>
               <tr style={{ background: "#dcfce7" }}>
-                {["회사명", "시작연월", "종료연월", "근속기간"].map(h => (
-                  <th key={h} style={{ padding: "4px 8px", border: "1px solid #bbf7d0", fontWeight: 600, color: "#15803d", textAlign: "left" }}>{h}</th>
+                {["회사명", "시작연월", "종료연월", "근속기간", "소음"].map(h => (
+                  <th key={h} style={{ padding: "4px 8px", border: "1px solid #bbf7d0", fontWeight: 600, color: h === "소음" ? "#dc2626" : "#15803d", textAlign: "left" }}>{h}</th>
                 ))}
               </tr>
             </thead>
@@ -437,20 +542,30 @@ export function WorkHistorySection({
               {workHistory.map((row, i) => {
                 const totalMonths = (row.endYear - row.startYear) * 12 + (row.endMonth - row.startMonth) + 1;
                 return (
-                  <tr key={i}>
+                  <tr key={i} style={{ background: row.noiseExposure ? "#fff7f7" : undefined }}>
                     <td style={{ padding: "4px 8px", border: "1px solid #dcfce7" }}>{row.company}</td>
-                    <td style={{ padding: "4px 8px", border: "1px solid #dcfce7" }}>{row.startYear}-{String(row.startMonth).padStart(2,"0")}</td>
-                    <td style={{ padding: "4px 8px", border: "1px solid #dcfce7" }}>{row.endYear}-{String(row.endMonth).padStart(2,"0")}</td>
+                    <td style={{ padding: "4px 8px", border: "1px solid #dcfce7" }}>{row.startYear}-{String(row.startMonth).padStart(2, "0")}</td>
+                    <td style={{ padding: "4px 8px", border: "1px solid #dcfce7" }}>{row.endYear}-{String(row.endMonth).padStart(2, "0")}</td>
                     <td style={{ padding: "4px 8px", border: "1px solid #dcfce7", fontWeight: 600, color: "#15803d" }}>{calcDuration(totalMonths)}</td>
+                    <td style={{ padding: "4px 8px", border: "1px solid #dcfce7", textAlign: "center" }}>
+                      {row.noiseExposure && (
+                        <span style={{ background: "#fee2e2", color: "#dc2626", borderRadius: 4, padding: "1px 6px", fontSize: 10, fontWeight: 700 }}>소음</span>
+                      )}
+                    </td>
                   </tr>
                 );
               })}
             </tbody>
             <tfoot>
               <tr style={{ background: "#f0fdf4" }}>
-                <td colSpan={3} style={{ padding: "4px 8px", border: "1px solid #bbf7d0", fontWeight: 700, color: "#15803d", textAlign: "right" }}>상용직 합계</td>
-                <td style={{ padding: "4px 8px", border: "1px solid #bbf7d0", fontWeight: 700, color: "#15803d" }}>
-                  {calcDuration(workHistory.reduce((sum, row) => sum + Math.max(0, (row.endYear - row.startYear) * 12 + (row.endMonth - row.startMonth) + 1), 0))}
+                <td colSpan={3} style={{ padding: "4px 8px", border: "1px solid #bbf7d0", fontWeight: 700, color: "#15803d", textAlign: "right" }}>상용직 합계 (union)</td>
+                <td colSpan={2} style={{ padding: "4px 8px", border: "1px solid #bbf7d0", fontWeight: 700, color: "#15803d" }}>
+                  {mergeResult ? calcDuration(mergeResult.regularMonths) : "—"}
+                  {mergeResult && mergeResult.noiseMonths > 0 && (
+                    <span style={{ marginLeft: 8, background: "#fee2e2", color: "#dc2626", borderRadius: 4, padding: "1px 8px", fontSize: 11 }}>
+                      소음 {calcDuration(mergeResult.noiseMonths)}
+                    </span>
+                  )}
                 </td>
               </tr>
             </tfoot>
@@ -464,14 +579,14 @@ export function WorkHistorySection({
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
           <thead>
             <tr style={{ background: "#f0fdf4" }}>
-              {["사업장명", "직종", "작업내용", "시작연월", "종료연월", "출처", ""].map((h) => (
-                <th key={h} style={{ padding: "5px 6px", border: "1px solid #bbf7d0", fontWeight: 600, color: "#15803d", whiteSpace: "nowrap" }}>{h}</th>
+              {["사업장명", "직종", "작업내용", "시작연월", "종료연월", "소음노출", "출처", ""].map((h) => (
+                <th key={h} style={{ padding: "5px 6px", border: "1px solid #bbf7d0", fontWeight: 600, color: h === "소음노출" ? "#dc2626" : "#15803d", whiteSpace: "nowrap" }}>{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {workHistory.map((row, i) => (
-              <tr key={i}>
+              <tr key={i} style={{ background: row.noiseExposure ? "#fff7f7" : undefined }}>
                 {(["company", "department", "jobType"] as (keyof WorkHistoryItem)[]).map((k) => (
                   <td key={k} style={{ padding: 3, border: "1px solid #f1f5f9" }}>
                     <input style={{ ...inputStyle, minWidth: 75, fontSize: 12 }} value={String(row[k] ?? "")} onChange={(e) => setWorkField(i, k, e.target.value)} />
@@ -497,6 +612,14 @@ export function WorkHistorySection({
                     </select>
                   </div>
                 </td>
+                <td style={{ padding: 3, border: "1px solid #f1f5f9", textAlign: "center" }}>
+                  <input
+                    type="checkbox"
+                    checked={row.noiseExposure}
+                    onChange={(e) => setWorkField(i, "noiseExposure", e.target.checked)}
+                    style={{ cursor: "pointer", width: 16, height: 16, accentColor: "#dc2626" }}
+                  />
+                </td>
                 <td style={{ padding: 3, border: "1px solid #f1f5f9" }}>
                   <input style={{ ...inputStyle, minWidth: 65, fontSize: 12 }} value={String(row.source ?? "")} onChange={(e) => setWorkField(i, "source", e.target.value)} />
                 </td>
@@ -506,7 +629,7 @@ export function WorkHistorySection({
               </tr>
             ))}
             {workHistory.length === 0 && (
-              <tr><td colSpan={7} style={{ padding: "12px", textAlign: "center", color: "#9ca3af", fontSize: 12 }}>합산하기 버튼을 눌러 최종 직업력을 생성하세요</td></tr>
+              <tr><td colSpan={8} style={{ padding: "12px", textAlign: "center", color: "#9ca3af", fontSize: 12 }}>합산하기 버튼을 눌러 최종 직업력을 생성하세요</td></tr>
             )}
           </tbody>
         </table>
@@ -619,6 +742,93 @@ export function WorkHistorySection({
           placeholder="특이사항을 입력하세요..."
         />
       </div>
+    </>
+  );
+
+  return (
+    <>
+      {/* 섹션 헤더 + 컴팩트 요약 */}
+      <div style={{ fontSize: 13, fontWeight: 700, color: "#374151", padding: "14px 0 8px 0", borderBottom: "2px solid #e5e7eb", marginBottom: 12 }}>직업력</div>
+
+      <div style={{
+        display: "flex", alignItems: "center", gap: 12, padding: "10px 14px",
+        background: "#f8fafc", borderRadius: 8, border: "1px solid #e2e8f0", marginBottom: 12, flexWrap: "wrap",
+      }}>
+        {/* 요약 정보 */}
+        <div style={{ flex: 1, display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
+          <span style={{ fontSize: 12, color: "#374151" }}>
+            원시데이터: <strong>{totalRawEntries}개</strong>
+          </span>
+          {workHistory.length > 0 && (
+            <span style={{ fontSize: 12, color: "#15803d" }}>
+              합산완료: <strong>{workHistory.length}개사</strong>
+            </span>
+          )}
+          {noiseEntryCount > 0 && (
+            <span style={{ fontSize: 12, color: "#dc2626", background: "#fee2e2", padding: "1px 8px", borderRadius: 6 }}>
+              소음노출 <strong>{noiseEntryCount}개</strong>
+            </span>
+          )}
+          {mergeResult && (
+            <span style={{ fontSize: 12, color: "#111827", fontWeight: 700, background: "#dcfce7", padding: "2px 10px", borderRadius: 6 }}>
+              {calcDuration(mergeResult.totalMonths)}
+            </span>
+          )}
+          {lastNoiseWorkEndDate && (
+            <span style={{ fontSize: 11, color: "#6b7280" }}>
+              소음중단: {lastNoiseWorkEndDate.slice(0, 7)}
+            </span>
+          )}
+        </div>
+        {/* 편집 버튼 */}
+        <button
+          onClick={() => setIsDrawerOpen(true)}
+          style={{
+            background: "#29ABE2", color: "white", border: "none", borderRadius: 6,
+            padding: "7px 18px", fontSize: 13, fontWeight: 700, cursor: "pointer", flexShrink: 0,
+          }}
+        >
+          직업력 편집 →
+        </button>
+      </div>
+
+      {/* 드로어 오버레이 */}
+      {isDrawerOpen && (
+        <>
+          <div
+            onClick={() => setIsDrawerOpen(false)}
+            style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.35)", zIndex: 900, transition: "opacity 0.2s" }}
+          />
+          <div style={{
+            position: "fixed", top: 0, right: 0, bottom: 0,
+            width: "min(820px, 85vw)",
+            background: "white",
+            zIndex: 901,
+            boxShadow: "-8px 0 40px rgba(0,0,0,0.18)",
+            display: "flex", flexDirection: "column",
+            overflowY: "auto",
+          }}>
+            {/* 드로어 헤더 */}
+            <div style={{
+              display: "flex", alignItems: "center", justifyContent: "space-between",
+              padding: "14px 20px", background: "#29ABE2", color: "white",
+              position: "sticky", top: 0, zIndex: 10,
+            }}>
+              <span style={{ fontSize: 15, fontWeight: 700 }}>직업력 관리</span>
+              <button
+                onClick={() => setIsDrawerOpen(false)}
+                style={{ background: "rgba(255,255,255,0.2)", border: "none", color: "white", borderRadius: 6, padding: "5px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
+              >
+                저장 후 닫기
+              </button>
+            </div>
+            {/* 드로어 내용 */}
+            <div style={{ padding: "16px 20px", flex: 1 }}>
+              {drawerContent}
+            </div>
+          </div>
+        </>
+      )}
     </>
   );
 }
