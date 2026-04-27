@@ -329,7 +329,9 @@ export function WorkHistorySection({
 
     const regularUnionMonths = calcUnionMonths(allIntervals);
     const noiseUnionMonths = calcUnionMonths(noiseIntervals);
-    const dailyTotal = workHistoryDaily.reduce((sum, r) => sum + Number(r.convertedMonths || 0), 0);
+    // 총 일수 먼저 합산 후 1번만 Math.ceil — 행별 ceil 합산 시 소규모 행이 각각 1개월로 과산정되는 버그 방지
+    const totalDaySum = workHistoryDaily.reduce((sum, r) => sum + Number(r.totalDays || 0), 0);
+    const dailyTotal = totalDaySum > 0 ? Math.ceil(totalDaySum / 20) : 0;
 
     setMergeResult({
       regularMonths: regularUnionMonths,
@@ -702,7 +704,13 @@ export function WorkHistorySection({
                     {workHistoryDaily.reduce((sum, r) => sum + Number(r.totalDays || 0), 0)}일
                   </td>
                   <td style={{ padding: "4px 8px", border: "1px solid #fcd34d", fontWeight: 700, color: "#b45309", textAlign: "center" }}>
-                    {calcDuration(workHistoryDaily.reduce((sum, r) => sum + Number(r.convertedMonths || 0), 0))}
+                    {(() => {
+                      const sumDays = workHistoryDaily.reduce((s, r) => s + Number(r.totalDays || 0), 0);
+                      return sumDays > 0 ? calcDuration(Math.ceil(sumDays / 20)) : "0개월";
+                    })()}
+                    <div style={{ fontSize: 10, color: "#9ca3af", fontWeight: 400 }}>
+                      (총 {workHistoryDaily.reduce((s, r) => s + Number(r.totalDays || 0), 0)}일 ÷ 20)
+                    </div>
                   </td>
                   <td colSpan={4} style={{ border: "1px solid #fcd34d" }} />
                 </tr>
