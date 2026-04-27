@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import pdfParse from "pdf-parse/lib/pdf-parse";
+import pdfParse from "pdf-parse";
 
+export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 // ─── PDF 텍스트 → 챕터/조문 파싱 ───────────────────────────────────────────
