@@ -224,7 +224,8 @@ function WorkHistoryDrawerContent({
       };
 
       // 3) 동시성 제한 병렬 처리 (rate limit 방지)
-      const CONCURRENCY = 3;
+      // 청크 수가 많을수록 동시성 낮춤: ≤3청크 동시성3, 4-6청크 동시성2, 그 이상은 1
+      const CONCURRENCY = allChunks.length <= 3 ? 3 : allChunks.length <= 6 ? 2 : 1;
       for (let i = 0; i < allChunks.length; i += CONCURRENCY) {
         const batch = allChunks.slice(i, i + CONCURRENCY);
         await Promise.all(batch.map(processChunk));
