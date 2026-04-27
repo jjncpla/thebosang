@@ -155,14 +155,16 @@ function WorkHistoryDrawerContent({
     try {
       const { PDFDocument } = await import("pdf-lib");
 
-      // 1) 모든 파일을 PDF 청크로 분할 (5페이지씩)
+      // 1) PDF 청크 분할 — 작은 PDF(≤5p)는 단일 청크, 큰 PDF는 3p 청크
       type Chunk = { blob: Blob; chunkName: string; docType: string };
       const allChunks: Chunk[] = [];
       for (const { file, docType } of valid) {
         const buffer = await file.arrayBuffer();
         const srcDoc = await PDFDocument.load(buffer);
         const totalPages = srcDoc.getPageCount();
-        const CHUNK_PAGES = 5;
+        // 작은 PDF: 단일 청크 (OCR 호출 1번 = overhead 최소화)
+        // 큰 PDF: 3p 청크 (병렬 처리 + 토큰 한도 안전)
+        const CHUNK_PAGES = totalPages <= 5 ? totalPages : 3;
         for (let start = 0; start < totalPages; start += CHUNK_PAGES) {
           const end = Math.min(start + CHUNK_PAGES, totalPages);
           const chunkDoc = await PDFDocument.create();
@@ -177,7 +179,7 @@ function WorkHistoryDrawerContent({
         }
       }
 
-      // 2) 모든 청크를 병렬로 처리 (Promise.all)
+      // 2) 청크 처리 함수
       const processChunk = async (chunk: Chunk) => {
         const formData = new FormData();
         formData.append("file", chunk.blob, chunk.chunkName);
@@ -221,7 +223,12 @@ function WorkHistoryDrawerContent({
         }
       };
 
-      await Promise.all(allChunks.map(processChunk));
+      // 3) 동시성 제한 병렬 처리 (rate limit 방지)
+      const CONCURRENCY = 3;
+      for (let i = 0; i < allChunks.length; i += CONCURRENCY) {
+        const batch = allChunks.slice(i, i + CONCURRENCY);
+        await Promise.all(batch.map(processChunk));
+      }
       onChange({ workHistoryRaw: accRaw });
       onChangeDaily(accDaily);
       const firstWithData = ['고용산재', '건보', '연금', '건근공', '일용직'].find(src => (accRaw as Record<string, unknown[]>)[src]?.length > 0);
