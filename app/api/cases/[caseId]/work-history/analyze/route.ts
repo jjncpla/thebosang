@@ -31,7 +31,7 @@ function getPromptForDocType(docType: string): string {
   const base = "[중요] 반드시 JSON만 응답하라. 설명 텍스트, 코드블록, 주석을 절대 포함하지 마라. 첫 글자 { 마지막 글자 }인 순수 JSON만 출력하라.\n\n"
   const noiseGuide = "noiseExposure 필드: 직종명·사업장명·작업내용에 소음 노출이 의심되는 경우(광업·채굴·착암·발파·광산·제철·제강·금속·기계·조선·자동차제조·섬유·목재·건설·용접·철근·콘크리트·토목·포장·운전·지게차·굴삭기·크레인·소음 포함 표기 등) true, 그 외는 false."
   if (docType === "건보") return base + `이 문서는 건강보험자격득실확인서이다. 가입자구분이 직장가입자인 항목만 추출하라. 지역가입자, 지역세대원, 지역세대주, 직장피부양자는 반드시 제외하라. 사업장명칭에서 사업장명을 추출하라. 자격취득일이 시작일, 자격상실일이 종료일. 상실일 없으면 2026-01.\n${noiseGuide}\n반드시 이 JSON 형식으로만 응답하라:\n{"name":"성명","sources":{"건보":[{"company":"사업장명","startYear":2000,"startMonth":1,"endYear":2005,"endMonth":12,"department":"","jobType":"","workDays":0,"noiseExposure":false}],"고용산재":[],"소득금액":[],"연금":[]},"dailyEntries":[]}`
-  if (docType === "고용산재_전체") return base + `이 문서는 고용보험 자료이다.\n\n[상용직] 자격이력내역서에서 비고/구분이 "근로자"인 항목을 sources.고용산재에 추출. 직종명(코드), 사업장명, 취득일(시작), 상실일(종료). 상실일 없으면 2026-01. 반복 취득·상실은 각각 별도 항목.\n\n[일용직] 일용근로노무제공내역서의 모든 행을 dailyEntries에 추출. 합산 금지. [업체명] 표기 시 []안 이름을 company로. 근무일수는 비고 날짜 숫자 개수 또는 근무일수 컬럼. startYear/startMonth는 해당 행 연월. convertedMonths=Math.ceil(totalDays/20).\n${noiseGuide}\n반드시 이 JSON 형식으로만 응답하라:\n{"name":"성명","sources":{"고용산재":[{"company":"사업장명","startYear":2016,"startMonth":9,"endYear":2016,"endMonth":11,"department":"","jobType":"직종명(코드)","workDays":0,"noiseExposure":false}],"건보":[],"소득금액":[],"연금":[]},"dailyEntries":[{"company":"사업장명","jobType":"직종명","totalDays":5,"startYear":2013,"startMonth":1,"convertedMonths":1,"source":"고용산재","memo":""}]}`
+  if (docType === "고용산재_전체") return base + `이 문서는 고용보험 자료이며 두 종류의 표가 섞여 있다.\n\n=== [표 1: 자격이력내역서] - 상용직 (보통 첫 페이지) ===\n컬럼 구성: 직종명(코드) | 사업장명 | 취득일 | 상실일 | 비고\n**비고/구분이 "근로자"인 모든 행을 sources.고용산재에 추출하라**\n- 단 한 행도 빠짐없이 추출 (작은 표라도 반드시 스캔)\n- 직종명(코드), 사업장명, 취득일(시작), 상실일(종료) 추출\n- 상실일 없으면 2026-01\n- 같은 사업장 반복 취득·상실은 각각 별도 항목\n\n=== [표 2: 일용근로노무제공내역서] - 일용직 (나머지 페이지) ===\n모든 행을 dailyEntries에 추출. 합산 금지.\n- [업체명] 표기 시 []안 이름을 company로\n- 근무일수는 비고 날짜 숫자 개수 또는 근무일수 컬럼\n- startYear/startMonth는 해당 행 연월\n- convertedMonths=Math.ceil(totalDays/20)\n\n${noiseGuide}\n\n반드시 이 JSON 형식으로만 응답하라:\n{"name":"성명","sources":{"고용산재":[{"company":"사업장명","startYear":2016,"startMonth":9,"endYear":2016,"endMonth":11,"department":"","jobType":"직종명(코드)","workDays":0,"noiseExposure":false}],"건보":[],"소득금액":[],"연금":[]},"dailyEntries":[{"company":"사업장명","jobType":"직종명","totalDays":5,"startYear":2013,"startMonth":1,"convertedMonths":1,"source":"고용산재","memo":""}]}`
   if (docType === "고용산재_상용") return base + `이 문서는 고용보험 자격이력내역서이다. 비고/구분이 "근로자"인 항목을 모두 추출하라. 직종명(코드), 사업장명, 취득일(시작), 상실일(종료). 상실일 없으면 2026-01.\n${noiseGuide}\n반드시 이 JSON 형식으로만 응답하라:\n{"name":"성명","sources":{"고용산재":[{"company":"사업장명","startYear":2000,"startMonth":1,"endYear":2005,"endMonth":12,"department":"","jobType":"직종명(코드)","workDays":0,"noiseExposure":false}],"건보":[],"소득금액":[],"연금":[]},"dailyEntries":[]}`
   if (docType === "일용직") return base + `이 문서는 고용보험 일용근로노무제공내역서이다. 모든 행을 그대로 추출. 합산 금지. [업체명] 표기 시 []안 이름을 company로. 근무일수는 비고 날짜 숫자 개수 또는 근무일수 컬럼. startYear/startMonth는 해당 행 연월. convertedMonths=Math.ceil(totalDays/20).\n반드시 이 JSON 형식으로만 응답하라:\n{"name":"성명","sources":{"고용산재":[],"건보":[],"소득금액":[],"연금":[]},"dailyEntries":[{"company":"사업장명","jobType":"직종명","totalDays":5,"startYear":2013,"startMonth":1,"convertedMonths":1,"source":"고용산재","memo":""}]}`
   if (docType === "연금") return base + `이 문서는 국민연금 가입증명 또는 가입내역확인서이다. 사업장가입자 취득·상실 이력을 추출하라. 명칭 변경 시 최신 명칭으로 통일. 지역가입자 제외. 취득일이 시작일, 상실일이 종료일.\n${noiseGuide}\n반드시 이 JSON 형식으로만 응답하라:\n{"name":"성명","sources":{"연금":[{"company":"사업장명","startYear":2000,"startMonth":1,"endYear":2005,"endMonth":12,"department":"","jobType":"","workDays":0,"noiseExposure":false}],"고용산재":[],"건보":[],"소득금액":[]},"dailyEntries":[]}`
@@ -89,9 +89,19 @@ export async function POST(
         const totalKB = images.reduce((sum, img) => sum + img.size, 0) / 1024
         console.log(`처리 중: ${chunkName} (${images.length}장, 총 ${Math.round(totalKB)}KB)`)
 
+        // docType 기반 모델 선택:
+        // - 상용직 추출 (자격이력) / 건보 / 연금 / 경력증명서: Sonnet (정확도 우선)
+        // - 일용직 / 건근공: Haiku (속도 우선, 단순 표 데이터)
+        // - 고용산재_전체 (자격이력 + 일용직): Sonnet (자격이력 누락 방지)
+        const fastDocs = ["일용직", "건근공"]
+        const model = fastDocs.includes(docType)
+          ? "claude-haiku-4-5-20251001"
+          : "claude-sonnet-4-6"
+        console.log(`모델 선택: ${chunkName} → ${model}`)
+
         const claudeRes = await callClaude(
           {
-            model: "claude-sonnet-4-6",
+            model,
             max_tokens: 8192,
             messages: [{
               role: "user",
