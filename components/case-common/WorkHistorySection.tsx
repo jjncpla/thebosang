@@ -148,19 +148,32 @@ function WorkHistoryDrawerContent({
     if (valid.length === 0) { setAnalyzeError("문서 종류를 선택해주세요"); return; }
     setIsAnalyzing(true);
     setAnalyzeError(null);
+    const accRaw = { ...workHistoryRaw };
+    const accDaily: typeof workHistoryDaily = [...workHistoryDaily];
+    let extractedName = "";
     try {
-      const formData = new FormData();
-      valid.forEach(({ file, docType }) => { formData.append("files", file); formData.append("docTypes", docType); });
-      const res = await fetch(`/api/cases/${caseId}/work-history/analyze`, { method: "POST", body: formData });
-      if (!res.ok) { const err = await res.json(); throw new Error(err.error ?? "분석 실패"); }
-      const data = await res.json();
-      const newRaw = { ...workHistoryRaw };
-      ["고용산재", "건보", "소득금액", "연금", "건근공"].forEach((src) => {
-        if (data.sources?.[src]?.length > 0) (newRaw as Record<string, unknown>)[src] = data.sources[src];
-      });
-      onChange({ workHistoryRaw: newRaw });
-      if (data.dailyEntries?.length > 0) onChangeDaily([...workHistoryDaily, ...data.dailyEntries]);
-      const firstWithData = ['고용산재', '건보', '연금', '건근공', '일용직'].find(src => (newRaw as Record<string, unknown[]>)[src]?.length > 0);
+      for (let i = 0; i < valid.length; i++) {
+        const { file, docType } = valid[i];
+        const formData = new FormData();
+        formData.append("files", file);
+        formData.append("docTypes", docType);
+        const res = await fetch(`/api/cases/${caseId}/work-history/analyze`, { method: "POST", body: formData });
+        if (!res.ok) { const err = await res.json(); throw new Error(err.error ?? "분석 실패"); }
+        const data = await res.json();
+        if (data.name && !extractedName) extractedName = data.name;
+        ["고용산재", "건보", "소득금액", "연금", "건근공"].forEach((src) => {
+          if (data.sources?.[src]?.length > 0) {
+            (accRaw as Record<string, unknown[]>)[src] = [
+              ...((accRaw as Record<string, unknown[]>)[src] ?? []),
+              ...data.sources[src],
+            ];
+          }
+        });
+        if (data.dailyEntries?.length > 0) accDaily.push(...data.dailyEntries);
+      }
+      onChange({ workHistoryRaw: accRaw });
+      onChangeDaily(accDaily);
+      const firstWithData = ['고용산재', '건보', '연금', '건근공', '일용직'].find(src => (accRaw as Record<string, unknown[]>)[src]?.length > 0);
       if (firstWithData) setActiveRawSource(firstWithData as RawSource);
       setPendingFiles([]);
       setShowFileSelector(false);
