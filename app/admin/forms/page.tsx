@@ -49,6 +49,36 @@ export default function FormsPage() {
   const [saving, setSaving]               = useState(false);
   const [saveMsg, setSaveMsg]             = useState('');
 
+  // 개발 요청 패널
+  const [reqPanelOpen, setReqPanelOpen]   = useState(false);
+  const [reqList, setReqList]             = useState<any[]>([]);
+  const [reqFilter, setReqFilter]         = useState<string>("pending");
+  const [reqDraft, setReqDraft]           = useState<Record<string, string>>({});
+
+  const loadRequests = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/forms/requests?status=${reqFilter}`);
+      if (res.ok) {
+        const d = await res.json();
+        setReqList(d.items ?? []);
+      }
+    } catch {}
+  }, [reqFilter]);
+
+  useEffect(() => { loadRequests(); }, [loadRequests]);
+
+  const updateRequest = async (id: string, patch: { status?: string; resolution?: string }) => {
+    const res = await fetch(`/api/forms/requests/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(patch),
+    });
+    if (res.ok) loadRequests();
+    else alert('처리 실패');
+  };
+
+  const pendingCount = reqList.filter(r => r.status === 'pending').length;
+
   useEffect(() => { setTestValues({}); setSaveMsg(''); }, [selectedForm]);
 
   // 서식 선택 시 DB 좌표 로드 — FORM_FIELDS 기준 뼈대에 DB x/y만 override (label 불변)
@@ -228,6 +258,128 @@ export default function FormsPage() {
 
   return (
     <div style={{ display: "flex", height: "calc(100vh - 56px)", fontFamily: "'Malgun Gothic','Apple SD Gothic Neo','Segoe UI',sans-serif", fontSize: 13 }}>
+
+      {/* ── 우상단 플로팅 버튼: 개발 요청 목록 ── */}
+      <button
+        onClick={() => setReqPanelOpen(true)}
+        style={{
+          position: "fixed", top: 110, right: 20, zIndex: 30,
+          padding: "8px 14px", fontSize: 12, fontWeight: 700,
+          background: "#fff7ed", color: "#c2410c",
+          border: "1px solid #fdba74", borderRadius: 20, cursor: "pointer",
+          boxShadow: "0 4px 10px rgba(0,0,0,.08)",
+        }}
+        title="유저들이 보낸 서식 생성 요청 목록"
+      >
+        📋 개발 요청 {pendingCount > 0 && (
+          <span style={{
+            display: "inline-block", marginLeft: 4, padding: "1px 6px",
+            background: "#dc2626", color: "#fff", borderRadius: 8, fontSize: 10,
+          }}>{pendingCount}</span>
+        )}
+      </button>
+
+      {/* ── 개발 요청 모달 ── */}
+      {reqPanelOpen && (
+        <div
+          onClick={() => setReqPanelOpen(false)}
+          style={{
+            position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)",
+            zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", padding: 20,
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: "100%", maxWidth: 720, maxHeight: "85vh", overflowY: "auto",
+              background: "#fff", borderRadius: 12, padding: 20,
+              boxShadow: "0 20px 50px rgba(0,0,0,0.2)",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+              <div style={{ fontSize: 16, fontWeight: 700 }}>📋 사용자 개발 요청</div>
+              <div style={{ display: "flex", gap: 6 }}>
+                {(["pending", "in_progress", "done", "rejected", "all"] as const).map(k => (
+                  <button
+                    key={k}
+                    onClick={() => setReqFilter(k)}
+                    style={{
+                      padding: "4px 10px", fontSize: 11, borderRadius: 4, cursor: "pointer",
+                      background: reqFilter === k ? "#1e40af" : "#fff",
+                      color: reqFilter === k ? "#fff" : "#374151",
+                      border: "1px solid " + (reqFilter === k ? "#1e40af" : "#d1d5db"),
+                    }}
+                  >
+                    {k === "pending" ? "접수" : k === "in_progress" ? "진행중" : k === "done" ? "완료" : k === "rejected" ? "반려" : "전체"}
+                  </button>
+                ))}
+                <button
+                  onClick={() => setReqPanelOpen(false)}
+                  style={{ padding: "4px 10px", fontSize: 11, background: "#fff", color: "#374151", border: "1px solid #d1d5db", borderRadius: 4, cursor: "pointer" }}
+                >닫기</button>
+              </div>
+            </div>
+
+            {reqList.length === 0 ? (
+              <div style={{ padding: 30, textAlign: "center", color: "#9ca3af", fontSize: 13 }}>요청이 없습니다.</div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {reqList.map(r => {
+                  const formLabel = FORMS.find(f => f.type === r.formType)?.label;
+                  return (
+                    <div key={r.id} style={{ padding: 12, border: "1px solid #e5e7eb", borderRadius: 8 }}>
+                      <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 6 }}>
+                        <span style={{
+                          fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 4,
+                          background: r.status === "done" ? "#dcfce7" : r.status === "rejected" ? "#fee2e2" : r.status === "in_progress" ? "#dbeafe" : "#fef3c7",
+                          color:      r.status === "done" ? "#166534" : r.status === "rejected" ? "#991b1b" : r.status === "in_progress" ? "#1e40af" : "#854d0e",
+                        }}>
+                          {r.status === "done" ? "완료" : r.status === "rejected" ? "반려" : r.status === "in_progress" ? "진행중" : "접수"}
+                        </span>
+                        <span style={{ fontSize: 13, fontWeight: 700, color: "#111827" }}>{r.title}</span>
+                        {formLabel && (
+                          <span style={{ fontSize: 10, color: "#6b7280" }}>({formLabel})</span>
+                        )}
+                        <span style={{ marginLeft: "auto", fontSize: 10, color: "#9ca3af" }}>
+                          {new Date(r.createdAt).toLocaleString("ko-KR")}
+                        </span>
+                      </div>
+                      <div style={{ fontSize: 11, color: "#6b7280", marginBottom: 6 }}>
+                        요청자: {r.requestedBy}{r.branch ? ` (${r.branch})` : ""} · {r.requestedByEmail ?? "-"}
+                      </div>
+                      {r.description && (
+                        <div style={{ fontSize: 12, color: "#374151", whiteSpace: "pre-wrap", padding: 8, background: "#f9fafb", borderRadius: 6, marginBottom: 8 }}>
+                          {r.description}
+                        </div>
+                      )}
+                      {r.resolution && (
+                        <div style={{ fontSize: 11, color: "#1e40af", padding: "6px 8px", background: "#eff6ff", borderRadius: 4, marginBottom: 8 }}>
+                          답변: {r.resolution}
+                        </div>
+                      )}
+                      <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                        <input
+                          type="text"
+                          placeholder="답변/메모 입력 후 상태 변경"
+                          value={reqDraft[r.id] ?? ""}
+                          onChange={(e) => setReqDraft(prev => ({ ...prev, [r.id]: e.target.value }))}
+                          style={{ flex: 1, padding: "5px 8px", fontSize: 11, border: "1px solid #d1d5db", borderRadius: 4 }}
+                        />
+                        <button onClick={() => updateRequest(r.id, { status: 'in_progress', resolution: reqDraft[r.id] ?? r.resolution })}
+                          style={{ padding: "5px 10px", fontSize: 11, background: "#dbeafe", color: "#1e40af", border: "1px solid #93c5fd", borderRadius: 4, cursor: "pointer" }}>진행중</button>
+                        <button onClick={() => updateRequest(r.id, { status: 'done', resolution: reqDraft[r.id] ?? r.resolution })}
+                          style={{ padding: "5px 10px", fontSize: 11, background: "#059669", color: "#fff", border: "none", borderRadius: 4, cursor: "pointer" }}>완료</button>
+                        <button onClick={() => updateRequest(r.id, { status: 'rejected', resolution: reqDraft[r.id] ?? r.resolution })}
+                          style={{ padding: "5px 10px", fontSize: 11, background: "#fff", color: "#dc2626", border: "1px solid #fecaca", borderRadius: 4, cursor: "pointer" }}>반려</button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* ── 좌측 패널: 서식 목록 ── */}
       <div style={{ width: 260, borderRight: "1px solid #e5e7eb", padding: 16, overflowY: "auto", background: "#fafafa", flexShrink: 0 }}>
