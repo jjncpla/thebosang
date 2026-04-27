@@ -360,14 +360,14 @@ function WorkHistoryDrawerContent({
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
             <thead>
               <tr style={{ background: "#f9fafb" }}>
-                {["사업장명", "직종", "작업내용", "시작연월", "종료연월", "소음노출", ""].map(h => (
-                  <th key={h} style={{ padding: "5px 6px", border: "1px solid #e5e7eb", fontWeight: 600, color: h === "소음노출" ? "#dc2626" : "#6b7280", whiteSpace: "nowrap" }}>{h}</th>
+                {["사업장명", "직종", "작업내용", "시작연월", "종료연월", ""].map(h => (
+                  <th key={h} style={{ padding: "5px 6px", border: "1px solid #e5e7eb", fontWeight: 600, color: "#6b7280", whiteSpace: "nowrap" }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {(workHistoryRaw[activeRawSource] ?? []).map((row, i) => (
-                <tr key={i} style={{ background: row.noiseExposure ? "#fff7f7" : undefined }}>
+                <tr key={i}>
                   {(["company", "department", "jobType"] as (keyof WorkHistoryRawEntry)[]).map(k => (
                     <td key={k} style={{ padding: 3, border: "1px solid #f1f5f9" }}>
                       <input style={{ ...inputStyle, minWidth: 75, fontSize: 12 }} value={String(row[k] ?? "")} onChange={(e) => setRawField(activeRawSource, i, k, e.target.value)} />
@@ -394,16 +394,12 @@ function WorkHistoryDrawerContent({
                     </div>
                   </td>
                   <td style={{ padding: 3, border: "1px solid #f1f5f9", textAlign: "center" }}>
-                    <input type="checkbox" checked={row.noiseExposure} onChange={(e) => setRawField(activeRawSource, i, "noiseExposure", e.target.checked)}
-                      style={{ cursor: "pointer", width: 16, height: 16, accentColor: "#dc2626" }} />
-                  </td>
-                  <td style={{ padding: 3, border: "1px solid #f1f5f9", textAlign: "center" }}>
                     <button onClick={() => removeRawRow(activeRawSource, i)} style={{ background: "none", border: "none", color: "#dc2626", cursor: "pointer", fontSize: 14 }}>✕</button>
                   </td>
                 </tr>
               ))}
               {(workHistoryRaw[activeRawSource]?.length ?? 0) === 0 && (
-                <tr><td colSpan={7} style={{ padding: "12px", textAlign: "center", color: "#9ca3af", fontSize: 12 }}>데이터 없음</td></tr>
+                <tr><td colSpan={6} style={{ padding: "12px", textAlign: "center", color: "#9ca3af", fontSize: 12 }}>데이터 없음</td></tr>
               )}
             </tbody>
           </table>
@@ -439,8 +435,8 @@ function WorkHistoryDrawerContent({
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
               <thead>
                 <tr style={{ background: "#dcfce7" }}>
-                  {["회사명", "시작연월", "종료연월", "근속기간", "소음"].map(h => (
-                    <th key={h} style={{ padding: "4px 8px", border: "1px solid #bbf7d0", fontWeight: 600, color: h === "소음" ? "#dc2626" : "#15803d", textAlign: "left" }}>{h}</th>
+                  {["회사명", "시작연월", "종료연월", "근속기간"].map(h => (
+                    <th key={h} style={{ padding: "4px 8px", border: "1px solid #bbf7d0", fontWeight: 600, color: "#15803d", textAlign: "left" }}>{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -448,14 +444,11 @@ function WorkHistoryDrawerContent({
                 {workHistory.map((row, i) => {
                   const tm = (row.endYear - row.startYear) * 12 + (row.endMonth - row.startMonth) + 1;
                   return (
-                    <tr key={i} style={{ background: row.noiseExposure ? "#fff7f7" : undefined }}>
+                    <tr key={i}>
                       <td style={{ padding: "4px 8px", border: "1px solid #dcfce7" }}>{row.company}</td>
                       <td style={{ padding: "4px 8px", border: "1px solid #dcfce7" }}>{row.startYear}-{String(row.startMonth).padStart(2, "0")}</td>
                       <td style={{ padding: "4px 8px", border: "1px solid #dcfce7" }}>{row.endYear}-{String(row.endMonth).padStart(2, "0")}</td>
                       <td style={{ padding: "4px 8px", border: "1px solid #dcfce7", fontWeight: 600, color: "#15803d" }}>{calcDuration(tm)}</td>
-                      <td style={{ padding: "4px 8px", border: "1px solid #dcfce7", textAlign: "center" }}>
-                        {row.noiseExposure && <span style={{ background: "#fee2e2", color: "#dc2626", borderRadius: 4, padding: "1px 6px", fontSize: 10, fontWeight: 700 }}>소음</span>}
-                      </td>
                     </tr>
                   );
                 })}
@@ -463,11 +456,8 @@ function WorkHistoryDrawerContent({
               <tfoot>
                 <tr style={{ background: "#f0fdf4" }}>
                   <td colSpan={3} style={{ padding: "4px 8px", border: "1px solid #bbf7d0", fontWeight: 700, color: "#15803d", textAlign: "right" }}>상용직 합계 (union)</td>
-                  <td colSpan={2} style={{ padding: "4px 8px", border: "1px solid #bbf7d0", fontWeight: 700, color: "#15803d" }}>
+                  <td style={{ padding: "4px 8px", border: "1px solid #bbf7d0", fontWeight: 700, color: "#15803d" }}>
                     {mergeResult ? calcDuration(mergeResult.regularMonths) : "—"}
-                    {mergeResult && mergeResult.noiseMonths > 0 && (
-                      <span style={{ marginLeft: 8, background: "#fee2e2", color: "#dc2626", borderRadius: 4, padding: "1px 8px", fontSize: 11 }}>소음 {calcDuration(mergeResult.noiseMonths)}</span>
-                    )}
                   </td>
                 </tr>
               </tfoot>
@@ -481,14 +471,14 @@ function WorkHistoryDrawerContent({
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
             <thead>
               <tr style={{ background: "#f0fdf4" }}>
-                {["사업장명", "직종", "작업내용", "시작연월", "종료연월", "소음노출", "출처", ""].map(h => (
-                  <th key={h} style={{ padding: "5px 6px", border: "1px solid #bbf7d0", fontWeight: 600, color: h === "소음노출" ? "#dc2626" : "#15803d", whiteSpace: "nowrap" }}>{h}</th>
+                {["사업장명", "직종", "작업내용", "시작연월", "종료연월", "출처", ""].map(h => (
+                  <th key={h} style={{ padding: "5px 6px", border: "1px solid #bbf7d0", fontWeight: 600, color: "#15803d", whiteSpace: "nowrap" }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {workHistory.map((row, i) => (
-                <tr key={i} style={{ background: row.noiseExposure ? "#fff7f7" : undefined }}>
+                <tr key={i}>
                   {(["company", "department", "jobType"] as (keyof WorkHistoryItem)[]).map(k => (
                     <td key={k} style={{ padding: 3, border: "1px solid #f1f5f9" }}>
                       <input style={{ ...inputStyle, minWidth: 75, fontSize: 12 }} value={String(row[k] ?? "")} onChange={(e) => setWorkField(i, k, e.target.value)} />
@@ -514,10 +504,6 @@ function WorkHistoryDrawerContent({
                       </select>
                     </div>
                   </td>
-                  <td style={{ padding: 3, border: "1px solid #f1f5f9", textAlign: "center" }}>
-                    <input type="checkbox" checked={row.noiseExposure} onChange={(e) => setWorkField(i, "noiseExposure", e.target.checked)}
-                      style={{ cursor: "pointer", width: 16, height: 16, accentColor: "#dc2626" }} />
-                  </td>
                   <td style={{ padding: 3, border: "1px solid #f1f5f9" }}>
                     <input style={{ ...inputStyle, minWidth: 65, fontSize: 12 }} value={String(row.source ?? "")} onChange={(e) => setWorkField(i, "source", e.target.value)} />
                   </td>
@@ -527,7 +513,7 @@ function WorkHistoryDrawerContent({
                 </tr>
               ))}
               {workHistory.length === 0 && (
-                <tr><td colSpan={8} style={{ padding: "12px", textAlign: "center", color: "#9ca3af", fontSize: 12 }}>합산하기 버튼을 눌러 최종 직업력을 생성하세요</td></tr>
+                <tr><td colSpan={7} style={{ padding: "12px", textAlign: "center", color: "#9ca3af", fontSize: 12 }}>합산하기 버튼을 눌러 최종 직업력을 생성하세요</td></tr>
               )}
             </tbody>
           </table>
@@ -537,78 +523,74 @@ function WorkHistoryDrawerContent({
         {/* 일용직 직업력 */}
         <div style={{ marginTop: 16, marginBottom: 16 }}>
           <div style={{ fontSize: 13, fontWeight: 700, color: "#374151", padding: "14px 0 8px 0", borderBottom: "2px solid #e5e7eb", marginBottom: 12 }}>
-            일용직 직업력 <span style={{ fontSize: 11, fontWeight: 400, color: "#9ca3af", marginLeft: 8 }}>(20일=1개월 기준)</span>
+            일용직 직업력 <span style={{ fontSize: 11, fontWeight: 400, color: "#9ca3af", marginLeft: 8 }}>(20일=1개월 기준 · 전체 합산 후 환산)</span>
           </div>
-          <div style={{ overflowX: "auto", marginBottom: 8 }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
-              <thead>
-                <tr style={{ background: "#fef9ec" }}>
-                  {["사업장(대표)", "직종", "총 근무일수", "환산 개월수", "최초 근무", "출처", "비고", ""].map(h => (
-                    <th key={h} style={{ padding: "5px 6px", border: "1px solid #fcd34d", fontWeight: 600, color: "#92400e", whiteSpace: "nowrap" }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {workHistoryDaily.map((row, i) => (
-                  <tr key={i}>
-                    <td style={{ padding: 3, border: "1px solid #fef3c7" }}>
-                      <input style={{ ...inputStyle, minWidth: 100, fontSize: 12 }} value={row.company}
-                        onChange={(e) => { const u = [...workHistoryDaily]; u[i] = { ...u[i], company: e.target.value }; onChangeDaily(u); }} />
-                    </td>
-                    <td style={{ padding: 3, border: "1px solid #fef3c7" }}>
-                      <input style={{ ...inputStyle, minWidth: 80, fontSize: 12 }} value={row.jobType}
-                        onChange={(e) => { const u = [...workHistoryDaily]; u[i] = { ...u[i], jobType: e.target.value }; onChangeDaily(u); }} />
-                    </td>
-                    <td style={{ padding: 3, border: "1px solid #fef3c7", textAlign: "center" }}>
-                      <input type="number" style={{ ...inputStyle, width: 70, fontSize: 12, textAlign: "center" }} value={row.totalDays}
-                        onChange={(e) => { const d = Number(e.target.value) || 0; const u = [...workHistoryDaily]; u[i] = { ...u[i], totalDays: d, convertedMonths: Math.ceil(d / 20) }; onChangeDaily(u); }} />
-                    </td>
-                    <td style={{ padding: "3px 8px", border: "1px solid #fef3c7", textAlign: "center", fontWeight: 700, color: "#b45309" }}>
-                      {row.convertedMonths}개월
-                    </td>
-                    <td style={{ padding: "3px 8px", border: "1px solid #fef3c7", textAlign: "center", fontSize: 11, color: "#6b7280" }}>
-                      {row.startYear}.{String(row.startMonth).padStart(2, "0")}
-                    </td>
-                    <td style={{ padding: 3, border: "1px solid #fef3c7" }}>
-                      <input style={{ ...inputStyle, width: 70, fontSize: 12 }} value={row.source}
-                        onChange={(e) => { const u = [...workHistoryDaily]; u[i] = { ...u[i], source: e.target.value }; onChangeDaily(u); }} />
-                    </td>
-                    <td style={{ padding: 3, border: "1px solid #fef3c7" }}>
-                      <input style={{ ...inputStyle, minWidth: 80, fontSize: 12 }} value={row.memo}
-                        onChange={(e) => { const u = [...workHistoryDaily]; u[i] = { ...u[i], memo: e.target.value }; onChangeDaily(u); }} />
-                    </td>
-                    <td style={{ padding: 3, border: "1px solid #fef3c7", textAlign: "center" }}>
-                      <button onClick={() => onChangeDaily(workHistoryDaily.filter((_, idx) => idx !== i))} style={{ background: "none", border: "none", color: "#dc2626", cursor: "pointer", fontSize: 14 }}>✕</button>
-                    </td>
-                  </tr>
-                ))}
-                {workHistoryDaily.length === 0 && (
-                  <tr><td colSpan={8} style={{ padding: "12px", textAlign: "center", color: "#9ca3af", fontSize: 12 }}>일용직 이력 없음</td></tr>
-                )}
-              </tbody>
-              {workHistoryDaily.length > 0 && (
-                <tfoot>
-                  <tr style={{ background: "#fef9ec" }}>
-                    <td colSpan={2} style={{ padding: "4px 8px", border: "1px solid #fcd34d", fontWeight: 700, color: "#92400e", textAlign: "right" }}>합계</td>
-                    <td style={{ padding: "4px 8px", border: "1px solid #fcd34d", fontWeight: 700, color: "#92400e", textAlign: "center" }}>
-                      {workHistoryDaily.reduce((s, r) => s + Number(r.totalDays || 0), 0)}일
-                    </td>
-                    <td style={{ padding: "4px 8px", border: "1px solid #fcd34d", fontWeight: 700, color: "#b45309", textAlign: "center" }}>
-                      {(() => { const s = workHistoryDaily.reduce((a, r) => a + Number(r.totalDays || 0), 0); return s > 0 ? calcDuration(Math.ceil(s / 20)) : "0개월"; })()}
-                      <div style={{ fontSize: 10, color: "#9ca3af", fontWeight: 400 }}>
-                        (총 {workHistoryDaily.reduce((s, r) => s + Number(r.totalDays || 0), 0)}일 ÷ 20)
-                      </div>
-                    </td>
-                    <td colSpan={4} style={{ border: "1px solid #fcd34d" }} />
-                  </tr>
-                </tfoot>
-              )}
-            </table>
-          </div>
-          <button onClick={() => onChangeDaily([...workHistoryDaily, { company: "", jobType: "", totalDays: 0, startYear: new Date().getFullYear(), startMonth: 1, convertedMonths: 0, source: "", memo: "" }])}
-            style={{ background: "white", border: "1px solid #fcd34d", borderRadius: 6, padding: "4px 12px", fontSize: 12, cursor: "pointer", color: "#92400e" }}>
-            + 일용직 행 추가
-          </button>
+          {(() => {
+            if (workHistoryDaily.length === 0) return (
+              <div style={{ padding: "12px", textAlign: "center", color: "#9ca3af", fontSize: 12, border: "1px solid #fef3c7", borderRadius: 6 }}>일용직 이력 없음</div>
+            );
+            // 최신 사업장 계산
+            const sorted = [...workHistoryDaily].sort((a, b) => (b.startYear * 12 + b.startMonth) - (a.startYear * 12 + a.startMonth));
+            const latestCompany = sorted[0]?.company ?? "";
+            const latestEntries = workHistoryDaily.filter(e => e.company === latestCompany);
+            const otherEntries = workHistoryDaily.filter(e => e.company !== latestCompany);
+            const latestDays = latestEntries.reduce((s, r) => s + Number(r.totalDays || 0), 0);
+            const otherDays = otherEntries.reduce((s, r) => s + Number(r.totalDays || 0), 0);
+            const totalDays = latestDays + otherDays;
+            const latestEarliestStart = latestEntries.reduce((min, e) => {
+              const v = e.startYear * 12 + e.startMonth;
+              return v < min ? v : min;
+            }, Infinity);
+            const otherEarliestStart = otherEntries.length > 0 ? otherEntries.reduce((min, e) => {
+              const v = e.startYear * 12 + e.startMonth;
+              return v < min ? v : min;
+            }, Infinity) : 0;
+            const toYM = (v: number) => v === Infinity || v === 0 ? "—" : `${Math.floor(v / 12)}.${String(v % 12).padStart(2, "0")}`;
+            const latestJobType = latestEntries[0]?.jobType ?? "";
+            const latestSource = [...new Set(latestEntries.map(e => e.source))].join("/");
+            const otherSources = [...new Set(otherEntries.map(e => e.source))].join("/");
+            return (
+              <div style={{ overflowX: "auto", marginBottom: 8 }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                  <thead>
+                    <tr style={{ background: "#fef9ec" }}>
+                      {["사업장(대표)", "직종", "총 근무일수", "최초 근무", "출처"].map(h => (
+                        <th key={h} style={{ padding: "5px 6px", border: "1px solid #fcd34d", fontWeight: 600, color: "#92400e", whiteSpace: "nowrap" }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td style={{ padding: "4px 8px", border: "1px solid #fef3c7", fontWeight: 600 }}>{latestCompany || "—"}</td>
+                      <td style={{ padding: "4px 8px", border: "1px solid #fef3c7", fontSize: 11, color: "#6b7280" }}>{latestJobType}</td>
+                      <td style={{ padding: "4px 8px", border: "1px solid #fef3c7", textAlign: "center", fontWeight: 700, color: "#b45309" }}>{latestDays}일</td>
+                      <td style={{ padding: "4px 8px", border: "1px solid #fef3c7", textAlign: "center", fontSize: 11, color: "#6b7280" }}>{toYM(latestEarliestStart)}</td>
+                      <td style={{ padding: "4px 8px", border: "1px solid #fef3c7", fontSize: 11, color: "#6b7280" }}>{latestSource}</td>
+                    </tr>
+                    {otherDays > 0 && (
+                      <tr style={{ background: "#fffbeb" }}>
+                        <td style={{ padding: "4px 8px", border: "1px solid #fef3c7", color: "#92400e", fontStyle: "italic" }}>그 외 직업력</td>
+                        <td style={{ padding: "4px 8px", border: "1px solid #fef3c7", fontSize: 11, color: "#9ca3af" }}>다수</td>
+                        <td style={{ padding: "4px 8px", border: "1px solid #fef3c7", textAlign: "center", fontWeight: 700, color: "#b45309" }}>{otherDays}일</td>
+                        <td style={{ padding: "4px 8px", border: "1px solid #fef3c7", textAlign: "center", fontSize: 11, color: "#6b7280" }}>{toYM(otherEarliestStart)}</td>
+                        <td style={{ padding: "4px 8px", border: "1px solid #fef3c7", fontSize: 11, color: "#6b7280" }}>{otherSources}</td>
+                      </tr>
+                    )}
+                  </tbody>
+                  <tfoot>
+                    <tr style={{ background: "#fef9ec" }}>
+                      <td colSpan={2} style={{ padding: "4px 8px", border: "1px solid #fcd34d", fontWeight: 700, color: "#92400e", textAlign: "right" }}>합계</td>
+                      <td colSpan={3} style={{ padding: "4px 8px", border: "1px solid #fcd34d", fontWeight: 700, color: "#b45309" }}>
+                        {totalDays}일 → <strong>{calcDuration(Math.ceil(totalDays / 20))}</strong>
+                        <span style={{ fontSize: 10, color: "#9ca3af", fontWeight: 400, marginLeft: 6 }}>({totalDays}일 ÷ 20, 올림)</span>
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+                <div style={{ fontSize: 10, color: "#9ca3af", marginTop: 4 }}>※ 상세 내역 {workHistoryDaily.length}건 집계 (최신 사업장 기준 요약)</div>
+              </div>
+            );
+          })()}
         </div>
 
         {/* 마지막 소음작업 중단일 */}
