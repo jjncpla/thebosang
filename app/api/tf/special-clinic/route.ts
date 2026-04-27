@@ -46,6 +46,7 @@ export async function GET(req: NextRequest) {
       title: true,
       content: true,
       scheduledDate: true,
+      scheduledEndDate: true,
       isAllDay: true,
       scheduledHour: true,
       scheduledMinute: true,
