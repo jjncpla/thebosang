@@ -164,16 +164,23 @@ function WorkHistoryDrawerContent({
         const totalPages = pdf.numPages;
         // 일용직 밀도 높은 문서는 3페이지, 그 외 5페이지
         const CHUNK_PAGES = (docType === "고용산재_전체" || docType === "일용직") ? 3 : 5;
+        let chunkIndex = 0;
 
         for (let start = 1; start <= totalPages; start += CHUNK_PAGES) {
           const end = Math.min(start + CHUNK_PAGES - 1, totalPages);
           const chunkName = `${file.name} (p${start}-${end})`;
 
+          // 고용산재_전체: 첫 청크는 자격이력+일용직 둘 다 (Sonnet),
+          // 나머지 청크는 일용직만 (Haiku) → 속도/정확도 균형
+          const effectiveDocType = (docType === "고용산재_전체" && chunkIndex > 0)
+            ? "일용직"
+            : docType;
+
           // 각 페이지를 캔버스에 렌더링 → JPEG 변환
           const formData = new FormData();
           for (let p = start; p <= end; p++) {
             const page = await pdf.getPage(p);
-            const viewport = page.getViewport({ scale: 2.0 }); // ~144 DPI
+            const viewport = page.getViewport({ scale: 2.0 });
             const canvas = document.createElement("canvas");
             canvas.width = viewport.width;
             canvas.height = viewport.height;
@@ -184,8 +191,9 @@ function WorkHistoryDrawerContent({
             });
             formData.append("images", blob, `page_${p}.jpg`);
           }
-          formData.append("docType", docType);
+          formData.append("docType", effectiveDocType);
           formData.append("chunkName", chunkName);
+          chunkIndex++;
 
           const res = await fetch(`/api/cases/${caseId}/work-history/analyze`, { method: "POST", body: formData });
           if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error((err as {error?: string}).error ?? "분석 실패"); }
@@ -218,6 +226,10 @@ function WorkHistoryDrawerContent({
               }
             });
             if (data.dailyEntries?.length) accDaily.push(...(data.dailyEntries as WorkHistoryDailyEntry[]));
+
+            // 청크별 즉시 화면 반영 (사용자가 진행상황 확인 가능)
+            onChange({ workHistoryRaw: { ...accRaw } as WorkHistoryRaw });
+            onChangeDaily([...accDaily]);
           }
         } // chunk loop
       } // valid files loop
