@@ -182,18 +182,37 @@ function WorkHistoryDrawerContent({
           formData.append("files", chunk);
           formData.append("docTypes", docType);
           const res = await fetch(`/api/cases/${caseId}/work-history/analyze`, { method: "POST", body: formData });
-          if (!res.ok) { const err = await res.json(); throw new Error(err.error ?? "분석 실패"); }
-          const data = await res.json();
-          if (data.name && !extractedName) extractedName = data.name;
-          ["고용산재", "건보", "소득금액", "연금", "건근공"].forEach((src) => {
-            if (data.sources?.[src]?.length > 0) {
-              (accRaw as Record<string, unknown[]>)[src] = [
-                ...((accRaw as Record<string, unknown[]>)[src] ?? []),
-                ...data.sources[src],
-              ];
+          if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error((err as {error?: string}).error ?? "분석 실패"); }
+
+          // SSE 스트림 읽기 (keepalive 핑 제외하고 result/error 이벤트 처리)
+          const reader = res.body!.getReader();
+          const decoder = new TextDecoder();
+          let buf = "";
+          let data: { type: string; sources?: Record<string, unknown[]>; dailyEntries?: unknown[]; name?: string; error?: string } | null = null;
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buf += decoder.decode(value, { stream: true });
+            const parts = buf.split("\n\n");
+            buf = parts.pop() ?? "";
+            for (const part of parts) {
+              if (!part.startsWith("data: ")) continue;
+              try { data = JSON.parse(part.slice(6)); } catch { /* skip */ }
             }
-          });
-          if (data.dailyEntries?.length > 0) accDaily.push(...data.dailyEntries);
+          }
+          if (data?.type === "error") throw new Error(data.error ?? "분석 오류");
+          if (data?.type === "result") {
+            if (data.name && !extractedName) extractedName = data.name;
+            ["고용산재", "건보", "소득금액", "연금", "건근공"].forEach((src) => {
+              if ((data!.sources as Record<string, unknown[]>)?.[src]?.length > 0) {
+                (accRaw as Record<string, unknown[]>)[src] = [
+                  ...((accRaw as Record<string, unknown[]>)[src] ?? []),
+                  ...(data!.sources as Record<string, unknown[]>)[src],
+                ];
+              }
+            });
+            if (data.dailyEntries?.length) accDaily.push(...(data.dailyEntries as WorkHistoryDailyEntry[]));
+          }
         } // chunksToSend loop
       } // valid files loop
       onChange({ workHistoryRaw: accRaw });
