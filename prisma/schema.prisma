@@ -1355,3 +1355,12 @@ model PendingExamReview {
   @@index([caseId, status])
   @@index([status, createdAt])
 }
+
+model JichimDocument {
+  id        String   @id @default(cuid())
+  itemId    String   @unique
+  title     String
+  content   Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
