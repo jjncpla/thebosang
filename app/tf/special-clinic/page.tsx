@@ -113,6 +113,26 @@ function SpecialClinicCalendar() {
   const [staffPanelOpen, setStaffPanelOpen] = useState(false)
   const staffPanelRef = useRef<HTMLDivElement>(null)
   const [staffSearch, setStaffSearch] = useState('')
+
+  // 필터 프리셋 (계정별 저장)
+  interface FilterPreset {
+    id: string
+    name: string
+    filters: {
+      selectedBranch?: string
+      selectedTFs?: string[]
+      categoryFilters?: string[]
+      hospitalFilters?: string[]
+      statusFilters?: string[]
+      staffFilters?: string[]
+    }
+    createdAt: string
+  }
+  const [presets, setPresets] = useState<FilterPreset[]>([])
+  const [presetPanelOpen, setPresetPanelOpen] = useState(false)
+  const presetPanelRef = useRef<HTMLDivElement>(null)
+  const [presetSaveName, setPresetSaveName] = useState('')
+  const [presetSaving, setPresetSaving] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [debouncedQuery, setDebouncedQuery] = useState('')
 
@@ -228,6 +248,87 @@ function SpecialClinicCalendar() {
     if (staffPanelOpen) document.addEventListener('mousedown', handleClick)
     return () => document.removeEventListener('mousedown', handleClick)
   }, [staffPanelOpen])
+
+  // 프리셋 패널 외부 클릭 닫기
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (presetPanelRef.current && !presetPanelRef.current.contains(e.target as Node)) setPresetPanelOpen(false)
+    }
+    if (presetPanelOpen) document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [presetPanelOpen])
+
+  // 프리셋 로드
+  useEffect(() => {
+    fetch('/api/me/calendar-presets')
+      .then(r => r.ok ? r.json() : null)
+      .then((data: { presets?: FilterPreset[] } | null) => {
+        if (data?.presets) setPresets(data.presets)
+      })
+      .catch(() => {})
+  }, [])
+
+  function applyPreset(p: FilterPreset) {
+    const f = p.filters
+    setSelectedBranch(f.selectedBranch ?? '')
+    setSelectedTFs(f.selectedTFs ?? [])
+    setCategoryFilters(f.categoryFilters ?? [])
+    setHospitalFilters(f.hospitalFilters ?? [])
+    setStatusFilters(f.statusFilters ?? [])
+    setStaffFilters(f.staffFilters ?? [])
+    setPresetPanelOpen(false)
+  }
+
+  async function savePreset() {
+    const name = presetSaveName.trim()
+    if (!name) { alert('프리셋 이름을 입력하세요'); return }
+    setPresetSaving(true)
+    const filters = {
+      selectedBranch,
+      selectedTFs,
+      categoryFilters,
+      hospitalFilters,
+      statusFilters,
+      staffFilters,
+    }
+    const res = await fetch('/api/me/calendar-presets', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, filters }),
+    })
+    setPresetSaving(false)
+    if (res.ok) {
+      // 다시 로드
+      const data = await fetch('/api/me/calendar-presets').then(r => r.json()).catch(() => null)
+      if (data?.presets) setPresets(data.presets)
+      setPresetSaveName('')
+    } else {
+      alert('저장 실패')
+    }
+  }
+
+  async function deletePreset(id: string, name: string) {
+    if (!confirm(`'${name}' 프리셋을 삭제하시겠습니까?`)) return
+    const res = await fetch(`/api/me/calendar-presets?id=${encodeURIComponent(id)}`, { method: 'DELETE' })
+    if (res.ok) setPresets(prev => prev.filter(p => p.id !== id))
+  }
+
+  function clearAllFilters() {
+    setSelectedBranch('')
+    setSelectedTFs([])
+    setCategoryFilters([])
+    setHospitalFilters([])
+    setStatusFilters([])
+    setStaffFilters([])
+  }
+
+  const hasAnyFilter =
+    !!selectedBranch ||
+    selectedTFs.length > 0 ||
+    categoryFilters.length > 0 ||
+    hospitalFilters.length > 0 ||
+    statusFilters.length > 0 ||
+    staffFilters.length > 0
 
   // 데이터 로드 (전체 — 프론트에서 필터링)
   const load = useCallback(async () => {
@@ -757,6 +858,97 @@ function SpecialClinicCalendar() {
                     </label>
                   ))}
               </div>
+            </div>
+          )}
+        </div>
+
+        {/* 필터 프리셋 드롭다운 */}
+        <div className="relative" ref={presetPanelRef}>
+          <button
+            onClick={() => setPresetPanelOpen(p => !p)}
+            className="border rounded px-2 py-1 text-xs flex items-center gap-1 hover:bg-gray-50 bg-gradient-to-r from-indigo-50 to-purple-50 border-indigo-200 text-indigo-700"
+            title="자주 쓰는 필터 조합 저장 / 불러오기"
+          >
+            📌 프리셋{presets.length > 0 ? ` (${presets.length})` : ''}
+            {' '}<span className="text-gray-400">▼</span>
+          </button>
+          {presetPanelOpen && (
+            <div className="absolute top-full mt-1 left-0 bg-white border rounded-lg shadow-lg z-40 w-72 py-1">
+              {/* 현재 상태로 저장 */}
+              <div className="px-2 py-2 border-b bg-gray-50">
+                <div className="text-[10px] font-semibold text-gray-500 mb-1">현재 필터를 프리셋으로 저장</div>
+                <div className="flex gap-1">
+                  <input
+                    type="text"
+                    value={presetSaveName}
+                    onChange={e => setPresetSaveName(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && hasAnyFilter && savePreset()}
+                    placeholder="프리셋 이름 (예: 홍길동 담당)"
+                    className="flex-1 border rounded px-1.5 py-0.5 text-xs focus:outline-none focus:border-indigo-400"
+                    disabled={!hasAnyFilter}
+                  />
+                  <button
+                    onClick={savePreset}
+                    disabled={!hasAnyFilter || !presetSaveName.trim() || presetSaving}
+                    className="px-2 py-0.5 text-xs bg-indigo-500 text-white rounded hover:bg-indigo-600 disabled:opacity-40"
+                    title={hasAnyFilter ? '현재 필터 조합을 저장' : '필터를 먼저 선택하세요'}
+                  >
+                    {presetSaving ? '...' : '💾 저장'}
+                  </button>
+                </div>
+                {!hasAnyFilter && (
+                  <div className="text-[10px] text-gray-400 mt-1">필터를 선택해야 저장 가능</div>
+                )}
+              </div>
+
+              {/* 저장된 프리셋 목록 */}
+              <div className="max-h-72 overflow-y-auto">
+                {presets.length === 0 && (
+                  <div className="text-[11px] text-gray-400 text-center py-3">저장된 프리셋이 없습니다</div>
+                )}
+                {presets.map(p => {
+                  const f = p.filters
+                  const summary: string[] = []
+                  if (f.selectedBranch) summary.push(BRANCH_SHORT[f.selectedBranch] || f.selectedBranch)
+                  if (f.selectedTFs?.length) summary.push(`TF ${f.selectedTFs.length}`)
+                  if (f.categoryFilters?.length) summary.push(`카 ${f.categoryFilters.length}`)
+                  if (f.hospitalFilters?.length) summary.push(`병 ${f.hospitalFilters.length}`)
+                  if (f.statusFilters?.length) summary.push(`상 ${f.statusFilters.length}`)
+                  if (f.staffFilters?.length) summary.push(`담 ${f.staffFilters.length}`)
+                  return (
+                    <div key={p.id} className="flex items-center px-2 py-1.5 hover:bg-indigo-50 border-b last:border-b-0">
+                      <button
+                        onClick={() => applyPreset(p)}
+                        className="flex-1 text-left text-xs"
+                      >
+                        <div className="font-medium text-gray-800 truncate">{p.name}</div>
+                        <div className="text-[10px] text-gray-400 truncate">
+                          {summary.length > 0 ? summary.join(' · ') : '(빈 필터)'}
+                        </div>
+                      </button>
+                      <button
+                        onClick={() => deletePreset(p.id, p.name)}
+                        className="text-[10px] text-gray-400 hover:text-red-500 px-1"
+                        title="삭제"
+                      >
+                        🗑️
+                      </button>
+                    </div>
+                  )
+                })}
+              </div>
+
+              {/* 전체 필터 초기화 */}
+              {hasAnyFilter && (
+                <div className="border-t px-2 py-1.5">
+                  <button
+                    onClick={() => { clearAllFilters(); setPresetPanelOpen(false) }}
+                    className="text-[11px] text-gray-500 hover:text-red-500 hover:underline"
+                  >
+                    ↺ 모든 필터 초기화
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>
