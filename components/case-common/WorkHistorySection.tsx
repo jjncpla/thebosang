@@ -156,7 +156,8 @@ function WorkHistoryDrawerContent({
       for (let i = 0; i < valid.length; i++) {
         const { file, docType } = valid[i];
 
-        // 1MB 초과 시 5페이지 청크로 분할하여 각각 별도 요청
+        // 1MB 초과 시 청크로 분할하여 각각 별도 요청
+        // 일용직 밀도 높은 문서는 3페이지, 그 외 5페이지
         const SIZE_LIMIT = 1 * 1024 * 1024;
         const chunksToSend: File[] = [];
         if (file.size > SIZE_LIMIT) {
@@ -164,7 +165,7 @@ function WorkHistoryDrawerContent({
           const buffer = await file.arrayBuffer();
           const srcDoc = await PDFDocument.load(buffer);
           const totalPages = srcDoc.getPageCount();
-          const CHUNK_PAGES = 5;
+          const CHUNK_PAGES = (docType === "고용산재_전체" || docType === "일용직") ? 3 : 5;
           for (let start = 0; start < totalPages; start += CHUNK_PAGES) {
             const end = Math.min(start + CHUNK_PAGES, totalPages);
             const chunkDoc = await PDFDocument.create();
