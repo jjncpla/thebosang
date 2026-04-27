@@ -1112,6 +1112,25 @@ model SystemConfig {
   @@map("system_configs")
 }
 
+model FormRequest {
+  id          String    @id @default(cuid())
+  title       String
+  description String    @default("")
+  formType    String?
+  requestedBy String
+  requestedByEmail String?
+  branch      String?
+  status      String    @default("pending")
+  resolution  String    @default("")
+  resolvedBy  String?
+  resolvedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([status, createdAt])
+  @@map("form_requests")
+}
+
 model Minutes {
   id          String   @id @default(cuid())
   category    String

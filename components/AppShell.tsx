@@ -35,6 +35,7 @@ const MENU_ITEMS: MenuItem[] = [
   { id: "todo", label: "To Do List", icon: "☑", path: "/todo" },
   { id: "law", label: "법령 및 규정", icon: "📜", path: "/law" },
   { id: "grade", label: "실무 참고 정보", icon: "📊", path: "/grade" },
+  { id: "forms", label: "서식 작성", icon: "📝", path: "/forms" },
   { id: "tf-special-clinic", label: "통합 캘린더", icon: "📅", path: "/tf/special-clinic" },
   {
     id: "cases",
