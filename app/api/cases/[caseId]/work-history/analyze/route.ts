@@ -82,7 +82,7 @@ export async function POST(
     }
 
     const SIZE_LIMIT = 1 * 1024 * 1024
-    const CHUNK_PAGES = 3
+    const CHUNK_PAGES = 5
     const pdfContents: { name: string; base64: string; docType: string }[] = []
 
     for (let fileIdx = 0; fileIdx < files.length; fileIdx++) {
@@ -179,7 +179,7 @@ export async function POST(
       }
 
       if (pdfIdx < pdfContents.length - 1) {
-        await new Promise((r) => setTimeout(r, 15000))
+        await new Promise((r) => setTimeout(r, 3000))
       }
     }
 
