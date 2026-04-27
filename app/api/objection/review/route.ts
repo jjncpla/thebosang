@@ -102,7 +102,7 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  if (!tfName || !patientName || !approvalStatus || !progressStatus) {
+  if (!tfName || !patientName || !approvalStatus) {
     return NextResponse.json({ error: "필수 항목 누락" }, { status: 400 });
   }
 

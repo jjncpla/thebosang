@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CASE_TYPE_LABELS } from "@/lib/constants/case";
 import { useBranches } from "@/lib/hooks/useBranches";
@@ -61,6 +61,63 @@ function toInputDate(iso: string | null | undefined) {
   const d = new Date(iso);
   if (isNaN(d.getTime())) return "";
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+// 연/월/일 탭 이동 날짜 입력 컴포넌트
+function DateInput({ value, onChange, style }: { value: string; onChange: (v: string) => void; style?: React.CSSProperties }) {
+  const [y, setY] = useState(value ? value.slice(0, 4) : "")
+  const [m, setM] = useState(value ? value.slice(5, 7) : "")
+  const [d, setD] = useState(value ? value.slice(8, 10) : "")
+
+  // 외부 value 변경 시 동기화
+  useEffect(() => {
+    setY(value ? value.slice(0, 4) : "")
+    setM(value ? value.slice(5, 7) : "")
+    setD(value ? value.slice(8, 10) : "")
+  }, [value])
+
+  function emit(ny: string, nm: string, nd: string) {
+    if (ny.length === 4 && nm.length === 2 && nd.length === 2) {
+      onChange(`${ny}-${nm}-${nd}`)
+    } else if (!ny && !nm && !nd) {
+      onChange("")
+    }
+  }
+
+  const base: React.CSSProperties = { border: "none", outline: "none", background: "transparent", textAlign: "center", fontSize: style?.fontSize ?? 13 }
+  const wrap: React.CSSProperties = { ...style, display: "flex", alignItems: "center", gap: 2, padding: "0 6px" }
+
+  return (
+    <div style={wrap}>
+      <input
+        type="text" inputMode="numeric" maxLength={4} placeholder="YYYY" value={y}
+        style={{ ...base, width: 36 }}
+        onChange={e => { const v = e.target.value.replace(/\D/g, ""); setY(v); emit(v, m, d) }}
+        onKeyDown={e => { if (e.key === "Tab" && y.length > 0) { e.preventDefault(); (e.currentTarget.nextElementSibling?.nextElementSibling as HTMLInputElement)?.focus() } }}
+      />
+      <span style={{ color: "#aaa" }}>-</span>
+      <input
+        type="text" inputMode="numeric" maxLength={2} placeholder="MM" value={m}
+        style={{ ...base, width: 22 }}
+        onChange={e => {
+          const v = e.target.value.replace(/\D/g, "")
+          setM(v)
+          emit(y, v, d)
+          if (v.length === 2) (e.currentTarget.nextElementSibling?.nextElementSibling as HTMLInputElement)?.focus()
+        }}
+      />
+      <span style={{ color: "#aaa" }}>-</span>
+      <input
+        type="text" inputMode="numeric" maxLength={2} placeholder="DD" value={d}
+        style={{ ...base, width: 22 }}
+        onChange={e => {
+          const v = e.target.value.replace(/\D/g, "")
+          setD(v)
+          emit(y, m, v)
+        }}
+      />
+    </div>
+  )
 }
 
 function addDays(iso: string | null, days: number): Date | null {
@@ -159,7 +216,7 @@ function ReviewModal({ initial, onClose, onSave }: {
           </div>
           <div><label style={labelStyle}>성명</label><input style={inputStyle} value={form.patientName} onChange={e => set("patientName", e.target.value)} /></div>
           <div><label style={labelStyle}>사건분류</label><select style={inputStyle} value={form.caseType} onChange={e => set("caseType", e.target.value)}><option value="">선택</option>{Object.entries(CASE_TYPE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
-          <div><label style={labelStyle}>처분일</label><input type="date" style={inputStyle} value={form.decisionDate} onChange={e => set("decisionDate", e.target.value)} /></div>
+          <div><label style={labelStyle}>처분일</label><DateInput style={inputStyle} value={form.decisionDate} onChange={v => set("decisionDate", v)} /></div>
           <div><label style={labelStyle}>승인여부</label><select style={inputStyle} value={form.approvalStatus} onChange={e => set("approvalStatus", e.target.value)}>{APPROVAL_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}</select></div>
           <div>
             <label style={labelStyle}>사건진행여부</label>
