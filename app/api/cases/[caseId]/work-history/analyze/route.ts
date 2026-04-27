@@ -123,64 +123,42 @@ export async function POST(
     const allDailyEntries: unknown[] = []
     let extractedName = ""
 
-    for (let pdfIdx = 0; pdfIdx < pdfContents.length; pdfIdx++) {
-      const pdf = pdfContents[pdfIdx]
+    const processOne = async (pdf: { name: string; base64: string; docType: string }) => {
       const promptText = getPromptForDocType(pdf.docType)
       const userContent = [
-        {
-          type: "document",
-          source: {
-            type: "base64",
-            media_type: "application/pdf",
-            data: pdf.base64,
-          },
-        },
+        { type: "document", source: { type: "base64", media_type: "application/pdf", data: pdf.base64 } },
         { type: "text", text: promptText },
       ]
-
       const claudeRes = await callClaudeWithRetry(
-        {
-          model: "claude-sonnet-4-6",
-          max_tokens: 8192,
-          messages: [{ role: "user", content: userContent }],
-        },
+        { model: "claude-sonnet-4-6", max_tokens: 8192, messages: [{ role: "user", content: userContent }] },
         apiKey
       )
-
       if (!claudeRes.ok) {
-        const err = await claudeRes.text()
-        console.error(`Claude API error (${pdf.name}):`, err)
-        continue
+        console.error(`Claude API error (${pdf.name}):`, await claudeRes.text())
+        return null
       }
-
       const claudeData = await claudeRes.json()
       const rawText = claudeData.content?.[0]?.text ?? ""
-
-      let parsed: { name?: string; sources: Record<string, unknown[]>; dailyEntries?: unknown[] }
       try {
         const jsonMatch = rawText.match(/\{[\s\S]*\}/)
         if (!jsonMatch) throw new Error("JSON not found")
-        parsed = JSON.parse(jsonMatch[0])
+        return JSON.parse(jsonMatch[0]) as { name?: string; sources: Record<string, unknown[]>; dailyEntries?: unknown[] }
       } catch {
         console.error(`JSON parse error (${pdf.name}):`, rawText)
-        continue
+        return null
       }
+    }
 
+    const results = await Promise.allSettled(pdfContents.map(processOne))
+
+    for (const result of results) {
+      if (result.status !== "fulfilled" || !result.value) continue
+      const parsed = result.value
       if (parsed.name && !extractedName) extractedName = parsed.name
-
       for (const key of ["고용산재", "건보", "소득금액", "연금"] as const) {
-        if (parsed.sources?.[key]?.length > 0) {
-          mergedSources[key] = mergedSources[key].concat(parsed.sources[key])
-        }
+        if (parsed.sources?.[key]?.length > 0) mergedSources[key] = mergedSources[key].concat(parsed.sources[key])
       }
-
-      if (parsed.dailyEntries?.length) {
-        allDailyEntries.push(...parsed.dailyEntries)
-      }
-
-      if (pdfIdx < pdfContents.length - 1) {
-        await new Promise((r) => setTimeout(r, 3000))
-      }
+      if (parsed.dailyEntries?.length) allDailyEntries.push(...parsed.dailyEntries)
     }
 
     await prisma.case.update({
