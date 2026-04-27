@@ -1,9 +1,30 @@
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/auth"
 import { prisma } from "@/lib/prisma"
-// pdf-parse 메인 진입점은 빌드 시 test PDF 파일을 열려다 실패하므로 내부 경로 직접 사용
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const pdfParse: (buf: Buffer) => Promise<{ text: string }> = require("pdf-parse/lib/pdf-parse.js")
+import { execFile } from "child_process"
+import { writeFile, readFile, unlink } from "fs/promises"
+import { tmpdir } from "os"
+import { join } from "path"
+import { promisify } from "util"
+
+// pdftotext(poppler-utils, Dockerfile에 설치됨) 사용 — 한국 PDF 텍스트 추출 최적
+const execFileAsync = promisify(execFile)
+
+async function extractTextFromPDF(buffer: Buffer, filename: string): Promise<string> {
+  const id = `${Date.now()}_${Math.random().toString(36).slice(2)}`
+  const tmpIn = join(tmpdir(), `tbss_${id}.pdf`)
+  const tmpOut = join(tmpdir(), `tbss_${id}.txt`)
+  try {
+    await writeFile(tmpIn, buffer)
+    await execFileAsync("pdftotext", ["-layout", "-enc", "UTF-8", tmpIn, tmpOut])
+    const text = await readFile(tmpOut, "utf-8")
+    console.log(`텍스트 추출 완료: ${filename} (${text.trim().length}자)`)
+    return text.trim()
+  } finally {
+    await unlink(tmpIn).catch(() => {})
+    await unlink(tmpOut).catch(() => {})
+  }
+}
 
 export const maxDuration = 300
 
@@ -92,13 +113,11 @@ export async function POST(
       const docType = docTypes[i] ?? ""
       try {
         const buffer = Buffer.from(await file.arrayBuffer())
-        const parsed = await pdfParse(buffer)
-        const text = parsed.text?.trim()
+        const text = await extractTextFromPDF(buffer, file.name)
         if (!text) {
           console.warn(`텍스트 추출 결과 없음: ${file.name}`)
           continue
         }
-        console.log(`텍스트 추출 완료: ${file.name} (${text.length}자)`)
         pdfContents.push({ name: file.name, text, docType })
       } catch (e) {
         console.error(`PDF 텍스트 추출 실패 (${file.name}):`, e)
