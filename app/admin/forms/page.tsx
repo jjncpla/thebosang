@@ -503,16 +503,20 @@ export default function FormsPage() {
                           pointerEvents: "none",
                         }}
                       >
-                        {/* 십자선 */}
-                        <div style={{ position: "absolute", left: markerX - 10, top: markerY - 10, width: 20, height: 20, pointerEvents: "none" }}>
-                          <div style={{ position: "absolute", left: 0, top: 9, width: 20, height: 2, backgroundColor: "#FF0000", opacity: 0.9 }} />
-                          <div style={{ position: "absolute", left: 9, top: 0, width: 2, height: 20, backgroundColor: "#FF0000", opacity: 0.9 }} />
+                        {/* L자 마커 — 코너가 baseline-left (drawText 기준점) */}
+                        <div style={{ position: "absolute", left: markerX, top: markerY - 18, width: 18, height: 20, pointerEvents: "none" }}>
+                          {/* 수직선: 코너에서 위로 (텍스트 본체 방향) */}
+                          <div style={{ position: "absolute", left: 0, top: 0, width: 2, height: 18, backgroundColor: "#FF0000", opacity: 0.9 }} />
+                          {/* 수평선: 코너에서 오른쪽으로 (텍스트 진행 방향) */}
+                          <div style={{ position: "absolute", left: 0, top: 16, width: 18, height: 2, backgroundColor: "#FF0000", opacity: 0.9 }} />
+                          {/* 코너 점 — 정확한 anchor 위치 강조 */}
+                          <div style={{ position: "absolute", left: -1, top: 15, width: 4, height: 4, backgroundColor: "#FF0000", borderRadius: "50%" }} />
                         </div>
-                        {/* 라벨 */}
+                        {/* 라벨 — L자 우측 하단 */}
                         <div style={{
                           position: "absolute",
-                          left: markerX + 12,
-                          top: markerY - 18,
+                          left: markerX + 22,
+                          top: markerY - 8,
                           backgroundColor: "rgba(220,38,38,0.9)",
                           color: "white",
                           fontSize: 10,
@@ -565,7 +569,7 @@ export default function FormsPage() {
               {/* 힌트 */}
               {selectedField && previewType === "png" && (
                 <div style={{ position: "absolute", top: 8, left: "50%", transform: "translateX(-50%)", background: "rgba(0,0,0,0.6)", color: "white", fontSize: 10, padding: "2px 8px", borderRadius: 10, pointerEvents: "none", whiteSpace: "nowrap" }}>
-                  클릭으로 마커 이동 · 방향키(Shift: 5pt)로 미세 조정
+                  L자 코너 = 텍스트 시작점 (왼쪽-baseline) · 클릭/방향키(Shift: 5pt) 조정
                 </div>
               )}
             </div>
