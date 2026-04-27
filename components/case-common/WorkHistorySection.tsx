@@ -153,39 +153,44 @@ function WorkHistoryDrawerContent({
     const accDaily: typeof workHistoryDaily = [...workHistoryDaily];
     let extractedName = "";
     try {
+      // pdfjs-dist 동적 로드 + worker 설정 (CDN)
+      const pdfjsLib = await import("pdfjs-dist");
+      pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
+
       for (let i = 0; i < valid.length; i++) {
         const { file, docType } = valid[i];
-
-        // 1MB 초과 시 청크로 분할하여 각각 별도 요청
+        const buffer = await file.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
+        const totalPages = pdf.numPages;
         // 일용직 밀도 높은 문서는 3페이지, 그 외 5페이지
-        const SIZE_LIMIT = 1 * 1024 * 1024;
-        const chunksToSend: File[] = [];
-        if (file.size > SIZE_LIMIT) {
-          const { PDFDocument } = await import("pdf-lib");
-          const buffer = await file.arrayBuffer();
-          const srcDoc = await PDFDocument.load(buffer);
-          const totalPages = srcDoc.getPageCount();
-          const CHUNK_PAGES = (docType === "고용산재_전체" || docType === "일용직") ? 3 : 5;
-          for (let start = 0; start < totalPages; start += CHUNK_PAGES) {
-            const end = Math.min(start + CHUNK_PAGES, totalPages);
-            const chunkDoc = await PDFDocument.create();
-            const copied = await chunkDoc.copyPages(srcDoc, Array.from({ length: end - start }, (_, k) => start + k));
-            copied.forEach(p => chunkDoc.addPage(p));
-            const bytes = await chunkDoc.save();
-            chunksToSend.push(new File([bytes.buffer as ArrayBuffer], `${file.name} (p${start + 1}-${end})`, { type: "application/pdf" }));
-          }
-        } else {
-          chunksToSend.push(file);
-        }
+        const CHUNK_PAGES = (docType === "고용산재_전체" || docType === "일용직") ? 3 : 5;
 
-        for (const chunk of chunksToSend) {
+        for (let start = 1; start <= totalPages; start += CHUNK_PAGES) {
+          const end = Math.min(start + CHUNK_PAGES - 1, totalPages);
+          const chunkName = `${file.name} (p${start}-${end})`;
+
+          // 각 페이지를 캔버스에 렌더링 → JPEG 변환
           const formData = new FormData();
-          formData.append("files", chunk);
-          formData.append("docTypes", docType);
+          for (let p = start; p <= end; p++) {
+            const page = await pdf.getPage(p);
+            const viewport = page.getViewport({ scale: 2.0 }); // ~144 DPI
+            const canvas = document.createElement("canvas");
+            canvas.width = viewport.width;
+            canvas.height = viewport.height;
+            const ctx = canvas.getContext("2d")!;
+            await page.render({ canvasContext: ctx, viewport, canvas }).promise;
+            const blob = await new Promise<Blob>((resolve) => {
+              canvas.toBlob((b) => resolve(b!), "image/jpeg", 0.85);
+            });
+            formData.append("images", blob, `page_${p}.jpg`);
+          }
+          formData.append("docType", docType);
+          formData.append("chunkName", chunkName);
+
           const res = await fetch(`/api/cases/${caseId}/work-history/analyze`, { method: "POST", body: formData });
           if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error((err as {error?: string}).error ?? "분석 실패"); }
 
-          // SSE 스트림 읽기 (keepalive 핑 제외하고 result/error 이벤트 처리)
+          // SSE 스트림 읽기
           const reader = res.body!.getReader();
           const decoder = new TextDecoder();
           let buf = "";
@@ -214,7 +219,7 @@ function WorkHistoryDrawerContent({
             });
             if (data.dailyEntries?.length) accDaily.push(...(data.dailyEntries as WorkHistoryDailyEntry[]));
           }
-        } // chunksToSend loop
+        } // chunk loop
       } // valid files loop
       onChange({ workHistoryRaw: accRaw });
       onChangeDaily(accDaily);

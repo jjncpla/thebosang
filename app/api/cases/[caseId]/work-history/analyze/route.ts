@@ -17,7 +17,6 @@ async function callClaude(body: object, apiKey: string, maxRetries = 3): Promise
         "Content-Type": "application/json",
         "x-api-key": apiKey,
         "anthropic-version": "2023-06-01",
-        "anthropic-beta": "pdfs-2024-09-25",
       },
       body: JSON.stringify(body),
       signal: AbortSignal.timeout(120000),
@@ -47,19 +46,17 @@ export async function POST(
 ) {
   const session = await auth()
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  await params // caseId 사용하지 않지만 await 필요
+  await params
 
   const formData = await req.formData()
-  const files = formData.getAll("files") as File[]
-  const docTypes = formData.getAll("docTypes") as string[]
+  const images = formData.getAll("images") as File[]
+  const docType = (formData.get("docType") as string) ?? ""
+  const chunkName = (formData.get("chunkName") as string) ?? "(unnamed)"
 
-  if (!files?.length) return NextResponse.json({ error: "파일이 없습니다" }, { status: 400 })
+  if (!images?.length) return NextResponse.json({ error: "이미지가 없습니다" }, { status: 400 })
 
   const apiKey = process.env.ANTHROPIC_API_KEY
   if (!apiKey) return NextResponse.json({ error: "API key missing" }, { status: 500 })
-
-  const file = files[0]
-  const docType = docTypes[0] ?? ""
 
   const enc = new TextEncoder()
 
@@ -68,25 +65,38 @@ export async function POST(
       const send = (data: object) =>
         controller.enqueue(enc.encode(`data: ${JSON.stringify(data)}\n\n`))
 
-      // Railway Nginx proxy 연결 유지용 keepalive 핑 (15초마다)
       const keepalive = setInterval(
         () => controller.enqueue(enc.encode(": keepalive\n\n")),
         15000
       )
 
       try {
-        const buffer = await file.arrayBuffer()
-        const base64 = Buffer.from(buffer).toString("base64")
-        console.log(`처리 중: ${file.name} (${Math.round(buffer.byteLength / 1024)}KB)`)
+        // 모든 이미지를 base64로 변환
+        const imageContents = await Promise.all(
+          images.map(async (img) => {
+            const buf = await img.arrayBuffer()
+            return {
+              type: "image" as const,
+              source: {
+                type: "base64" as const,
+                media_type: "image/jpeg" as const,
+                data: Buffer.from(buf).toString("base64"),
+              },
+            }
+          })
+        )
+
+        const totalKB = images.reduce((sum, img) => sum + img.size, 0) / 1024
+        console.log(`처리 중: ${chunkName} (${images.length}장, 총 ${Math.round(totalKB)}KB)`)
 
         const claudeRes = await callClaude(
           {
-            model: "claude-haiku-4-5-20251001",
+            model: "claude-sonnet-4-6",
             max_tokens: 8192,
             messages: [{
               role: "user",
               content: [
-                { type: "document", source: { type: "base64", media_type: "application/pdf", data: base64 } },
+                ...imageContents,
                 { type: "text", text: getPromptForDocType(docType) },
               ],
             }],
@@ -96,7 +106,7 @@ export async function POST(
 
         if (!claudeRes.ok) {
           const errText = await claudeRes.text()
-          console.error(`Claude API 오류 (${file.name}):`, errText)
+          console.error(`Claude API 오류 (${chunkName}):`, errText)
           send({ type: "error", error: `Claude API 오류: ${errText}` })
           return
         }
@@ -115,9 +125,9 @@ export async function POST(
           sources = parsed.sources ?? sources
           dailyEntries = parsed.dailyEntries ?? []
           name = parsed.name ?? ""
-          console.log(`추출 완료: ${file.name} — 고용산재:${sources.고용산재?.length ?? 0} 건보:${sources.건보?.length ?? 0} 연금:${sources.연금?.length ?? 0} 일용직:${dailyEntries.length}`)
+          console.log(`추출 완료: ${chunkName} — 고용산재:${sources.고용산재?.length ?? 0} 건보:${sources.건보?.length ?? 0} 연금:${sources.연금?.length ?? 0} 일용직:${dailyEntries.length}`)
         } catch {
-          console.error(`JSON 파싱 오류 (${file.name}):`, rawText.slice(0, 300))
+          console.error(`JSON 파싱 오류 (${chunkName}):`, rawText.slice(0, 300))
         }
 
         send({ type: "result", sources, dailyEntries, name })
@@ -135,7 +145,7 @@ export async function POST(
     headers: {
       "Content-Type": "text/event-stream",
       "Cache-Control": "no-cache",
-      "X-Accel-Buffering": "no", // Nginx 버퍼링 비활성화 (Railway 필수)
+      "X-Accel-Buffering": "no",
     },
   })
 }
