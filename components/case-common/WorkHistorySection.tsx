@@ -153,86 +153,75 @@ function WorkHistoryDrawerContent({
     const accDaily: typeof workHistoryDaily = [...workHistoryDaily];
     let extractedName = "";
     try {
-      // pdfjs-dist 동적 로드 + worker 설정 (CDN)
-      const pdfjsLib = await import("pdfjs-dist");
-      pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
+      const { PDFDocument } = await import("pdf-lib");
 
-      for (let i = 0; i < valid.length; i++) {
-        const { file, docType } = valid[i];
+      // 1) 모든 파일을 PDF 청크로 분할 (5페이지씩)
+      type Chunk = { blob: Blob; chunkName: string; docType: string };
+      const allChunks: Chunk[] = [];
+      for (const { file, docType } of valid) {
         const buffer = await file.arrayBuffer();
-        const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
-        const totalPages = pdf.numPages;
-        // 일용직 밀도 높은 문서는 3페이지, 그 외 5페이지
-        const CHUNK_PAGES = (docType === "고용산재_전체" || docType === "일용직") ? 3 : 5;
-        let chunkIndex = 0;
+        const srcDoc = await PDFDocument.load(buffer);
+        const totalPages = srcDoc.getPageCount();
+        const CHUNK_PAGES = 5;
+        for (let start = 0; start < totalPages; start += CHUNK_PAGES) {
+          const end = Math.min(start + CHUNK_PAGES, totalPages);
+          const chunkDoc = await PDFDocument.create();
+          const copied = await chunkDoc.copyPages(srcDoc, Array.from({ length: end - start }, (_, k) => start + k));
+          copied.forEach(p => chunkDoc.addPage(p));
+          const bytes = await chunkDoc.save();
+          allChunks.push({
+            blob: new Blob([bytes.buffer as ArrayBuffer], { type: "application/pdf" }),
+            chunkName: `${file.name} (p${start + 1}-${end})`,
+            docType,
+          });
+        }
+      }
 
-        for (let start = 1; start <= totalPages; start += CHUNK_PAGES) {
-          const end = Math.min(start + CHUNK_PAGES - 1, totalPages);
-          const chunkName = `${file.name} (p${start}-${end})`;
+      // 2) 모든 청크를 병렬로 처리 (Promise.all)
+      const processChunk = async (chunk: Chunk) => {
+        const formData = new FormData();
+        formData.append("file", chunk.blob, chunk.chunkName);
+        formData.append("docType", chunk.docType);
+        formData.append("chunkName", chunk.chunkName);
 
-          // 고용산재_전체: 첫 청크는 자격이력+일용직 둘 다 (Sonnet),
-          // 나머지 청크는 일용직만 (Haiku) → 속도/정확도 균형
-          const effectiveDocType = (docType === "고용산재_전체" && chunkIndex > 0)
-            ? "일용직"
-            : docType;
+        const res = await fetch(`/api/cases/${caseId}/work-history/analyze`, { method: "POST", body: formData });
+        if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error((err as {error?: string}).error ?? "분석 실패"); }
 
-          // 각 페이지를 캔버스에 렌더링 → JPEG 변환
-          const formData = new FormData();
-          for (let p = start; p <= end; p++) {
-            const page = await pdf.getPage(p);
-            const viewport = page.getViewport({ scale: 2.0 });
-            const canvas = document.createElement("canvas");
-            canvas.width = viewport.width;
-            canvas.height = viewport.height;
-            const ctx = canvas.getContext("2d")!;
-            await page.render({ canvasContext: ctx, viewport, canvas }).promise;
-            const blob = await new Promise<Blob>((resolve) => {
-              canvas.toBlob((b) => resolve(b!), "image/jpeg", 0.85);
-            });
-            formData.append("images", blob, `page_${p}.jpg`);
+        // SSE 스트림 읽기
+        const reader = res.body!.getReader();
+        const decoder = new TextDecoder();
+        let buf = "";
+        let data: { type: string; sources?: Record<string, unknown[]>; dailyEntries?: unknown[]; name?: string; error?: string } | null = null;
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buf += decoder.decode(value, { stream: true });
+          const parts = buf.split("\n\n");
+          buf = parts.pop() ?? "";
+          for (const part of parts) {
+            if (!part.startsWith("data: ")) continue;
+            try { data = JSON.parse(part.slice(6)); } catch { /* skip */ }
           }
-          formData.append("docType", effectiveDocType);
-          formData.append("chunkName", chunkName);
-          chunkIndex++;
-
-          const res = await fetch(`/api/cases/${caseId}/work-history/analyze`, { method: "POST", body: formData });
-          if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error((err as {error?: string}).error ?? "분석 실패"); }
-
-          // SSE 스트림 읽기
-          const reader = res.body!.getReader();
-          const decoder = new TextDecoder();
-          let buf = "";
-          let data: { type: string; sources?: Record<string, unknown[]>; dailyEntries?: unknown[]; name?: string; error?: string } | null = null;
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            buf += decoder.decode(value, { stream: true });
-            const parts = buf.split("\n\n");
-            buf = parts.pop() ?? "";
-            for (const part of parts) {
-              if (!part.startsWith("data: ")) continue;
-              try { data = JSON.parse(part.slice(6)); } catch { /* skip */ }
+        }
+        if (data?.type === "error") throw new Error(data.error ?? "분석 오류");
+        if (data?.type === "result") {
+          // 청크별 결과를 누적 + 즉시 UI 반영 (JS single-thread라 race 문제 없음)
+          if (data.name && !extractedName) extractedName = data.name;
+          ["고용산재", "건보", "소득금액", "연금", "건근공"].forEach((src) => {
+            if ((data!.sources as Record<string, unknown[]>)?.[src]?.length > 0) {
+              (accRaw as Record<string, unknown[]>)[src] = [
+                ...((accRaw as Record<string, unknown[]>)[src] ?? []),
+                ...(data!.sources as Record<string, unknown[]>)[src],
+              ];
             }
-          }
-          if (data?.type === "error") throw new Error(data.error ?? "분석 오류");
-          if (data?.type === "result") {
-            if (data.name && !extractedName) extractedName = data.name;
-            ["고용산재", "건보", "소득금액", "연금", "건근공"].forEach((src) => {
-              if ((data!.sources as Record<string, unknown[]>)?.[src]?.length > 0) {
-                (accRaw as Record<string, unknown[]>)[src] = [
-                  ...((accRaw as Record<string, unknown[]>)[src] ?? []),
-                  ...(data!.sources as Record<string, unknown[]>)[src],
-                ];
-              }
-            });
-            if (data.dailyEntries?.length) accDaily.push(...(data.dailyEntries as WorkHistoryDailyEntry[]));
+          });
+          if (data.dailyEntries?.length) accDaily.push(...(data.dailyEntries as WorkHistoryDailyEntry[]));
+          onChange({ workHistoryRaw: { ...accRaw } as WorkHistoryRaw });
+          onChangeDaily([...accDaily]);
+        }
+      };
 
-            // 청크별 즉시 화면 반영 (사용자가 진행상황 확인 가능)
-            onChange({ workHistoryRaw: { ...accRaw } as WorkHistoryRaw });
-            onChangeDaily([...accDaily]);
-          }
-        } // chunk loop
-      } // valid files loop
+      await Promise.all(allChunks.map(processChunk));
       onChange({ workHistoryRaw: accRaw });
       onChangeDaily(accDaily);
       const firstWithData = ['고용산재', '건보', '연금', '건근공', '일용직'].find(src => (accRaw as Record<string, unknown[]>)[src]?.length > 0);
