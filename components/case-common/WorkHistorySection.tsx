@@ -61,6 +61,149 @@ function calcUnionMonths(intervals: { start: number; end: number }[]): number {
   return total + curEnd - curStart + 1;
 }
 
+// ── 소스 그룹 패널 (상용직/일용직 분할 표시) ───────────────────────────
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type AnyRawSource = any;
+interface SourceGroupPanelProps {
+  title: string;
+  titleColor: string;
+  bgColor: string;
+  sources: readonly string[];
+  activeSrc: string;
+  setActiveSrc: (s: string) => void;
+  workHistoryRaw: WorkHistoryRaw;
+  sourceLabels: Record<string, string>;
+  inputStyle: React.CSSProperties;
+  years: number[];
+  months: number[];
+  workHistoryDaily: WorkHistoryDailyEntry[];
+  onChangeDaily: (entries: WorkHistoryDailyEntry[]) => void;
+  setRawField: (source: AnyRawSource, i: number, key: keyof WorkHistoryRawEntry, val: unknown) => void;
+  removeRawRow: (source: AnyRawSource, i: number) => void;
+  addRawRow: (source: AnyRawSource) => void;
+}
+function SourceGroupPanel(props: SourceGroupPanelProps) {
+  const { title, titleColor, bgColor, sources, activeSrc, setActiveSrc, workHistoryRaw, sourceLabels, inputStyle, years, months, setRawField, removeRawRow, addRawRow, workHistoryDaily, onChangeDaily } = props;
+  const isDailyTab = activeSrc === "일용직" || activeSrc === "건근공";
+
+  return (
+    <div style={{ background: bgColor, borderRadius: 10, padding: 12, border: `1px solid ${titleColor}33` }}>
+      <div style={{ fontSize: 13, fontWeight: 700, color: titleColor, marginBottom: 10 }}>{title}</div>
+      {/* 탭 버튼 */}
+      <div style={{ display: "flex", gap: 4, marginBottom: 10, flexWrap: "wrap" }}>
+        {sources.map((src) => {
+          const count = src === "일용직"
+            ? workHistoryDaily.length
+            : (workHistoryRaw[src as keyof WorkHistoryRaw]?.length ?? 0);
+          return (
+            <button key={src} onClick={() => setActiveSrc(src)} style={{
+              padding: "4px 10px", fontSize: 11, fontWeight: 600, borderRadius: 6, cursor: "pointer", border: "1px solid",
+              background: activeSrc === src ? titleColor : "white",
+              color: activeSrc === src ? "white" : "#374151",
+              borderColor: activeSrc === src ? titleColor : "#d1d5db",
+            }}>
+              {sourceLabels[src] ?? src}
+              {count > 0 && (
+                <span style={{ marginLeft: 4, background: activeSrc === src ? "rgba(255,255,255,0.3)" : "#e0e7ff", color: activeSrc === src ? "white" : "#3730a3", borderRadius: 999, padding: "1px 6px", fontSize: 10 }}>
+                  {count}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+      {/* 데이터 테이블 */}
+      <div style={{ overflowX: "auto", marginBottom: 8 }}>
+        {isDailyTab && activeSrc === "일용직" ? (
+          // 일용직 탭: dailyEntries 표시
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+            <thead>
+              <tr style={{ background: "#f9fafb" }}>
+                {["사업장명", "직종", "총일수", "최초근무", "환산", ""].map(h => (
+                  <th key={h} style={{ padding: "4px 5px", border: "1px solid #e5e7eb", fontWeight: 600, color: "#6b7280", whiteSpace: "nowrap" }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {workHistoryDaily.length === 0 ? (
+                <tr><td colSpan={6} style={{ padding: "10px", textAlign: "center", color: "#9ca3af", fontSize: 11 }}>데이터 없음</td></tr>
+              ) : workHistoryDaily.map((row, i) => (
+                <tr key={i}>
+                  <td style={{ padding: 2, border: "1px solid #f1f5f9" }}>
+                    <input style={{ ...inputStyle, minWidth: 80, fontSize: 11 }} value={row.company} onChange={(e) => onChangeDaily(workHistoryDaily.map((r, j) => j === i ? { ...r, company: e.target.value } : r))} />
+                  </td>
+                  <td style={{ padding: 2, border: "1px solid #f1f5f9" }}>
+                    <input style={{ ...inputStyle, minWidth: 80, fontSize: 11 }} value={row.jobType} onChange={(e) => onChangeDaily(workHistoryDaily.map((r, j) => j === i ? { ...r, jobType: e.target.value } : r))} />
+                  </td>
+                  <td style={{ padding: 2, border: "1px solid #f1f5f9", textAlign: "center" }}>
+                    <input type="number" style={{ ...inputStyle, width: 50, fontSize: 11 }} value={row.totalDays} onChange={(e) => onChangeDaily(workHistoryDaily.map((r, j) => j === i ? { ...r, totalDays: Number(e.target.value) } : r))} />
+                  </td>
+                  <td style={{ padding: 2, border: "1px solid #f1f5f9", textAlign: "center", whiteSpace: "nowrap" }}>{row.startYear}-{String(row.startMonth).padStart(2, "0")}</td>
+                  <td style={{ padding: 2, border: "1px solid #f1f5f9", textAlign: "center" }}>{row.convertedMonths}개월</td>
+                  <td style={{ padding: 2, border: "1px solid #f1f5f9", textAlign: "center" }}>
+                    <button onClick={() => onChangeDaily(workHistoryDaily.filter((_, j) => j !== i))} style={{ background: "none", border: "none", color: "#dc2626", cursor: "pointer", fontSize: 13 }}>✕</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : (
+          // 일반 raw source 탭
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+            <thead>
+              <tr style={{ background: "#f9fafb" }}>
+                {["사업장명", "직종", "작업내용", "시작연월", "종료연월", ""].map(h => (
+                  <th key={h} style={{ padding: "4px 5px", border: "1px solid #e5e7eb", fontWeight: 600, color: "#6b7280", whiteSpace: "nowrap" }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {(workHistoryRaw[activeSrc as keyof WorkHistoryRaw] ?? []).map((row, i) => (
+                <tr key={i}>
+                  {(["company", "department", "jobType"] as (keyof WorkHistoryRawEntry)[]).map(k => (
+                    <td key={k} style={{ padding: 2, border: "1px solid #f1f5f9" }}>
+                      <input style={{ ...inputStyle, minWidth: 70, fontSize: 11 }} value={String(row[k] ?? "")} onChange={(e) => setRawField(activeSrc, i, k, e.target.value)} />
+                    </td>
+                  ))}
+                  <td style={{ padding: 2, border: "1px solid #f1f5f9" }}>
+                    <div style={{ display: "flex", gap: 2 }}>
+                      <select style={{ ...inputStyle, width: 60, fontSize: 11 }} value={row.startYear} onChange={(e) => setRawField(activeSrc, i, "startYear", Number(e.target.value))}>
+                        {years.map(y => <option key={y} value={y}>{y}</option>)}
+                      </select>
+                      <select style={{ ...inputStyle, width: 44, fontSize: 11 }} value={row.startMonth} onChange={(e) => setRawField(activeSrc, i, "startMonth", Number(e.target.value))}>
+                        {months.map(m => <option key={m} value={m}>{m}월</option>)}
+                      </select>
+                    </div>
+                  </td>
+                  <td style={{ padding: 2, border: "1px solid #f1f5f9" }}>
+                    <div style={{ display: "flex", gap: 2 }}>
+                      <select style={{ ...inputStyle, width: 60, fontSize: 11 }} value={row.endYear} onChange={(e) => setRawField(activeSrc, i, "endYear", Number(e.target.value))}>
+                        {years.map(y => <option key={y} value={y}>{y}</option>)}
+                      </select>
+                      <select style={{ ...inputStyle, width: 44, fontSize: 11 }} value={row.endMonth} onChange={(e) => setRawField(activeSrc, i, "endMonth", Number(e.target.value))}>
+                        {months.map(m => <option key={m} value={m}>{m}월</option>)}
+                      </select>
+                    </div>
+                  </td>
+                  <td style={{ padding: 2, border: "1px solid #f1f5f9", textAlign: "center" }}>
+                    <button onClick={() => removeRawRow(activeSrc, i)} style={{ background: "none", border: "none", color: "#dc2626", cursor: "pointer", fontSize: 13 }}>✕</button>
+                  </td>
+                </tr>
+              ))}
+              {(workHistoryRaw[activeSrc as keyof WorkHistoryRaw]?.length ?? 0) === 0 && (
+                <tr><td colSpan={6} style={{ padding: "10px", textAlign: "center", color: "#9ca3af", fontSize: 11 }}>데이터 없음</td></tr>
+              )}
+            </tbody>
+          </table>
+        )}
+      </div>
+      {!isDailyTab || activeSrc === "건근공" ? (
+        <button onClick={() => addRawRow(activeSrc)} style={{ background: "white", border: "1px solid #d1d5db", borderRadius: 6, padding: "3px 10px", fontSize: 11, cursor: "pointer" }}>+ 행 추가</button>
+      ) : null}
+    </div>
+  );
+}
+
 // ── 진행률 표시 컴포넌트 ───────────────────────────────────────────────
 function AnalyzeProgressBar({ progress }: { progress: { done: number; total: number; currentChunk: string; estimatedTotalSec: number; startMs: number } }) {
   const [now, setNow] = useState(Date.now());
@@ -129,7 +272,17 @@ function WorkHistoryDrawerContent({
 
   const RAW_SOURCES = ["고용산재", "건보", "소득금액", "연금", "건근공", "일용직"] as const;
   type RawSource = typeof RAW_SOURCES[number];
-  const [activeRawSource, setActiveRawSource] = useState<RawSource>("고용산재");
+  // 상용직: 4개 / 일용직: 2개로 분리
+  const REGULAR_SOURCES = ["고용산재", "건보", "소득금액", "연금"] as const;
+  const DAILY_SOURCES = ["건근공", "일용직"] as const;
+  const [activeRegularSource, setActiveRegularSource] = useState<RawSource>("고용산재");
+  const [activeDailySource, setActiveDailySource] = useState<RawSource>("건근공");
+  // 통합 ref (다른 부분 호환용)
+  const activeRawSource = activeRegularSource;
+  const setActiveRawSource = (src: RawSource) => {
+    if ((REGULAR_SOURCES as readonly string[]).includes(src)) setActiveRegularSource(src);
+    else setActiveDailySource(src);
+  };
 
   const DOC_TYPE_OPTIONS = [
     { value: "건보", label: "건강보험 자격득실확인서" },
@@ -467,75 +620,47 @@ function WorkHistoryDrawerContent({
           </div>
         </div>
 
-        {/* 소스 탭 */}
-        <div style={{ display: "flex", gap: 4, marginBottom: 12, flexWrap: "wrap" }}>
-          {RAW_SOURCES.map((src) => (
-            <button key={src} onClick={() => setActiveRawSource(src)} style={{
-              padding: "5px 12px", fontSize: 12, fontWeight: 600, borderRadius: 6, cursor: "pointer", border: "1px solid",
-              background: activeRawSource === src ? "#29ABE2" : "white",
-              color: activeRawSource === src ? "white" : "#374151",
-              borderColor: activeRawSource === src ? "#29ABE2" : "#d1d5db",
-            }}>
-              {SOURCE_LABELS[src] ?? src}
-              {(workHistoryRaw[src]?.length ?? 0) > 0 && (
-                <span style={{ marginLeft: 4, background: activeRawSource === src ? "rgba(255,255,255,0.3)" : "#e0e7ff", color: activeRawSource === src ? "white" : "#3730a3", borderRadius: 999, padding: "1px 6px", fontSize: 11 }}>
-                  {workHistoryRaw[src].length}
-                </span>
-              )}
-            </button>
-          ))}
+        {/* 상용직/일용직 좌우 분할 그리드 */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
+          {/* 좌: 상용직 직업력 산정 */}
+          <SourceGroupPanel
+            title="🏢 상용직 직업력 산정"
+            titleColor="#1e40af"
+            bgColor="#eff6ff"
+            sources={REGULAR_SOURCES}
+            activeSrc={activeRegularSource}
+            setActiveSrc={(s) => setActiveRegularSource(s as RawSource)}
+            workHistoryRaw={workHistoryRaw}
+            sourceLabels={SOURCE_LABELS}
+            inputStyle={inputStyle}
+            years={years}
+            months={months}
+            workHistoryDaily={workHistoryDaily}
+            onChangeDaily={onChangeDaily}
+            setRawField={setRawField}
+            removeRawRow={removeRawRow}
+            addRawRow={addRawRow}
+          />
+          {/* 우: 일용직 직업력 산정 */}
+          <SourceGroupPanel
+            title="🛠 일용직 직업력 산정"
+            titleColor="#92400e"
+            bgColor="#fffbeb"
+            sources={DAILY_SOURCES}
+            activeSrc={activeDailySource}
+            setActiveSrc={(s) => setActiveDailySource(s as RawSource)}
+            workHistoryRaw={workHistoryRaw}
+            sourceLabels={SOURCE_LABELS}
+            inputStyle={inputStyle}
+            years={years}
+            months={months}
+            workHistoryDaily={workHistoryDaily}
+            onChangeDaily={onChangeDaily}
+            setRawField={setRawField}
+            removeRawRow={removeRawRow}
+            addRawRow={addRawRow}
+          />
         </div>
-
-        {/* 소스별 원시 직업력 테이블 */}
-        <div style={{ overflowX: "auto", marginBottom: 8 }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
-            <thead>
-              <tr style={{ background: "#f9fafb" }}>
-                {["사업장명", "직종", "작업내용", "시작연월", "종료연월", ""].map(h => (
-                  <th key={h} style={{ padding: "5px 6px", border: "1px solid #e5e7eb", fontWeight: 600, color: "#6b7280", whiteSpace: "nowrap" }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {(workHistoryRaw[activeRawSource] ?? []).map((row, i) => (
-                <tr key={i}>
-                  {(["company", "department", "jobType"] as (keyof WorkHistoryRawEntry)[]).map(k => (
-                    <td key={k} style={{ padding: 3, border: "1px solid #f1f5f9" }}>
-                      <input style={{ ...inputStyle, minWidth: 75, fontSize: 12 }} value={String(row[k] ?? "")} onChange={(e) => setRawField(activeRawSource, i, k, e.target.value)} />
-                    </td>
-                  ))}
-                  <td style={{ padding: 3, border: "1px solid #f1f5f9" }}>
-                    <div style={{ display: "flex", gap: 2 }}>
-                      <select style={{ ...inputStyle, width: 65, fontSize: 12 }} value={row.startYear} onChange={(e) => setRawField(activeRawSource, i, "startYear", Number(e.target.value))}>
-                        {years.map(y => <option key={y} value={y}>{y}</option>)}
-                      </select>
-                      <select style={{ ...inputStyle, width: 48, fontSize: 12 }} value={row.startMonth} onChange={(e) => setRawField(activeRawSource, i, "startMonth", Number(e.target.value))}>
-                        {months.map(m => <option key={m} value={m}>{m}월</option>)}
-                      </select>
-                    </div>
-                  </td>
-                  <td style={{ padding: 3, border: "1px solid #f1f5f9" }}>
-                    <div style={{ display: "flex", gap: 2 }}>
-                      <select style={{ ...inputStyle, width: 65, fontSize: 12 }} value={row.endYear} onChange={(e) => setRawField(activeRawSource, i, "endYear", Number(e.target.value))}>
-                        {years.map(y => <option key={y} value={y}>{y}</option>)}
-                      </select>
-                      <select style={{ ...inputStyle, width: 48, fontSize: 12 }} value={row.endMonth} onChange={(e) => setRawField(activeRawSource, i, "endMonth", Number(e.target.value))}>
-                        {months.map(m => <option key={m} value={m}>{m}월</option>)}
-                      </select>
-                    </div>
-                  </td>
-                  <td style={{ padding: 3, border: "1px solid #f1f5f9", textAlign: "center" }}>
-                    <button onClick={() => removeRawRow(activeRawSource, i)} style={{ background: "none", border: "none", color: "#dc2626", cursor: "pointer", fontSize: 14 }}>✕</button>
-                  </td>
-                </tr>
-              ))}
-              {(workHistoryRaw[activeRawSource]?.length ?? 0) === 0 && (
-                <tr><td colSpan={6} style={{ padding: "12px", textAlign: "center", color: "#9ca3af", fontSize: 12 }}>데이터 없음</td></tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-        <button onClick={() => addRawRow(activeRawSource)} style={{ background: "white", border: "1px solid #d1d5db", borderRadius: 6, padding: "4px 12px", fontSize: 12, cursor: "pointer", marginBottom: 16 }}>+ 행 추가</button>
 
         {/* 최종 직업력 합산하기 */}
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16, padding: "10px 14px", background: "#f0fdf4", borderRadius: 8, border: "1px solid #bbf7d0", flexWrap: "wrap" }}>
