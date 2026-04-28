@@ -555,7 +555,7 @@ export default function InfoBoardSection() {
         <button
           onClick={() => {
             if (hasChildren) toggleNode(nodeId);
-            selectNode(selState, nodeId);
+            selectNode(selState);
           }}
           style={{
             display: "flex", alignItems: "center", gap: 4,
