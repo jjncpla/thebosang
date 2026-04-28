@@ -46,11 +46,14 @@ export async function POST(req: NextRequest) {
     const font = await pdfDoc.embedFont(fontBytes)
 
     const formFields = await getFormFields(formKey)
-    const page = pdfDoc.getPages()[0]
+    const pages = pdfDoc.getPages()
 
     for (const field of formFields) {
       const value = fields[field.key]
       if (!value) continue
+      const pageIdx = (field.page ?? 1) - 1
+      const page = pages[pageIdx]
+      if (!page) continue
       page.drawText(String(value), {
         x: field.x,
         y: field.y,

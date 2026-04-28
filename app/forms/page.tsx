@@ -48,6 +48,7 @@ export default function PracticalFormsPage() {
   const [values, setValues]               = useState<Record<string, string>>({});
   const [generating, setGenerating]       = useState(false);
   const [previewType, setPreviewType]     = useState<"png" | "pdf">("png");
+  const [savedCoords, setSavedCoords]     = useState<Record<string, FieldEntry[]>>({});
 
   // 검색 패널
   const [searchQuery, setSearchQuery]   = useState("");
@@ -70,10 +71,20 @@ export default function PracticalFormsPage() {
     [selectedForm]
   );
 
-  const fields = useMemo<FieldEntry[]>(
-    () => (selectedForm ? (FORM_FIELDS[selectedForm] ?? []) : []),
-    [selectedForm]
-  );
+  // FORM_FIELDS 뼈대에 관리자 페이지에서 저장한 x/y override
+  const fields = useMemo<FieldEntry[]>(() => {
+    if (!selectedForm) return [];
+    const base = FORM_FIELDS[selectedForm] ?? [];
+    const saved = savedCoords[selectedForm];
+    if (!saved) return base;
+    const map = new Map(saved.map(f => [f.key, f]));
+    return base.map(f => {
+      const s = map.get(f.key);
+      if (!s) return f;
+      // 저장된 x/y 우선, 단 0이면 기본값 유지
+      return { ...f, x: s.x || f.x, y: s.y || f.y };
+    });
+  }, [selectedForm, savedCoords]);
 
   const handleSelectForm = (type: string) => {
     setSelectedForm(type);
@@ -81,6 +92,19 @@ export default function PracticalFormsPage() {
     setValues({});
     setPreviewType("png");
   };
+
+  // 서식 선택 시 저장된 좌표 로드
+  useEffect(() => {
+    if (!selectedForm || savedCoords[selectedForm]) return;
+    fetch(`/api/forms/coordinates?type=${selectedForm}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data?.fields && Array.isArray(data.fields)) {
+          setSavedCoords(prev => ({ ...prev, [selectedForm]: data.fields }));
+        }
+      })
+      .catch(() => {});
+  }, [selectedForm, savedCoords]);
 
   const setVal = (key: string, v: string) => setValues(prev => ({ ...prev, [key]: v }));
 
@@ -122,6 +146,50 @@ export default function PracticalFormsPage() {
     const c = raw.replace(/[-\s]/g, "");
     return c.split("");
   };
+
+  // 주민번호 13자리 일괄 입력 → prefix1~13 분배
+  const fillBulkSsn = (prefix: string, raw: string) => {
+    const clean = raw.replace(/[-\s]/g, "").slice(0, 13);
+    setValues(prev => {
+      const next = { ...prev };
+      for (let i = 1; i <= 13; i++) {
+        next[`${prefix}${i}`] = clean[i - 1] ?? "";
+      }
+      return next;
+    });
+  };
+
+  // YYYY-MM-DD / YYYYMMDD → Y1-4, M1-2, D1-2 분배
+  const fillBulkDate = (prefix: "inj" | "birth", raw: string) => {
+    const c = raw.replace(/[-\s./]/g, "");
+    const Y = c.slice(0, 4);
+    const M = c.slice(4, 6);
+    const D = c.slice(6, 8);
+    const Yk = prefix === "inj" ? "injY" : "birthY";
+    const Mk = prefix === "inj" ? "injM" : "birthM";
+    const Dk = prefix === "inj" ? "injD" : "birthD";
+    setValues(prev => {
+      const next = { ...prev };
+      for (let i = 1; i <= 4; i++) next[`${Yk}${i}`] = Y[i - 1] ?? "";
+      for (let i = 1; i <= 2; i++) next[`${Mk}${i}`] = M[i - 1] ?? "";
+      for (let i = 1; i <= 2; i++) next[`${Dk}${i}`] = D[i - 1] ?? "";
+      return next;
+    });
+  };
+
+  // 활성 폼에 어떤 일괄 그룹이 있는지 감지
+  const bulkGroups = useMemo(() => {
+    if (!selectedForm) return [];
+    const keys = new Set(fields.map(f => f.key));
+    const groups: Array<{ prefix: string; label: string; placeholder: string; type: "ssn" | "date"; datePrefix?: "inj" | "birth" }> = [];
+    if (keys.has("ssn1") && keys.has("ssn13"))                 groups.push({ prefix: "ssn",            label: "주민번호",          placeholder: "13자리 일괄 입력 (예: 9001011234567)",           type: "ssn" });
+    if (keys.has("jumin1") && keys.has("jumin13"))             groups.push({ prefix: "jumin",          label: "주민번호",          placeholder: "13자리 일괄 입력 (예: 9001011234567)",           type: "ssn" });
+    if (keys.has("claimantJumin1") && keys.has("claimantJumin13")) groups.push({ prefix: "claimantJumin", label: "위임인 주민번호",  placeholder: "13자리 일괄 입력",                              type: "ssn" });
+    if (keys.has("agentJumin1")    && keys.has("agentJumin13"))    groups.push({ prefix: "agentJumin",    label: "수임인 주민번호",  placeholder: "13자리 일괄 입력",                              type: "ssn" });
+    if (keys.has("injY1")   && keys.has("injD2"))              groups.push({ prefix: "inj",            label: "재해발생일",        placeholder: "YYYYMMDD 또는 YYYY-MM-DD",                       type: "date", datePrefix: "inj" });
+    if (keys.has("birthY1") && keys.has("birthD2"))            groups.push({ prefix: "birth",          label: "생년월일",          placeholder: "YYYYMMDD 또는 YYYY-MM-DD",                       type: "date", datePrefix: "birth" });
+    return groups;
+  }, [selectedForm, fields]);
 
   const applyPatient = (p: PatientHit) => {
     const next: Record<string, string> = { ...values };
@@ -452,43 +520,93 @@ export default function PracticalFormsPage() {
                 >🗑 입력값 초기화</button>
               </div>
 
-              {/* 입력 필드 */}
+              {/* 일괄 입력 */}
+              {bulkGroups.length > 0 && (
+                <div style={{ borderTop: "1px solid #f3f4f6", paddingTop: 10, marginBottom: 4 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: "#374151", marginBottom: 6 }}>
+                    ⚡ 일괄 입력 <span style={{ fontWeight: 400, color: "#9ca3af" }}>(자릿수별 자동 분배)</span>
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    {bulkGroups.map(g => (
+                      <div key={g.prefix}>
+                        <div style={{ fontSize: 10, color: "#6b7280", marginBottom: 2 }}>{g.label}</div>
+                        <input
+                          type="text"
+                          placeholder={g.placeholder}
+                          onChange={(e) => {
+                            if (g.type === "ssn") fillBulkSsn(g.prefix, e.target.value);
+                            else fillBulkDate(g.datePrefix!, e.target.value);
+                          }}
+                          style={{
+                            width: "100%", padding: "5px 8px", fontSize: 12,
+                            border: "1px solid #93c5fd", borderRadius: 4,
+                            boxSizing: "border-box", background: "#eff6ff",
+                          }}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* 입력 필드 — 페이지별 그룹 */}
               <div style={{ borderTop: "1px solid #f3f4f6", paddingTop: 10, maxHeight: "calc(100vh - 480px)", overflowY: "auto" }}>
                 <div style={{ fontSize: 11, fontWeight: 700, color: "#374151", marginBottom: 6 }}>입력 항목</div>
                 {fields.length === 0 ? (
                   <div style={{ fontSize: 11, color: "#9ca3af" }}>등록된 필드가 없습니다.</div>
-                ) : (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                    {fields.map(f => {
-                      const isPositioned = !!(f.x && f.y);
-                      return (
-                        <div key={f.key}>
-                          <div style={{
-                            fontSize: 10, color: isPositioned ? "#6b7280" : "#d1d5db",
-                            marginBottom: 2, display: "flex", justifyContent: "space-between",
-                          }}>
-                            <span>{f.label}</span>
-                            {!isPositioned && <span style={{ color: "#d1d5db" }}>좌표 미설정</span>}
+                ) : (() => {
+                  const byPage = new Map<number, FieldEntry[]>();
+                  for (const f of fields) {
+                    const p = f.page ?? 1;
+                    if (!byPage.has(p)) byPage.set(p, []);
+                    byPage.get(p)!.push(f);
+                  }
+                  const pageNums = [...byPage.keys()].sort((a, b) => a - b);
+                  const showPageHeader = pageNums.length > 1;
+                  return (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                      {pageNums.map(pn => (
+                        <div key={pn}>
+                          {showPageHeader && (
+                            <div style={{ fontSize: 11, fontWeight: 700, color: "#1e40af", marginBottom: 6, padding: "4px 8px", background: "#eff6ff", borderRadius: 4 }}>
+                              📄 {pn}페이지
+                            </div>
+                          )}
+                          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                            {byPage.get(pn)!.map(f => {
+                              const isPositioned = !!(f.x && f.y);
+                              return (
+                                <div key={f.key}>
+                                  <div style={{
+                                    fontSize: 10, color: isPositioned ? "#6b7280" : "#d1d5db",
+                                    marginBottom: 2, display: "flex", justifyContent: "space-between",
+                                  }}>
+                                    <span>{f.label}</span>
+                                    {!isPositioned && <span style={{ color: "#d1d5db" }}>좌표 미설정</span>}
+                                  </div>
+                                  <input
+                                    type="text"
+                                    placeholder={f.label}
+                                    value={values[f.key] ?? ""}
+                                    onChange={(e) => setVal(f.key, e.target.value)}
+                                    disabled={!isPositioned}
+                                    style={{
+                                      width: "100%", padding: "5px 8px", fontSize: 12,
+                                      border: "1px solid " + (isPositioned ? "#d1d5db" : "#f3f4f6"),
+                                      borderRadius: 4, boxSizing: "border-box",
+                                      background: isPositioned ? "#fff" : "#fafafa",
+                                      color: isPositioned ? "#111827" : "#9ca3af",
+                                    }}
+                                  />
+                                </div>
+                              );
+                            })}
                           </div>
-                          <input
-                            type="text"
-                            placeholder={f.label}
-                            value={values[f.key] ?? ""}
-                            onChange={(e) => setVal(f.key, e.target.value)}
-                            disabled={!isPositioned}
-                            style={{
-                              width: "100%", padding: "5px 8px", fontSize: 12,
-                              border: "1px solid " + (isPositioned ? "#d1d5db" : "#f3f4f6"),
-                              borderRadius: 4, boxSizing: "border-box",
-                              background: isPositioned ? "#fff" : "#fafafa",
-                              color: isPositioned ? "#111827" : "#9ca3af",
-                            }}
-                          />
                         </div>
-                      );
-                    })}
-                  </div>
-                )}
+                      ))}
+                    </div>
+                  );
+                })()}
               </div>
 
               {/* 액션 버튼 */}
