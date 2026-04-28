@@ -303,7 +303,7 @@ input:focus, select:focus, textarea:focus {
   gap: var(--s-5);
   position: sticky;
   top: 0;
-  z-index: 10;
+  z-index: 100;
 }
 .topbar .crumbs {
   display: flex; align-items: center; gap: 8px;
