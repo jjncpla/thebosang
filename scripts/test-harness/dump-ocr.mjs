@@ -28,9 +28,9 @@ const srcDoc = await PDFDocument.load(buffer)
 const totalPages = srcDoc.getPageCount()
 console.log(`PDF: ${path.basename(pdfPath)} (${totalPages}p)`)
 
-// Split into 5-page chunks
-const CHUNK_PAGES = 5
-const outDir = path.resolve(__dirname, "ocr-dumps", path.basename(pdfPath, ".pdf"))
+// Split into N-page chunks (default 5)
+const CHUNK_PAGES = Number(process.argv[3] ?? 5)
+const outDir = path.resolve(__dirname, "ocr-dumps", path.basename(pdfPath, ".pdf") + `-${CHUNK_PAGES}p`)
 fs.mkdirSync(outDir, { recursive: true })
 
 for (let start = 0; start < totalPages; start += CHUNK_PAGES) {

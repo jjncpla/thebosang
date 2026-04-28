@@ -195,15 +195,14 @@ function WorkHistoryDrawerContent({
       const { PDFDocument } = await import("pdf-lib");
 
       // 1) PDF 청크 분할 — 작은 PDF(≤5p)는 단일 청크, 큰 PDF는 3p 청크
-      type Chunk = { blob: Blob; chunkName: string; docType: string };
+      type Chunk = { blob: Blob; chunkName: string; docType: string; chunkIndex: number };
       const allChunks: Chunk[] = [];
       for (const { file, docType } of valid) {
         const buffer = await file.arrayBuffer();
         const srcDoc = await PDFDocument.load(buffer);
         const totalPages = srcDoc.getPageCount();
-        // 작은 PDF: 단일 청크 (OCR 호출 1번 = overhead 최소화)
-        // 큰 PDF: 3p 청크 (병렬 처리 + 토큰 한도 안전)
         const CHUNK_PAGES = totalPages <= 5 ? totalPages : 3;
+        let fileChunkIndex = 0;
         for (let start = 0; start < totalPages; start += CHUNK_PAGES) {
           const end = Math.min(start + CHUNK_PAGES, totalPages);
           const chunkDoc = await PDFDocument.create();
@@ -214,6 +213,7 @@ function WorkHistoryDrawerContent({
             blob: new Blob([bytes.buffer as ArrayBuffer], { type: "application/pdf" }),
             chunkName: `${file.name} (p${start + 1}-${end})`,
             docType,
+            chunkIndex: fileChunkIndex++,
           });
         }
       }
@@ -240,6 +240,7 @@ function WorkHistoryDrawerContent({
         formData.append("file", chunk.blob, chunk.chunkName);
         formData.append("docType", chunk.docType);
         formData.append("chunkName", chunk.chunkName);
+        formData.append("chunkIndex", String(chunk.chunkIndex));
 
         const res = await fetch(`/api/cases/${caseId}/work-history/analyze`, { method: "POST", body: formData });
         if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error((err as {error?: string}).error ?? "분석 실패"); }

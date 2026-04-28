@@ -96,7 +96,14 @@
       "Bash(railway run:*)",
       "Bash(railway status:*)",
       "Bash(powershell:*)",
-      "Bash(set DATABASE_URL=postgresql://postgres:SRLSqrRWpIAywlMHYSmdMZANmiESHQZf@caboose.proxy.rlwy.net:18869/railway)"
+      "Bash(set DATABASE_URL=postgresql://postgres:SRLSqrRWpIAywlMHYSmdMZANmiESHQZf@caboose.proxy.rlwy.net:18869/railway)",
+      "mcp__Claude_in_Chrome__tabs_context_mcp",
+      "mcp__Claude_in_Chrome__switch_browser",
+      "mcp__Claude_in_Chrome__tabs_create_mcp",
+      "mcp__Claude_in_Chrome__navigate",
+      "mcp__Claude_in_Chrome__javascript_tool",
+      "PowerShell([Convert]::ToBase64String\\([IO.File]::ReadAllBytes\\(\"C:\\\\Users\\\\jjakg\\\\thebosang\\\\tbss-494605-7be880b365d7.json\"\\)\\))",
+      "Bash(git merge *)"
     ]
   },
   "enableAllProjectMcpServers": true,

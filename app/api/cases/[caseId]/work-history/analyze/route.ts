@@ -170,11 +170,11 @@ function getPromptForDocType(docType: string): string {
 
   if (docType === "건보") return base + `[건강보험자격득실확인서 추출 규칙]\n\n표의 모든 행(No 1~끝)을 순서대로 스캔하고, 가입자구분이 정확히 "직장가입자"인 항목만 sources.건보에 추출하라.\n\n[제외 대상 - 절대 추출 금지]\n- 직장피부양자 (본인 가입자 아님)\n- 지역세대주\n- 지역세대원\n- 지역가입자\n\n[추출 규칙]\n- 단 한 행도 누락 금지. 가입자구분이 "직장가입자"이면 무조건 추출.\n- 사업장명칭에 "(일용)" 또는 "/일용/" 표기가 있어도 직장가입자이면 추출.\n- 사업장명이 OCR에서 잘렸거나 누락된 경우 company는 OCR에서 보이는 만큼만 적되 빈 문자열은 피한다.\n- 자격취득일 → startYear/startMonth, 자격상실일 → endYear/endMonth (yyyy.mm.dd 형식). 상실일 없으면 2026-01.\n\n${noiseGuide}\n\n반드시 이 JSON 형식으로만 응답하라:\n{"name":"성명","sources":{"건보":[{"company":"사업장명","startYear":2000,"startMonth":1,"endYear":2005,"endMonth":12,"department":"","jobType":"","workDays":0,"noiseExposure":false}],"고용산재":[],"소득금액":[],"연금":[]},"dailyEntries":[]}`
 
-  if (docType === "고용산재_전체") return base + `[고용보험 자격이력 + 일용근로 통합 추출 — 단계별 추론]\n\n[Step 0] OCR 텍스트에서 "조회기간 총 N개 이력 중" 표현을 찾아라.\n  - 자격이력내역서의 N → sources.고용산재의 정답 행 수\n  - 일용근로내역서의 N → dailyEntries의 정답 행 수\n  - 두 표 모두 있으면 양쪽 N 모두 활용\n\n=== [표 1: 자격이력내역서] - 상용직 ===\n- 헤더: "자격이력내역서 (근로자용/피보험자용)"\n- 컬럼: 일련번호 | 직종명(코드) | 사업장 명칭 | 취득일/전근일 | 상실일 | 비고\n- 비고 컬럼이 "근로자"인 모든 행을 sources.고용산재에 추출.\n- 단 한 행도 누락 금지. 같은 사업장 반복 취득·상실은 각각 별도 항목.\n- jobType: 직종명(코드 포함), company: 사업장 명칭, startYear/startMonth: 취득일, endYear/endMonth: 상실일.\n- 상실일 없으면 2026-01.\n\n=== [표 2: 일용근로·노무제공내역서] - 일용직 ===\n- 헤더: "일용근로·노무제공내역서 (근로자용/피보험자용)"\n- 컬럼: 일련번호 | 근로년월 | 사업장명 | 직종명(코드) | 근로일자 | 근로일수 | 임금총액 | 보수총액 | 근로자 구분\n- 모든 행을 dailyEntries에 추출. 합산 금지.\n- 사업장명에 [업체명] 표기 시 []안 이름을 company로 사용.\n- totalDays = 근로일수 컬럼 (예: "27일"이면 27)\n- startYear/startMonth = 근로년월 (예: "2018/02"이면 2018, 2)\n- convertedMonths = Math.ceil(totalDays / 20)\n- jobType = 직종명(코드 포함)\n- memo = 빈 문자열로 토큰 절약\n\n[Step Final] 추출 후 자체 검증:\n- sources.고용산재의 길이가 자격이력 N과 일치하는가?\n- dailyEntries의 길이가 일용근로 N과 일치하는가?\n- 일치하지 않으면 OCR 텍스트를 다시 한번 스캔하여 누락 행을 찾아라.\n\n${noiseGuide}\n\n반드시 이 JSON 형식으로만 응답하라:\n{"name":"성명","sources":{"고용산재":[{"company":"사업장명","startYear":2016,"startMonth":9,"endYear":2016,"endMonth":11,"department":"","jobType":"직종명(코드)","workDays":0,"noiseExposure":false}],"건보":[],"소득금액":[],"연금":[]},"dailyEntries":[{"company":"사업장명","jobType":"직종명","totalDays":5,"startYear":2013,"startMonth":1,"convertedMonths":1,"source":"고용산재","memo":""}]}`
+  if (docType === "고용산재_전체") return base + `[고용보험 자격이력 + 일용근로 통합 추출 — 패턴 기반 분류]\n\n## 핵심: 두 표를 행 패턴으로 구분\n\n### 자격이력내역서 행 (sources.고용산재로):\n- 컬럼: 직종명(코드) | 사업장 명칭 | 취득일 | 상실일 | 비고\n- 날짜 형식: yyyy-mm-dd 두 개 (취득일, 상실일)\n- 비고 컬럼: "근로자"\n- 임금/근로일수 컬럼 없음\n- 예: "1 식당 서비스 관련 종사자(132) 미소식당 2016-09-08 2016-11-11 근로자"\n\n### 일용근로·노무제공내역서 행 (dailyEntries로):\n- 컬럼: 근로년월 | 사업장명 | 직종명(코드) | 근로일자 | 근로일수 | 임금총액 | 보수총액 | 근로자구분\n- 날짜 형식: yyyy/mm 한 개 (근로년월)\n- "X일" 형태 근로일수 (예: "27일", "2일")\n- "N원" 형태 임금/보수\n- 예: "1 2018/02 푸드앤디자인협동조 제조관련 단순 종사자(229) 5,6,7,8 4일 90,000원 90,000원 근로자"\n\n## 절대 규칙\n1. "yyyy/mm 사업장명 ... X일 N원" 패턴 → **반드시 dailyEntries**, 절대 sources.고용산재 아님\n2. "yyyy-mm-dd yyyy-mm-dd 근로자" 패턴 → **반드시 sources.고용산재**\n3. "근로일수", "임금총액" 컬럼 데이터 있는 행은 무조건 dailyEntries\n4. 자격이력 표는 짧음 (3-10행). dailyEntries는 길음 (수십~수백행)\n5. sources.고용산재가 10건을 초과하면 일용근로를 잘못 분류한 것이다 — 다시 검토하라\n\n## 추출 필드\n자격이력 sources.고용산재:\n- jobType, company, startYear/startMonth (취득), endYear/endMonth (상실, 없으면 2026-01)\n\n일용근로 dailyEntries:\n- company ([업체명] 표기 시 []안 이름)\n- jobType (직종명+코드)\n- totalDays (X일에서 X)\n- startYear/startMonth (yyyy/mm)\n- convertedMonths = Math.ceil(totalDays/20)\n- source: "고용산재" (단순 라벨)\n- memo: 빈 문자열\n\n${noiseGuide}\n\n반드시 이 JSON 형식으로만 응답하라:\n{"name":"성명","sources":{"고용산재":[{"company":"사업장명","startYear":2016,"startMonth":9,"endYear":2016,"endMonth":11,"department":"","jobType":"직종명(코드)","workDays":0,"noiseExposure":false}],"건보":[],"소득금액":[],"연금":[]},"dailyEntries":[{"company":"사업장명","jobType":"직종명","totalDays":5,"startYear":2013,"startMonth":1,"convertedMonths":1,"source":"고용산재","memo":""}]}`
 
   if (docType === "고용산재_상용") return base + `이 문서는 고용보험 자격이력내역서이다. 비고/구분이 "근로자"인 항목을 모두 추출하라. 직종명(코드), 사업장명, 취득일(시작), 상실일(종료). 상실일 없으면 2026-01.\n${noiseGuide}\n반드시 이 JSON 형식으로만 응답하라:\n{"name":"성명","sources":{"고용산재":[{"company":"사업장명","startYear":2000,"startMonth":1,"endYear":2005,"endMonth":12,"department":"","jobType":"직종명(코드)","workDays":0,"noiseExposure":false}],"건보":[],"소득금액":[],"연금":[]},"dailyEntries":[]}`
 
-  if (docType === "일용직") return base + `이 문서는 고용보험 일용근로노무제공내역서이다. 모든 행을 그대로 추출. 합산 금지. [업체명] 표기 시 []안 이름을 company로. 근무일수는 비고 날짜 숫자 개수 또는 근무일수 컬럼. startYear/startMonth는 해당 행 연월. convertedMonths=Math.ceil(totalDays/20). memo는 빈 문자열로 두어 토큰 절약.\n반드시 이 JSON 형식으로만 응답하라:\n{"name":"성명","sources":{"고용산재":[],"건보":[],"소득금액":[],"연금":[]},"dailyEntries":[{"company":"사업장명","jobType":"직종명","totalDays":5,"startYear":2013,"startMonth":1,"convertedMonths":1,"source":"고용산재","memo":""}]}`
+  if (docType === "일용직") return base + `이 문서는 고용보험 일용근로·노무제공내역서이다.\n\n## 절대 규칙 (매우 중요)\n1. 모든 행을 dailyEntries 배열에만 추출하라.\n2. **sources.고용산재, sources.건보, sources.소득금액, sources.연금 모두 반드시 빈 배열 [] 이다.** 절대로 이 4개 sources 배열에 데이터를 넣지 마라.\n3. 일용근로 행은 자격이력이 아니다. dailyEntries로만 분류한다.\n4. dailyEntries 항목의 "source" 필드는 단순한 문자열 라벨일 뿐이다 (sources 배열 키와 무관).\n\n## 추출 규칙\n- 모든 행을 그대로 추출. 합산 금지.\n- 사업장명에 [업체명] 표기 시 []안 이름을 company로 사용.\n- totalDays = 근로일수 컬럼 (예: "27일" → 27)\n- startYear/startMonth = 근로년월 (예: "2018/02" → 2018, 2)\n- convertedMonths = Math.ceil(totalDays / 20)\n- jobType = 직종명(코드 포함)\n- source = "고용산재" (단순 라벨, 변경하지 말 것)\n- memo = 빈 문자열 (토큰 절약)\n\n반드시 이 JSON 형식으로만 응답하라 (sources의 모든 키는 빈 배열):\n{"name":"성명","sources":{"고용산재":[],"건보":[],"소득금액":[],"연금":[]},"dailyEntries":[{"company":"사업장명","jobType":"직종명","totalDays":5,"startYear":2013,"startMonth":1,"convertedMonths":1,"source":"고용산재","memo":""}]}`
 
   if (docType === "연금") return base + `[국민연금 가입증명/가입내역확인서 추출 — 단계별 추론]\n\n다음 순서로 사고하여 정확한 결과를 도출하라:\n\n[Step 1] OCR 텍스트에서 "가입이력" 또는 "자격유지기간" 표를 식별한다.\n  - 이 표만 추출 대상이다. (변동사유 표나 변경 내역 표는 무시)\n  - 자격유지기간이 명시된 행을 모두 나열한다 (예: "2002.11.01 ~ 2008.01.06")\n\n[Step 2] 각 자격유지기간의 가입자종별을 확인한다.\n  - 가입자종별 컬럼이 "사업장" 또는 "사업장가입자"이면 → 추출 대상\n  - 가입자종별 컬럼이 "지역" 또는 "지역가입자"이면 → 절대 제외\n  - 임의가입자, 임의계속가입자도 제외\n\n[Step 3] 가입자종별 매칭 시 사업장명도 체크한다.\n  - 사업장가입자면 사업장명이 함께 표시됨 (예: "경주캐터링서비스")\n  - 지역가입자면 사업장명 자리에 "지역" 또는 빈칸\n\n[Step 4] 변동사유/처리일자 표(상실/취득 메타데이터)는 절대로 별개 항목으로 만들지 않는다.\n  - 예: "상실 2008-01-07"은 위 자격유지기간 종료일의 처리 정보일 뿐이다.\n  - 예: "사업장 2002-11-01 2002-11-14"는 자격취득일 처리 정보일 뿐이다.\n\n[Step 5] 추출 결과 검증\n  - sources.연금의 모든 항목은 [Step 1]에서 식별한 자격유지기간 중 하나여야 한다.\n  - 가입자종별이 "지역"인 행을 추출하지 않았는지 마지막으로 확인하라.\n\n[추출 필드]\n- company: 사업장명 (변경 이력 있으면 최신 명칭)\n- startYear/startMonth: 자격취득일\n- endYear/endMonth: 자격상실일 (없으면 2026-01)\n\n${noiseGuide}\n\n반드시 이 JSON 형식으로만 응답하라:\n{"name":"성명","sources":{"연금":[{"company":"사업장명","startYear":2000,"startMonth":1,"endYear":2005,"endMonth":12,"department":"","jobType":"","workDays":0,"noiseExposure":false}],"고용산재":[],"건보":[],"소득금액":[]},"dailyEntries":[]}`
 
@@ -197,6 +197,7 @@ export async function POST(
   const file = formData.get("file") as File | null
   const docType = (formData.get("docType") as string) ?? ""
   const chunkName = (formData.get("chunkName") as string) ?? "(unnamed)"
+  const chunkIndex = Number(formData.get("chunkIndex") ?? 0)
 
   if (!file) return NextResponse.json({ error: "파일이 없습니다" }, { status: 400 })
 
@@ -235,15 +236,16 @@ export async function POST(
         }
 
         // 2단계: Haiku 텍스트 파싱
-        // 청크 자동 감지: 고용산재_전체 청크 중 "자격이력내역서" 헤더가 없고 "일용근로"만 있으면
-        // 일용직 prompt로 전환 → 일용직 행을 자격이력으로 오분류 방지 (헤비 케이스 핵심 수정)
+        // 청크 분기 정책 (헤비 케이스 false positive 방지):
+        // - 고용산재_전체 첫 청크 (chunkIndex=0): 자격이력+일용직 통합 prompt
+        // - 그 외 청크: 일용직 전용 prompt (자격이력 헤더는 첫 페이지에만 있으므로)
+        // 보조 검증: OCR 텍스트에 "자격이력내역서" 명시되면 통합 prompt 강제
         let effectiveDocType = docType
         if (docType === "고용산재_전체") {
-          const hasJaagyeokIryeok = /자격이력내역서/.test(text)
-          const hasIlyongKeullo = /일용근로|노무제공내역서/.test(text)
-          if (!hasJaagyeokIryeok && hasIlyongKeullo) {
+          const hasJaagyeokHeader = /자격이력내역서/.test(text)
+          if (chunkIndex > 0 && !hasJaagyeokHeader) {
             effectiveDocType = "일용직"
-            console.log(`[${chunkName}] 자격이력 헤더 없음 → 일용직 prompt로 자동 전환`)
+            console.log(`[${chunkName}] chunkIndex=${chunkIndex} (자격이력 헤더 없음) → 일용직 prompt`)
           }
         }
         const fullPrompt = `${getPromptForDocType(effectiveDocType)}\n\n--- 문서 텍스트 ---\n${text}`
