@@ -88,6 +88,17 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   const session = await auth()
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   const { id } = await params
+  const { searchParams } = new URL(req.url)
+  const deleteGroup = searchParams.get("deleteGroup") === "true"
+
+  if (deleteGroup) {
+    const record = await prisma.specialClinicSchedule.findUnique({ where: { id }, select: { recurringGroupId: true } })
+    if (record?.recurringGroupId) {
+      const { count } = await prisma.specialClinicSchedule.deleteMany({ where: { recurringGroupId: record.recurringGroupId } })
+      return NextResponse.json({ success: true, deleted: count })
+    }
+  }
+
   await prisma.specialClinicSchedule.delete({ where: { id } })
   return NextResponse.json({ success: true })
 }

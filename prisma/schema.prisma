@@ -1173,6 +1173,9 @@ model SpecialClinicSchedule {
   attended       Boolean? // 참석 여부
   isPickup       Boolean? @default(false) // 픽업 필요 (= HearingLossDetail.{special|reSpecial|re2Special}ClinicPickup 와 싱크)
 
+  // 주기성 일정
+  recurringGroupId String? // 같은 반복 그룹 레코드끼리 공유하는 ID
+
   // 텔레그램 수신
   sender          String?
   sourceDate      DateTime?
