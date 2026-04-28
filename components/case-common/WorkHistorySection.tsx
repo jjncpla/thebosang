@@ -662,68 +662,34 @@ function WorkHistoryDrawerContent({
           />
         </div>
 
-        {/* 최종 직업력 합산하기 */}
-        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16, padding: "10px 14px", background: "#f0fdf4", borderRadius: 8, border: "1px solid #bbf7d0", flexWrap: "wrap" }}>
-          <button onClick={mergeWorkHistory} style={{ background: "#8DC63F", color: "white", border: "none", borderRadius: 6, padding: "7px 18px", fontSize: 13, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>
+        {/* 최종 직업력 합산하기 (간소화) */}
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12, padding: "8px 12px", background: "#f0fdf4", borderRadius: 8, border: "1px solid #bbf7d0", flexWrap: "wrap" }}>
+          <button onClick={mergeWorkHistory} style={{ background: "#8DC63F", color: "white", border: "none", borderRadius: 6, padding: "6px 16px", fontSize: 13, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}>
             ▶ 최종 직업력 합산하기
           </button>
-          {mergeResult ? (
-            <div style={{ display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
-              <span style={{ fontSize: 12, color: "#15803d" }}>상용직: <strong>{calcDuration(mergeResult.regularMonths)}</strong></span>
-              {mergeResult.noiseMonths > 0 && (
-                <span style={{ fontSize: 12, color: "#dc2626", background: "#fee2e2", padding: "2px 8px", borderRadius: 6 }}>소음노출: <strong>{calcDuration(mergeResult.noiseMonths)}</strong></span>
-              )}
-              <span style={{ fontSize: 12, color: "#92400e" }}>일용직: <strong>{calcDuration(mergeResult.dailyMonths)}</strong></span>
-              <span style={{ fontSize: 13, color: "#111827", fontWeight: 700, background: "#dcfce7", padding: "3px 10px", borderRadius: 6 }}>최종 합계: {calcDuration(mergeResult.totalMonths)}</span>
-              <span style={{ fontSize: 10, color: "#9ca3af" }}>※동시재직 중복 제거 union 기준</span>
-            </div>
-          ) : (
-            <span style={{ fontSize: 12, color: "#15803d" }}>
-              총 {RAW_SOURCES.reduce((s, src) => s + (workHistoryRaw[src]?.length ?? 0), 0)}개 항목 + 일용직 {workHistoryDaily.length}건 → 합산하여 최종 직업력 생성
-            </span>
-          )}
+          <span style={{ fontSize: 11, color: "#15803d" }}>
+            상용직 {RAW_SOURCES.filter(s => s !== "일용직" && s !== "건근공").reduce((sum, src) => sum + (workHistoryRaw[src]?.length ?? 0), 0)}건 + 일용직 {workHistoryDaily.length + (workHistoryRaw["건근공"]?.length ?? 0)}건 → 통합 분석
+          </span>
         </div>
 
-        {/* 합산 결과 요약 */}
-        {workHistory.length > 0 && (
-          <div style={{ marginBottom: 16, background: "#f0fdf4", borderRadius: 8, border: "1px solid #bbf7d0", padding: "12px 14px" }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: "#15803d", marginBottom: 8 }}>합산 결과 요약</div>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
-              <thead>
-                <tr style={{ background: "#dcfce7" }}>
-                  {["회사명", "시작연월", "종료연월", "근속기간"].map(h => (
-                    <th key={h} style={{ padding: "4px 8px", border: "1px solid #bbf7d0", fontWeight: 600, color: "#15803d", textAlign: "left" }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {workHistory.map((row, i) => {
-                  const tm = (row.endYear - row.startYear) * 12 + (row.endMonth - row.startMonth) + 1;
-                  return (
-                    <tr key={i}>
-                      <td style={{ padding: "4px 8px", border: "1px solid #dcfce7" }}>{row.company}</td>
-                      <td style={{ padding: "4px 8px", border: "1px solid #dcfce7" }}>{row.startYear}-{String(row.startMonth).padStart(2, "0")}</td>
-                      <td style={{ padding: "4px 8px", border: "1px solid #dcfce7" }}>{row.endYear}-{String(row.endMonth).padStart(2, "0")}</td>
-                      <td style={{ padding: "4px 8px", border: "1px solid #dcfce7", fontWeight: 600, color: "#15803d" }}>{calcDuration(tm)}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-              <tfoot>
-                <tr style={{ background: "#f0fdf4" }}>
-                  <td colSpan={3} style={{ padding: "4px 8px", border: "1px solid #bbf7d0", fontWeight: 700, color: "#15803d", textAlign: "right" }}>상용직 합계 (union)</td>
-                  <td style={{ padding: "4px 8px", border: "1px solid #bbf7d0", fontWeight: 700, color: "#15803d" }}>
-                    {mergeResult ? calcDuration(mergeResult.regularMonths) : "—"}
-                  </td>
-                </tr>
-              </tfoot>
-            </table>
+        {/* ─── 통합 "최종 합산 직업력" 섹션 ─── */}
+        <div style={{ background: "#f0fdf4", borderRadius: 10, border: "2px solid #86efac", padding: 14, marginBottom: 16 }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: "#15803d", marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}>
+            📋 최종 합산 직업력
+            {mergeResult && (
+              <span style={{ fontSize: 11, fontWeight: 500, color: "#16a34a", marginLeft: 4 }}>
+                (총 <strong>{calcDuration(mergeResult.totalMonths)}</strong>)
+              </span>
+            )}
           </div>
-        )}
 
-        {/* 최종 직업력 편집 테이블 */}
-        <div style={{ fontSize: 12, fontWeight: 700, color: "#374151", marginBottom: 8 }}>최종 직업력 (합산 결과)</div>
-        <div style={{ overflowX: "auto", marginBottom: 12 }}>
+          {/* 상용직 직업력 */}
+          <div style={{ marginBottom: 14 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: "#1e40af", marginBottom: 6, display: "flex", alignItems: "center", gap: 6 }}>
+              🏢 상용직 직업력
+              {mergeResult && <span style={{ fontSize: 11, color: "#3b82f6", fontWeight: 500 }}>· {calcDuration(mergeResult.regularMonths)}</span>}
+            </div>
+        <div style={{ overflowX: "auto", marginBottom: 8 }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
             <thead>
               <tr style={{ background: "#f0fdf4" }}>
@@ -774,13 +740,16 @@ function WorkHistoryDrawerContent({
             </tbody>
           </table>
         </div>
-        <button onClick={addWorkRow} style={{ background: "white", border: "1px solid #bbf7d0", borderRadius: 6, padding: "4px 12px", fontSize: 12, cursor: "pointer", marginBottom: 16, color: "#15803d" }}>+ 직접 추가</button>
-
-        {/* 일용직 직업력 */}
-        <div style={{ marginTop: 16, marginBottom: 16 }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: "#374151", padding: "14px 0 8px 0", borderBottom: "2px solid #e5e7eb", marginBottom: 12 }}>
-            일용직 직업력 <span style={{ fontSize: 11, fontWeight: 400, color: "#9ca3af", marginLeft: 8 }}>(20일=1개월 기준 · 전체 합산 후 환산)</span>
+            <button onClick={addWorkRow} style={{ background: "white", border: "1px solid #bbf7d0", borderRadius: 6, padding: "4px 12px", fontSize: 12, cursor: "pointer", color: "#15803d" }}>+ 행 추가</button>
           </div>
+
+          {/* 일용직 직업력 */}
+          <div style={{ marginBottom: 6 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: "#92400e", marginBottom: 6, display: "flex", alignItems: "center", gap: 6 }}>
+              🛠 일용직 직업력
+              {mergeResult && <span style={{ fontSize: 11, color: "#d97706", fontWeight: 500 }}>· {calcDuration(mergeResult.dailyMonths)}</span>}
+              <span style={{ fontSize: 10, fontWeight: 400, color: "#9ca3af", marginLeft: 4 }}>(20일=1개월, 전체 합산 후 환산)</span>
+            </div>
           {(() => {
             if (workHistoryDaily.length === 0) return (
               <div style={{ padding: "12px", textAlign: "center", color: "#9ca3af", fontSize: 12, border: "1px solid #fef3c7", borderRadius: 6 }}>일용직 이력 없음</div>
@@ -847,6 +816,21 @@ function WorkHistoryDrawerContent({
               </div>
             );
           })()}
+          </div>
+
+          {/* 최종 합계 강조 */}
+          {mergeResult && (
+            <div style={{ marginTop: 10, padding: "10px 14px", background: "#dcfce7", borderRadius: 8, border: "1px solid #86efac", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
+              <span style={{ fontSize: 12, color: "#15803d", fontWeight: 600 }}>
+                상용직 <strong>{calcDuration(mergeResult.regularMonths)}</strong>
+                {mergeResult.noiseMonths > 0 && <> · 소음노출 <strong style={{ color: "#dc2626" }}>{calcDuration(mergeResult.noiseMonths)}</strong></>}
+                {' · '}일용직 <strong style={{ color: "#92400e" }}>{calcDuration(mergeResult.dailyMonths)}</strong>
+              </span>
+              <span style={{ fontSize: 14, fontWeight: 800, color: "#15803d", background: "white", padding: "5px 14px", borderRadius: 6, border: "1px solid #86efac" }}>
+                최종 합계: {calcDuration(mergeResult.totalMonths)}
+              </span>
+            </div>
+          )}
         </div>
 
         {/* 마지막 소음작업 중단일 */}
