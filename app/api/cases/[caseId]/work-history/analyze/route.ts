@@ -162,7 +162,18 @@ export async function POST(
         }
 
         // 2단계: Haiku 텍스트 파싱
-        const fullPrompt = `${getPromptForDocType(docType)}\n\n--- 문서 텍스트 ---\n${text}`
+        // 청크 자동 감지: 고용산재_전체 청크 중 "자격이력내역서" 헤더가 없고 "일용근로"만 있으면
+        // 일용직 prompt로 전환 → 일용직 행을 자격이력으로 오분류 방지 (헤비 케이스 핵심 수정)
+        let effectiveDocType = docType
+        if (docType === "고용산재_전체") {
+          const hasJaagyeokIryeok = /자격이력내역서/.test(text)
+          const hasIlyongKeullo = /일용근로|노무제공내역서/.test(text)
+          if (!hasJaagyeokIryeok && hasIlyongKeullo) {
+            effectiveDocType = "일용직"
+            console.log(`[${chunkName}] 자격이력 헤더 없음 → 일용직 prompt로 자동 전환`)
+          }
+        }
+        const fullPrompt = `${getPromptForDocType(effectiveDocType)}\n\n--- 문서 텍스트 ---\n${text}`
         const t2 = Date.now()
         const claudeRes = await callClaude(
           {

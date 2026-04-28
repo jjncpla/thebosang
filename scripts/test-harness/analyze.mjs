@@ -280,8 +280,18 @@ async function processChunk(chunk, docType) {
     }
   }
 
+  // 청크별 docType 자동 감지: 자격이력 헤더 없으면 일용직 prompt
+  let effectiveDocType = docType
+  if (docType === "고용산재_전체") {
+    const hasJaagyeokIryeok = /자격이력내역서/.test(text)
+    const hasIlyongKeullo = /일용근로|노무제공내역서/.test(text)
+    if (!hasJaagyeokIryeok && hasIlyongKeullo) {
+      effectiveDocType = "일용직"
+    }
+  }
+
   const t1 = Date.now()
-  const fullPrompt = `${getPromptForDocType(docType)}\n\n--- 문서 텍스트 ---\n${text}`
+  const fullPrompt = `${getPromptForDocType(effectiveDocType)}\n\n--- 문서 텍스트 ---\n${text}`
   const claudeRes = await callClaude({
     model: "claude-haiku-4-5-20251001",
     max_tokens: 8192,
