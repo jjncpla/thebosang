@@ -61,6 +61,44 @@ function calcUnionMonths(intervals: { start: number; end: number }[]): number {
   return total + curEnd - curStart + 1;
 }
 
+// ── 진행률 표시 컴포넌트 ───────────────────────────────────────────────
+function AnalyzeProgressBar({ progress }: { progress: { done: number; total: number; currentChunk: string; estimatedTotalSec: number; startMs: number } }) {
+  const [now, setNow] = useState(Date.now());
+  React.useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 500);
+    return () => clearInterval(id);
+  }, []);
+  const elapsedSec = Math.floor((now - progress.startMs) / 1000);
+  const pct = progress.total > 0 ? Math.min(100, Math.round((progress.done / progress.total) * 100)) : 0;
+  const remainingSec = Math.max(0, progress.estimatedTotalSec - elapsedSec);
+  const isHeavy = progress.estimatedTotalSec > 60;
+
+  return (
+    <div style={{ background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: 8, padding: 12, marginTop: 10 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+        <span style={{ fontSize: 12, fontWeight: 700, color: "#1e40af" }}>
+          🤖 AI 분석 중… ({progress.done}/{progress.total} 청크 완료)
+        </span>
+        <span style={{ fontSize: 11, color: "#475569" }}>
+          경과 {elapsedSec}초 · 예상 약 {progress.estimatedTotalSec}초
+          {remainingSec > 0 && ` (남은 ~${remainingSec}초)`}
+        </span>
+      </div>
+      <div style={{ height: 8, background: "#dbeafe", borderRadius: 4, overflow: "hidden" }}>
+        <div style={{ height: "100%", width: `${pct}%`, background: "linear-gradient(90deg, #3b82f6, #2563eb)", transition: "width 0.4s ease" }} />
+      </div>
+      <div style={{ fontSize: 11, color: "#64748b", marginTop: 6, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        현재: {progress.currentChunk}
+      </div>
+      {isHeavy && (
+        <div style={{ fontSize: 11, color: "#92400e", marginTop: 6, background: "#fef3c7", padding: 6, borderRadius: 4 }}>
+          ⏰ 페이지 수가 많아 시간이 다소 걸립니다. 처리되는 항목은 아래 표에 즉시 반영됩니다.
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── 드로어 내부 컴포넌트 (분리된 컴포넌트 → DOM 안정성 보장) ──────────────
 interface DrawerContentProps extends WorkHistorySectionProps {
   onClose: () => void;
@@ -79,6 +117,7 @@ function WorkHistoryDrawerContent({
   onClose,
 }: DrawerContentProps) {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analyzeProgress, setAnalyzeProgress] = useState<{ done: number; total: number; currentChunk: string; estimatedTotalSec: number; startMs: number } | null>(null);
   const [analyzeError, setAnalyzeError] = useState<string | null>(null);
   const [pendingFiles, setPendingFiles] = useState<{ file: File; docType: string }[]>([]);
   const [showFileSelector, setShowFileSelector] = useState(false);
@@ -179,8 +218,24 @@ function WorkHistoryDrawerContent({
         }
       }
 
+      // 진행률 추적 초기화
+      // 추정: 청크당 평균 ~10초 (OCR 6-8s + Haiku 3-5s, 동시성 고려)
+      const concurrency = allChunks.length <= 3 ? 3 : allChunks.length <= 6 ? 2 : 1;
+      const estimatedTotalSec = Math.ceil(allChunks.length / concurrency) * 12;
+      let doneCount = 0;
+      setAnalyzeProgress({
+        done: 0,
+        total: allChunks.length,
+        currentChunk: allChunks[0]?.chunkName ?? "",
+        estimatedTotalSec,
+        startMs: Date.now(),
+      });
+
       // 2) 청크 처리 함수
       const processChunk = async (chunk: Chunk) => {
+        // 진행 상태 업데이트: 현재 처리 중인 청크 표시
+        setAnalyzeProgress((prev) => prev ? { ...prev, currentChunk: chunk.chunkName } : prev);
+
         const formData = new FormData();
         formData.append("file", chunk.blob, chunk.chunkName);
         formData.append("docType", chunk.docType);
@@ -207,7 +262,7 @@ function WorkHistoryDrawerContent({
         }
         if (data?.type === "error") throw new Error(data.error ?? "분석 오류");
         if (data?.type === "result") {
-          // 청크별 결과를 누적 + 즉시 UI 반영 (JS single-thread라 race 문제 없음)
+          // 청크별 결과를 누적 + 즉시 UI 반영
           if (data.name && !extractedName) extractedName = data.name;
           ["고용산재", "건보", "소득금액", "연금", "건근공"].forEach((src) => {
             if ((data!.sources as Record<string, unknown[]>)?.[src]?.length > 0) {
@@ -221,11 +276,13 @@ function WorkHistoryDrawerContent({
           onChange({ workHistoryRaw: { ...accRaw } as WorkHistoryRaw });
           onChangeDaily([...accDaily]);
         }
+        // 청크 완료 카운트
+        doneCount++;
+        setAnalyzeProgress((prev) => prev ? { ...prev, done: doneCount } : prev);
       };
 
       // 3) 동시성 제한 병렬 처리 (rate limit 방지)
-      // 청크 수가 많을수록 동시성 낮춤: ≤3청크 동시성3, 4-6청크 동시성2, 그 이상은 1
-      const CONCURRENCY = allChunks.length <= 3 ? 3 : allChunks.length <= 6 ? 2 : 1;
+      const CONCURRENCY = concurrency;
       for (let i = 0; i < allChunks.length; i += CONCURRENCY) {
         const batch = allChunks.slice(i, i + CONCURRENCY);
         await Promise.all(batch.map(processChunk));
@@ -240,6 +297,7 @@ function WorkHistoryDrawerContent({
       setAnalyzeError(err instanceof Error ? err.message : "오류가 발생했습니다");
     } finally {
       setIsAnalyzing(false);
+      setAnalyzeProgress(null);
     }
   };
 
@@ -374,6 +432,10 @@ function WorkHistoryDrawerContent({
             )}
             {analyzeError && <span style={{ fontSize: 11, color: "#dc2626", width: "100%" }}>⚠ {analyzeError}</span>}
           </div>
+
+          {isAnalyzing && analyzeProgress && (
+            <AnalyzeProgressBar progress={analyzeProgress} />
+          )}
 
           {showFileSelector && pendingFiles.length > 0 && (
             <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, padding: 12, marginTop: 8 }}>

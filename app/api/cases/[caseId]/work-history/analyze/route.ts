@@ -26,6 +26,79 @@ async function ocrPdf(pdfBase64: string): Promise<string> {
   return result.document?.text ?? ""
 }
 
+// Form Parser: 표 구조 보존하여 텍스트화 (건보·연금 등 표 중심 문서)
+async function ocrPdfWithFormParser(pdfBase64: string): Promise<string> {
+  const client = getDocAIClient()
+  const processorName = process.env.GOOGLE_DOCAI_FORM_PROCESSOR
+  if (!processorName) {
+    // Form Parser 환경변수 없으면 일반 OCR로 폴백
+    return ocrPdf(pdfBase64)
+  }
+
+  const [result] = await client.processDocument({
+    name: processorName,
+    rawDocument: { content: pdfBase64, mimeType: "application/pdf" },
+  })
+
+  const doc = result.document
+  if (!doc) return ""
+
+  // 기본 텍스트
+  const baseText = doc.text ?? ""
+
+  // 표 구조를 마크다운 테이블 형태로 변환
+  const tableTexts: string[] = []
+  for (const page of doc.pages ?? []) {
+    for (const table of page.tables ?? []) {
+      const headerRows = (table.headerRows ?? []).map((row) =>
+        (row.cells ?? []).map((cell) => extractCellText(cell, baseText))
+      )
+      const bodyRows = (table.bodyRows ?? []).map((row) =>
+        (row.cells ?? []).map((cell) => extractCellText(cell, baseText))
+      )
+      if (headerRows.length === 0 && bodyRows.length === 0) continue
+
+      tableTexts.push("\n=== TABLE ===")
+      for (const row of headerRows) {
+        tableTexts.push("| " + row.join(" | ") + " |")
+      }
+      if (headerRows.length > 0 && bodyRows.length > 0) {
+        tableTexts.push("|" + headerRows[0].map(() => "---").join("|") + "|")
+      }
+      for (const row of bodyRows) {
+        tableTexts.push("| " + row.join(" | ") + " |")
+      }
+      tableTexts.push("=== END TABLE ===\n")
+    }
+  }
+
+  return baseText + "\n\n" + tableTexts.join("\n")
+}
+
+// Form Parser cell의 textAnchor를 base text에서 추출
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function extractCellText(cell: any, baseText: string): string {
+  const segments = cell?.layout?.textAnchor?.textSegments ?? []
+  const parts: string[] = []
+  for (const seg of segments) {
+    const start = Number(seg.startIndex ?? 0)
+    const end = Number(seg.endIndex ?? 0)
+    parts.push(baseText.slice(start, end))
+  }
+  return parts.join("").replace(/\s+/g, " ").trim()
+}
+
+// docType별 OCR 전략 선택
+async function performOcr(pdfBase64: string, docType: string): Promise<string> {
+  // 표 구조가 중요한 문서: Form Parser 사용 (사용 가능 시)
+  // - 건보: 자격득실 표
+  // - 연금: 가입이력 표 (김옥자 1↔2 변동 케이스)
+  // - 고용산재_상용: 자격이력 표
+  // - 경력증명서: 재직 표
+  const useFormParser = ["건보", "연금", "고용산재_상용", "경력증명서"].includes(docType)
+  return useFormParser ? ocrPdfWithFormParser(pdfBase64) : ocrPdf(pdfBase64)
+}
+
 async function callClaude(body: object, apiKey: string, maxRetries = 5): Promise<Response> {
   let lastError: Error | null = null
   for (let attempt = 0; attempt < maxRetries; attempt++) {
@@ -145,9 +218,9 @@ export async function POST(
         const base64 = Buffer.from(buf).toString("base64")
         console.log(`[${chunkName}] OCR 시작 (${Math.round(buf.byteLength / 1024)}KB)`)
 
-        // 1단계: Document AI OCR
+        // 1단계: Document AI OCR (docType에 따라 OCR vs Form Parser 자동 선택)
         const t1 = Date.now()
-        const text = await ocrPdf(base64)
+        const text = await performOcr(base64, docType)
         const ocrMs = Date.now() - t1
         console.log(`[${chunkName}] OCR 완료: ${text.length}자 (${ocrMs}ms)`)
 
