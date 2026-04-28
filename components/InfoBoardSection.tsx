@@ -474,6 +474,7 @@ export default function InfoBoardSection() {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [sel, setSel] = useState<SelState>({});
   const [query, setQuery] = useState("");
+  const [openCard, setOpenCard] = useState<number | null>(null);
 
   /* ── 트리 상태 조작 ── */
   function toggleNode(id: string) {
@@ -733,39 +734,76 @@ export default function InfoBoardSection() {
             const cat1Label = CAT1_LIST.find(c => c.key === item.cat1)?.label.replace(/^\d+\.\s*/, "") ?? item.cat1;
             const cat2Label = item.cat2 ? (getCat2List(item.cat1).find(c => c.key === item.cat2)?.label ?? item.cat2) : null;
             const cat3Style = item.cat3 ? (CAT3_COLOR[item.cat3] ?? { bg: "#f3f4f6", color: "#4b5563" }) : null;
+            const isOpen = openCard === idx;
             return (
               <div key={idx} style={{
-                background: "#fff", border: "1px solid #e5e7eb",
-                borderRadius: 8, padding: "10px 14px",
-                display: "flex", alignItems: "flex-start", gap: 10,
+                background: "#fff",
+                border: `1px solid ${isOpen ? "#93c5fd" : "#e5e7eb"}`,
+                borderRadius: 8, overflow: "hidden",
+                transition: "border-color 0.15s",
               }}>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: "#111827", lineHeight: 1.5 }}>
-                    {item.title}
-                  </div>
-                  {item.desc && (
-                    <div style={{ fontSize: 11, color: "#6b7280", marginTop: 2, lineHeight: 1.5 }}>
-                      {item.desc}
+                {/* 헤더 (클릭 토글) */}
+                <div
+                  onClick={() => setOpenCard(isOpen ? null : idx)}
+                  style={{
+                    padding: "10px 14px", cursor: "pointer",
+                    display: "flex", alignItems: "flex-start", gap: 10,
+                    background: isOpen ? "#eff6ff" : "#fff",
+                    transition: "background 0.15s",
+                  }}
+                >
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: "#111827", lineHeight: 1.5 }}>
+                      {item.title}
                     </div>
-                  )}
+                    {item.desc && !isOpen && (
+                      <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 2, lineHeight: 1.5, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {item.desc}
+                      </div>
+                    )}
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+                    <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 3 }}>
+                      {!sel.cat1 && (
+                        <span style={{ fontSize: 10, padding: "2px 6px", borderRadius: 6, background: "#dbeafe", color: "#1e40af", fontWeight: 600, whiteSpace: "nowrap" }}>
+                          {cat1Label}
+                        </span>
+                      )}
+                      {!sel.cat2 && cat2Label && (
+                        <span style={{ fontSize: 10, padding: "2px 6px", borderRadius: 6, background: "#f3f4f6", color: "#4b5563", whiteSpace: "nowrap" }}>
+                          {cat2Label}
+                        </span>
+                      )}
+                      {!sel.cat3 && cat3Style && item.cat3 && (
+                        <span style={{ fontSize: 10, padding: "2px 6px", borderRadius: 6, whiteSpace: "nowrap", background: cat3Style.bg, color: cat3Style.color }}>
+                          {item.cat3}
+                        </span>
+                      )}
+                    </div>
+                    <span style={{ fontSize: 10, color: "#9ca3af", transition: "transform 0.2s", display: "inline-block", transform: isOpen ? "rotate(180deg)" : "rotate(0deg)" }}>
+                      ▼
+                    </span>
+                  </div>
                 </div>
-                <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 3, flexShrink: 0 }}>
-                  {!sel.cat1 && (
-                    <span style={{ fontSize: 10, padding: "2px 6px", borderRadius: 6, background: "#dbeafe", color: "#1e40af", fontWeight: 600, whiteSpace: "nowrap" }}>
-                      {cat1Label}
-                    </span>
-                  )}
-                  {!sel.cat2 && cat2Label && (
-                    <span style={{ fontSize: 10, padding: "2px 6px", borderRadius: 6, background: "#f3f4f6", color: "#4b5563", whiteSpace: "nowrap" }}>
-                      {cat2Label}
-                    </span>
-                  )}
-                  {!sel.cat3 && cat3Style && item.cat3 && (
-                    <span style={{ fontSize: 10, padding: "2px 6px", borderRadius: 6, whiteSpace: "nowrap", background: cat3Style.bg, color: cat3Style.color }}>
-                      {item.cat3}
-                    </span>
-                  )}
-                </div>
+
+                {/* 펼쳐진 내용 */}
+                {isOpen && (
+                  <div style={{
+                    padding: "10px 14px 12px",
+                    borderTop: "1px solid #e0f2fe",
+                    background: "#f8faff",
+                  }}>
+                    {item.desc ? (
+                      <p style={{ margin: 0, fontSize: 13, color: "#374151", lineHeight: 1.75, whiteSpace: "pre-wrap" }}>
+                        {item.desc}
+                      </p>
+                    ) : (
+                      <p style={{ margin: 0, fontSize: 12, color: "#9ca3af", fontStyle: "italic" }}>
+                        자료 내용이 아직 등록되지 않았습니다.
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
             );
           })}
