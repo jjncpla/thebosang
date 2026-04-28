@@ -67,6 +67,55 @@ async function ocrPdf(pdfBase64) {
   return result.document?.text ?? ""
 }
 
+const GOOGLE_DOCAI_FORM_PROCESSOR = env.GOOGLE_DOCAI_FORM_PROCESSOR
+
+async function ocrPdfWithFormParser(pdfBase64) {
+  if (!GOOGLE_DOCAI_FORM_PROCESSOR) return ocrPdf(pdfBase64)
+  const [result] = await docAIClient.processDocument({
+    name: GOOGLE_DOCAI_FORM_PROCESSOR,
+    rawDocument: { content: pdfBase64, mimeType: "application/pdf" },
+  })
+  const doc = result.document
+  if (!doc) return ""
+  const baseText = doc.text ?? ""
+  const tableTexts = []
+  for (const page of doc.pages ?? []) {
+    for (const table of page.tables ?? []) {
+      const headerRows = (table.headerRows ?? []).map((row) =>
+        (row.cells ?? []).map((cell) => extractCellText(cell, baseText))
+      )
+      const bodyRows = (table.bodyRows ?? []).map((row) =>
+        (row.cells ?? []).map((cell) => extractCellText(cell, baseText))
+      )
+      if (headerRows.length === 0 && bodyRows.length === 0) continue
+      tableTexts.push("\n=== TABLE ===")
+      for (const row of headerRows) tableTexts.push("| " + row.join(" | ") + " |")
+      if (headerRows.length > 0 && bodyRows.length > 0) {
+        tableTexts.push("|" + headerRows[0].map(() => "---").join("|") + "|")
+      }
+      for (const row of bodyRows) tableTexts.push("| " + row.join(" | ") + " |")
+      tableTexts.push("=== END TABLE ===\n")
+    }
+  }
+  return baseText + "\n\n" + tableTexts.join("\n")
+}
+
+function extractCellText(cell, baseText) {
+  const segments = cell?.layout?.textAnchor?.textSegments ?? []
+  const parts = []
+  for (const seg of segments) {
+    const start = Number(seg.startIndex ?? 0)
+    const end = Number(seg.endIndex ?? 0)
+    parts.push(baseText.slice(start, end))
+  }
+  return parts.join("").replace(/\s+/g, " ").trim()
+}
+
+async function performOcr(pdfBase64, docType) {
+  const useFormParser = ["건보", "연금", "고용산재_상용", "경력증명서"].includes(docType)
+  return useFormParser ? ocrPdfWithFormParser(pdfBase64) : ocrPdf(pdfBase64)
+}
+
 // ── Claude call ────────────────────────────────────────────────────
 async function callClaude(body) {
   for (let attempt = 0; attempt < 3; attempt++) {
@@ -101,7 +150,7 @@ function getPromptForDocType(docType) {
   if (docType === "고용산재_전체")
     return (
       base +
-      `[고용보험 자격이력 + 일용근로 통합 추출 — 단계별 추론]\n\n[Step 0] OCR 텍스트에서 "조회기간 총 N개 이력 중" 표현을 찾아라.\n  - 자격이력내역서의 N → sources.고용산재의 정답 행 수 (모두 비고가 "근로자"인 경우)\n  - 일용근로내역서의 N → dailyEntries의 정답 행 수\n  - 두 표 모두 있으면 양쪽 N 모두 활용\n\n=== [표 1: 자격이력내역서] - 상용직 ===\n- 헤더: "자격이력내역서 (근로자용/피보험자용)"\n- 컬럼: 일련번호 | 직종명(코드) | 사업장 명칭 | 취득일/전근일 | 상실일 | 비고\n- 비고 컬럼이 "근로자"인 모든 행을 sources.고용산재에 추출.\n- 단 한 행도 누락 금지.\n- 같은 사업장의 반복 취득·상실은 각각 별도 항목으로 추출.\n- jobType: 직종명(코드 포함), company: 사업장 명칭, startYear/startMonth: 취득일, endYear/endMonth: 상실일.\n- 상실일 없으면 2026-01.\n\n=== [표 2: 일용근로·노무제공내역서] - 일용직 ===\n- 헤더: "일용근로·노무제공내역서 (근로자용/피보험자용)"\n- 컬럼: 일련번호 | 근로년월 | 사업장명 | 직종명(코드) | 근로일자 | 근로일수 | 임금총액 | 보수총액 | 근로자 구분\n- 모든 행을 dailyEntries에 추출. 합산 금지. 단 한 행도 누락 금지.\n- 사업장명에 [업체명] 표기 시 []안 이름을 company로 사용.\n- totalDays = 근로일수 컬럼 (예: "27일"이면 27)\n- startYear/startMonth = 근로년월 (예: "2018/02"이면 2018, 2)\n- convertedMonths = Math.ceil(totalDays / 20)\n- jobType = 직종명(코드 포함)\n- memo = 빈 문자열로 두어 토큰 절약\n\n[Step Final] 추출 후 자체 검증:\n- sources.고용산재의 길이가 자격이력 N과 일치하는가?\n- dailyEntries의 길이가 일용근로 N과 일치하는가?\n- 일치하지 않으면 OCR 텍스트를 다시 한번 스캔하여 누락 행을 찾아라.\n\n${noiseGuide}\n\n반드시 이 JSON 형식으로만 응답하라:\n{"name":"성명","sources":{"고용산재":[{"company":"사업장명","startYear":2016,"startMonth":9,"endYear":2016,"endMonth":11,"department":"","jobType":"직종명(코드)","workDays":0,"noiseExposure":false}],"건보":[],"소득금액":[],"연금":[]},"dailyEntries":[{"company":"사업장명","jobType":"직종명","totalDays":5,"startYear":2013,"startMonth":1,"convertedMonths":1,"source":"고용산재","memo":""}]}`
+      `[고용보험 자격이력 + 일용근로 통합 추출 — 패턴 기반 분류]\n\n## 핵심: 두 표를 행 패턴으로 구분\n\n### 자격이력내역서 행 (sources.고용산재로):\n- 컬럼: 직종명(코드) | 사업장 명칭 | 취득일 | 상실일 | 비고\n- 날짜 형식: yyyy-mm-dd 두 개 (취득일, 상실일)\n- 비고 컬럼: "근로자"\n- 임금/근로일수 컬럼 없음\n- 예: "1 식당 서비스 관련 종사자(132) 미소식당 2016-09-08 2016-11-11 근로자"\n\n### 일용근로·노무제공내역서 행 (dailyEntries로):\n- 컬럼: 근로년월 | 사업장명 | 직종명(코드) | 근로일자 | 근로일수 | 임금총액 | 보수총액 | 근로자구분\n- 날짜 형식: yyyy/mm 한 개 (근로년월)\n- "X일" 형태 근로일수 (예: "27일", "2일")\n- "N원" 형태 임금/보수\n- 예: "1 2018/02 푸드앤디자인협동조 제조관련 단순 종사자(229) 5,6,7,8 4일 90,000원 90,000원 근로자"\n\n## 절대 규칙\n1. "yyyy/mm 사업장명 ... X일 N원" 패턴 → **반드시 dailyEntries**, 절대 sources.고용산재 아님\n2. "yyyy-mm-dd yyyy-mm-dd 근로자" 패턴 → **반드시 sources.고용산재**\n3. "근로일수", "임금총액" 컬럼 데이터 있는 행은 무조건 dailyEntries\n4. 자격이력 표는 짧음 (3-10행). dailyEntries는 길음 (수십~수백행)\n5. sources.고용산재가 10건을 초과하면 일용근로를 잘못 분류한 것이다 — 다시 검토하라\n\n## 추출 필드\n자격이력 sources.고용산재:\n- jobType, company, startYear/startMonth (취득), endYear/endMonth (상실, 없으면 2026-01)\n\n일용근로 dailyEntries:\n- company ([업체명] 표기 시 []안 이름)\n- jobType (직종명+코드)\n- totalDays (X일에서 X)\n- startYear/startMonth (yyyy/mm)\n- convertedMonths = Math.ceil(totalDays/20)\n- source: "고용산재"\n- memo: 빈 문자열\n\n${noiseGuide}\n\n반드시 이 JSON 형식으로만 응답하라:\n{"name":"성명","sources":{"고용산재":[{"company":"사업장명","startYear":2016,"startMonth":9,"endYear":2016,"endMonth":11,"department":"","jobType":"직종명(코드)","workDays":0,"noiseExposure":false}],"건보":[],"소득금액":[],"연금":[]},"dailyEntries":[{"company":"사업장명","jobType":"직종명","totalDays":5,"startYear":2013,"startMonth":1,"convertedMonths":1,"source":"고용산재","memo":""}]}`
     )
   if (docType === "고용산재_상용")
     return (
@@ -111,7 +160,7 @@ function getPromptForDocType(docType) {
   if (docType === "일용직")
     return (
       base +
-      `이 문서는 고용보험 일용근로노무제공내역서이다. 모든 행을 그대로 추출. 합산 금지. [업체명] 표기 시 []안 이름을 company로. 근무일수는 비고 날짜 숫자 개수 또는 근무일수 컬럼. startYear/startMonth는 해당 행 연월. convertedMonths=Math.ceil(totalDays/20).\n반드시 이 JSON 형식으로만 응답하라:\n{"name":"성명","sources":{"고용산재":[],"건보":[],"소득금액":[],"연금":[]},"dailyEntries":[{"company":"사업장명","jobType":"직종명","totalDays":5,"startYear":2013,"startMonth":1,"convertedMonths":1,"source":"고용산재","memo":""}]}`
+      `이 문서는 고용보험 일용근로·노무제공내역서이다.\n\n## 절대 규칙 (매우 중요)\n1. 모든 행을 dailyEntries 배열에만 추출하라.\n2. **sources.고용산재, sources.건보, sources.소득금액, sources.연금 모두 반드시 빈 배열 [] 이다.** 절대로 이 4개 sources 배열에 데이터를 넣지 마라.\n3. 일용근로 행은 자격이력이 아니다. dailyEntries로만 분류한다.\n4. dailyEntries 항목의 "source" 필드는 단순한 문자열 라벨일 뿐이다 (sources 배열 키와 무관).\n\n## 추출 규칙\n- 모든 행을 그대로 추출. 합산 금지.\n- 사업장명에 [업체명] 표기 시 []안 이름을 company로 사용.\n- totalDays = 근로일수 컬럼 (예: "27일" → 27)\n- startYear/startMonth = 근로년월 (예: "2018/02" → 2018, 2)\n- convertedMonths = Math.ceil(totalDays / 20)\n- jobType = 직종명(코드 포함)\n- source = "고용산재" (단순 라벨, 변경하지 말 것)\n- memo = 빈 문자열 (토큰 절약)\n\n반드시 이 JSON 형식으로만 응답하라 (sources의 모든 키는 빈 배열):\n{"name":"성명","sources":{"고용산재":[],"건보":[],"소득금액":[],"연금":[]},"dailyEntries":[{"company":"사업장명","jobType":"직종명","totalDays":5,"startYear":2013,"startMonth":1,"convertedMonths":1,"source":"고용산재","memo":""}]}`
     )
   if (docType === "연금")
     return (
@@ -263,9 +312,9 @@ async function splitPdfIntoChunks(pdfBuffer, pagesPerChunk) {
 }
 
 // ── Process single chunk ───────────────────────────────────────────
-async function processChunk(chunk, docType) {
+async function processChunk(chunk, docType, chunkIndex = 0) {
   const t0 = Date.now()
-  const text = await ocrPdf(chunk.base64)
+  const text = await performOcr(chunk.base64, docType)
   const ocrMs = Date.now() - t0
 
   if (!text || text.length < 10) {
@@ -280,14 +329,14 @@ async function processChunk(chunk, docType) {
     }
   }
 
-  // 청크별 docType 자동 감지: 자격이력 헤더 없으면 일용직 prompt
+  // 청크 분기 정책: 첫 청크가 아니고 자격이력 헤더 없으면 일용직 prompt
   let effectiveDocType = docType
   if (docType === "고용산재_전체") {
-    const hasJaagyeokIryeok = /자격이력내역서/.test(text)
-    const hasIlyongKeullo = /일용근로|노무제공내역서/.test(text)
-    if (!hasJaagyeokIryeok && hasIlyongKeullo) {
+    const hasJaagyeokHeader = /자격이력내역서/.test(text)
+    if (chunkIndex > 0 && !hasJaagyeokHeader) {
       effectiveDocType = "일용직"
     }
+    console.log(`  [${chunk.name}] chunkIdx=${chunkIndex} hasHeader=${hasJaagyeokHeader} → ${effectiveDocType}`)
   }
 
   const t1 = Date.now()
@@ -321,6 +370,7 @@ async function processChunk(chunk, docType) {
     console.error(`  [${chunk.name}] JSON parse error (text len ${rawText.length}):`, rawText.slice(-200))
   }
 
+    console.log(`  [RESULT ${chunk.name}] effective=${effectiveDocType} 고용:${sources.고용산재?.length ?? 0} 일용:${dailyEntries.length}`)
   return {
     chunkName: chunk.name,
     ocrMs,
@@ -344,13 +394,15 @@ export async function analyzeFile(pdfPath, docType, opts = {}) {
   const chunks = await splitPdfIntoChunks(pdfBuffer, chunkPages)
   if (verbose) console.log(`  청크 ${chunks.length}개 생성`)
 
-  // Concurrent processing with cap
+  // Concurrent processing with cap (chunkIndex 전달)
   const CONCURRENCY = opts.concurrency ?? 5
   const results = []
-  for (let i = 0; i < chunks.length; i += CONCURRENCY) {
-    const batch = chunks.slice(i, i + CONCURRENCY)
+  let chunkIdx = 0
+  const indexedChunks = chunks.map((c) => ({ ...c, chunkIndex: chunkIdx++ }))
+  for (let i = 0; i < indexedChunks.length; i += CONCURRENCY) {
+    const batch = indexedChunks.slice(i, i + CONCURRENCY)
     const batchResults = await Promise.all(
-      batch.map((chunk) => processChunk(chunk, docType))
+      batch.map((chunk) => processChunk(chunk, docType, chunk.chunkIndex))
     )
     results.push(...batchResults)
   }

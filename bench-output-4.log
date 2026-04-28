@@ -45,3 +45,19 @@
   Run 2: ERROR rate limit retries exhausted
   Run 3: ERROR fetch failed
   Run 4: 288.4s | name="안세윤" | 고용:233 건보:0 연금:0 일용:408 | 청크 6
+  Run 5: ERROR Total timeout of API google.cloud.documentai.v1.DocumentProcessorService exceeded 300000 milliseconds retrying error Error: 14 UNAVAILABLE: read ECONNRESET  before any response was received.
+  ▶ 평균 288.4s (288.4-288.4s) | 일관성: ✓
+
+
+========== 종합 ==========
+케이스 | 평균 | 범위 | 일관성 | 샘플 결과
+김옥자 자격득실 | 20.7s | 12.3-44.4s | OK | {"고용산재":0,"건보":6,"연금":0,"일용직":0}
+김옥자 국민연금 | 7.8s | 7.6-8.1s | OK | {"고용산재":0,"건보":0,"연금":1,"일용직":0}
+김옥자 고용보험 | 28.9s | 28.8-29.1s | 변동 | {"고용산재":3,"건보":0,"연금":0,"일용직":48}
+안세윤 자격득실 | 6.9s | 6.8-7.3s | OK | {"고용산재":0,"건보":2,"연금":0,"일용직":0}
+안세윤 국민연금 | 6.6s | 6.1-7.2s | OK | {"고용산재":0,"건보":0,"연금":0,"일용직":0}
+안세윤 고용보험 (헤비) | 288.4s | 288.4-288.4s | OK | {"고용산재":233,"건보":0,"연금":0,"일용직":408}
+
+10초 이내: 3/6, 일관성: 5/6
+
+리포트 저장: C:\Users\jjakg\thebosang\.claude\worktrees\reverent-kalam-786964\scripts\test-harness\last-bench.json
