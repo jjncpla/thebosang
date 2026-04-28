@@ -30,6 +30,7 @@ interface Schedule {
   assignedStaff: string | null
   attended: boolean | null
   isPickup: boolean | null
+  recurringGroupId: string | null
   createdAt: string
 }
 
@@ -143,6 +144,7 @@ function SpecialClinicCalendar() {
   const [showModal, setShowModal] = useState(false)
   const [modalTab, setModalTab] = useState<'form' | 'paste'>('form')
   const [editTarget, setEditTarget] = useState<Schedule | null>(null)
+  const [copySource, setCopySource] = useState<Schedule | null>(null)
 
   // 캘린더 고도화 상태
   const [viewMode, setViewMode] = useState<'month' | 'week' | 'day'>('month')
@@ -569,9 +571,19 @@ function SpecialClinicCalendar() {
   }
 
   // 삭제
-  async function handleDelete(id: string) {
-    if (!confirm('삭제하시겠습니까?')) return
-    await fetch(`/api/tf/special-clinic/${id}`, { method: 'DELETE' })
+  async function handleDelete(id: string, recurringGroupId?: string | null) {
+    let deleteGroup = false
+    if (recurringGroupId) {
+      const choice = window.confirm('반복 일정입니다.\n\n[확인] 이 일정만 삭제\n[취소] 취소')
+      if (!choice) {
+        const groupDelete = window.confirm('그룹 전체(반복 일정 모두)를 삭제하시겠습니까?')
+        if (!groupDelete) return
+        deleteGroup = true
+      }
+    } else {
+      if (!confirm('삭제하시겠습니까?')) return
+    }
+    await fetch(`/api/tf/special-clinic/${id}${deleteGroup ? '?deleteGroup=true' : ''}`, { method: 'DELETE' })
     setSelected(null)
     load()
   }
@@ -1504,13 +1516,17 @@ function SpecialClinicCalendar() {
             )}
 
             <div className="flex gap-2 pt-2 border-t">
-              <button onClick={() => handleDelete(selected.id)}
+              <button onClick={() => handleDelete(selected.id, selected.recurringGroupId)}
                 className="px-3 py-1 text-xs border border-red-300 text-red-500 rounded hover:bg-red-50">
                 삭제
               </button>
               <button onClick={() => { setEditTarget(selected); setSelected(null); setShowModal(true); setModalTab('form') }}
                 className="px-3 py-1 text-xs border border-sky-300 text-sky-600 rounded hover:bg-sky-50">
                 수정
+              </button>
+              <button onClick={() => { setCopySource(selected); setEditTarget(null); setSelected(null); setShowModal(true); setModalTab('form') }}
+                className="px-3 py-1 text-xs border border-green-300 text-green-600 rounded hover:bg-green-50">
+                복사
               </button>
             </div>
           </div>
@@ -1520,8 +1536,8 @@ function SpecialClinicCalendar() {
       {/* ── 수동 입력 / 수정 모달 ── */}
       {showModal && (
         <InputModal
-          onClose={() => { setShowModal(false); setManualDate(''); setEditTarget(null) }}
-          onSaved={() => { setShowModal(false); setManualDate(''); setEditTarget(null); load() }}
+          onClose={() => { setShowModal(false); setManualDate(''); setEditTarget(null); setCopySource(null) }}
+          onSaved={() => { setShowModal(false); setManualDate(''); setEditTarget(null); setCopySource(null); load() }}
           modalTab={modalTab}
           setModalTab={setModalTab}
           tfList={tfList}
@@ -1529,6 +1545,7 @@ function SpecialClinicCalendar() {
           defaultMonth={month}
           defaultDate={manualDate}
           editTarget={editTarget ?? undefined}
+          copySource={copySource ?? undefined}
         />
       )}
     </div>
@@ -1537,7 +1554,7 @@ function SpecialClinicCalendar() {
 
 // ─── 수동 입력 모달 ────────────────────────────────────────────────
 function InputModal({
-  onClose, onSaved, modalTab, setModalTab, tfList, defaultYear, defaultMonth, defaultDate, editTarget,
+  onClose, onSaved, modalTab, setModalTab, tfList, defaultYear, defaultMonth, defaultDate, editTarget, copySource,
 }: {
   onClose: () => void
   onSaved: () => void
@@ -1548,6 +1565,7 @@ function InputModal({
   defaultMonth: number
   defaultDate?: string
   editTarget?: Schedule
+  copySource?: Schedule
 }) {
   // 직접 입력 — 수정 모드일 때 editTarget 값으로 초기화
   function initForm(target?: Schedule) {
@@ -1577,6 +1595,11 @@ function InputModal({
         isPickup: target.isPickup ?? false,
       }
     }
+    // 복사 모드: 날짜만 비우고 나머지 데이터 채움
+    if (copySource) {
+      const cs = initForm(copySource)
+      return { ...cs, scheduledDate: defaultDate || `${defaultYear}-${pad(defaultMonth)}-01`, scheduledEndDate: '' }
+    }
     return {
       category: '특진',
       tfName: '',
@@ -1596,6 +1619,10 @@ function InputModal({
     }
   }
   const [form, setForm] = useState(() => initForm(editTarget))
+  // 주기성 상태
+  const [isRecurring, setIsRecurring] = useState(false)
+  const [recurringType, setRecurringType] = useState<'weekly' | 'biweekly' | 'monthly'>('biweekly')
+  const [recurringCount, setRecurringCount] = useState(6)
   const [saving, setSaving] = useState(false)
 
   // 텍스트 붙여넣기
@@ -1651,6 +1678,11 @@ function InputModal({
       })
     }
 
+    // 주기성 일정 (신규 생성 시만)
+    if (!editTarget && isRecurring) {
+      Object.assign(payload, { _recurring: { type: recurringType, count: recurringCount } })
+    }
+
     const url = editTarget ? `/api/tf/special-clinic/${editTarget.id}` : '/api/tf/special-clinic'
     const method = editTarget ? 'PUT' : 'POST'
     const res = await fetch(url, {
@@ -1689,7 +1721,7 @@ function InputModal({
       <div className="relative bg-white rounded-xl shadow-xl w-full max-w-lg p-5 space-y-4 max-h-[90vh] overflow-y-auto"
         onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between">
-          <h2 className="text-sm font-bold">{editTarget ? '일정 수정' : '일정 등록'}</h2>
+          <h2 className="text-sm font-bold">{editTarget ? '일정 수정' : copySource ? '일정 복사 (새 일정)' : '일정 등록'}</h2>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600">✕</button>
         </div>
 
@@ -1868,10 +1900,41 @@ function InputModal({
               </div>
             )}
 
+            {/* 주기성 설정 — 신규·복사 모드에서만 */}
+            {!editTarget && (
+              <div className="border border-dashed border-gray-300 rounded-lg p-3 space-y-2">
+                <label className="flex items-center gap-2 cursor-pointer text-sm font-medium text-gray-700">
+                  <input type="checkbox" checked={isRecurring} onChange={e => setIsRecurring(e.target.checked)} className="w-4 h-4" />
+                  반복 일정으로 등록
+                </label>
+                {isRecurring && (
+                  <div className="grid grid-cols-2 gap-2 mt-1">
+                    <div>
+                      <label className="text-xs text-gray-500">반복 주기</label>
+                      <select value={recurringType} onChange={e => setRecurringType(e.target.value as 'weekly' | 'biweekly' | 'monthly')} className={inputCls}>
+                        <option value="weekly">매주</option>
+                        <option value="biweekly">격주 (2주마다)</option>
+                        <option value="monthly">매월</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-xs text-gray-500">반복 횟수</label>
+                      <select value={recurringCount} onChange={e => setRecurringCount(Number(e.target.value))} className={inputCls}>
+                        {[2,3,4,5,6,8,10,12,24].map(n => <option key={n} value={n}>{n}회</option>)}
+                      </select>
+                    </div>
+                    <div className="col-span-2 text-[11px] text-gray-400">
+                      시작일부터 {recurringCount}개 일정이 자동 생성됩니다
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
             <div className="flex justify-end">
               <button onClick={handleFormSave} disabled={saving}
                 className="px-4 py-1.5 text-sm bg-sky-500 text-white rounded hover:bg-sky-600 disabled:opacity-50">
-                {saving ? '저장 중...' : editTarget ? '수정 완료' : '저장'}
+                {saving ? '저장 중...' : editTarget ? '수정 완료' : isRecurring ? `반복 ${recurringCount}개 저장` : copySource ? '복사 저장' : '저장'}
               </button>
             </div>
           </div>

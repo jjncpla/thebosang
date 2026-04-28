@@ -56,6 +56,7 @@ export async function GET(req: NextRequest) {
       assignedStaff: true,
       attended: true,
       isPickup: true,
+      recurringGroupId: true,
       createdAt: true,
     },
   })
@@ -90,6 +91,29 @@ export async function POST(req: NextRequest) {
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
   const body = await req.json()
-  const schedule = await prisma.specialClinicSchedule.create({ data: body })
-  return NextResponse.json(schedule)
+  const { _recurring, ...data } = body
+
+  // 단건 생성
+  if (!_recurring) {
+    const schedule = await prisma.specialClinicSchedule.create({ data })
+    return NextResponse.json(schedule)
+  }
+
+  // 주기성 일정 일괄 생성
+  const { type, count } = _recurring as { type: 'weekly' | 'biweekly' | 'monthly', count: number }
+  const recurringGroupId = `rg_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
+  const baseDate = new Date(data.scheduledDate)
+  const records = []
+
+  for (let i = 0; i < count; i++) {
+    const d = new Date(baseDate)
+    if (type === 'weekly') d.setDate(d.getDate() + i * 7)
+    else if (type === 'biweekly') d.setDate(d.getDate() + i * 14)
+    else if (type === 'monthly') d.setMonth(d.getMonth() + i)
+
+    records.push({ ...data, scheduledDate: d, recurringGroupId })
+  }
+
+  await prisma.specialClinicSchedule.createMany({ data: records })
+  return NextResponse.json({ created: records.length, recurringGroupId })
 }
