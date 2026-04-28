@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "_comment": "에이전트 사무실 hooks. AGENT_OFFICE_TOKEN을 ~/.zshrc 또는 셸 환경변수로 export하고 .env.local에도 동일 토큰을 넣어야 함. URL은 로컬 dev 서버(3000)로 고정 — Railway 운영 인스턴스로 보내지 않음.",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "http",
+            "url": "http://localhost:3000/api/agent-activity",
+            "timeout": 5,
+            "headers": {
+              "Authorization": "Bearer $AGENT_OFFICE_TOKEN",
+              "X-Hook-Event": "PreToolUse",
+              "Content-Type": "application/json"
+            },
+            "allowedEnvVars": ["AGENT_OFFICE_TOKEN"]
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "http",
+            "url": "http://localhost:3000/api/agent-activity",
+            "timeout": 5,
+            "headers": {
+              "Authorization": "Bearer $AGENT_OFFICE_TOKEN",
+              "X-Hook-Event": "PostToolUse",
+              "Content-Type": "application/json"
+            },
+            "allowedEnvVars": ["AGENT_OFFICE_TOKEN"]
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "http",
+            "url": "http://localhost:3000/api/agent-activity",
+            "timeout": 5,
+            "headers": {
+              "Authorization": "Bearer $AGENT_OFFICE_TOKEN",
+              "X-Hook-Event": "SubagentStop",
+              "Content-Type": "application/json"
+            },
+            "allowedEnvVars": ["AGENT_OFFICE_TOKEN"]
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "http",
+            "url": "http://localhost:3000/api/agent-activity",
+            "timeout": 5,
+            "headers": {
+              "Authorization": "Bearer $AGENT_OFFICE_TOKEN",
+              "X-Hook-Event": "Stop",
+              "Content-Type": "application/json"
+            },
+            "allowedEnvVars": ["AGENT_OFFICE_TOKEN"]
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
+import AgentOffice from "@/components/AgentOffice";
 
 type Notice = { id: string; type: string; title: string | null; content: string } | null;
 
@@ -139,6 +140,14 @@ export default function LoginPage() {
           letter-spacing: 0.12em;
           text-transform: uppercase;
           margin-top: 2px;
+        }
+
+        /* ── Claude Code 사무실 영역 ── */
+        .agent-office-wrap {
+          width: 100%;
+          border-radius: 20px;
+          overflow: hidden;
+          box-shadow: 0 12px 40px rgba(0,0,0,0.25);
         }
 
         /* ── 메인 행 ── */
@@ -417,6 +426,11 @@ export default function LoginPage() {
                 <span className="logo-text-sub">The Bosang · TBSS</span>
               </div>
             </div>
+          </div>
+
+          {/* Claude Code 사무실 */}
+          <div className="agent-office-wrap">
+            <AgentOffice />
           </div>
 
           {/* 메인 행 */}
