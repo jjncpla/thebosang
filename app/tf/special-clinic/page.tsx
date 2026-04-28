@@ -44,6 +44,51 @@ function isSameDay(d1: Date, d2: Date) {
   return d1.getFullYear() === d2.getFullYear() && d1.getMonth() === d2.getMonth() && d1.getDate() === d2.getDate()
 }
 
+// 시간 입력: 시(셀렉트) + 분(00/30 버튼)
+function TimeInput({ value, onChange, className }: { value: string; onChange: (v: string) => void; className?: string }) {
+  const h = value ? Number(value.split(':')[0]) : null
+  const m = value ? Number(value.split(':')[1]) : null
+  const setTime = (nh: number | null, nm: number | null) => {
+    if (nh == null) { onChange(''); return }
+    onChange(`${pad(nh)}:${pad(nm ?? 0)}`)
+  }
+  return (
+    <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+      <select
+        value={h ?? ''}
+        onChange={e => setTime(e.target.value === '' ? null : Number(e.target.value), m ?? 0)}
+        className={className}
+        style={{ flex: 1 }}
+      >
+        <option value="">--</option>
+        {Array.from({ length: 24 }, (_, i) => (
+          <option key={i} value={i}>{pad(i)}시</option>
+        ))}
+      </select>
+      {[0, 30].map(min => (
+        <button
+          key={min}
+          type="button"
+          onClick={() => setTime(h ?? 9, min)}
+          style={{
+            padding: '5px 10px',
+            fontSize: 13,
+            borderRadius: 6,
+            border: '1px solid',
+            cursor: 'pointer',
+            fontWeight: m === min && h != null ? 700 : 400,
+            background: m === min && h != null ? '#1A95C8' : 'white',
+            color: m === min && h != null ? 'white' : '#374151',
+            borderColor: m === min && h != null ? '#1A95C8' : '#d1d5db',
+          }}
+        >
+          {pad(min)}분
+        </button>
+      ))}
+    </div>
+  )
+}
+
 const STATUS_LABELS: Record<string, string> = { scheduled: '예정', done: '완료', cancelled: '취소', unknown: '미정' }
 const STATUS_COLORS: Record<string, string> = { scheduled: '#3B82F6', done: '#22C55E', cancelled: '#EF4444', unknown: '#F59E0B' }
 const CATEGORIES = ['특진', '재특진', '영업', '자료보완', '교육', '회의', '장해진단', '질판위', '상담', '약정', '기타'] as const
@@ -1808,7 +1853,7 @@ function InputModal({
                 </div>
                 <div>
                   <label className="text-xs text-gray-500">시간 (선택)</label>
-                  <input type="time" value={form.scheduledTime} onChange={e => setForm(f => ({ ...f, scheduledTime: e.target.value }))} className={inputCls} />
+                  <TimeInput value={form.scheduledTime} onChange={v => setForm(f => ({ ...f, scheduledTime: v }))} className={inputCls} />
                 </div>
                 <div>
                   <label className="text-xs text-gray-500">담당자</label>
@@ -1877,7 +1922,7 @@ function InputModal({
                 </div>
                 <div className="col-span-2">
                   <label className="text-xs text-gray-500">시간 (선택)</label>
-                  <input type="time" value={form.scheduledTime} onChange={e => setForm(f => ({ ...f, scheduledTime: e.target.value }))} className={inputCls} />
+                  <TimeInput value={form.scheduledTime} onChange={v => setForm(f => ({ ...f, scheduledTime: v }))} className={inputCls} />
                 </div>
                 <div className="col-span-2">
                   <label className="text-xs text-gray-500">내용</label>
