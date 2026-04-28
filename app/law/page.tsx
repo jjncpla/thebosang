@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { LawAttachmentTab } from "@/components/law/LawAttachmentTab";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -170,8 +171,24 @@ function LawTab() {
     new Set([LAW_GROUPS[0].id])
   );
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
 
   const categories: Array<"주요 법률" | "관련 법률"> = ["주요 법률", "관련 법률"];
+
+  const q = searchQuery.trim().toLowerCase();
+  const matchesQuery = (group: LawGroup) => {
+    if (!q) return true;
+    if (group.groupName.toLowerCase().includes(q)) return true;
+    return group.laws.some((l) => l.name.toLowerCase().includes(q));
+  };
+  const filteredLawGroups = LAW_GROUPS.filter(matchesQuery);
+
+  // 검색 시 모든 그룹 자동 펼침
+  useEffect(() => {
+    if (q) {
+      setExpandedGroups(new Set(filteredLawGroups.map((g) => g.id)));
+    }
+  }, [q]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const toggleGroup = (gid: string) => {
     setExpandedGroups((prev) => {
@@ -197,8 +214,29 @@ function LawTab() {
             flexDirection: "column",
           }}
         >
+          {/* 법령 검색 */}
+          <div style={{ padding: "10px 12px 6px", borderBottom: "1px solid #e5e7eb", background: "#fff" }}>
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="법령 검색…"
+              style={{
+                width: "100%",
+                padding: "5px 8px",
+                fontSize: 12,
+                border: "1px solid #d1d5db",
+                borderRadius: 4,
+                outline: "none",
+                boxSizing: "border-box",
+              }}
+            />
+          </div>
           <div style={{ flex: 1 }}>
-            {categories.map((cat) => (
+            {categories.map((cat) => {
+              const groupsInCat = filteredLawGroups.filter((g) => g.category === cat);
+              if (groupsInCat.length === 0) return null;
+              return (
               <div key={cat}>
                 <div
                   style={{
@@ -213,7 +251,7 @@ function LawTab() {
                   {cat}
                 </div>
 
-                {LAW_GROUPS.filter((g) => g.category === cat).map((group) => {
+                {groupsInCat.map((group) => {
                   const isExpanded = expandedGroups.has(group.id);
                   const isGroupActive = group.laws.some((l) => l.id === selectedItem.id);
                   return (
@@ -303,7 +341,13 @@ function LawTab() {
 
                 <div style={{ height: 8 }} />
               </div>
-            ))}
+              );
+            })}
+            {q && filteredLawGroups.length === 0 && (
+              <div style={{ padding: "20px 14px", fontSize: 12, color: "#9ca3af", textAlign: "center" }}>
+                검색 결과 없음
+              </div>
+            )}
           </div>
 
           <div style={{ padding: "12px 14px", borderTop: "1px solid #e5e7eb" }}>
@@ -1406,9 +1450,10 @@ function ChapterView({
 // ─── Main Page ───────────────────────────────────────────────────────────────
 
 const TABS = [
-  { id: "law",      label: "관련 법령" },
-  { id: "internal", label: "근로복지공단 내부규정" },
-  { id: "jichim",   label: "근로복지공단 지침" },
+  { id: "law",        label: "관련 법령" },
+  { id: "attachment", label: "별표 · 첨부" },
+  { id: "internal",   label: "근로복지공단 내부규정" },
+  { id: "jichim",     label: "근로복지공단 지침" },
 ] as const;
 
 type TabId = (typeof TABS)[number]["id"];
@@ -1455,9 +1500,18 @@ export default function LawPage() {
 
       {/* Tab content */}
       <div style={{ flex: 1, overflow: "hidden" }}>
-        {activeTab === "law"      && <LawTab />}
-        {activeTab === "internal" && <InternalRegulationTab />}
-        {activeTab === "jichim"   && <JichimTab />}
+        {activeTab === "law"        && <LawTab />}
+        {activeTab === "attachment" && (
+          <LawAttachmentTab
+            lawGroups={LAW_GROUPS.map((g) => ({
+              id: g.id,
+              groupName: g.groupName,
+              laws: g.laws.map((l) => ({ id: l.id, label: l.label, name: l.name })),
+            }))}
+          />
+        )}
+        {activeTab === "internal"   && <InternalRegulationTab />}
+        {activeTab === "jichim"     && <JichimTab />}
       </div>
     </div>
   );

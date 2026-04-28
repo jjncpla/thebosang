@@ -100,6 +100,18 @@ model Case {
   telegramMessages   TelegramMessage[]
   caseEvents         CaseEvent[]
   pendingExamReviews PendingExamReview[]
+
+  @@index([caseType, createdAt(sort: Desc)])
+  @@index([status])
+  @@index([tfName])
+  @@index([branch])
+  @@index([salesManagerId])
+  @@index([caseManagerId])
+  @@index([kwcOfficeName])
+  @@index([kwcOfficerName])
+  @@index([receptionDate])
+  @@index([contractDate])
+  @@index([patientId, caseType])
 }
 
 model HearingLossDetail {
@@ -1367,4 +1379,25 @@ model JichimDocument {
   content   Json
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+// 법령 별표·별지·첨부 (산재법 별표 1, 시행령 별표 2 등)
+model LawAttachment {
+  id             String   @id @default(cuid())
+  lawId          String   // LAW_GROUPS의 lawId (예: "산재법", "산재령", "산재칙")
+  attachmentType String   @default("별표") // "별표" | "별지" | "첨부"
+  number         String?  // "별표 1", "별지 제2호서식" 등 표시용 번호
+  title          String   // 사람이 읽는 제목 (예: "장해등급의 종류")
+  description    String?  // 추가 설명
+  fileName       String   // 원본 파일명
+  contentType    String   @default("application/pdf")
+  fileSize       Int      // bytes
+  fileData       Bytes    // PDF 파일 본문 (Postgres BYTEA, 5MB 제한)
+  uploadedBy     String?  // userId
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([lawId])
+  @@index([lawId, attachmentType])
+  @@index([createdAt])
 }

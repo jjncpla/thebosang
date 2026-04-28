@@ -13,12 +13,10 @@ import {
 
 type Patient = { id: string; name: string; ssn: string; phone: string | null };
 type HearingLoss = {
-  status: string;
   firstClinic: string | null;
   specialClinic: string | null;
-  disposalType: string | null;
-  grade: number | null;
-  gradeType: string | null;
+  decisionType: string | null;     // 처분결과 (APPROVED/REJECTED)
+  disabilityGrade: string | null;  // 장해등급
 };
 type DetailStatus = { status: string } | null;
 type Case = {
@@ -27,7 +25,6 @@ type Case = {
   patientId: string;
   patient: Patient;
   caseType: string;
-  caseNumber: string | null;
   tfName: string | null;
   branch: string | null;
   salesManager: string | null;
@@ -679,12 +676,44 @@ function UnscheduledExamPanel({ onNavigate }: { onNavigate: (caseId: string) => 
 }
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
+const CASES_CACHE_PREFIX = "tbss:cases-cache:v1:";
+const CASES_PAGE_SIZE = 200;
+
+function buildCacheKey(filters: Record<string, string>): string {
+  const ordered = Object.keys(filters).sort().map((k) => `${k}=${filters[k] ?? ""}`).join("&");
+  return CASES_CACHE_PREFIX + ordered;
+}
+
+function readCachedCases(key: string): Case[] | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(key);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : null;
+  } catch { return null; }
+}
+
+function writeCachedCases(key: string, cases: Case[]) {
+  if (typeof window === "undefined") return;
+  try {
+    // 캐시 슬림화: 표시에 필요한 필드만 저장 (용량 절감)
+    const slim = cases.slice(0, CASES_PAGE_SIZE);
+    window.localStorage.setItem(key, JSON.stringify(slim));
+  } catch { /* quota exceeded → 무시 */ }
+}
+
 export default function CasesPage() {
   const { tfByBranch: TF_BY_BRANCH } = useBranches();
   const router = useRouter();
   const [cases, setCases] = useState<Case[]>([]);
+  // loading 기본값 false: 캐시가 있으면 흐린 화면 즉시 사라짐
   const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [totalCount, setTotalCount] = useState<number | null>(null);
 
   const [selectedBranch, setSelectedBranch] = useState("");
   const [selectedTf, setSelectedTf] = useState("");
@@ -719,38 +748,87 @@ export default function CasesPage() {
 
   const abortRef = useRef<AbortController | null>(null);
 
+  // 현재 필터 조합 → 캐시 키
+  const filterSnapshot = useCallback(() => {
+    const snap: Record<string, string> = {};
+    if (selectedTf) snap.tfName = selectedTf;
+    if (selectedCaseType) snap.caseType = selectedCaseType;
+    if (filterStatus) snap.status = filterStatus;
+    if (search) snap.search = search;
+    if (filterKwcOffice) snap.kwcOfficeName = filterKwcOffice;
+    if (filterKwcOfficer) snap.kwcOfficerName = filterKwcOfficer;
+    for (const [k, v] of Object.entries(activeFilters)) if (v) snap[k] = v;
+    return snap;
+  }, [selectedTf, selectedCaseType, filterStatus, search, activeFilters, filterKwcOffice, filterKwcOfficer]);
+
   const fetchCases = useCallback(async () => {
-    // 이전 요청 취소 (race condition 방지)
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
 
-    setLoading(true);
-    setError(null);
-    try {
-      const params = new URLSearchParams();
-      if (selectedTf) params.set("tfName", selectedTf);
-      if (selectedCaseType) params.set("caseType", selectedCaseType);
-      if (filterStatus) params.set("status", filterStatus);
-      if (search) params.set("search", search);
-      if (filterKwcOffice) params.set("kwcOfficeName", filterKwcOffice);
-      if (filterKwcOfficer) params.set("kwcOfficerName", filterKwcOfficer);
+    const snap = filterSnapshot();
+    const cacheKey = buildCacheKey(snap);
 
-      for (const [k, v] of Object.entries(activeFilters)) {
-        if (v) params.set(k, v);
-      }
+    // 캐시 즉시 표시 (있으면 흐린 화면 없이 데이터 표시)
+    const cached = readCachedCases(cacheKey);
+    const hadCache = cached && cached.length > 0;
+    if (hadCache) {
+      setCases(cached!);
+      setLoading(false);
+      setRefreshing(true);
+    } else {
+      setLoading(true);
+    }
+    setError(null);
+
+    try {
+      const params = new URLSearchParams(snap);
+      params.set("limit", String(CASES_PAGE_SIZE));
+      params.set("paginate", "true");
+      params.set("count", "true");
 
       const res = await fetch(`/api/cases?${params}`, { signal: controller.signal });
       if (!res.ok) throw new Error(`서버 오류 (${res.status})`);
-      const data: Case[] = await res.json();
-      setCases(data);
+      const json = await res.json();
+      const items: Case[] = json.items ?? [];
+      const nextCursor: string | null = json.nextCursor ?? null;
+      const total: number | null = typeof json.total === "number" ? json.total : null;
+
+      setCases(items);
+      setHasMore(Boolean(nextCursor));
+      setTotalCount(total);
+      writeCachedCases(cacheKey, items);
     } catch (e: unknown) {
       if ((e as Error).name === "AbortError") return;
       setError(e instanceof Error ? e.message : "알 수 없는 오류");
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
-  }, [selectedTf, selectedCaseType, filterStatus, search, activeFilters, filterKwcOffice, filterKwcOfficer]);
+  }, [filterSnapshot]);
+
+  // 더 불러오기 (cursor 페이지네이션)
+  const loadMore = useCallback(async () => {
+    if (loadingMore || !hasMore || cases.length === 0) return;
+    setLoadingMore(true);
+    try {
+      const snap = filterSnapshot();
+      const params = new URLSearchParams(snap);
+      params.set("limit", String(CASES_PAGE_SIZE));
+      params.set("paginate", "true");
+      params.set("cursor", cases[cases.length - 1].id);
+      const res = await fetch(`/api/cases?${params}`);
+      if (!res.ok) throw new Error("더 불러오기 실패");
+      const json = await res.json();
+      const items: Case[] = json.items ?? [];
+      setCases((prev) => [...prev, ...items]);
+      setHasMore(Boolean(json.nextCursor));
+    } catch {
+      // 무시 (재시도 가능)
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [cases, hasMore, loadingMore, filterSnapshot]);
 
   useEffect(() => {
     fetchCases();
@@ -834,8 +912,13 @@ export default function CasesPage() {
             <h1 style={{ fontSize: 20, fontWeight: 800, color: "#005530", margin: 0 }}>사건 목록</h1>
             {!loading && !error && (
               <span style={{ background: "#e0e7ff", color: "#3730a3", fontSize: 12, fontWeight: 700, padding: "2px 10px", borderRadius: 999 }}>
-                {cases.length}건
+                {totalCount !== null
+                  ? (cases.length < totalCount ? `${cases.length} / ${totalCount}건` : `${totalCount}건`)
+                  : `${cases.length}건`}
               </span>
+            )}
+            {refreshing && (
+              <span style={{ fontSize: 11, color: "#9ca3af" }}>갱신 중…</span>
             )}
           </div>
         </div>
@@ -1101,9 +1184,11 @@ export default function CasesPage() {
                     </td>
                     <td style={{ padding: "12px 16px", color: "#6b7280" }}>{c.hearingLoss?.firstClinic ?? "-"}</td>
                     <td style={{ padding: "12px 16px", color: "#6b7280" }}>{c.hearingLoss?.specialClinic ?? "-"}</td>
-                    <td style={{ padding: "12px 16px", color: "#374151" }}>{c.hearingLoss?.disposalType ?? "-"}</td>
                     <td style={{ padding: "12px 16px", color: "#374151" }}>
-                      {c.hearingLoss?.grade != null ? `${c.hearingLoss.grade}급` : "-"}
+                      {c.hearingLoss?.decisionType === "APPROVED" ? "승인" : c.hearingLoss?.decisionType === "REJECTED" ? "불승인" : "-"}
+                    </td>
+                    <td style={{ padding: "12px 16px", color: "#374151" }}>
+                      {c.hearingLoss?.disabilityGrade ?? "-"}
                     </td>
                     <td style={{ padding: "12px 16px", color: "#6b7280" }}>{c.kwcOfficeName ?? "-"}</td>
                     <td style={{ padding: "12px 16px", color: "#6b7280" }}>{c.kwcOfficerName ?? "-"}</td>
@@ -1126,6 +1211,26 @@ export default function CasesPage() {
             ))}
           </tbody>
         </table>
+        {hasMore && !loading && (
+          <div style={{ padding: "12px 16px", borderTop: "1px solid #f1f5f9", textAlign: "center" }}>
+            <button
+              onClick={loadMore}
+              disabled={loadingMore}
+              style={{
+                background: loadingMore ? "#e5e7eb" : "#fff",
+                color: "#374151",
+                border: "1px solid #d1d5db",
+                borderRadius: 6,
+                padding: "8px 24px",
+                fontSize: 13,
+                fontWeight: 600,
+                cursor: loadingMore ? "not-allowed" : "pointer",
+              }}
+            >
+              {loadingMore ? "불러오는 중…" : `더 불러오기 (${CASES_PAGE_SIZE}건씩)`}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

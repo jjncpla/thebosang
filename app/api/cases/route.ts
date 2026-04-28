@@ -62,54 +62,99 @@ export async function GET(req: NextRequest) {
   if (receptionDateFrom) receptionDateFilter.gte = new Date(receptionDateFrom);
   if (receptionDateTo) receptionDateFilter.lte = new Date(receptionDateTo);
 
-  try {
-    const cases = await prisma.case.findMany({
-      where: {
-        ...(caseType && { caseType }),
-        ...(tfName && { tfName }),
-        ...(status && { status }),
-        ...(salesRoute && { salesRoute: { contains: salesRoute } }),
-        ...(isOneStop && { isOneStop: isOneStop === "true" }),
-        ...(Object.keys(contractDateFilter).length > 0 && { contractDate: contractDateFilter }),
-        ...(Object.keys(receptionDateFilter).length > 0 && { receptionDate: receptionDateFilter }),
-        ...(search && {
-          patient: {
-            OR: [
-              { name: { contains: search } },
-              { ssn: { contains: search } },
-              { phone: { endsWith: search } },
-            ],
-          },
-        }),
-        ...(hasHlFilter && { hearingLoss: hlWhere }),
-        ...(kwcOfficeName && { kwcOfficeName: { contains: kwcOfficeName } }),
-        ...(kwcOfficerName && { kwcOfficerName: { contains: kwcOfficerName } }),
-        ...(salesManagerId && { salesManagerId }),
-        ...(caseManagerId && { caseManagerId }),
+  // 페이지네이션: ?limit=N&paginate=true&cursor=ID (cursor 기반, createdAt desc 정렬)
+  // - paginate=true: 응답 형식 = { items, nextCursor, total? }
+  // - paginate 없으면: limit이 있어도 단순 배열 반환 (기존 호출자 호환)
+  const limitRaw = Number(sp.get("limit") ?? "0");
+  const limit = limitRaw > 0 && limitRaw <= 1000 ? limitRaw : 0;
+  const paginateMode = sp.get("paginate") === "true";
+  const cursor = sp.get("cursor") ?? "";
+  const includeCount = sp.get("count") === "true";
+
+  const where = {
+    ...(caseType && { caseType }),
+    ...(tfName && { tfName }),
+    ...(status && { status }),
+    ...(salesRoute && { salesRoute: { contains: salesRoute } }),
+    ...(isOneStop && { isOneStop: isOneStop === "true" }),
+    ...(Object.keys(contractDateFilter).length > 0 && { contractDate: contractDateFilter }),
+    ...(Object.keys(receptionDateFilter).length > 0 && { receptionDate: receptionDateFilter }),
+    ...(search && {
+      patient: {
+        OR: [
+          { name: { contains: search } },
+          { ssn: { contains: search } },
+          { phone: { endsWith: search } },
+        ],
       },
+    }),
+    ...(hasHlFilter && { hearingLoss: hlWhere }),
+    ...(kwcOfficeName && { kwcOfficeName: { contains: kwcOfficeName } }),
+    ...(kwcOfficerName && { kwcOfficerName: { contains: kwcOfficerName } }),
+    ...(salesManagerId && { salesManagerId }),
+    ...(caseManagerId && { caseManagerId }),
+  };
+
+  try {
+    const t0 = Date.now();
+    const cases = await prisma.case.findMany({
+      where,
       orderBy: { createdAt: "desc" },
-      include: {
+      ...(limit > 0 && { take: limit }),
+      ...(limit > 0 && cursor && { skip: 1, cursor: { id: cursor } }),
+      // 목록 표시에 필요한 최소 필드만 select (hearingLoss 100+ 필드 → 6개 필드)
+      select: {
+        id: true,
+        patientId: true,
+        caseType: true,
+        status: true,
+        tfName: true,
+        branch: true,
+        salesRoute: true,
+        contractDate: true,
+        receptionDate: true,
+        isOneStop: true,
+        kwcOfficeName: true,
+        kwcOfficerName: true,
+        createdAt: true,
         patient: { select: { id: true, name: true, ssn: true, phone: true } },
         salesManager: { select: { id: true, name: true } },
         caseManager: { select: { id: true, name: true } },
-        hearingLoss: true,
-        copd: { select: { id: true } },
-        pneumoconiosis: { select: { id: true } },
-        musculoskeletal: { select: { id: true } },
-        occupationalAccident: { select: { id: true } },
-        occupationalCancer: { select: { id: true } },
-        bereaved: { select: { id: true } },
+        // Detail 모델은 목록 표시에 필요한 필드만 select
+        hearingLoss: {
+          select: {
+            firstClinic: true,
+            specialClinic: true,
+            decisionType: true,
+            disabilityGrade: true,
+          },
+        },
+        copd: { select: { caseId: true } },
+        pneumoconiosis: { select: { caseId: true } },
+        musculoskeletal: { select: { caseId: true } },
+        occupationalAccident: { select: { caseId: true } },
+        occupationalCancer: { select: { caseId: true } },
+        bereaved: { select: { caseId: true } },
       },
     });
+    const queryMs = Date.now() - t0;
 
-    // Flatten manager names for list display
-    const result = cases.map((c) => ({
+    const items = cases.map((c) => ({
       ...c,
       salesManager: c.salesManager?.name ?? null,
       caseManager: c.caseManager?.name ?? null,
     }));
 
-    return NextResponse.json(result);
+    if (paginateMode) {
+      // 페이지네이션 모드: { items, nextCursor, total? } 형태
+      const nextCursor = limit > 0 && cases.length === limit ? cases[cases.length - 1].id : null;
+      const total = includeCount ? await prisma.case.count({ where }) : undefined;
+      const headers = new Headers({ "Server-Timing": `db;dur=${queryMs}` });
+      return NextResponse.json({ items, nextCursor, ...(total !== undefined && { total }) }, { headers });
+    }
+
+    // 하위호환: paginate 미지정 시 단순 배열 반환 (기존 호출자 보호)
+    return NextResponse.json(items, { headers: { "Server-Timing": `db;dur=${queryMs}` } });
   } catch (err) {
     console.error("[GET /api/cases]", err);
     return NextResponse.json({ error: "조회 오류" }, { status: 500 });
