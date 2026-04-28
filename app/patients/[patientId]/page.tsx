@@ -1010,12 +1010,6 @@ function HearingLossTab({ caseId, initial }: { caseId: string; initial: HearingL
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 20 }}>
               <DField label="접수일" k="claimSubmittedAt" type="date" />
             </div>
-            <SectionTitle>특진진찰요구서</SectionTitle>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 20 }}>
-              <DField label="수령일" k="examRequestReceivedAt" type="date" />
-              <DField label="진찰기간 시작" k="examPeriodStart" type="date" />
-              <DField label="진찰기간 종료" k="examPeriodEnd" type="date" />
-            </div>
             <SectionTitle>특진병원 선택</SectionTitle>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 20 }}>
               <Field label="특진병원명">
@@ -1026,6 +1020,12 @@ function HearingLossTab({ caseId, initial }: { caseId: string; initial: HearingL
               </Field>
               <DField label="선택확인서 제출일" k="examClinicSelectionSubmittedAt" type="date" />
               <DField label="비고" k="specialClinicNote" />
+            </div>
+            <SectionTitle>특진진찰요구서</SectionTitle>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 20 }}>
+              <DField label="수령일" k="examRequestReceivedAt" type="date" />
+              <DField label="진찰기간 시작" k="examPeriodStart" type="date" />
+              <DField label="진찰기간 종료" k="examPeriodEnd" type="date" />
             </div>
             <SectionTitle>
               최초특진 일정 및 참석
