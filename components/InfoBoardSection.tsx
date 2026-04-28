@@ -437,221 +437,339 @@ const DATA: InfoEntry[] = [
 ];
 
 /* ═══════════════════════════════════════════════════════
+   트리 헬퍼
+═══════════════════════════════════════════════════════ */
+type SelState = { cat1?: string; cat2?: string; cat3?: string };
+
+/** 데이터에서 cat1 안의 cat2 목록 동적 추출 */
+function getCat2List(cat1: string) {
+  return CAT2_MAP[cat1] ?? [];
+}
+
+/** 특정 범위 안에서 cat3 존재 여부 */
+function getAvailableCat3(cat1: string, cat2?: string): string[] {
+  const scope = DATA.filter(d => d.cat1 === cat1 && (!cat2 || d.cat2 === cat2));
+  return ["일반", "이의제기", "판례"].filter(t => scope.some(d => d.cat3 === t));
+}
+
+/** 항목 수 */
+function cnt(cat1?: string, cat2?: string, cat3?: string) {
+  return DATA.filter(d =>
+    (!cat1 || d.cat1 === cat1) &&
+    (!cat2 || d.cat2 === cat2) &&
+    (!cat3 || d.cat3 === cat3)
+  ).length;
+}
+
+const CAT3_COLOR: Record<string, { bg: string; color: string }> = {
+  "일반":     { bg: "#f0fdf4", color: "#059669" },
+  "이의제기": { bg: "#fef3c7", color: "#d97706" },
+  "판례":     { bg: "#ede9fe", color: "#7c3aed" },
+};
+
+/* ═══════════════════════════════════════════════════════
    컴포넌트
 ═══════════════════════════════════════════════════════ */
 export default function InfoBoardSection() {
-  const [sel1, setSel1] = useState<string | null>(null);
-  const [sel2, setSel2] = useState<string | null>(null);
-  const [sel3, setSel3] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [sel, setSel] = useState<SelState>({});
   const [query, setQuery] = useState("");
 
-  function pick1(key: string) {
-    setSel1(prev => prev === key ? null : key);
-    setSel2(null);
-    setSel3(null);
-  }
-  function pick2(key: string) {
-    setSel2(prev => prev === key ? null : key);
-    setSel3(null);
-  }
-  function pick3(key: string) {
-    setSel3(prev => prev === key ? null : key);
+  /* ── 트리 상태 조작 ── */
+  function toggleNode(id: string) {
+    setExpanded(prev => {
+      const n = new Set(prev);
+      n.has(id) ? n.delete(id) : n.add(id);
+      return n;
+    });
   }
 
+  function selectNode(s: SelState, expandId?: string) {
+    setSel(s);
+    if (expandId) {
+      setExpanded(prev => {
+        const n = new Set(prev);
+        // 부모 노드도 자동 열기
+        expandId.split("::").reduce((acc, part) => {
+          const id = acc ? `${acc}::${part}` : part;
+          n.add(id);
+          return id;
+        }, "");
+        return n;
+      });
+    }
+  }
+
+  function resetAll() {
+    setSel({});
+    setQuery("");
+  }
+
+  /* ── 필터링 ── */
   const filtered = useMemo(() => {
     return DATA.filter(item => {
-      if (sel1 && item.cat1 !== sel1) return false;
-      if (sel2 && item.cat2 !== sel2) return false;
-      if (sel3 && item.cat3 !== sel3) return false;
+      if (sel.cat1 && item.cat1 !== sel.cat1) return false;
+      if (sel.cat2 && item.cat2 !== sel.cat2) return false;
+      if (sel.cat3 && item.cat3 !== sel.cat3) return false;
       const q = query.trim().toLowerCase();
       if (q && !item.title.toLowerCase().includes(q) && !(item.desc?.toLowerCase().includes(q))) return false;
       return true;
     });
-  }, [sel1, sel2, sel3, query]);
+  }, [sel, query]);
 
-  const sub2List = sel1 ? (CAT2_MAP[sel1] ?? []) : [];
-  const show3 = sel1 && (
-    ["산재직업병","산재외","요양휴업","장해급여","유족급여","평균임금"].includes(sel1) ||
-    (sel1 === "법적용범위" && !sel2) === false
-  ) && !["법적용범위","공단자료","의학근거"].includes(sel1);
+  /* ── 현재 선택 브레드크럼 ── */
+  const breadcrumb = useMemo(() => {
+    const parts: string[] = [];
+    if (sel.cat1) parts.push(CAT1_LIST.find(c => c.key === sel.cat1)?.label.replace(/^\d+\.\s*/, "") ?? sel.cat1);
+    if (sel.cat2) parts.push(getCat2List(sel.cat1!).find(c => c.key === sel.cat2)?.label ?? sel.cat2);
+    if (sel.cat3) parts.push(sel.cat3);
+    return parts;
+  }, [sel]);
 
-  // 3단계 필터 표시 조건: cat3가 있는 항목들이 있을 때
-  const has3 = useMemo(() => {
-    const scope = sel1 ? DATA.filter(d => d.cat1 === sel1 && (!sel2 || d.cat2 === sel2)) : DATA;
-    return scope.some(d => d.cat3);
-  }, [sel1, sel2]);
+  /* ── 트리 노드 렌더 함수 ── */
+  function isActive(s: SelState) {
+    return sel.cat1 === s.cat1 && sel.cat2 === s.cat2 && sel.cat3 === s.cat3;
+  }
+
+  function NodeBtn({
+    label, nodeId, selState, depth, hasChildren, count: c,
+  }: { label: string; nodeId: string; selState: SelState; depth: number; hasChildren: boolean; count: number }) {
+    const open = expanded.has(nodeId);
+    const active = isActive(selState);
+    const ancestorActive = !!(
+      (selState.cat1 && sel.cat1 === selState.cat1) &&
+      (!selState.cat2 || sel.cat2 === selState.cat2) &&
+      (!selState.cat3 || sel.cat3 === selState.cat3)
+    );
+
+    return (
+      <div
+        style={{
+          display: "flex", alignItems: "center", gap: 0,
+          paddingLeft: depth * 14 + 8,
+          background: active ? "#dbeafe" : "transparent",
+          borderRadius: 4, marginBottom: 1,
+        }}
+      >
+        {/* 펼침 화살표 */}
+        <button
+          onClick={() => {
+            if (hasChildren) toggleNode(nodeId);
+            selectNode(selState, nodeId);
+          }}
+          style={{
+            display: "flex", alignItems: "center", gap: 4,
+            flex: 1, padding: "5px 6px 5px 0",
+            background: "none", border: "none", cursor: "pointer",
+            textAlign: "left",
+          }}
+        >
+          <span style={{
+            width: 14, fontSize: 9, color: hasChildren ? "#9ca3af" : "transparent",
+            flexShrink: 0, textAlign: "center",
+          }}>
+            {hasChildren ? (open ? "▼" : "▶") : ""}
+          </span>
+          <span style={{
+            fontSize: 12, lineHeight: 1.4,
+            fontWeight: active ? 700 : ancestorActive ? 600 : 400,
+            color: active ? "#1e40af" : ancestorActive ? "#1e3a8a" : "#374151",
+          }}>
+            {label}
+          </span>
+          <span style={{
+            marginLeft: "auto", fontSize: 10,
+            color: active ? "#3b82f6" : "#9ca3af",
+            flexShrink: 0, paddingLeft: 6,
+          }}>
+            {c}
+          </span>
+        </button>
+      </div>
+    );
+  }
 
   return (
-    <div style={{ padding: "20px", maxWidth: 960, margin: "0 auto" }}>
+    <div style={{ display: "flex", height: "calc(100vh - 170px)", minHeight: 500, overflow: "hidden" }}>
 
-      {/* 헤더 */}
-      <div style={{ marginBottom: 16 }}>
-        <h2 style={{ fontSize: 18, fontWeight: 700, color: "#111827", margin: "0 0 4px" }}>
-          노무사 정보 게시판
-        </h2>
-        <p style={{ fontSize: 13, color: "#6b7280", margin: 0 }}>
-          더보상 노무사 업무공유방 판례·사례·지침·실무팁 아카이브 ({DATA.length}건)
-        </p>
-      </div>
-
-      {/* 검색 */}
-      <input
-        type="text"
-        placeholder="제목·키워드 검색..."
-        value={query}
-        onChange={e => { setQuery(e.target.value); setSel1(null); setSel2(null); setSel3(null); }}
-        style={{
-          width: "100%", boxSizing: "border-box",
-          padding: "9px 14px", fontSize: 14,
-          border: "1px solid #d1d5db", borderRadius: 8,
-          marginBottom: 16, color: "#111827", outline: "none",
-        }}
-      />
-
-      {/* ── 1단계 카테고리 ── */}
-      <div style={{ marginBottom: 10 }}>
-        <div style={{ fontSize: 11, fontWeight: 700, color: "#9ca3af", marginBottom: 6, letterSpacing: 1 }}>
-          카테고리
+      {/* ══════════════ 왼쪽 트리 패널 ══════════════ */}
+      <div style={{
+        width: 230, flexShrink: 0,
+        overflowY: "auto", borderRight: "1px solid #e5e7eb",
+        background: "#fafafa", display: "flex", flexDirection: "column",
+      }}>
+        {/* 검색 */}
+        <div style={{ padding: "12px 10px 8px", borderBottom: "1px solid #f3f4f6" }}>
+          <input
+            type="text"
+            placeholder="검색..."
+            value={query}
+            onChange={e => { setQuery(e.target.value); setSel({}); }}
+            style={{
+              width: "100%", boxSizing: "border-box",
+              padding: "6px 10px", fontSize: 12,
+              border: "1px solid #d1d5db", borderRadius: 6,
+              color: "#111827", outline: "none", background: "#fff",
+            }}
+          />
         </div>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
-          {CAT1_LIST.map(c => {
-            const cnt = DATA.filter(d => d.cat1 === c.key).length;
-            const active = sel1 === c.key;
+
+        {/* 전체 보기 */}
+        <div style={{ padding: "4px 8px" }}>
+          <NodeBtn
+            label="전체" nodeId="__all__"
+            selState={{}} depth={0} hasChildren={false}
+            count={DATA.length}
+          />
+        </div>
+
+        <div style={{ flex: 1, padding: "0 8px 12px", overflowY: "auto" }}>
+          {CAT1_LIST.map(c1 => {
+            const c2List = getCat2List(c1.key);
+            const directCat3 = getAvailableCat3(c1.key);          // cat2 없는 직속 cat3
+            const hasCat2    = c2List.length > 0;
+            const hasDirect3 = !hasCat2 && directCat3.length > 0;
+            const hasChildren = hasCat2 || hasDirect3;
+            const open1 = expanded.has(c1.key);
+
             return (
-              <button key={c.key} onClick={() => pick1(c.key)} style={{
-                padding: "6px 11px", fontSize: 12, fontWeight: active ? 700 : 500,
-                border: active ? "2px solid #1e40af" : "1px solid #d1d5db",
-                borderRadius: 16, cursor: "pointer",
-                background: active ? "#dbeafe" : "#fff",
-                color: active ? "#1e40af" : "#374151",
-              }}>
-                {c.label} <span style={{ color: active ? "#3b82f6" : "#9ca3af" }}>({cnt})</span>
-              </button>
+              <div key={c1.key}>
+                <NodeBtn
+                  label={c1.label} nodeId={c1.key}
+                  selState={{ cat1: c1.key }} depth={0}
+                  hasChildren={hasChildren} count={cnt(c1.key)}
+                />
+
+                {open1 && (
+                  <>
+                    {/* 2단계: cat2 목록 */}
+                    {hasCat2 && c2List.map(c2 => {
+                      const cat3s = getAvailableCat3(c1.key, c2.key);
+                      const has3  = cat3s.length > 0;
+                      const nodeId2 = `${c1.key}::${c2.key}`;
+                      const open2  = expanded.has(nodeId2);
+
+                      return (
+                        <div key={c2.key}>
+                          <NodeBtn
+                            label={c2.label} nodeId={nodeId2}
+                            selState={{ cat1: c1.key, cat2: c2.key }}
+                            depth={1} hasChildren={has3}
+                            count={cnt(c1.key, c2.key)}
+                          />
+                          {open2 && has3 && cat3s.map(t => (
+                            <NodeBtn
+                              key={t} label={t}
+                              nodeId={`${nodeId2}::${t}`}
+                              selState={{ cat1: c1.key, cat2: c2.key, cat3: t }}
+                              depth={2} hasChildren={false}
+                              count={cnt(c1.key, c2.key, t)}
+                            />
+                          ))}
+                        </div>
+                      );
+                    })}
+
+                    {/* 2단계 없고 직속 cat3 있는 경우 */}
+                    {hasDirect3 && directCat3.map(t => (
+                      <NodeBtn
+                        key={t} label={t}
+                        nodeId={`${c1.key}::${t}`}
+                        selState={{ cat1: c1.key, cat3: t }}
+                        depth={1} hasChildren={false}
+                        count={cnt(c1.key, undefined, t)}
+                      />
+                    ))}
+                  </>
+                )}
+              </div>
             );
           })}
         </div>
       </div>
 
-      {/* ── 2단계 서브카테고리 ── */}
-      {sel1 && sub2List.length > 0 && (
-        <div style={{ marginBottom: 10, paddingLeft: 8, borderLeft: "3px solid #bfdbfe" }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: "#9ca3af", marginBottom: 6, letterSpacing: 1 }}>
-            세부 분류
-          </div>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
-            {sub2List.map(s => {
-              const cnt = DATA.filter(d => d.cat1 === sel1 && d.cat2 === s.key).length;
-              const active = sel2 === s.key;
-              return (
-                <button key={s.key} onClick={() => pick2(s.key)} style={{
-                  padding: "5px 10px", fontSize: 12, fontWeight: active ? 700 : 400,
-                  border: active ? "2px solid #0369a1" : "1px solid #d1d5db",
-                  borderRadius: 12, cursor: "pointer",
-                  background: active ? "#e0f2fe" : "#f9fafb",
-                  color: active ? "#0369a1" : "#6b7280",
-                }}>
-                  {s.label} <span style={{ color: active ? "#38bdf8" : "#9ca3af" }}>({cnt})</span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
+      {/* ══════════════ 오른쪽 컨텐츠 패널 ══════════════ */}
+      <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px", minWidth: 0 }}>
 
-      {/* ── 3단계 일반/이의제기/판례 ── */}
-      {has3 && (
-        <div style={{ marginBottom: 14, paddingLeft: 16, borderLeft: "3px solid #c7d2fe" }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: "#9ca3af", marginBottom: 6, letterSpacing: 1 }}>
-            유형
-          </div>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
-            {CAT3_LIST.map(t => {
-              const cnt = DATA.filter(d =>
-                (!sel1 || d.cat1 === sel1) &&
-                (!sel2 || d.cat2 === sel2) &&
-                d.cat3 === t
-              ).length;
-              if (cnt === 0) return null;
-              const active = sel3 === t;
-              return (
-                <button key={t} onClick={() => pick3(t)} style={{
-                  padding: "4px 10px", fontSize: 12, fontWeight: active ? 700 : 400,
-                  border: active ? "2px solid #7c3aed" : "1px solid #d1d5db",
-                  borderRadius: 12, cursor: "pointer",
-                  background: active ? "#ede9fe" : "#f9fafb",
-                  color: active ? "#7c3aed" : "#6b7280",
-                }}>
-                  {t} ({cnt})
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* 결과 수 + 초기화 */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-        <span style={{ fontSize: 13, color: "#6b7280" }}>
-          {filtered.length}건
-          {(sel1 || sel2 || sel3 || query) && (
-            <button
-              onClick={() => { setSel1(null); setSel2(null); setSel3(null); setQuery(""); }}
-              style={{ marginLeft: 10, fontSize: 12, color: "#6b7280", background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}
+        {/* 브레드크럼 + 카운트 */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14, flexWrap: "wrap", gap: 6 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 13, flexWrap: "wrap" }}>
+            <span
+              style={{ color: "#6b7280", cursor: "pointer", textDecoration: breadcrumb.length === 0 ? "none" : "underline" }}
+              onClick={resetAll}
             >
-              필터 초기화
-            </button>
-          )}
-        </span>
-      </div>
-
-      {/* 목록 */}
-      <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-        {filtered.length === 0 && (
-          <div style={{ textAlign: "center", padding: 48, color: "#9ca3af", fontSize: 14 }}>
-            검색 결과가 없습니다.
-          </div>
-        )}
-        {filtered.map((item, idx) => {
-          const cat1Label = CAT1_LIST.find(c => c.key === item.cat1)?.label ?? item.cat1;
-          const cat2Label = item.cat2 ? (CAT2_MAP[item.cat1]?.find(c => c.key === item.cat2)?.label ?? item.cat2) : null;
-          return (
-            <div key={idx} style={{
-              background: "#fff", border: "1px solid #e5e7eb",
-              borderRadius: 8, padding: "11px 14px",
-              display: "flex", alignItems: "flex-start", gap: 10,
-            }}>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 14, fontWeight: 600, color: "#111827", lineHeight: 1.5 }}>
-                  {item.title}
-                </div>
-                {item.desc && (
-                  <div style={{ fontSize: 12, color: "#6b7280", marginTop: 3, lineHeight: 1.5 }}>
-                    {item.desc}
-                  </div>
-                )}
-              </div>
-              <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 3, flexShrink: 0, minWidth: 0 }}>
-                <span style={{ fontSize: 10, padding: "2px 7px", borderRadius: 8, background: "#dbeafe", color: "#1e40af", fontWeight: 600, whiteSpace: "nowrap" }}>
-                  {cat1Label.replace(/^\d+\.\s*/, "")}
+              전체
+            </span>
+            {breadcrumb.map((b, i) => (
+              <span key={i} style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                <span style={{ color: "#d1d5db" }}>›</span>
+                <span style={{ color: i === breadcrumb.length - 1 ? "#111827" : "#6b7280", fontWeight: i === breadcrumb.length - 1 ? 600 : 400 }}>
+                  {b}
                 </span>
-                {cat2Label && (
-                  <span style={{ fontSize: 10, padding: "2px 7px", borderRadius: 8, background: "#f3f4f6", color: "#4b5563", whiteSpace: "nowrap" }}>
-                    {cat2Label}
-                  </span>
-                )}
-                {item.cat3 && (
-                  <span style={{
-                    fontSize: 10, padding: "2px 7px", borderRadius: 8, whiteSpace: "nowrap",
-                    background: item.cat3 === "판례" ? "#ede9fe" : item.cat3 === "이의제기" ? "#fef3c7" : "#f0fdf4",
-                    color: item.cat3 === "판례" ? "#7c3aed" : item.cat3 === "이의제기" ? "#d97706" : "#059669",
-                  }}>
-                    {item.cat3}
-                  </span>
-                )}
-              </div>
+              </span>
+            ))}
+          </div>
+          <span style={{ fontSize: 12, color: "#9ca3af" }}>
+            {filtered.length}건
+            {(sel.cat1 || query) && (
+              <button
+                onClick={resetAll}
+                style={{ marginLeft: 8, fontSize: 11, color: "#9ca3af", background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}
+              >
+                초기화
+              </button>
+            )}
+          </span>
+        </div>
+
+        {/* 목록 */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+          {filtered.length === 0 && (
+            <div style={{ textAlign: "center", padding: 48, color: "#9ca3af", fontSize: 14 }}>
+              검색 결과가 없습니다.
             </div>
-          );
-        })}
+          )}
+          {filtered.map((item, idx) => {
+            const cat1Label = CAT1_LIST.find(c => c.key === item.cat1)?.label.replace(/^\d+\.\s*/, "") ?? item.cat1;
+            const cat2Label = item.cat2 ? (getCat2List(item.cat1).find(c => c.key === item.cat2)?.label ?? item.cat2) : null;
+            const cat3Style = item.cat3 ? (CAT3_COLOR[item.cat3] ?? { bg: "#f3f4f6", color: "#4b5563" }) : null;
+            return (
+              <div key={idx} style={{
+                background: "#fff", border: "1px solid #e5e7eb",
+                borderRadius: 8, padding: "10px 14px",
+                display: "flex", alignItems: "flex-start", gap: 10,
+              }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "#111827", lineHeight: 1.5 }}>
+                    {item.title}
+                  </div>
+                  {item.desc && (
+                    <div style={{ fontSize: 11, color: "#6b7280", marginTop: 2, lineHeight: 1.5 }}>
+                      {item.desc}
+                    </div>
+                  )}
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 3, flexShrink: 0 }}>
+                  {!sel.cat1 && (
+                    <span style={{ fontSize: 10, padding: "2px 6px", borderRadius: 6, background: "#dbeafe", color: "#1e40af", fontWeight: 600, whiteSpace: "nowrap" }}>
+                      {cat1Label}
+                    </span>
+                  )}
+                  {!sel.cat2 && cat2Label && (
+                    <span style={{ fontSize: 10, padding: "2px 6px", borderRadius: 6, background: "#f3f4f6", color: "#4b5563", whiteSpace: "nowrap" }}>
+                      {cat2Label}
+                    </span>
+                  )}
+                  {!sel.cat3 && cat3Style && item.cat3 && (
+                    <span style={{ fontSize: 10, padding: "2px 6px", borderRadius: 6, whiteSpace: "nowrap", background: cat3Style.bg, color: cat3Style.color }}>
+                      {item.cat3}
+                    </span>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
