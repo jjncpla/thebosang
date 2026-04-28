@@ -145,7 +145,7 @@ export function recordHookEvent(
   }
 }
 
-const IDLE_TIMEOUT_MS = 6000;
+const IDLE_TIMEOUT_MS = 30000;
 
 export function getSnapshot() {
   const now = Date.now();
