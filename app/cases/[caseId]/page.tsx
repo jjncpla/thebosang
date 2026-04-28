@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { CASE_TYPE_LABELS, DISPOSAL_TYPE, GRADE_TYPE, STATUS_BY_CASE_TYPE, CASE_STATUS_LABELS, CASE_STATUS_COLORS } from "@/lib/constants/case";
 import ContactSelector from "@/components/ui/ContactSelector";
@@ -938,18 +938,18 @@ function HearingLossTab({ caseId, initial, status, onStatusChange }: { caseId: s
               <DField label="텔레그램 공유일시" k="telegramSharedAt" type="datetime-local" />
             </div>
 
-            <SectionTitle>특진진찰요구서</SectionTitle>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 20 }}>
-              <DField label="수령일" k="examRequestReceivedAt" type="date" />
-              <DField label="진찰기간 시작" k="examPeriodStart" type="date" />
-              <DField label="진찰기간 종료" k="examPeriodEnd" type="date" />
-            </div>
-
             <SectionTitle>특진병원 선택</SectionTitle>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 20 }}>
               <DField label="특진병원명" k="specialClinic" />
               <DField label="선택확인서 제출일" k="examClinicSelectionSubmittedAt" type="date" />
               <DField label="비고" k="specialClinicNote" />
+            </div>
+
+            <SectionTitle>특진진찰요구서</SectionTitle>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 20 }}>
+              <DField label="수령일" k="examRequestReceivedAt" type="date" />
+              <DField label="진찰기간 시작" k="examPeriodStart" type="date" />
+              <DField label="진찰기간 종료" k="examPeriodEnd" type="date" />
             </div>
 
             <SectionTitle>최초특진 일정 및 참석</SectionTitle>
@@ -1539,6 +1539,33 @@ function PneumoconiosisTab({ caseId }: { caseId: string }) {
 const BRANCHES = ["울산지사", "부산지사", "경남지사", "서울지사", "경기지사", "인천지사", "대구지사", "광주지사", "대전지사", "기타"];
 const SALES_ROUTES = ["직접", "제휴", "소개", "온라인", "기타"];
 
+function SplitDateInput({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const pad = (s: string, n: number) => s.slice(0, n)
+  const [y, setY] = useState(value ? value.slice(0, 4) : "")
+  const [m, setM] = useState(value ? value.slice(5, 7) : "")
+  const [d, setD] = useState(value ? value.slice(8, 10) : "")
+  const mRef = useRef<HTMLInputElement>(null)
+  const dRef = useRef<HTMLInputElement>(null)
+  const commit = (ny: string, nm: string, nd: string) => {
+    if (ny.length === 4 && nm.length === 2 && nd.length === 2) onChange(`${ny}-${nm}-${nd}`)
+    else if (!ny && !nm && !nd) onChange("")
+  }
+  const cellStyle: React.CSSProperties = { border: "1px solid #e5e7eb", borderRadius: 6, padding: "6px 8px", fontSize: 13, color: "#374151", outline: "none", background: "white", textAlign: "center" as const }
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+      <input style={{ ...cellStyle, width: 64 }} placeholder="YYYY" maxLength={4} value={y}
+        onChange={(e) => { const v = pad(e.target.value.replace(/\D/g, ""), 4); setY(v); commit(v, m, d); if (v.length === 4) mRef.current?.focus() }}
+        onKeyDown={(e) => { if (e.key === "Tab" && y.length > 0) { e.preventDefault(); mRef.current?.focus() } }} />
+      <span style={{ color: "#9ca3af" }}>-</span>
+      <input ref={mRef} style={{ ...cellStyle, width: 42 }} placeholder="MM" maxLength={2} value={m}
+        onChange={(e) => { const v = pad(e.target.value.replace(/\D/g, ""), 2); setM(v); commit(y, v, d); if (v.length === 2) dRef.current?.focus() }} />
+      <span style={{ color: "#9ca3af" }}>-</span>
+      <input ref={dRef} style={{ ...cellStyle, width: 42 }} placeholder="DD" maxLength={2} value={d}
+        onChange={(e) => { const v = pad(e.target.value.replace(/\D/g, ""), 2); setD(v); commit(y, m, v) }} />
+    </div>
+  )
+}
+
 const FORM_LIST = [
   { type: "DISABILITY_CLAIM", label: "장해급여 청구서" },
   { type: "NOISE_WORK_CONFIRM", label: "소음작업 확인서" },
@@ -1728,11 +1755,11 @@ function BasicInfoTab({ caseData, onUpdated }: { caseData: CaseData; onUpdated: 
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
           <label style={{ fontSize: 12, color: "#6b7280" }}>약정일자</label>
-          <input type="date" style={inputStyle} value={form.contractDate} onChange={(e) => setForm({ ...form, contractDate: e.target.value })} />
+          <SplitDateInput value={form.contractDate} onChange={(v) => setForm({ ...form, contractDate: v })} />
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
           <label style={{ fontSize: 12, color: "#6b7280" }}>접수일자</label>
-          <input type="date" style={inputStyle} value={form.receptionDate} onChange={(e) => setForm({ ...form, receptionDate: e.target.value })} />
+          <SplitDateInput value={form.receptionDate} onChange={(v) => setForm({ ...form, receptionDate: v })} />
         </div>
         <div style={{ gridColumn: "1 / -1", display: "flex", flexDirection: "column", gap: 3 }}>
           <label style={{ fontSize: 12, color: "#6b7280" }}>메모</label>
