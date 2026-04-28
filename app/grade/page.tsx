@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useSession, signOut } from "next-auth/react";
 import DisabilityTable from "../../components/DisabilityTable";
 import HearingTable from "../../components/HearingTable";
@@ -9,6 +9,7 @@ import { hearingTable } from "../../data/hearing";
 import Link from 'next/link';
 import GongDanSection from "../../components/GongDanSection";
 import InfoBoardSection from "../../components/InfoBoardSection";
+import WageChangeCalc from "../wage/change-calc/page";
 
 /* ═══════════════════════════════════════════════════════════════
    [타입 정의]
@@ -1541,7 +1542,7 @@ export default function GradePage() {
                 {wageMenu==="minimum"      && <MinimumWageSection data={mergedMinWage}/>}
                 {wageMenu==="construction" && <ConstructionWageSection data={mergedConstruction}/>}
                 {wageMenu==="compensation" && <CompensationSection data={mergedCompensation}/>}
-                {wageMenu==="calculator"   && <WageCalculatorSection wageRate={mergedWageRate} cpiRate={mergedCpiRate}/>}
+                {wageMenu==="calculator"   && <WageChangeCalc />}
                 {wageMenu==="stats"        && <StatWageSection/>}
                 {wageMenu==="manage" && session?.user?.role === "ADMIN" && <DataManageSection dynamic={dynamic} setDynamic={setDynamic}/>}
               </div>
