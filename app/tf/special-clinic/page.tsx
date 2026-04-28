@@ -1567,39 +1567,34 @@ function InputModal({
   editTarget?: Schedule
   copySource?: Schedule
 }) {
-  // 직접 입력 — 수정 모드일 때 editTarget 값으로 초기화
-  function initForm(target?: Schedule) {
-    if (target) {
-      const d = target.scheduledDate ? new Date(target.scheduledDate) : null
-      const dateStr = d ? `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}` : `${defaultYear}-${pad(defaultMonth)}-01`
-      const de = target.scheduledEndDate ? new Date(target.scheduledEndDate) : null
-      const endDateStr = de ? `${de.getFullYear()}-${pad(de.getMonth() + 1)}-${pad(de.getDate())}` : ''
-      const timeStr = !target.isAllDay && target.scheduledHour != null
-        ? `${pad(target.scheduledHour)}:${pad(target.scheduledMinute ?? 0)}`
-        : ''
-      return {
-        category: target.category || '특진',
-        tfName: target.tfName || '',
-        scheduledDate: dateStr,
-        scheduledEndDate: endDateStr,
-        scheduledTime: timeStr,
-        memo: target.memo || '',
-        patientName: target.patientName || '',
-        hospitalName: target.hospitalName || '',
-        clinicType: target.clinicType || '특진',
-        examRound: target.examRound ?? 1,
-        title: target.title || '',
-        content: target.content || '',
-        assignedStaff: target.assignedStaff || '',
-        attended: target.attended ?? null,
-        isPickup: target.isPickup ?? false,
-      }
+  // Schedule → form 객체 변환 (수정/복사 공통)
+  function scheduleToForm(s: Schedule, overrideDate?: string) {
+    const d = s.scheduledDate ? new Date(s.scheduledDate) : null
+    const dateStr = overrideDate ?? (d ? `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}` : `${defaultYear}-${pad(defaultMonth)}-01`)
+    const de = !overrideDate && s.scheduledEndDate ? new Date(s.scheduledEndDate) : null
+    const endDateStr = de ? `${de.getFullYear()}-${pad(de.getMonth() + 1)}-${pad(de.getDate())}` : ''
+    const timeStr = !s.isAllDay && s.scheduledHour != null ? `${pad(s.scheduledHour)}:${pad(s.scheduledMinute ?? 0)}` : ''
+    return {
+      category: s.category || '특진',
+      tfName: s.tfName || '',
+      scheduledDate: dateStr,
+      scheduledEndDate: endDateStr,
+      scheduledTime: timeStr,
+      memo: s.memo || '',
+      patientName: s.patientName || '',
+      hospitalName: s.hospitalName || '',
+      clinicType: s.clinicType || '특진',
+      examRound: s.examRound ?? 1,
+      title: s.title || '',
+      content: s.content || '',
+      assignedStaff: s.assignedStaff || '',
+      attended: s.attended ?? null as boolean | null,
+      isPickup: s.isPickup ?? false,
     }
-    // 복사 모드: 날짜만 비우고 나머지 데이터 채움
-    if (copySource) {
-      const cs = initForm(copySource)
-      return { ...cs, scheduledDate: defaultDate || `${defaultYear}-${pad(defaultMonth)}-01`, scheduledEndDate: '' }
-    }
+  }
+  function initForm() {
+    if (editTarget) return scheduleToForm(editTarget)
+    if (copySource) return scheduleToForm(copySource, defaultDate || `${defaultYear}-${pad(defaultMonth)}-01`)
     return {
       category: '특진',
       tfName: '',
@@ -1618,7 +1613,7 @@ function InputModal({
       isPickup: false,
     }
   }
-  const [form, setForm] = useState(() => initForm(editTarget))
+  const [form, setForm] = useState(() => initForm())
   // 주기성 상태
   const [isRecurring, setIsRecurring] = useState(false)
   const [recurringType, setRecurringType] = useState<'weekly' | 'biweekly' | 'monthly'>('biweekly')
