@@ -24,21 +24,25 @@ interface ElderlyResult {
   graceEndDate: Date;
   reductionStartDate: Date;
   currentAge: number;
-  reductionRate: number;
+  elderlyBenefitRate: number | null; // 별표1 지급률 (61세 미만이면 null)
   isReduced: boolean;
-  payRate: number;
+  normalPayRate: number;             // 70% or 90%
+  effectiveRate: number;             // 실제 적용 지급률
   dailyBenefit: number;
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   고령자 감액률 테이블 (산재법 별표1)
+   고령자 휴업급여 지급률 테이블 (산재법 제55조 별표 1)
+   - 별표 1은 "평균임금 대비 최종 지급률"을 직접 규정함
+   - 70%에서 감액하는 방식이 아니라 별표 1 지급률로 대체됨
+   - 공단 실제 산정: 평균임금 × 70% × (별표1율/70%) = 평균임금 × 별표1율
    ═══════════════════════════════════════════════════════════════ */
-const ELDERLY_REDUCTION_RATE = [
-  { minAge: 61, maxAge: 62, reductionRate: 0.04 },
-  { minAge: 62, maxAge: 63, reductionRate: 0.08 },
-  { minAge: 63, maxAge: 64, reductionRate: 0.12 },
-  { minAge: 64, maxAge: 65, reductionRate: 0.16 },
-  { minAge: 65, maxAge: null as number | null, reductionRate: 0.2 },
+const ELDERLY_BENEFIT_RATE = [
+  { minAge: 61, maxAge: 62,             rate: 0.67 },
+  { minAge: 62, maxAge: 63,             rate: 0.64 },
+  { minAge: 63, maxAge: 64,             rate: 0.61 },
+  { minAge: 64, maxAge: 65,             rate: 0.58 },
+  { minAge: 65, maxAge: null as number | null, rate: 0.50 },
 ];
 
 /* ═══════════════════════════════════════════════════════════════
@@ -120,13 +124,13 @@ function calcAge(birth: Date, ref: Date): number {
   return age;
 }
 
-function getReductionRate(age: number): number {
-  for (const row of ELDERLY_REDUCTION_RATE) {
+function getElderlyBenefitRate(age: number): number | null {
+  for (const row of ELDERLY_BENEFIT_RATE) {
     if (age >= row.minAge && (row.maxAge === null || age < row.maxAge)) {
-      return row.reductionRate;
+      return row.rate;
     }
   }
-  return 0;
+  return null; // 61세 미만 → 고령자 감액 없음
 }
 
 function formatDate(d: Date): string {
@@ -208,19 +212,22 @@ export default function WageChangeCalcPage() {
 
     const currentAge = calcAge(birth, today);
     const isReduced = today >= reductionStartDate && currentAge >= 61;
-    const reductionRate = isReduced ? getReductionRate(currentAge) : 0;
-    const payRate = isLowIncome ? 0.9 : 0.7;
+    const elderlyBenefitRate = isReduced ? getElderlyBenefitRate(currentAge) : null;
+    const normalPayRate = isLowIncome ? 0.9 : 0.7;
     const wage = parseFloat(avgWage) || 0;
-    const dailyBenefit = wage * payRate * (1 - reductionRate);
+    // 고령자 해당 시: 별표1 지급률 직접 적용 (70%가 아닌 별표1율로 대체)
+    const effectiveRate = elderlyBenefitRate !== null ? elderlyBenefitRate : normalPayRate;
+    const dailyBenefit = wage * effectiveRate;
 
     return {
       age61Date,
       graceEndDate,
       reductionStartDate,
       currentAge,
-      reductionRate,
+      elderlyBenefitRate,
       isReduced,
-      payRate,
+      normalPayRate,
+      effectiveRate,
       dailyBenefit,
     };
   }, [birthDate, accidentDate, hasGrace, avgWage, isLowIncome]);
@@ -553,18 +560,20 @@ export default function WageChangeCalcPage() {
           </label>
         </div>
 
-        {/* 감액률 참조 테이블 */}
+        {/* 별표 1 지급률 참조 테이블 */}
+        <p style={{ fontSize: 12, color: "#6b7280", marginBottom: 6 }}>
+          산재법 제55조 별표 1 — 고령자 휴업급여 지급률 (평균임금 대비 최종 지급률)
+        </p>
         <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 16, fontSize: 13 }}>
           <thead>
             <tr style={{ background: "#f1f5f9", borderBottom: "1px solid #e2e8f0" }}>
               <th style={thStyle}>연령</th>
-              <th style={thStyle}>감액률</th>
-              <th style={thStyle}>휴업급여 지급률 (일반)</th>
-              <th style={thStyle}>휴업급여 지급률 (저소득)</th>
+              <th style={thStyle}>별표 1 지급률</th>
+              <th style={thStyle}>공단 산정식</th>
             </tr>
           </thead>
           <tbody>
-            {ELDERLY_REDUCTION_RATE.map((row) => {
+            {ELDERLY_BENEFIT_RATE.map((row) => {
               const isHighlighted =
                 elderlyResult &&
                 elderlyResult.isReduced &&
@@ -583,9 +592,10 @@ export default function WageChangeCalcPage() {
                     만 {row.minAge}세 이상{row.maxAge ? ` ~ ${row.maxAge}세 미만` : ""}
                     {isHighlighted && <span style={{ marginLeft: 6, fontSize: 11, color: "#1d4ed8" }}>◀ 현재</span>}
                   </td>
-                  <td style={tdStyle}>{(row.reductionRate * 100).toFixed(0)}%</td>
-                  <td style={tdStyle}>{((0.7 * (1 - row.reductionRate)) * 100).toFixed(1)}%</td>
-                  <td style={tdStyle}>{((0.9 * (1 - row.reductionRate)) * 100).toFixed(1)}%</td>
+                  <td style={tdStyle}>{(row.rate * 100).toFixed(0)}%</td>
+                  <td style={{ ...tdStyle, color: "#6b7280" }}>
+                    평균임금 × 70% × {(row.rate / 0.7 * 100).toFixed(1)}/70.0
+                  </td>
                 </tr>
               );
             })}
@@ -619,16 +629,17 @@ export default function WageChangeCalcPage() {
                 <span style={{ fontSize: 12, color: "#6b7280" }}>감액 여부</span>
                 <p style={{ fontSize: 16, fontWeight: 700, color: elderlyResult.isReduced ? "#dc2626" : "#16a34a", margin: 0 }}>
                   {elderlyResult.isReduced
-                    ? `감액 적용 (${(elderlyResult.reductionRate * 100).toFixed(0)}%)`
+                    ? `감액 적용 → 별표1 ${(elderlyResult.elderlyBenefitRate! * 100).toFixed(0)}%`
                     : "감액 미적용"}
                 </p>
               </div>
               <div>
-                <span style={{ fontSize: 12, color: "#6b7280" }}>지급률</span>
+                <span style={{ fontSize: 12, color: "#6b7280" }}>실효 지급률</span>
                 <p style={{ fontSize: 16, fontWeight: 700, color: "#0369a1", margin: 0 }}>
-                  {(elderlyResult.payRate * 100).toFixed(0)}%
-                  {elderlyResult.isReduced &&
-                    ` × ${((1 - elderlyResult.reductionRate) * 100).toFixed(0)}%`}
+                  {(elderlyResult.effectiveRate * 100).toFixed(0)}%
+                  {!elderlyResult.isReduced && (
+                    <span style={{ fontSize: 12, color: "#6b7280" }}> ({(elderlyResult.normalPayRate * 100).toFixed(0)}%)</span>
+                  )}
                 </p>
               </div>
               <div>
