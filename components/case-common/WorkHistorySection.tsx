@@ -87,7 +87,7 @@ function SourceGroupPanel(props: SourceGroupPanelProps) {
   const isDailyTab = activeSrc === "일용직" || activeSrc === "건근공";
 
   return (
-    <div style={{ background: bgColor, borderRadius: 10, padding: 12, border: `1px solid ${titleColor}33` }}>
+    <div style={{ background: bgColor, borderRadius: 10, padding: 12, border: `1px solid ${titleColor}33`, minWidth: 0, overflow: "hidden" }}>
       <div style={{ fontSize: 13, fontWeight: 700, color: titleColor, marginBottom: 10 }}>{title}</div>
       {/* 탭 버튼 */}
       <div style={{ display: "flex", gap: 4, marginBottom: 10, flexWrap: "wrap" }}>
@@ -113,10 +113,10 @@ function SourceGroupPanel(props: SourceGroupPanelProps) {
         })}
       </div>
       {/* 데이터 테이블 */}
-      <div style={{ overflowX: "auto", marginBottom: 8 }}>
+      <div style={{ overflowX: "auto", marginBottom: 8, maxWidth: "100%" }}>
         {isDailyTab && activeSrc === "일용직" ? (
           // 일용직 탭: dailyEntries 표시
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11, tableLayout: "fixed" }}>
             <thead>
               <tr style={{ background: "#f9fafb" }}>
                 {["사업장명", "직종", "총일수", "최초근무", "환산", ""].map(h => (
@@ -130,10 +130,10 @@ function SourceGroupPanel(props: SourceGroupPanelProps) {
               ) : workHistoryDaily.map((row, i) => (
                 <tr key={i}>
                   <td style={{ padding: 2, border: "1px solid #f1f5f9" }}>
-                    <input style={{ ...inputStyle, minWidth: 80, fontSize: 11 }} value={row.company} onChange={(e) => onChangeDaily(workHistoryDaily.map((r, j) => j === i ? { ...r, company: e.target.value } : r))} />
+                    <input style={{ ...inputStyle, width: "100%", minWidth: 0, fontSize: 11, boxSizing: "border-box" }} value={row.company} onChange={(e) => onChangeDaily(workHistoryDaily.map((r, j) => j === i ? { ...r, company: e.target.value } : r))} />
                   </td>
                   <td style={{ padding: 2, border: "1px solid #f1f5f9" }}>
-                    <input style={{ ...inputStyle, minWidth: 80, fontSize: 11 }} value={row.jobType} onChange={(e) => onChangeDaily(workHistoryDaily.map((r, j) => j === i ? { ...r, jobType: e.target.value } : r))} />
+                    <input style={{ ...inputStyle, width: "100%", minWidth: 0, fontSize: 11, boxSizing: "border-box" }} value={row.jobType} onChange={(e) => onChangeDaily(workHistoryDaily.map((r, j) => j === i ? { ...r, jobType: e.target.value } : r))} />
                   </td>
                   <td style={{ padding: 2, border: "1px solid #f1f5f9", textAlign: "center" }}>
                     <input type="number" style={{ ...inputStyle, width: 50, fontSize: 11 }} value={row.totalDays} onChange={(e) => onChangeDaily(workHistoryDaily.map((r, j) => j === i ? { ...r, totalDays: Number(e.target.value) } : r))} />
@@ -149,7 +149,7 @@ function SourceGroupPanel(props: SourceGroupPanelProps) {
           </table>
         ) : (
           // 일반 raw source 탭
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11, tableLayout: "fixed" }}>
             <thead>
               <tr style={{ background: "#f9fafb" }}>
                 {["사업장명", "직종", "작업내용", "시작연월", "종료연월", ""].map(h => (
@@ -162,25 +162,25 @@ function SourceGroupPanel(props: SourceGroupPanelProps) {
                 <tr key={i}>
                   {(["company", "department", "jobType"] as (keyof WorkHistoryRawEntry)[]).map(k => (
                     <td key={k} style={{ padding: 2, border: "1px solid #f1f5f9" }}>
-                      <input style={{ ...inputStyle, minWidth: 70, fontSize: 11 }} value={String(row[k] ?? "")} onChange={(e) => setRawField(activeSrc, i, k, e.target.value)} />
+                      <input style={{ ...inputStyle, width: "100%", minWidth: 0, fontSize: 11, boxSizing: "border-box" }} value={String(row[k] ?? "")} onChange={(e) => setRawField(activeSrc, i, k, e.target.value)} />
                     </td>
                   ))}
                   <td style={{ padding: 2, border: "1px solid #f1f5f9" }}>
                     <div style={{ display: "flex", gap: 2 }}>
-                      <select style={{ ...inputStyle, width: 60, fontSize: 11 }} value={row.startYear} onChange={(e) => setRawField(activeSrc, i, "startYear", Number(e.target.value))}>
+                      <select style={{ ...inputStyle, width: 56, fontSize: 11, boxSizing: "border-box" }} value={row.startYear} onChange={(e) => setRawField(activeSrc, i, "startYear", Number(e.target.value))}>
                         {years.map(y => <option key={y} value={y}>{y}</option>)}
                       </select>
-                      <select style={{ ...inputStyle, width: 44, fontSize: 11 }} value={row.startMonth} onChange={(e) => setRawField(activeSrc, i, "startMonth", Number(e.target.value))}>
+                      <select style={{ ...inputStyle, width: 44, fontSize: 11, boxSizing: "border-box" }} value={row.startMonth} onChange={(e) => setRawField(activeSrc, i, "startMonth", Number(e.target.value))}>
                         {months.map(m => <option key={m} value={m}>{m}월</option>)}
                       </select>
                     </div>
                   </td>
                   <td style={{ padding: 2, border: "1px solid #f1f5f9" }}>
                     <div style={{ display: "flex", gap: 2 }}>
-                      <select style={{ ...inputStyle, width: 60, fontSize: 11 }} value={row.endYear} onChange={(e) => setRawField(activeSrc, i, "endYear", Number(e.target.value))}>
+                      <select style={{ ...inputStyle, width: 56, fontSize: 11, boxSizing: "border-box" }} value={row.endYear} onChange={(e) => setRawField(activeSrc, i, "endYear", Number(e.target.value))}>
                         {years.map(y => <option key={y} value={y}>{y}</option>)}
                       </select>
-                      <select style={{ ...inputStyle, width: 44, fontSize: 11 }} value={row.endMonth} onChange={(e) => setRawField(activeSrc, i, "endMonth", Number(e.target.value))}>
+                      <select style={{ ...inputStyle, width: 44, fontSize: 11, boxSizing: "border-box" }} value={row.endMonth} onChange={(e) => setRawField(activeSrc, i, "endMonth", Number(e.target.value))}>
                         {months.map(m => <option key={m} value={m}>{m}월</option>)}
                       </select>
                     </div>
@@ -620,8 +620,8 @@ function WorkHistoryDrawerContent({
           </div>
         </div>
 
-        {/* 상용직/일용직 좌우 분할 그리드 */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
+        {/* 상용직/일용직 좌우 분할 그리드 (좁은 화면은 1열로 폴백) */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(420px, 1fr))", gap: 12, marginBottom: 16 }}>
           {/* 좌: 상용직 직업력 산정 */}
           <SourceGroupPanel
             title="🏢 상용직 직업력 산정"
@@ -920,7 +920,7 @@ export function WorkHistorySection({
       {isDrawerOpen && (
         <>
           <div onClick={() => setIsDrawerOpen(false)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.35)", zIndex: 900 }} />
-          <div style={{ position: "fixed", top: 0, right: 0, bottom: 0, width: "min(820px, 85vw)", background: "white", zIndex: 901, boxShadow: "-8px 0 40px rgba(0,0,0,0.18)", display: "flex", flexDirection: "column", overflowY: "auto" }}>
+          <div style={{ position: "fixed", top: 0, right: 0, bottom: 0, width: "min(1200px, 95vw)", background: "white", zIndex: 901, boxShadow: "-8px 0 40px rgba(0,0,0,0.18)", display: "flex", flexDirection: "column", overflowY: "auto" }}>
             <WorkHistoryDrawerContent
               caseId={caseId}
               workHistory={workHistory}
