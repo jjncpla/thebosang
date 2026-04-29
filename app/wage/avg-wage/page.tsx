@@ -25,6 +25,7 @@ export default function AvgWageNoticePage() {
     needsCorrection: boolean;
     correctionReason: string | null;
     verifyStatus: string | null;
+    wageReviewId: string | null;
     createdAt: string;
   };
   const [recent, setRecent] = useState<ListItem[]>([]);
@@ -94,6 +95,39 @@ export default function AvgWageNoticePage() {
       fetchRecent();
     } catch {
       alert("삭제 실패");
+    }
+  }
+
+  /** AvgWageNotice → WageReviewData 변환 */
+  async function promoteToWageReview(item: ListItem) {
+    if (item.wageReviewId) {
+      alert(`이미 WageReviewData로 변환됨 (id=${item.wageReviewId})`);
+      return;
+    }
+    const tfName = window.prompt("TF명 입력 (예: 울산북부TF)", "");
+    if (!tfName) return;
+    const patientName = window.prompt("재해자 성명", item.workerName ?? "");
+    if (!patientName) return;
+    const caseType = window.prompt("사건 종류 (예: 소음성 난청 / 진폐 / COPD)", "소음성 난청");
+    if (!caseType) return;
+    const caseId = window.prompt("Case ID (없으면 비움)", "") || null;
+    const reviewManagerName = window.prompt("검토 담당자명 (선택)", "") || null;
+
+    try {
+      const res = await fetch(`/api/avg-wage/${item.id}/promote`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tfName, patientName, caseType, caseId, reviewManagerName }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error || "변환 실패");
+        return;
+      }
+      alert(`✅ WageReviewData 생성 완료 (id=${data.wageReviewId})`);
+      fetchRecent();
+    } catch (e) {
+      alert(`변환 실패: ${e instanceof Error ? e.message : String(e)}`);
     }
   }
 
@@ -501,6 +535,7 @@ export default function AvgWageNoticePage() {
                   <th style={{ padding: 8, textAlign: "right", fontWeight: 600 }}>특례</th>
                   <th style={{ padding: 8, textAlign: "right", fontWeight: 600 }}>적용</th>
                   <th style={{ padding: 8, textAlign: "center", fontWeight: 600 }}>판정</th>
+                  <th style={{ padding: 8, textAlign: "center", fontWeight: 600 }}>변환</th>
                   <th style={{ padding: 8, textAlign: "center", fontWeight: 600 }}>삭제</th>
                 </tr>
               </thead>
@@ -546,6 +581,38 @@ export default function AvgWageNoticePage() {
                         >
                           ✅
                         </span>
+                      )}
+                    </td>
+                    <td style={{ padding: 8, textAlign: "center" }}>
+                      {it.wageReviewId ? (
+                        <span
+                          style={{
+                            background: "#dbeafe",
+                            color: "#1e40af",
+                            padding: "2px 6px",
+                            borderRadius: 4,
+                            fontSize: 11,
+                          }}
+                          title={`WageReviewData id=${it.wageReviewId}`}
+                        >
+                          ✅ 변환됨
+                        </span>
+                      ) : (
+                        <button
+                          onClick={() => promoteToWageReview(it)}
+                          style={{
+                            background: "#3b82f6",
+                            color: "#fff",
+                            border: "none",
+                            borderRadius: 4,
+                            padding: "4px 8px",
+                            fontSize: 11,
+                            cursor: "pointer",
+                            fontWeight: 500,
+                          }}
+                        >
+                          ➡️ 변환
+                        </button>
                       )}
                     </td>
                     <td style={{ padding: 8, textAlign: "center" }}>
