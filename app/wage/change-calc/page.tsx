@@ -22,12 +22,16 @@ interface WageResult {
 interface ElderlyResult {
   age61Date: Date;
   graceEndDate: Date;
-  reductionStartDate: Date;
+  reductionStartDate: Date;         // 유예 종료일 + 1일
+  reductionStartYear: number;       // 감액 시작 연도
   currentAge: number;
   elderlyBenefitRate: number | null; // 별표1 지급률 (61세 미만이면 null)
   isReduced: boolean;
   normalPayRate: number;             // 70% or 90%
   effectiveRate: number;             // 실제 적용 지급률
+  wageIncrementRatio: number;        // 재해 → 감액 시작 연도 누적 증감 배율
+  wageRatioType: RatioType;          // 적용 증감 유형 (임금/CPI)
+  adjustedWage: number;              // 증감 후 평균임금
   dailyBenefit: number;
 }
 
@@ -206,28 +210,45 @@ export default function WageChangeCalcPage() {
     const age61Date = addYears(birth, 61);
     const graceEndDate = addYears(accident, 2);
 
-    // 감액 시작일: 실무상 재해발생일로부터 2년간 감액 미적용 (지침)
-    const reductionStartDate =
-      age61Date > graceEndDate ? age61Date : graceEndDate;
+    // ① 감액 실제 시작일 = 유예 종료일 + 1일 (PDF 검증)
+    const graceEndDateNext = new Date(graceEndDate);
+    graceEndDateNext.setDate(graceEndDateNext.getDate() + 1);
+    const reductionStartDate = age61Date > graceEndDateNext ? age61Date : graceEndDateNext;
+    const reductionStartYear = reductionStartDate.getFullYear();
 
+    // ② 재해발생연도/월 → 2008 분기 자동 판단
+    const accidentYr = accident.getFullYear();
+    const accidentMo = accident.getMonth() + 1;
+    const { type: wageRatioType } = detectRatioType(accidentYr, accidentMo);
+
+    // ③ 재해발생연도 → 감액 시작 연도 사이 누적 증감 적용
+    const wageIncrementResult = calcWageIncrease(accidentYr, reductionStartYear, 1, wageRatioType);
+    const initialWageVal = parseFloat(avgWage) || 0;
+    const adjustedWage = initialWageVal * wageIncrementResult.ratio;
+
+    // ④ 고령자 별표1 지급률 적용
     const currentAge = calcAge(birth, today);
     const isReduced = today >= reductionStartDate && currentAge >= 61;
     const elderlyBenefitRate = isReduced ? getElderlyBenefitRate(currentAge) : null;
     const normalPayRate = isLowIncome ? 0.9 : 0.7;
-    const wage = parseFloat(avgWage) || 0;
-    // 고령자 해당 시: 별표1 지급률 직접 적용 (70%가 아닌 별표1율로 대체)
+    // 고령자 감액 시: 증감된 평균임금 × 별표1 지급률
+    // 감액 전: 증감된 현재 평균임금 × 통상 지급률
     const effectiveRate = elderlyBenefitRate !== null ? elderlyBenefitRate : normalPayRate;
-    const dailyBenefit = wage * effectiveRate;
+    const dailyBenefit = adjustedWage * effectiveRate;
 
     return {
       age61Date,
       graceEndDate,
       reductionStartDate,
+      reductionStartYear,
       currentAge,
       elderlyBenefitRate,
       isReduced,
       normalPayRate,
       effectiveRate,
+      wageIncrementRatio: wageIncrementResult.ratio,
+      wageRatioType,
+      adjustedWage,
       dailyBenefit,
     };
   }, [birthDate, accidentDate, hasGrace, avgWage, isLowIncome]);
@@ -539,13 +560,15 @@ export default function WageChangeCalcPage() {
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
           <label style={labelStyle}>
-            <span style={labelTextStyle}>평균임금 (원/일)</span>
+            <span style={labelTextStyle}>
+              최초 평균임금 (재해 당시, 원/일)
+            </span>
             <input
               type="text"
               inputMode="numeric"
               value={avgWage}
               onChange={(e) => setAvgWage(e.target.value.replace(/[^0-9.]/g, ""))}
-              placeholder="예: 80000"
+              placeholder="예: 126290"
               style={inputStyle}
             />
           </label>
@@ -605,6 +628,7 @@ export default function WageChangeCalcPage() {
         {/* 결과 */}
         {elderlyResult && (
           <div style={{ background: "#f0f9ff", borderRadius: 8, padding: 20, border: "1px solid #bae6fd", marginBottom: 16 }}>
+            {/* 날짜 정보 */}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
               <div>
                 <span style={{ fontSize: 12, color: "#6b7280" }}>만 61세 도달일</span>
@@ -615,7 +639,7 @@ export default function WageChangeCalcPage() {
                 <p style={{ fontSize: 15, fontWeight: 600, color: "#374151", margin: 0 }}>{formatDate(elderlyResult.graceEndDate)}</p>
               </div>
               <div>
-                <span style={{ fontSize: 12, color: "#6b7280" }}>감액 실제 시작일</span>
+                <span style={{ fontSize: 12, color: "#6b7280" }}>감액 실제 시작일 <span style={{ fontSize: 11, color: "#9ca3af" }}>(유예 종료 +1일)</span></span>
                 <p style={{ fontSize: 15, fontWeight: 600, color: "#0369a1", margin: 0 }}>{formatDate(elderlyResult.reductionStartDate)}</p>
               </div>
               <div>
@@ -624,6 +648,31 @@ export default function WageChangeCalcPage() {
               </div>
             </div>
 
+            {/* 증감 적용 */}
+            {elderlyResult.wageIncrementRatio !== 1 && (
+              <div style={{
+                background: "#f8fafc",
+                border: "1px solid #e2e8f0",
+                borderRadius: 6,
+                padding: "10px 14px",
+                marginBottom: 12,
+                fontSize: 13,
+              }}>
+                <span style={{ color: "#6b7280" }}>
+                  임금증감 ({elderlyResult.wageRatioType === "wage" ? "전체근로자 임금평균액" : "소비자물가변동률"})
+                  &nbsp;재해연도 → {elderlyResult.reductionStartYear}년&nbsp;
+                  <strong style={{ color: "#0369a1" }}>× {elderlyResult.wageIncrementRatio.toFixed(4)}</strong>
+                </span>
+                <div style={{ marginTop: 4, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                  <span style={{ color: "#374151" }}>{formatNumber(parseFloat(avgWage) || 0, 2)}원</span>
+                  <span style={{ color: "#9ca3af" }}>→</span>
+                  <span style={{ fontWeight: 700, color: "#0369a1" }}>{formatNumber(elderlyResult.adjustedWage, 2)}원</span>
+                  <span style={{ fontSize: 11, color: "#9ca3af" }}>(증감 후 평균임금)</span>
+                </div>
+              </div>
+            )}
+
+            {/* 지급률 및 결과 */}
             <div style={{ borderTop: "1px solid #bae6fd", paddingTop: 12, display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
               <div>
                 <span style={{ fontSize: 12, color: "#6b7280" }}>감액 여부</span>
@@ -645,7 +694,10 @@ export default function WageChangeCalcPage() {
               <div>
                 <span style={{ fontSize: 12, color: "#6b7280" }}>1일 휴업급여</span>
                 <p style={{ fontSize: 22, fontWeight: 700, color: "#0369a1", margin: 0 }}>
-                  {formatNumber(elderlyResult.dailyBenefit, 0)}원
+                  {formatNumber(Math.floor(elderlyResult.dailyBenefit), 0)}원{" "}
+                  <span style={{ fontSize: 13, fontWeight: 400 }}>
+                    {Math.round((elderlyResult.dailyBenefit % 1) * 1000)}전
+                  </span>
                 </p>
               </div>
             </div>
