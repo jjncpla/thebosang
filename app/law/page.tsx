@@ -842,8 +842,7 @@ function GuidelinesTab() {
 
           {CAT1_LIST.map(c1 => {
             const count = cntPdf(c1.key);
-            if (count === 0) return null;
-            const c2List = (CAT2_MAP[c1.key] ?? []).filter(c2 => cntPdf(c1.key, c2.key) > 0);
+            const c2List = CAT2_MAP[c1.key] ?? [];
             const open = expanded.has(c1.key);
             const active = sel.cat1 === c1.key && !sel.cat2;
 
