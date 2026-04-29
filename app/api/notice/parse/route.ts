@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { DocumentProcessorServiceClient } from "@google-cloud/documentai";
 import { parseDecisionNotice } from "@/lib/notice-parser";
+import { prisma } from "@/lib/prisma";
 
 export const maxDuration = 120;
 export const dynamic = "force-dynamic";
@@ -38,6 +39,9 @@ export async function POST(req: NextRequest) {
     const formData = await req.formData();
     const file = formData.get("file") as File | null;
     const includeRaw = formData.get("includeRaw") === "true";
+    const caseId = (formData.get("caseId") as string | null) || null;
+    const patientId = (formData.get("patientId") as string | null) || null;
+    const skipSave = formData.get("skipSave") === "true";
 
     if (!file) {
       return NextResponse.json({ error: "file required" }, { status: 400 });
@@ -56,11 +60,57 @@ export async function POST(req: NextRequest) {
     const parsed = parseDecisionNotice(text);
     if (includeRaw) parsed.rawText = text;
 
+    // DB 저장 (검토 이력)
+    let noticeId: string | null = null;
+    if (!skipSave) {
+      try {
+        const userId = (session.user as { id?: string })?.id ?? null;
+
+        const safeDate = (s: string | null | undefined) => {
+          if (!s) return null;
+          const d = new Date(s);
+          return isNaN(d.getTime()) ? null : d;
+        };
+
+        const ocrTrimmed = text.length > 100000 ? text.slice(0, 100000) : text;
+
+        const created = await prisma.decisionNotice.create({
+          data: {
+            caseId,
+            patientId,
+            fileName: file.name,
+            fileSize: file.size,
+            decisionType: parsed.decisionType ?? "기타",
+            decisionDate: safeDate(parsed.decisionDate),
+            managementNo: parsed.managementNo,
+            caseNo: parsed.caseNo,
+            resultStatus: parsed.resultStatus,
+            workerName: parsed.workerName,
+            birthDate: safeDate(parsed.birthDate),
+            accidentDate: safeDate(parsed.accidentDate),
+            businessName: parsed.businessName,
+            paymentAmount: parsed.paymentAmount,
+            cumulativeAmount: parsed.cumulativeAmount,
+            initialAvgWage: parsed.initialAvgWage,
+            parsedData: parsed as unknown as object,
+            ocrText: ocrTrimmed,
+            verifyStatus: "미검증",
+            uploadedBy: userId,
+          },
+        });
+        noticeId = created.id;
+      } catch (saveErr) {
+        // DB 저장 실패해도 파싱 결과는 반환
+        console.error("[notice/parse] DB save error:", saveErr);
+      }
+    }
+
     return NextResponse.json({
       success: true,
       fileName: file.name,
       fileSize: file.size,
       ocrTextLength: text.length,
+      noticeId,
       parsed,
     });
   } catch (e) {

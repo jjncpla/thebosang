@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useRef } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import {
   WAGE_INCREASE_RATIO,
   CPI_RATIO,
@@ -249,6 +249,39 @@ export default function WageChangeCalcPage() {
   const [uploadedFileName, setUploadedFileName] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // 최근 업로드 이력
+  type NoticeListItem = {
+    id: string;
+    fileName: string;
+    decisionType: string;
+    workerName: string | null;
+    accidentDate: string | null;
+    paymentAmount: number | null;
+    initialAvgWage: number | null;
+    createdAt: string;
+  };
+  const [recentNotices, setRecentNotices] = useState<NoticeListItem[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+
+  async function fetchRecent() {
+    setLoadingHistory(true);
+    try {
+      const res = await fetch("/api/notice/list?limit=10");
+      if (res.ok) {
+        const data = await res.json();
+        setRecentNotices(data.items ?? []);
+      }
+    } catch {
+      /* silent */
+    } finally {
+      setLoadingHistory(false);
+    }
+  }
+
+  useEffect(() => {
+    fetchRecent();
+  }, []);
+
   async function handleFileUpload(file: File) {
     setUploading(true);
     setUploadError(null);
@@ -302,6 +335,8 @@ export default function WageChangeCalcPage() {
           }
         }
       }
+      // 업로드 후 이력 새로고침
+      fetchRecent();
     } catch (e: unknown) {
       setUploadError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -314,6 +349,16 @@ export default function WageChangeCalcPage() {
     setUploadError(null);
     setUploadedFileName(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
+  }
+
+  async function deleteNotice(id: string) {
+    if (!confirm("이 검토 이력을 삭제하시겠습니까?")) return;
+    try {
+      await fetch(`/api/notice/list?id=${id}`, { method: "DELETE" });
+      fetchRecent();
+    } catch {
+      alert("삭제 실패");
+    }
   }
 
   // 계산
@@ -426,9 +471,82 @@ export default function WageChangeCalcPage() {
         )}
 
         <p style={{ marginTop: 12, fontSize: 11, color: "#9ca3af" }}>
-          ※ 지원: 휴업급여·장해일시금·유족연금·장례비 결정통지서 / 스캔본·이미지 PDF 모두 가능
+          ※ 지원: 휴업급여·장해일시금·유족연금·장례비 결정통지서 / 스캔본·이미지 PDF 모두 가능 / 업로드 시 자동으로 검토 이력 저장
         </p>
       </section>
+
+      {/* ─── 최근 검토 이력 ─── */}
+      {recentNotices.length > 0 && (
+        <section style={sectionStyle}>
+          <h2 style={sectionTitleStyle}>
+            🗂️ 최근 검토 이력 ({recentNotices.length}건)
+            {loadingHistory && <span style={{ fontSize: 11, color: "#9ca3af", marginLeft: 8 }}>로딩…</span>}
+          </h2>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+            <thead>
+              <tr style={{ background: "#f1f5f9", borderBottom: "1px solid #cbd5e1" }}>
+                <th style={{ padding: 8, textAlign: "left", fontWeight: 600 }}>업로드일</th>
+                <th style={{ padding: 8, textAlign: "left", fontWeight: 600 }}>재해자</th>
+                <th style={{ padding: 8, textAlign: "left", fontWeight: 600 }}>결정사항</th>
+                <th style={{ padding: 8, textAlign: "left", fontWeight: 600 }}>재해일</th>
+                <th style={{ padding: 8, textAlign: "right", fontWeight: 600 }}>최초 평임</th>
+                <th style={{ padding: 8, textAlign: "right", fontWeight: 600 }}>지급결정액</th>
+                <th style={{ padding: 8, textAlign: "left", fontWeight: 600 }}>파일명</th>
+                <th style={{ padding: 8, textAlign: "center", fontWeight: 600 }}></th>
+              </tr>
+            </thead>
+            <tbody>
+              {recentNotices.map((n) => (
+                <tr key={n.id} style={{ borderBottom: "1px solid #f1f5f9" }}>
+                  <td style={{ padding: 8, color: "#6b7280" }}>
+                    {new Date(n.createdAt).toLocaleDateString("ko-KR")}
+                  </td>
+                  <td style={{ padding: 8, fontWeight: 600 }}>{n.workerName ?? "-"}</td>
+                  <td style={{ padding: 8 }}>
+                    <span style={{
+                      background: "#dbeafe",
+                      color: "#1e40af",
+                      fontSize: 11,
+                      padding: "1px 6px",
+                      borderRadius: 10,
+                      fontWeight: 600,
+                    }}>
+                      {n.decisionType}
+                    </span>
+                  </td>
+                  <td style={{ padding: 8 }}>
+                    {n.accidentDate ? new Date(n.accidentDate).toLocaleDateString("ko-KR") : "-"}
+                  </td>
+                  <td style={{ padding: 8, textAlign: "right" }}>
+                    {n.initialAvgWage ? n.initialAvgWage.toLocaleString("ko-KR") + "원" : "-"}
+                  </td>
+                  <td style={{ padding: 8, textAlign: "right", fontWeight: 600 }}>
+                    {n.paymentAmount ? n.paymentAmount.toLocaleString("ko-KR") + "원" : "-"}
+                  </td>
+                  <td style={{ padding: 8, color: "#9ca3af", fontSize: 11 }}>
+                    {n.fileName.length > 30 ? n.fileName.slice(0, 30) + "..." : n.fileName}
+                  </td>
+                  <td style={{ padding: 8, textAlign: "center" }}>
+                    <button
+                      onClick={() => deleteNotice(n.id)}
+                      style={{
+                        background: "none",
+                        border: "none",
+                        color: "#dc2626",
+                        cursor: "pointer",
+                        fontSize: 14,
+                      }}
+                      title="삭제"
+                    >
+                      ✕
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
+      )}
 
       {/* ─── 입력 섹션 ─── */}
       <section style={sectionStyle}>

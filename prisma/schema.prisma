@@ -1412,3 +1412,53 @@ model LawAttachment {
   @@index([lawId, attachmentType])
   @@index([createdAt])
 }
+
+// 결정통지서 자동 파싱 이력 (Phase A)
+// PDF 본문은 저장하지 않고 OCR 텍스트 + 파싱 결과만 보존
+model DecisionNotice {
+  id               String    @id @default(cuid())
+
+  // 사건/재해자 연결 (선택적)
+  caseId           String?
+  patientId        String?
+
+  // 통지서 메타
+  fileName         String
+  fileSize         Int
+  decisionType     String    // 휴업급여/장해일시금/장해연금/유족연금/유족일시금/장례비/기타
+  decisionDate     DateTime?
+  managementNo     String?
+  caseNo           String?
+  resultStatus     String?   // 지급/부지급/일부지급 등
+
+  // 산재근로자
+  workerName       String?
+  birthDate        DateTime?
+  accidentDate     DateTime?
+  businessName     String?
+
+  // 금액
+  paymentAmount    Float?    // 지급결정액
+  cumulativeAmount Float?    // 누계액
+  initialAvgWage   Float?    // 평균임금 산정 후 최초 지급액
+
+  // 파싱 결과 전체 (Json)
+  parsedData       Json      // ParsedNotice 전체 구조
+  ocrText          String?   // 원본 OCR 텍스트 (디버깅용, 100k자 제한)
+
+  // 검증 상태
+  verifyStatus     String?   // "일치" | "불일치" | "부분일치" | "미검증"
+  verifyNote       String?
+
+  // 메타
+  uploadedBy       String?   // userId
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@index([caseId])
+  @@index([patientId])
+  @@index([workerName])
+  @@index([decisionType])
+  @@index([accidentDate])
+  @@index([createdAt])
+}
