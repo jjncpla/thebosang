@@ -282,16 +282,25 @@ export default function WageChangeCalcPage() {
     fetchRecent();
   }, []);
 
+  // OCR 원문 텍스트 (디버그용)
+  const [ocrRawText, setOcrRawText] = useState<string | null>(null);
+  const [showRaw, setShowRaw] = useState(false);
+
   async function handleFileUpload(file: File) {
     setUploading(true);
     setUploadError(null);
     setUploadedFileName(file.name);
+    setOcrRawText(null);
     try {
       const fd = new FormData();
       fd.append("file", file);
+      fd.append("includeRaw", "true"); // 디버그용 원문 포함
       const res = await fetch("/api/notice/parse", { method: "POST", body: fd });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "파싱 실패");
+
+      // OCR 원문 보존 (UI에서 보기/다운로드용)
+      if (data.parsed?.rawText) setOcrRawText(data.parsed.rawText);
 
       const parsed: ParsedNotice = data.parsed;
       setParsedNotice(parsed);
@@ -467,11 +476,76 @@ export default function WageChangeCalcPage() {
         {parsedNotice && !uploading && (
           <div style={{ marginTop: 16 }}>
             <NoticeSummary notice={parsedNotice} fileName={uploadedFileName} />
+
+            {/* OCR 원문 디버그 */}
+            {ocrRawText && (
+              <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px dashed #cbd5e1" }}>
+                <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 6 }}>
+                  <button
+                    onClick={() => setShowRaw(!showRaw)}
+                    style={{
+                      padding: "4px 10px",
+                      fontSize: 11,
+                      border: "1px solid #d1d5db",
+                      background: "#fff",
+                      borderRadius: 4,
+                      cursor: "pointer",
+                      color: "#6b7280",
+                    }}
+                  >
+                    {showRaw ? "▼ OCR 원문 숨기기" : "▶ OCR 원문 보기 (디버그)"}
+                  </button>
+                  <button
+                    onClick={() => {
+                      const blob = new Blob([ocrRawText], { type: "text/plain;charset=utf-8" });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement("a");
+                      a.href = url;
+                      a.download = (uploadedFileName?.replace(/\.pdf$/i, "") ?? "ocr") + "_OCR.txt";
+                      a.click();
+                      URL.revokeObjectURL(url);
+                    }}
+                    style={{
+                      padding: "4px 10px",
+                      fontSize: 11,
+                      border: "1px solid #d1d5db",
+                      background: "#fff",
+                      borderRadius: 4,
+                      cursor: "pointer",
+                      color: "#6b7280",
+                    }}
+                  >
+                    💾 OCR 원문 .txt 다운로드
+                  </button>
+                  <span style={{ fontSize: 11, color: "#9ca3af" }}>
+                    {ocrRawText.length.toLocaleString()}자
+                  </span>
+                </div>
+                {showRaw && (
+                  <pre style={{
+                    background: "#f9fafb",
+                    border: "1px solid #e5e7eb",
+                    borderRadius: 6,
+                    padding: 10,
+                    fontSize: 11,
+                    lineHeight: 1.5,
+                    maxHeight: 400,
+                    overflow: "auto",
+                    whiteSpace: "pre-wrap",
+                    wordBreak: "break-all",
+                    color: "#374151",
+                  }}>
+                    {ocrRawText}
+                  </pre>
+                )}
+              </div>
+            )}
           </div>
         )}
 
         <p style={{ marginTop: 12, fontSize: 11, color: "#9ca3af" }}>
-          ※ 지원: 휴업급여·장해일시금·유족연금·장례비 결정통지서 / 스캔본·이미지 PDF 모두 가능 / 업로드 시 자동으로 검토 이력 저장
+          ※ 지원: 휴업급여·장해일시금·유족연금·장례비 결정통지서 / 스캔본·이미지 PDF 모두 가능 / 업로드 시 자동으로 검토 이력 저장<br/>
+          ※ 추출 누락 시 <strong>OCR 원문 .txt 다운로드</strong>해서 공유해주시면 패턴 보강 가능합니다.
         </p>
       </section>
 
@@ -966,11 +1040,19 @@ function NoticeSummary({
       {/* 검증 안내 */}
       {isHuyup ? (
         <div style={{ background: "#dbeafe", color: "#1e40af", padding: 10, borderRadius: 8, fontSize: 12 }}>
-          ✅ 휴업급여 통지서입니다. 아래 입력 정보가 자동으로 채워졌습니다. 연차별 평임 산정 결과를 확인하세요.
+          ✅ <strong>휴업급여</strong> 통지서입니다. 평균임금 증감 + 고령자 별표1 감액(산재법 제55조) 모두 적용 가능. 아래 입력값을 확인하세요.
+        </div>
+      ) : notice.decisionType === "기타" ? (
+        <div style={{ background: "#fef2f2", color: "#dc2626", padding: 10, borderRadius: 8, fontSize: 12 }}>
+          ❌ <strong>결정사항 분류 실패</strong> — OCR 원문을 다운로드하여 양식 확인 부탁드립니다. 정규식 패턴 보강이 필요할 수 있습니다.
         </div>
       ) : (
         <div style={{ background: "#fffbeb", color: "#92400e", padding: 10, borderRadius: 8, fontSize: 12 }}>
-          ⚠️ {notice.decisionType} 통지서 — 본 도구는 평균임금 증감 검증용입니다. 등급 일수·가족구성 등 추가 검증 로직은 향후 단계에서 추가 예정입니다.
+          ⚠️ <strong>{notice.decisionType}</strong> 통지서 — 평균임금 증감만 검증 가능합니다.<br/>
+          <span style={{ fontSize: 11 }}>
+            ※ 고령자 감액(산재법 제55조 별표1)은 <strong>휴업급여에만 적용</strong>됩니다 — 본 결정사항에는 무관.<br/>
+            ※ 등급 일수·가족구성·기수령액 차감 등 추가 검증 로직은 추후 정리 후 반영.
+          </span>
         </div>
       )}
 

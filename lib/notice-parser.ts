@@ -155,13 +155,18 @@ export function parseDecisionNotice(rawText: string): ParsedNotice {
     ? `${decisionDateMatch[1]}-${decisionDateMatch[2]}-${decisionDateMatch[3]}`
     : null;
 
-  // 산재근로자명: "산재근로자명" 또는 "성 명" 라벨 다음
+  // 산재근로자명: 다양한 양식 지원
   let workerName: string | null = null;
-  const m1 = text.match(/산재근로자명[\s:]+([가-힣]{2,5})/);
-  if (m1) workerName = m1[1];
-  if (!workerName) {
-    const m2 = text.match(/성\s*명[\s:]+([가-힣]{2,5})\s*생년월일/);
-    if (m2) workerName = m2[1];
+  const namePatterns = [
+    /산재근로자명[\s:]+([가-힣]{2,5})(?=\s|$|생년)/,
+    /성\s*명[\s:]+([가-힣]{2,5})(?=\s+생년월일)/,
+    /산\s*재\s*근로자[\s\S]{0,80}?성\s*명[\s:]+([가-힣]{2,5})/, // 표 형식 (장해통지서)
+    /^([가-힣]{2,5})\s+귀하/m,                                // 우편 발송 헤더
+    /수\s*급\s*권자\s*[성|이][\s:]+([가-힣]{2,5})/,         // 유족 케이스
+  ];
+  for (const re of namePatterns) {
+    const mm = text.match(re);
+    if (mm && mm[1]) { workerName = mm[1].trim(); break; }
   }
 
   // 생년월일
@@ -173,9 +178,25 @@ export function parseDecisionNotice(rawText: string): ParsedNotice {
   const accidentMatch = text.match(/재해발생일[\s:]+(\d{4}-\d{2}-\d{2})/);
   const accidentDate = accidentMatch ? accidentMatch[1] : null;
 
-  // 결정사항
-  const decisionMatch = text.match(/결정사항[\s:]+(휴업급여|장해일시금|장해연금|유족연금|유족일시금|상병보상연금|장례비|요양급여|재요양)/);
-  const decisionType = (decisionMatch ? decisionMatch[1] : "기타") as DecisionType;
+  // 결정사항: 명시 라벨 → 실패 시 제목 키워드로 추론
+  let decisionType: DecisionType = "기타";
+  const decisionMatch = text.match(/결정사항[\s:]+(휴업급여|장해일시금|장해연금|유족연금|유족일시금|상병보상연금|장례비|요양급여|재요양|간병급여|장례비)/);
+  if (decisionMatch) {
+    decisionType = decisionMatch[1] as DecisionType;
+  } else {
+    // 제목/본문 키워드 휴리스틱
+    if (/장례비/.test(text)) decisionType = "장례비";
+    else if (/유족보상연금|유족\s*연금/.test(text)) decisionType = "유족연금";
+    else if (/유족보상일시금|유족\s*일시금/.test(text)) decisionType = "유족일시금";
+    else if (/장해보상연금|장해\s*연금/.test(text)) decisionType = "장해연금";
+    else if (/장\s*해\s*\(?중증요양상태\)?\s*등\s*급/.test(text)) {
+      // 장해등급 결정통지서 → 일시금/연금 둘 중 추가 추론
+      decisionType = /일시금/.test(text) ? "장해일시금" : "장해연금";
+    }
+    else if (/상병보상연금/.test(text)) decisionType = "상병보상연금";
+    else if (/휴업급여/.test(text)) decisionType = "휴업급여";
+    else if (/요양급여|재요양/.test(text)) decisionType = "요양급여";
+  }
 
   // 처리결과
   const resultStatus = pickFirst<string>(
@@ -198,9 +219,13 @@ export function parseDecisionNotice(rawText: string): ParsedNotice {
     text.match(/재해자와의\s*관계[\s:]+([가-힣]+)/)
   );
 
-  // 금액
+  // 금액 (지급결정액 또는 장해급여 결정액)
   const paymentAmount = parseAmount(
     pickFirst<string>(text.match(/지급결정액[\s:]+([\d,]+)\s*원/))
+  ) ?? parseAmount(
+    pickFirst<string>(text.match(/장해급여\s*결정액[\s:]+([\d,]+)\s*원/))
+  ) ?? parseAmount(
+    pickFirst<string>(text.match(/결\s*정\s*액[\s:]+([\d,]+)\s*원/))
   );
   const cumulativeAmount = parseAmount(
     pickFirst<string>(text.match(/누\s*계\s*액[\s:]+([\d,]+)\s*원/))
