@@ -1,6 +1,9 @@
 "use client";
 
 import { useState, useMemo } from "react";
+import dynamic from "next/dynamic";
+
+const PdfViewerModal = dynamic(() => import("./PdfViewerModal"), { ssr: false });
 
 /* ═══════════════════════════════════════════════════════
    타입
@@ -9,6 +12,8 @@ interface InfoEntry {
   no: string;
   title: string;
   desc?: string;
+  content?: string;   // 핵심 발췌 텍스트 (복사 버튼용)
+  fileUrl?: string;   // PDF 경로 (예: /docs/파일명.pdf)
   cat1: string;   // 1단계 (산재직업병, 산재외, 요양휴업, ...)
   cat2?: string;  // 2단계 (난청, 진폐COPD, ...)
   cat3?: string;  // 3단계 (일반, 이의제기, 판례)
@@ -475,6 +480,15 @@ export default function InfoBoardSection() {
   const [sel, setSel] = useState<SelState>({});
   const [query, setQuery] = useState("");
   const [openCard, setOpenCard] = useState<number | null>(null);
+  const [pdfModal, setPdfModal] = useState<{ url: string; title: string } | null>(null);
+  const [copied, setCopied] = useState<number | null>(null);
+
+  function copyText(text: string, idx: number) {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(idx);
+      setTimeout(() => setCopied(null), 2000);
+    });
+  }
 
   /* ── 트리 상태 조작 ── */
   function toggleNode(id: string) {
@@ -592,6 +606,15 @@ export default function InfoBoardSection() {
 
   return (
     <div style={{ display: "flex", height: "calc(100vh - 170px)", minHeight: 500, overflow: "hidden" }}>
+
+      {/* PDF 모달 */}
+      {pdfModal && (
+        <PdfViewerModal
+          fileUrl={pdfModal.url}
+          title={pdfModal.title}
+          onClose={() => setPdfModal(null)}
+        />
+      )}
 
       {/* ══════════════ 왼쪽 트리 패널 ══════════════ */}
       <div style={{
@@ -789,15 +812,66 @@ export default function InfoBoardSection() {
                 {/* 펼쳐진 내용 */}
                 {isOpen && (
                   <div style={{
-                    padding: "10px 14px 12px",
+                    padding: "12px 14px 14px",
                     borderTop: "1px solid #e0f2fe",
                     background: "#f8faff",
+                    display: "flex", flexDirection: "column", gap: 10,
                   }}>
-                    {item.desc ? (
+                    {/* 액션 버튼 */}
+                    <div style={{ display: "flex", gap: 8 }}>
+                      {item.fileUrl && (
+                        <button
+                          onClick={() => setPdfModal({ url: item.fileUrl!, title: item.title })}
+                          style={{
+                            display: "flex", alignItems: "center", gap: 5,
+                            padding: "6px 12px", borderRadius: 6, border: "1px solid #93c5fd",
+                            background: "#eff6ff", color: "#1d4ed8",
+                            cursor: "pointer", fontSize: 12, fontWeight: 600,
+                          }}
+                        >
+                          📄 PDF 뷰어
+                        </button>
+                      )}
+                      {item.content && (
+                        <button
+                          onClick={() => copyText(item.content!, idx)}
+                          style={{
+                            display: "flex", alignItems: "center", gap: 5,
+                            padding: "6px 12px", borderRadius: 6,
+                            border: copied === idx ? "1px solid #86efac" : "1px solid #d1d5db",
+                            background: copied === idx ? "#f0fdf4" : "#fff",
+                            color: copied === idx ? "#15803d" : "#374151",
+                            cursor: "pointer", fontSize: 12, fontWeight: 600,
+                            transition: "all 0.2s",
+                          }}
+                        >
+                          {copied === idx ? "✓ 복사됨" : "📋 핵심내용 복사"}
+                        </button>
+                      )}
+                    </div>
+
+                    {/* desc */}
+                    {item.desc && (
                       <p style={{ margin: 0, fontSize: 13, color: "#374151", lineHeight: 1.75, whiteSpace: "pre-wrap" }}>
                         {item.desc}
                       </p>
-                    ) : (
+                    )}
+
+                    {/* 핵심 발췌 텍스트 */}
+                    {item.content && (
+                      <div style={{
+                        background: "#fff", border: "1px solid #e5e7eb", borderRadius: 6,
+                        padding: "10px 12px", fontSize: 12, color: "#374151",
+                        lineHeight: 1.8, whiteSpace: "pre-wrap",
+                        maxHeight: 200, overflowY: "auto",
+                        fontFamily: "monospace",
+                      }}>
+                        {item.content}
+                      </div>
+                    )}
+
+                    {/* 아무것도 없을 때 */}
+                    {!item.desc && !item.content && !item.fileUrl && (
                       <p style={{ margin: 0, fontSize: 12, color: "#9ca3af", fontStyle: "italic" }}>
                         자료 내용이 아직 등록되지 않았습니다.
                       </p>
