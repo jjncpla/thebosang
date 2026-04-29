@@ -51,16 +51,43 @@ export default function TodoPage() {
 
   useEffect(() => {
     const n = new Date();
+    const cacheKey = `tbss:page-cache:v1:todo-stats:${n.getFullYear()}-${n.getMonth() + 1}`;
+    if (typeof window !== "undefined") {
+      try {
+        const raw = window.localStorage.getItem(cacheKey);
+        if (raw) setStats(JSON.parse(raw));
+      } catch { /* ignore */ }
+    }
     fetch(`/api/todos/stats?year=${n.getFullYear()}&month=${n.getMonth() + 1}`)
       .then(r => r.json())
-      .then(setStats)
+      .then((d) => {
+        setStats(d);
+        if (typeof window !== "undefined") {
+          try { window.localStorage.setItem(cacheKey, JSON.stringify(d)) } catch { /* quota */ }
+        }
+      })
       .catch(() => {});
   }, []);
 
   const fetchTodos = async () => {
+    const cacheKey = "tbss:page-cache:v1:todos";
+    let hadCache = false;
+    if (typeof window !== "undefined") {
+      try {
+        const raw = window.localStorage.getItem(cacheKey);
+        if (raw) { setTasks(JSON.parse(raw)); hadCache = true; }
+      } catch { /* ignore */ }
+    }
+    if (hadCache) setLoading(false);
     try {
       const res = await fetch("/api/todos");
-      if (res.ok) setTasks(await res.json());
+      if (res.ok) {
+        const data = await res.json();
+        setTasks(data);
+        if (typeof window !== "undefined") {
+          try { window.localStorage.setItem(cacheKey, JSON.stringify(data)) } catch { /* quota */ }
+        }
+      }
     } catch (e) {
       console.error("Todo 로드 실패", e);
     } finally {

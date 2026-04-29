@@ -19,6 +19,10 @@ model Patient {
   updatedAt DateTime @updatedAt
 
   cases Case[]
+
+  @@index([name])
+  @@index([phone])
+  @@index([createdAt])
 }
 
 model Case {
@@ -634,6 +638,13 @@ model Consultation {
   updatedAt      DateTime  @updatedAt
 
   @@unique([name, phone])
+  @@index([managerId])
+  @@index([tfName])
+  @@index([branchName])
+  @@index([status])
+  @@index([status, createdAt])
+  @@index([reminderDate])
+  @@index([createdAt])
 }
 
 // ─────────────────────────────────────────────

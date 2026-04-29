@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useState } from "react";
+import { usePageCache } from "@/lib/hooks/usePageCache";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 
@@ -40,9 +41,8 @@ export default function CasesViewPage() {
   const { data: session } = useSession();
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<"all" | "my">("all");
-  const [cases, setCases] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [submittedSearch, setSubmittedSearch] = useState("");
   const [caseType, setCaseType] = useState("");
   const [status, setStatus] = useState("");
 
@@ -50,35 +50,27 @@ export default function CasesViewPage() {
   const isIsanAccount = role === "이산계정";
   const isStaff = role === "STAFF";
 
-  const fetchCases = async (myOnly: boolean) => {
-    setLoading(true);
-    try {
-      const params = new URLSearchParams();
-      if (myOnly) params.set("myOnly", "true");
-      if (search) params.set("search", search);
-      if (caseType) params.set("caseType", caseType);
-      if (status) params.set("status", status);
+  const myOnly = isStaff || activeTab === "my";
+  const cacheKey = `cases-view:${myOnly ? "my" : "all"}:${submittedSearch}:${caseType}:${status}`;
 
-      const res = await fetch(`/api/cases-view?${params.toString()}`);
-      if (res.ok) {
-        const data = await res.json();
-        setCases(data);
-      }
-    } catch (e) {
-      console.error("사건 조회 실패", e);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const fetcher = useCallback(async (signal: AbortSignal): Promise<any[]> => {
+    const params = new URLSearchParams();
+    if (myOnly) params.set("myOnly", "true");
+    if (submittedSearch) params.set("search", submittedSearch);
+    if (caseType) params.set("caseType", caseType);
+    if (status) params.set("status", status);
+    const res = await fetch(`/api/cases-view?${params.toString()}`, { signal });
+    if (!res.ok) throw new Error(`서버 오류 (${res.status})`);
+    return res.json();
+  }, [myOnly, submittedSearch, caseType, status]);
 
-  useEffect(() => {
-    fetchCases(isStaff || activeTab === "my");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab, isStaff]);
+  const { data: cases, loading, refreshing } = usePageCache<any[]>({
+    cacheKey,
+    fetcher,
+    initial: [],
+  });
 
-  const handleSearch = () => {
-    fetchCases(isStaff || activeTab === "my");
-  };
+  const handleSearch = () => setSubmittedSearch(search);
 
   return (
     <div className="p-6">
