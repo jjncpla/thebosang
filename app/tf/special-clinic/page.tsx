@@ -378,9 +378,20 @@ function SpecialClinicCalendar() {
     statusFilters.length > 0 ||
     staffFilters.length > 0
 
-  // 데이터 로드 (전체 — 프론트에서 필터링)
+  // 데이터 로드 (전체 — 프론트에서 필터링) + stale-while-revalidate
   const load = useCallback(async () => {
-    setLoading(true)
+    const cacheKey = `tbss:page-cache:v1:special-clinic:${year}-${pad(month)}`
+    let hadCache = false
+    if (typeof window !== "undefined") {
+      try {
+        const raw = window.localStorage.getItem(cacheKey)
+        if (raw) {
+          setSchedules(JSON.parse(raw))
+          hadCache = true
+        }
+      } catch { /* ignore */ }
+    }
+    if (!hadCache) setLoading(true)
     const qs = new URLSearchParams({
       month: `${year}-${pad(month)}`,
       status: 'all',
@@ -389,6 +400,9 @@ function SpecialClinicCalendar() {
     if (res.ok) {
       const data = await res.json()
       setSchedules(data)
+      if (typeof window !== "undefined") {
+        try { window.localStorage.setItem(cacheKey, JSON.stringify(data)) } catch { /* quota */ }
+      }
     }
     setLoading(false)
   }, [year, month])

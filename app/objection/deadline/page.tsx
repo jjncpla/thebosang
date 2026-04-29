@@ -356,24 +356,58 @@ export default function ObjectionDeadlinePage() {
     return `${d.getFullYear()}년 ${d.getMonth() + 1}월 ${d.getDate()}일 (${days[d.getDay()]})`;
   };
 
+  // stale-while-revalidate 헬퍼: localStorage에서 즉시 복원 + 백그라운드 갱신
+  const swrFetch = useCallback(async <T,>(
+    cacheKey: string,
+    url: string,
+    setter: (v: T) => void
+  ): Promise<void> => {
+    if (typeof window !== "undefined") {
+      try {
+        const raw = window.localStorage.getItem("tbss:page-cache:v1:" + cacheKey);
+        if (raw) setter(JSON.parse(raw) as T);
+      } catch { /* ignore */ }
+    }
+    try {
+      const res = await fetch(url);
+      if (!res.ok) return;
+      const data: T = await res.json();
+      setter(data);
+      if (typeof window !== "undefined") {
+        try {
+          window.localStorage.setItem("tbss:page-cache:v1:" + cacheKey, JSON.stringify(data));
+        } catch { /* quota */ }
+      }
+    } catch { /* network */ }
+  }, []);
+
   const fetchItems = useCallback(async () => {
     const p = new URLSearchParams();
     if (filterTf) p.set("tfName", filterTf);
     if (filterProgress && filterProgress !== "송무인계") p.set("progressStatus", filterProgress);
     if (filterCaseType) p.set("caseType", filterCaseType);
-    const res = await fetch(`/api/objection/cases?${p}`);
-    if (res.ok) setItems(await res.json());
-  }, [filterTf, filterProgress, filterCaseType]);
+    await swrFetch<ObjectionCase[]>(
+      `objection-cases:${p.toString()}`,
+      `/api/objection/cases?${p}`,
+      setItems
+    );
+  }, [filterTf, filterProgress, filterCaseType, swrFetch]);
 
   const fetchLitigation = useCallback(async () => {
-    const res = await fetch("/api/objection/cases?type=litigation");
-    if (res.ok) setLitigationItems(await res.json());
-  }, []);
+    await swrFetch<ObjectionCase[]>(
+      "objection-litigation",
+      "/api/objection/cases?type=litigation",
+      setLitigationItems
+    );
+  }, [swrFetch]);
 
   const fetchWage = useCallback(async () => {
-    const res = await fetch("/api/objection/wage-review?reviewResult=평정청구%20진행");
-    if (res.ok) setWageItems(await res.json());
-  }, []);
+    await swrFetch<WageItem[]>(
+      "objection-wage",
+      "/api/objection/wage-review?reviewResult=평정청구%20진행",
+      setWageItems
+    );
+  }, [swrFetch]);
 
   useEffect(() => {
     fetch("/api/users").then(r => r.json()).then(d => setManagers(Array.isArray(d) ? d : []));

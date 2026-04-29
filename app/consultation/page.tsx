@@ -357,6 +357,7 @@ export default function ConsultationPage() {
   const [stats, setStats] = useState<Stats>({ total: 0, contract: 0, waiting: 0, closed: 0 });
   const [managers, setManagers] = useState<Manager[]>([]);
   const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const pageSize = 50;
@@ -416,30 +417,58 @@ export default function ConsultationPage() {
   };
 
   const fetchItems = useCallback(async () => {
-    setLoading(true);
-    try {
-      const p = new URLSearchParams();
-      if (filterStatus) p.set("status", filterStatus);
-      if (filterCaseType) p.set("caseType", filterCaseType);
-      if (filterManagerId) p.set("managerId", filterManagerId);
-      if (filterTf) p.set("tfName", filterTf);
-      if (filterRoute) p.set("routeMain", filterRoute);
-      if (filterDateFrom) p.set("dateFrom", filterDateFrom);
-      if (filterDateTo) p.set("dateTo", filterDateTo);
-      if (search) p.set("search", search);
-      p.set("page", String(page));
-      p.set("pageSize", String(pageSize));
+    const p = new URLSearchParams();
+    if (filterStatus) p.set("status", filterStatus);
+    if (filterCaseType) p.set("caseType", filterCaseType);
+    if (filterManagerId) p.set("managerId", filterManagerId);
+    if (filterTf) p.set("tfName", filterTf);
+    if (filterRoute) p.set("routeMain", filterRoute);
+    if (filterDateFrom) p.set("dateFrom", filterDateFrom);
+    if (filterDateTo) p.set("dateTo", filterDateTo);
+    if (search) p.set("search", search);
+    p.set("page", String(page));
+    p.set("pageSize", String(pageSize));
 
+    const cacheKey = "tbss:page-cache:v1:consultation:" + p.toString();
+    let hadCache = false;
+    if (typeof window !== "undefined") {
+      try {
+        const raw = window.localStorage.getItem(cacheKey);
+        if (raw) {
+          const cached = JSON.parse(raw);
+          setItems(cached.items ?? []);
+          setTotal(cached.total ?? 0);
+          setStats(cached.stats ?? { total: 0, contract: 0, waiting: 0, closed: 0 });
+          hadCache = true;
+        }
+      } catch { /* ignore */ }
+    }
+
+    if (hadCache) {
+      setLoading(false);
+      setRefreshing(true);
+    } else {
+      setLoading(true);
+    }
+
+    try {
       const res = await fetch(`/api/consultation?${p}`);
       if (!res.ok) throw new Error("조회 실패");
       const data = await res.json();
       setItems(data.items ?? []);
       setTotal(data.total ?? 0);
       setStats(data.stats ?? { total: 0, contract: 0, waiting: 0, closed: 0 });
+      if (typeof window !== "undefined") {
+        try {
+          const slim = { items: data.items ?? [], total: data.total ?? 0, stats: data.stats };
+          window.localStorage.setItem(cacheKey, JSON.stringify(slim));
+        } catch { /* quota */ }
+      }
     } catch {
-      alert("데이터 조회 중 오류가 발생했습니다.");
+      if (!hadCache) alert("데이터 조회 중 오류가 발생했습니다.");
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   }, [filterStatus, filterCaseType, filterManagerId, filterTf, filterRoute, filterDateFrom, filterDateTo, search, page]);
 

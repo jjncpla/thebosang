@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { CASE_TYPE_LABELS } from "@/lib/constants/case";
 import { useBranches } from "@/lib/hooks/useBranches";
+import { usePageCache } from "@/lib/hooks/usePageCache";
 
 type PatientListItem = {
   id: string;
@@ -14,7 +15,7 @@ type PatientListItem = {
   address: string | null;
   createdAt: string;
   _count: { cases: number };
-  cases: { id: string; caseType: string; status: string }[];
+  cases: { id: string; caseType: string }[];
 };
 
 function maskSsn(ssn: string): string {
@@ -52,32 +53,25 @@ export default function PatientsPage() {
     }
   }, [status, role, router]);
 
-  const [patients, setPatients] = useState<PatientListItem[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [submittedSearch, setSubmittedSearch] = useState("");
   const [filterTf, setFilterTf] = useState("");
 
-  const fetchPatients = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const params = new URLSearchParams();
-      if (submittedSearch) params.set("search", submittedSearch);
-      if (filterTf) params.set("tfName", filterTf);
-      const res = await fetch(`/api/patients?${params}`);
-      if (!res.ok) throw new Error(`서버 오류 (${res.status})`);
-      const data: PatientListItem[] = await res.json();
-      setPatients(data);
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "알 수 없는 오류");
-    } finally {
-      setLoading(false);
-    }
+  const cacheKey = `patients:${submittedSearch}:${filterTf}`;
+  const fetcher = useCallback(async (signal: AbortSignal): Promise<PatientListItem[]> => {
+    const params = new URLSearchParams();
+    if (submittedSearch) params.set("search", submittedSearch);
+    if (filterTf) params.set("tfName", filterTf);
+    const res = await fetch(`/api/patients?${params}`, { signal });
+    if (!res.ok) throw new Error(`서버 오류 (${res.status})`);
+    return res.json();
   }, [submittedSearch, filterTf]);
 
-  useEffect(() => { fetchPatients(); }, [fetchPatients]);
+  const { data: patients, loading, refreshing, error, refetch } = usePageCache<PatientListItem[]>({
+    cacheKey,
+    fetcher,
+    initial: [],
+  });
 
   const handleSearch = () => setSubmittedSearch(search);
 
@@ -149,7 +143,7 @@ export default function PatientsPage() {
         {error && (
           <div style={{ padding: "12px 16px", background: "#fef2f2", color: "#dc2626", fontSize: 13, borderBottom: "1px solid #fecaca", display: "flex", alignItems: "center", gap: 10 }}>
             ⚠ {error}
-            <button onClick={fetchPatients} style={{ color: "#29ABE2", background: "none", border: "none", cursor: "pointer", fontSize: 13, textDecoration: "underline" }}>다시 시도</button>
+            <button onClick={refetch} style={{ color: "#29ABE2", background: "none", border: "none", cursor: "pointer", fontSize: 13, textDecoration: "underline" }}>다시 시도</button>
           </div>
         )}
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
