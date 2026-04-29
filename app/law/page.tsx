@@ -1,6 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import dynamic from "next/dynamic";
+
+const PdfViewerModal = dynamic(() => import("../../components/PdfViewerModal"), { ssr: false });
+const InlinePdfViewer = dynamic(() => import("../../components/InlinePdfViewer"), { ssr: false });
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -775,11 +779,122 @@ function ChapterView({
   );
 }
 
+// ─── 근로복지공단 지침 ──────────────────────────────────────────────────────────
+
+type GuidanceEntry = {
+  id: string;
+  title: string;
+  category: string;
+  fileUrl: string;
+};
+
+const GUIDANCE_LIST: GuidanceEntry[] = [
+  { id: "g1", title: "소음성 난청 업무처리기준 개선 전문 (2021.12.23. 시행)", category: "소음성 난청", fileUrl: "/docs/소음성_난청_업무처리기준_2021.pdf" },
+];
+
+function GuidelinesTab() {
+  const categories = Array.from(new Set(GUIDANCE_LIST.map((g) => g.category)));
+  const [selectedCat, setSelectedCat] = useState<string>(categories[0] ?? "");
+  const [selectedPdf, setSelectedPdf] = useState<GuidanceEntry | null>(null);
+
+  const filtered = GUIDANCE_LIST.filter((g) => g.category === selectedCat);
+
+  return (
+    <div style={{ display: "flex", height: "calc(100vh - 160px)" }}>
+      {/* 왼쪽: 카테고리 + PDF 목록 */}
+      <div style={{ width: 256, flexShrink: 0, borderRight: "1px solid #e5e7eb", overflowY: "auto", background: "#f9fafb", display: "flex", flexDirection: "column" }}>
+        <div style={{ padding: "10px 12px 6px", fontSize: 10, fontWeight: 700, color: "#9ca3af", letterSpacing: "0.06em" }}>
+          카테고리
+        </div>
+        {categories.map((cat) => (
+          <button
+            key={cat}
+            onClick={() => { setSelectedCat(cat); setSelectedPdf(null); }}
+            style={{
+              display: "block", width: "100%", textAlign: "left",
+              padding: "8px 14px", fontSize: 12, border: "none", cursor: "pointer",
+              background: selectedCat === cat ? "#eff6ff" : "transparent",
+              color: selectedCat === cat ? "#1d4ed8" : "#374151",
+              fontWeight: selectedCat === cat ? 700 : 400,
+              borderLeft: selectedCat === cat ? "3px solid #3b82f6" : "3px solid transparent",
+            }}
+          >
+            {cat}
+            <span style={{ marginLeft: 6, fontSize: 10, color: "#9ca3af" }}>
+              {GUIDANCE_LIST.filter((g) => g.category === cat).length}
+            </span>
+          </button>
+        ))}
+
+        <div style={{ height: 1, background: "#e5e7eb", margin: "8px 0" }} />
+
+        <div style={{ padding: "0 8px 12px", flex: 1, overflowY: "auto" }}>
+          {filtered.map((g) => (
+            <button
+              key={g.id}
+              onClick={() => setSelectedPdf(g)}
+              style={{
+                display: "block", width: "100%", textAlign: "left",
+                padding: "8px 10px", fontSize: 12, border: "none", cursor: "pointer",
+                borderRadius: 6, marginBottom: 2,
+                background: selectedPdf?.id === g.id ? "#dbeafe" : "transparent",
+                color: selectedPdf?.id === g.id ? "#1d4ed8" : "#374151",
+                fontWeight: selectedPdf?.id === g.id ? 600 : 400,
+                lineHeight: 1.45,
+              }}
+            >
+              📄 {g.title}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* 오른쪽: PDF 뷰어 */}
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
+        {selectedPdf ? (
+          <>
+            {/* 툴바 */}
+            <div style={{ padding: "8px 16px", borderBottom: "1px solid #e5e7eb", background: "#fff", display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+              <button
+                onClick={() => setSelectedPdf(null)}
+                style={{ fontSize: 12, color: "#6b7280", background: "none", border: "none", cursor: "pointer", padding: 0 }}
+              >
+                ← 목록으로
+              </button>
+              <span style={{ fontSize: 13, fontWeight: 600, color: "#111827", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {selectedPdf.title}
+              </span>
+              <a
+                href={selectedPdf.fileUrl}
+                download
+                style={{ fontSize: 12, color: "#3b82f6", textDecoration: "none", flexShrink: 0 }}
+              >
+                ⬇ 다운로드
+              </a>
+            </div>
+            {/* 인라인 PDF */}
+            <div style={{ flex: 1, overflow: "auto", background: "#525659" }}>
+              <InlinePdfViewer fileUrl={selectedPdf.fileUrl} />
+            </div>
+          </>
+        ) : (
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", flexDirection: "column", gap: 12, color: "#9ca3af" }}>
+            <span style={{ fontSize: 32 }}>📄</span>
+            <span style={{ fontSize: 14 }}>왼쪽에서 지침을 선택하세요</span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+
 // ─── Main Page ───────────────────────────────────────────────────────────────
 
 const TABS = [
-  { id: "law",      label: "관련 법령" },
-  { id: "internal", label: "근로복지공단 내부규정" },
+  { id: "law",        label: "관련 법령" },
+  { id: "internal",   label: "근로복지공단 내부규정" },
+  { id: "guidelines", label: "근로복지공단 지침" },
 ] as const;
 
 type TabId = (typeof TABS)[number]["id"];
@@ -826,8 +941,9 @@ export default function LawPage() {
 
       {/* Tab content */}
       <div style={{ flex: 1, overflow: "hidden" }}>
-        {activeTab === "law"      && <LawTab />}
-        {activeTab === "internal" && <InternalRegulationTab />}
+        {activeTab === "law"        && <LawTab />}
+        {activeTab === "internal"   && <InternalRegulationTab />}
+        {activeTab === "guidelines" && <GuidelinesTab />}
       </div>
     </div>
   );
