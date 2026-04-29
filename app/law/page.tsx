@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
+import { CAT1_LIST, CAT2_MAP } from "../../lib/constants/info-categories";
 
 const PdfViewerModal = dynamic(() => import("../../components/PdfViewerModal"), { ssr: false });
 const InlinePdfViewer = dynamic(() => import("../../components/InlinePdfViewer"), { ssr: false });
@@ -784,103 +785,178 @@ function ChapterView({
 type GuidanceEntry = {
   id: string;
   title: string;
-  category: string;
+  cat1: string;
+  cat2?: string;
   fileUrl: string;
 };
 
 const GUIDANCE_LIST: GuidanceEntry[] = [
-  { id: "g1", title: "소음성 난청 업무처리기준 개선 전문 (2021.12.23. 시행)", category: "소음성 난청", fileUrl: "/docs/소음성_난청_업무처리기준_2021.pdf" },
+  /* ── 1. 산재·직업병 일반 > 난청 ── */
+  { id: "g1", cat1: "산재직업병", cat2: "난청", title: "소음성 난청 업무처리기준 개선 전문 (2021.12.23. 시행)", fileUrl: "/docs/소음성_난청_업무처리기준_2021.pdf" },
 ];
 
+type SelState = { cat1?: string; cat2?: string };
+
 function GuidelinesTab() {
-  const categories = Array.from(new Set(GUIDANCE_LIST.map((g) => g.category)));
-  const [selectedCat, setSelectedCat] = useState<string>(categories[0] ?? "");
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [sel, setSel] = useState<SelState>({});
   const [selectedPdf, setSelectedPdf] = useState<GuidanceEntry | null>(null);
 
-  const filtered = GUIDANCE_LIST.filter((g) => g.category === selectedCat);
+  function toggleExpand(key: string) {
+    setExpanded(prev => {
+      const n = new Set(prev);
+      n.has(key) ? n.delete(key) : n.add(key);
+      return n;
+    });
+  }
+
+  function cntPdf(cat1: string, cat2?: string) {
+    return GUIDANCE_LIST.filter(g =>
+      g.cat1 === cat1 && (cat2 === undefined || g.cat2 === cat2)
+    ).length;
+  }
+
+  const filtered = GUIDANCE_LIST.filter(g =>
+    (!sel.cat1 || g.cat1 === sel.cat1) &&
+    (!sel.cat2 || g.cat2 === sel.cat2)
+  );
 
   return (
     <div style={{ display: "flex", height: "calc(100vh - 160px)" }}>
-      {/* 왼쪽: 카테고리 + PDF 목록 */}
+      {/* 왼쪽: 트리 사이드바 */}
       <div style={{ width: 256, flexShrink: 0, borderRight: "1px solid #e5e7eb", overflowY: "auto", background: "#f9fafb", display: "flex", flexDirection: "column" }}>
-        <div style={{ padding: "10px 12px 6px", fontSize: 10, fontWeight: 700, color: "#9ca3af", letterSpacing: "0.06em" }}>
-          카테고리
-        </div>
-        {categories.map((cat) => (
+        <div style={{ padding: "8px 10px" }}>
+          {/* 전체 */}
           <button
-            key={cat}
-            onClick={() => { setSelectedCat(cat); setSelectedPdf(null); }}
+            onClick={() => { setSel({}); setSelectedPdf(null); }}
             style={{
-              display: "block", width: "100%", textAlign: "left",
-              padding: "8px 14px", fontSize: 12, border: "none", cursor: "pointer",
-              background: selectedCat === cat ? "#eff6ff" : "transparent",
-              color: selectedCat === cat ? "#1d4ed8" : "#374151",
-              fontWeight: selectedCat === cat ? 700 : 400,
-              borderLeft: selectedCat === cat ? "3px solid #3b82f6" : "3px solid transparent",
+              display: "flex", alignItems: "center", width: "100%", textAlign: "left",
+              padding: "6px 8px", fontSize: 12, border: "none", cursor: "pointer", borderRadius: 4,
+              background: !sel.cat1 ? "#dbeafe" : "transparent",
+              color: !sel.cat1 ? "#1d4ed8" : "#374151", fontWeight: !sel.cat1 ? 700 : 400,
             }}
           >
-            {cat}
-            <span style={{ marginLeft: 6, fontSize: 10, color: "#9ca3af" }}>
-              {GUIDANCE_LIST.filter((g) => g.category === cat).length}
-            </span>
+            <span style={{ flex: 1 }}>전체</span>
+            <span style={{ fontSize: 10, color: "#9ca3af" }}>{GUIDANCE_LIST.length}</span>
           </button>
-        ))}
 
-        <div style={{ height: 1, background: "#e5e7eb", margin: "8px 0" }} />
+          {CAT1_LIST.map(c1 => {
+            const count = cntPdf(c1.key);
+            if (count === 0) return null;
+            const c2List = (CAT2_MAP[c1.key] ?? []).filter(c2 => cntPdf(c1.key, c2.key) > 0);
+            const open = expanded.has(c1.key);
+            const active = sel.cat1 === c1.key && !sel.cat2;
 
-        <div style={{ padding: "0 8px 12px", flex: 1, overflowY: "auto" }}>
-          {filtered.map((g) => (
-            <button
-              key={g.id}
-              onClick={() => setSelectedPdf(g)}
-              style={{
-                display: "block", width: "100%", textAlign: "left",
-                padding: "8px 10px", fontSize: 12, border: "none", cursor: "pointer",
-                borderRadius: 6, marginBottom: 2,
-                background: selectedPdf?.id === g.id ? "#dbeafe" : "transparent",
-                color: selectedPdf?.id === g.id ? "#1d4ed8" : "#374151",
-                fontWeight: selectedPdf?.id === g.id ? 600 : 400,
-                lineHeight: 1.45,
-              }}
-            >
-              📄 {g.title}
-            </button>
-          ))}
+            return (
+              <div key={c1.key}>
+                <button
+                  onClick={() => {
+                    toggleExpand(c1.key);
+                    setSel({ cat1: c1.key });
+                    setSelectedPdf(null);
+                  }}
+                  style={{
+                    display: "flex", alignItems: "center", gap: 4, width: "100%", textAlign: "left",
+                    padding: "6px 8px", fontSize: 12, border: "none", cursor: "pointer", borderRadius: 4,
+                    background: active ? "#dbeafe" : "transparent",
+                    color: active ? "#1d4ed8" : "#374151", fontWeight: active ? 700 : 500,
+                  }}
+                >
+                  <span style={{ fontSize: 9, color: "#9ca3af", width: 12, textAlign: "center" }}>
+                    {c2List.length > 0 ? (open ? "▼" : "▶") : ""}
+                  </span>
+                  <span style={{ flex: 1, lineHeight: 1.4 }}>{c1.label}</span>
+                  <span style={{ fontSize: 10, color: "#9ca3af" }}>{count}</span>
+                </button>
+
+                {open && c2List.map(c2 => {
+                  const c2Count = cntPdf(c1.key, c2.key);
+                  const c2Active = sel.cat1 === c1.key && sel.cat2 === c2.key;
+                  return (
+                    <button
+                      key={c2.key}
+                      onClick={() => { setSel({ cat1: c1.key, cat2: c2.key }); setSelectedPdf(null); }}
+                      style={{
+                        display: "flex", alignItems: "center", gap: 4, width: "100%", textAlign: "left",
+                        padding: "5px 8px 5px 24px", fontSize: 12, border: "none", cursor: "pointer", borderRadius: 4,
+                        background: c2Active ? "#dbeafe" : "transparent",
+                        color: c2Active ? "#1d4ed8" : "#4b5563", fontWeight: c2Active ? 600 : 400,
+                      }}
+                    >
+                      <span style={{ flex: 1 }}>{c2.label}</span>
+                      <span style={{ fontSize: 10, color: "#9ca3af" }}>{c2Count}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            );
+          })}
         </div>
       </div>
 
-      {/* 오른쪽: PDF 뷰어 */}
+      {/* 오른쪽: PDF 목록 + 뷰어 */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
         {selectedPdf ? (
           <>
-            {/* 툴바 */}
             <div style={{ padding: "8px 16px", borderBottom: "1px solid #e5e7eb", background: "#fff", display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
-              <button
-                onClick={() => setSelectedPdf(null)}
-                style={{ fontSize: 12, color: "#6b7280", background: "none", border: "none", cursor: "pointer", padding: 0 }}
-              >
+              <button onClick={() => setSelectedPdf(null)}
+                style={{ fontSize: 12, color: "#6b7280", background: "none", border: "none", cursor: "pointer", padding: 0, flexShrink: 0 }}>
                 ← 목록으로
               </button>
               <span style={{ fontSize: 13, fontWeight: 600, color: "#111827", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 {selectedPdf.title}
               </span>
-              <a
-                href={selectedPdf.fileUrl}
-                download
-                style={{ fontSize: 12, color: "#3b82f6", textDecoration: "none", flexShrink: 0 }}
-              >
+              <a href={selectedPdf.fileUrl} download
+                style={{ fontSize: 12, color: "#3b82f6", textDecoration: "none", flexShrink: 0 }}>
                 ⬇ 다운로드
               </a>
             </div>
-            {/* 인라인 PDF */}
-            <div style={{ flex: 1, overflow: "auto", background: "#525659" }}>
+            <div style={{ flex: 1, overflow: "hidden", background: "#525659" }}>
               <InlinePdfViewer fileUrl={selectedPdf.fileUrl} />
             </div>
           </>
         ) : (
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", flexDirection: "column", gap: 12, color: "#9ca3af" }}>
-            <span style={{ fontSize: 32 }}>📄</span>
-            <span style={{ fontSize: 14 }}>왼쪽에서 지침을 선택하세요</span>
+          <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px" }}>
+            {filtered.length === 0 ? (
+              <div style={{ textAlign: "center", padding: 48, color: "#9ca3af", fontSize: 14 }}>
+                등록된 지침이 없습니다.
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                {filtered.map(g => {
+                  const c1Label = CAT1_LIST.find(c => c.key === g.cat1)?.label.replace(/^\d+\.\s*/, "") ?? g.cat1;
+                  const c2Label = g.cat2 ? (CAT2_MAP[g.cat1]?.find(c => c.key === g.cat2)?.label ?? g.cat2) : null;
+                  return (
+                    <button
+                      key={g.id}
+                      onClick={() => setSelectedPdf(g)}
+                      style={{
+                        display: "flex", alignItems: "center", gap: 12, textAlign: "left",
+                        padding: "12px 16px", border: "1px solid #e5e7eb", borderRadius: 8,
+                        background: "#fff", cursor: "pointer",
+                      }}
+                    >
+                      <span style={{ fontSize: 20, flexShrink: 0 }}>📄</span>
+                      <span style={{ flex: 1, fontSize: 13, fontWeight: 600, color: "#111827", lineHeight: 1.5 }}>
+                        {g.title}
+                      </span>
+                      <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 3, flexShrink: 0 }}>
+                        {!sel.cat1 && (
+                          <span style={{ fontSize: 10, padding: "2px 6px", borderRadius: 6, background: "#dbeafe", color: "#1e40af", fontWeight: 600, whiteSpace: "nowrap" }}>
+                            {c1Label}
+                          </span>
+                        )}
+                        {!sel.cat2 && c2Label && (
+                          <span style={{ fontSize: 10, padding: "2px 6px", borderRadius: 6, background: "#f3f4f6", color: "#4b5563", whiteSpace: "nowrap" }}>
+                            {c2Label}
+                          </span>
+                        )}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
       </div>
