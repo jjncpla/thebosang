@@ -35,10 +35,17 @@ async function ocrPdfWithFormParser(pdfBase64: string): Promise<string> {
     return ocrPdf(pdfBase64)
   }
 
-  const [result] = await client.processDocument({
-    name: processorName,
-    rawDocument: { content: pdfBase64, mimeType: "application/pdf" },
-  })
+  let result
+  try {
+    [result] = await client.processDocument({
+      name: processorName,
+      rawDocument: { content: pdfBase64, mimeType: "application/pdf" },
+    })
+  } catch (err) {
+    // Form Parser 실패 (페이지 한도 초과, processor 미활성 등) → 일반 OCR 폴백
+    console.warn(`Form Parser 실패, OCR 폴백: ${String(err).slice(0, 200)}`)
+    return ocrPdf(pdfBase64)
+  }
 
   const doc = result.document
   if (!doc) return ""
