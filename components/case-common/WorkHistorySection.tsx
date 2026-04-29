@@ -50,6 +50,27 @@ function normalizeCompany(name: string): string {
     .replace(/\s+/g, "").toLowerCase();
 }
 
+// 사업장명에서 핵심 회사 토큰만 추출 (건보 vs 일용근로내역서 매칭용).
+// 건보: "삼호개발(주) -(일용)영인~팽성 도로건설공사"
+// 일용: "아산영인-평택청북(제1공구) 도로건설공사 [삼호개발(주)]"
+// 둘 다 "삼호개발"로 정규화되어 매칭 가능.
+function extractCompanyKey(name: string): string {
+  if (!name) return "";
+  // 1) [...] 대괄호 안의 내용 우선 (일용근로내역서 발주처 표기)
+  const bracket = name.match(/\[([^\]]+)\]/);
+  if (bracket) return normalizeCompany(bracket[1]);
+  // 2) 한글/영문/숫자 + (주)/(유)/(합) 형태
+  const corp1 = name.match(/[가-힣A-Za-z0-9]+\s*[\(（](?:주|유|합)[\)）]/);
+  if (corp1) return normalizeCompany(corp1[0]);
+  // 3) (주)/(유)/(합) + 한글/영문/숫자 형태
+  const corp2 = name.match(/[\(（](?:주|유|합)[\)）]\s*[가-힣A-Za-z0-9]+/);
+  if (corp2) return normalizeCompany(corp2[0]);
+  // 4) 첫 한글 연속 토큰
+  const first = name.match(/[가-힣]+/);
+  if (first) return normalizeCompany(first[0]);
+  return normalizeCompany(name);
+}
+
 function calcUnionMonths(intervals: { start: number; end: number }[]): number {
   if (!intervals.length) return 0;
   const sorted = [...intervals].sort((a, b) => a.start - b.start);
@@ -86,16 +107,28 @@ interface SourceGroupPanelProps {
 function SourceGroupPanel(props: SourceGroupPanelProps) {
   const { title, titleColor, bgColor, sources, activeSrc, setActiveSrc, workHistoryRaw, sourceLabels, inputStyle, years, months, setRawField, removeRawRow, addRawRow, workHistoryDaily, onChangeDaily, convertRawToDaily } = props;
   const isDailyTab = activeSrc === "일용직" || activeSrc === "건근공";
-  const dailyHintCount = (workHistoryRaw[activeSrc as keyof WorkHistoryRaw] ?? []).filter((e) => e.isDailyHint).length;
+  const activeRows = workHistoryRaw[activeSrc as keyof WorkHistoryRaw] ?? [];
+  const dailyHintCount = activeRows.filter((e) => e.isDailyHint).length;
+  const dailyDupCount = activeRows.filter((e) => {
+    if (!e.isDailyHint) return false;
+    const k = extractCompanyKey(e.company);
+    return k && workHistoryDaily.some((d) => extractCompanyKey(d.company) === k);
+  }).length;
 
   return (
     <div style={{ background: bgColor, borderRadius: 10, padding: 12, border: `1px solid ${titleColor}33`, minWidth: 0, overflow: "hidden" }}>
       <div style={{ fontSize: 13, fontWeight: 700, color: titleColor, marginBottom: 10 }}>{title}</div>
       {!isDailyTab && dailyHintCount > 0 && (
-        <div style={{ background: "#fef3c7", border: "1px solid #fcd34d", borderRadius: 6, padding: "6px 10px", marginBottom: 10, fontSize: 11, color: "#92400e", display: "flex", alignItems: "center", gap: 6 }}>
+        <div style={{ background: dailyDupCount > 0 ? "#fee2e2" : "#fef3c7", border: `1px solid ${dailyDupCount > 0 ? "#fca5a5" : "#fcd34d"}`, borderRadius: 6, padding: "6px 10px", marginBottom: 10, fontSize: 11, color: dailyDupCount > 0 ? "#991b1b" : "#92400e", display: "flex", alignItems: "center", gap: 6 }}>
           <span style={{ fontSize: 12 }}>⚠</span>
           <span>
-            <b>{dailyHintCount}건</b>이 일용직으로 의심됩니다 (사업장명에 "(일용)" 표기). 행 우측 <b style={{ background: "#f59e0b", color: "white", padding: "1px 4px", borderRadius: 3, fontWeight: 700 }}>일용→</b> 버튼으로 일용직 탭에 이동 가능 (총일수는 추정).
+            <b>{dailyHintCount}건</b>이 일용직으로 의심됩니다 (사업장명에 "(일용)" 표기).
+            {dailyDupCount > 0 && (
+              <> 그 중 <b>{dailyDupCount}건</b>은 일용직 탭에 같은 사업장이 이미 있어 <b style={{ background: "#dc2626", color: "white", padding: "1px 4px", borderRadius: 3, fontWeight: 700 }}>중복?</b> 표시 — <b>이동 자제 권장</b>.</>
+            )}
+            {dailyDupCount === 0 && (
+              <> 행 우측 <b style={{ background: "#f59e0b", color: "white", padding: "1px 4px", borderRadius: 3, fontWeight: 700 }}>일용→</b> 버튼으로 일용직 탭에 이동 가능 (총일수는 추정).</>
+            )}
           </span>
         </div>
       )}
@@ -170,7 +203,9 @@ function SourceGroupPanel(props: SourceGroupPanelProps) {
             <tbody>
               {(workHistoryRaw[activeSrc as keyof WorkHistoryRaw] ?? []).map((row, i) => {
                 const isHint = row.isDailyHint === true;
-                const rowBg = isHint ? "#fef3c7" : undefined;
+                const rowKey = extractCompanyKey(row.company);
+                const hasDailyDup = isHint && rowKey && workHistoryDaily.some((d) => extractCompanyKey(d.company) === rowKey);
+                const rowBg = hasDailyDup ? "#fee2e2" : (isHint ? "#fef3c7" : undefined);
                 return (
                 <tr key={i} style={rowBg ? { background: rowBg } : undefined}>
                   {(["company", "department", "jobType"] as (keyof WorkHistoryRawEntry)[]).map(k => (
@@ -209,10 +244,22 @@ function SourceGroupPanel(props: SourceGroupPanelProps) {
                     {isHint && convertRawToDaily && (
                       <button
                         onClick={() => convertRawToDaily(activeSrc, i)}
-                        title="이 항목을 일용직 탭으로 이동 (총일수는 개월수×20일로 추정, 이동 후 정정 가능)"
-                        style={{ background: "#f59e0b", color: "white", border: "none", borderRadius: 4, padding: "2px 6px", fontSize: 10, cursor: "pointer", fontWeight: 600, marginRight: 4 }}
+                        title={hasDailyDup
+                          ? "같은 사업장이 일용직 탭에 이미 존재 (정확한 일수 가능성). 클릭 시 경고 후 추정값 추가 — 중복 위험."
+                          : "이 항목을 일용직 탭으로 이동 (총일수는 개월수×20일로 추정, 이동 후 정정 가능)"}
+                        style={{
+                          background: hasDailyDup ? "#dc2626" : "#f59e0b",
+                          color: "white",
+                          border: "none",
+                          borderRadius: 4,
+                          padding: "2px 6px",
+                          fontSize: 10,
+                          cursor: "pointer",
+                          fontWeight: 600,
+                          marginRight: 4,
+                        }}
                       >
-                        일용→
+                        {hasDailyDup ? "중복?" : "일용→"}
                       </button>
                     )}
                     <button onClick={() => removeRawRow(activeSrc, i)} style={{ background: "none", border: "none", color: "#dc2626", cursor: "pointer", fontSize: 13 }}>✕</button>
@@ -355,6 +402,15 @@ function WorkHistoryDrawerContent({
   const convertRawToDaily = (source: RawSource, i: number) => {
     const row = workHistoryRaw[source]?.[i];
     if (!row) return;
+    // 가드: dailyEntries에 같은 사업장(extractCompanyKey 매칭)이 이미 있으면 중복 방지
+    const rowKey = extractCompanyKey(row.company);
+    const hasMatch = rowKey && workHistoryDaily.some((d) => extractCompanyKey(d.company) === rowKey);
+    if (hasMatch) {
+      const ok = confirm(
+        `"${row.company}"\n\n같은 사업장이 일용직 탭에 이미 존재합니다 (정확한 일수 데이터 가능성).\n\n그래도 추정값으로 추가하시겠습니까?\n(취소 권장 — 중복 데이터로 평균임금 산정에 영향)`
+      );
+      if (!ok) return;
+    }
     const months =
       Math.max(1, (row.endYear * 12 + row.endMonth) - (row.startYear * 12 + row.startMonth));
     const totalDays = months * 20;
