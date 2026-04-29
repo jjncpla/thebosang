@@ -1,27 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { LawAttachmentTab } from "@/components/law/LawAttachmentTab";
+import { useEffect, useState } from "react";
+import dynamic from "next/dynamic";
+
+const PdfViewerModal = dynamic(() => import("../../components/PdfViewerModal"), { ssr: false });
+const InlinePdfViewer = dynamic(() => import("../../components/InlinePdfViewer"), { ssr: false });
 
 // ─── Types ───────────────────────────────────────────────────────────────────
-
-type JichimItem = {
-  id: string;
-  label: string;
-};
-
-type JichimSubcategory = {
-  id: string;
-  label: string;
-  items: JichimItem[];
-};
-
-type JichimCategory = {
-  id: string;
-  label: string;
-  color: { bg: string; text: string; border: string };
-  subcategories: JichimSubcategory[];
-};
 
 type Article = {
   id: string;
@@ -171,24 +156,8 @@ function LawTab() {
     new Set([LAW_GROUPS[0].id])
   );
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [searchQuery, setSearchQuery] = useState("");
 
   const categories: Array<"주요 법률" | "관련 법률"> = ["주요 법률", "관련 법률"];
-
-  const q = searchQuery.trim().toLowerCase();
-  const matchesQuery = (group: LawGroup) => {
-    if (!q) return true;
-    if (group.groupName.toLowerCase().includes(q)) return true;
-    return group.laws.some((l) => l.name.toLowerCase().includes(q));
-  };
-  const filteredLawGroups = LAW_GROUPS.filter(matchesQuery);
-
-  // 검색 시 모든 그룹 자동 펼침
-  useEffect(() => {
-    if (q) {
-      setExpandedGroups(new Set(filteredLawGroups.map((g) => g.id)));
-    }
-  }, [q]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const toggleGroup = (gid: string) => {
     setExpandedGroups((prev) => {
@@ -214,29 +183,8 @@ function LawTab() {
             flexDirection: "column",
           }}
         >
-          {/* 법령 검색 */}
-          <div style={{ padding: "10px 12px 6px", borderBottom: "1px solid #e5e7eb", background: "#fff" }}>
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="법령 검색…"
-              style={{
-                width: "100%",
-                padding: "5px 8px",
-                fontSize: 12,
-                border: "1px solid #d1d5db",
-                borderRadius: 4,
-                outline: "none",
-                boxSizing: "border-box",
-              }}
-            />
-          </div>
           <div style={{ flex: 1 }}>
-            {categories.map((cat) => {
-              const groupsInCat = filteredLawGroups.filter((g) => g.category === cat);
-              if (groupsInCat.length === 0) return null;
-              return (
+            {categories.map((cat) => (
               <div key={cat}>
                 <div
                   style={{
@@ -251,7 +199,7 @@ function LawTab() {
                   {cat}
                 </div>
 
-                {groupsInCat.map((group) => {
+                {LAW_GROUPS.filter((g) => g.category === cat).map((group) => {
                   const isExpanded = expandedGroups.has(group.id);
                   const isGroupActive = group.laws.some((l) => l.id === selectedItem.id);
                   return (
@@ -341,13 +289,7 @@ function LawTab() {
 
                 <div style={{ height: 8 }} />
               </div>
-              );
-            })}
-            {q && filteredLawGroups.length === 0 && (
-              <div style={{ padding: "20px 14px", fontSize: 12, color: "#9ca3af", textAlign: "center" }}>
-                검색 결과 없음
-              </div>
-            )}
+            ))}
           </div>
 
           <div style={{ padding: "12px 14px", borderTop: "1px solid #e5e7eb" }}>
@@ -440,616 +382,6 @@ function LawTab() {
             title={selectedItem.name}
             sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-top-navigation"
           />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ─── 공단 지침 데이터 (안 2: 질병별 / 재해 인정 / 보상·장해 / 특수형태) ─────────
-
-const JICHIM_CATEGORIES: JichimCategory[] = [
-  {
-    id: "general",
-    label: "산재 일반",
-    color: { bg: "#dbeafe", text: "#1d4ed8", border: "#93c5fd" },
-    subcategories: [
-      {
-        id: "yoyang",
-        label: "요양",
-        items: [
-          { id: "individual-yoyang",  label: "개별요양급여 업무처리 지침" },
-          { id: "add-injury",         label: "추가상병 및 재요양 업무처리 기준" },
-          { id: "nursing-care",       label: "간병료 지급기준 업무처리지침" },
-          { id: "remote-work",        label: "재택근무 중 업무상 재해 인정기준" },
-          { id: "sick-leave-qa",      label: "휴업급여 지급 관련 자문 요령 및 취소·패소 사례 전파" },
-        ],
-      },
-      {
-        id: "bosang",
-        label: "보상",
-        items: [
-          { id: "compensation-practice", label: "보상 실무" },
-          { id: "disability-regrade",    label: "장해등급 재판정 운영지침" },
-          { id: "disability-adjust",     label: "장해등급 조정에 관한 시행지침" },
-        ],
-      },
-      {
-        id: "avgwage",
-        label: "평균임금",
-        items: [
-          { id: "avg-wage",            label: "직업병에 걸린 사람에 대한 평균임금 산정 지침" },
-          { id: "treatment-decision",  label: "요양 결정시 적용업무 관련 판단에 관한 처리지침" },
-          { id: "daily-worker-wage",   label: "일용근로자 평균임금 산정 업무처리요령" },
-          { id: "pneumo-wage",         label: "진폐요양 중 장해인정에 따른 장해급여(위로금) 산정 평균임금 적용관련 업무처리기준" },
-          { id: "insurance-law-wage",  label: "산재보험법 시행령 개정 관련 업무처리요령" },
-          { id: "commute",             label: "출퇴근재해 업무처리지침" },
-          { id: "truck-driver",        label: "계약내용과 다른 업무수행중 발생한 화물자동차 운전자 사고 업무처리 요령" },
-          { id: "break-time",          label: "휴게시간 중 사고에 대한 처리요령" },
-          { id: "overseas",            label: "해외파견(자) 산재보험 적용여부 판단 기준" },
-        ],
-      },
-    ],
-  },
-  {
-    id: "disease",
-    label: "상병별 상세",
-    color: { bg: "#dcfce7", text: "#15803d", border: "#86efac" },
-    subcategories: [
-      {
-        id: "noise-hearing",
-        label: "소음성 난청",
-        items: [
-          { id: "noise-1",            label: "소음성 난청 업무처리 기준 1지침" },
-          { id: "noise-2",            label: "소음성 난청 업무처리 기준 2지침" },
-          { id: "noise-3",            label: "소음성 난청 업무처리 기준 3지침" },
-          { id: "noise-4",            label: "소음성 난청 업무처리 기준 4지침" },
-          { id: "noise-disability",   label: "소음성 난청 장해판정 가이드라인" },
-          { id: "noise-onestop",      label: "소음성 난청 소속병원 원스톱 장해판정 운영 계획·수립·시행" },
-          { id: "noise-incomplete",   label: "소음성 난청 청력검사 특별진찰 미완료자의 장해판정방법" },
-          { id: "noise-hearing-aid",  label: "소음성 난청 업무상 질병 승인자 보청기 지급 관련사항" },
-        ],
-      },
-      {
-        id: "copd",
-        label: "COPD",
-        items: [
-          { id: "copd-guide",  label: "COPD 만성폐쇄성폐질환 업무처리 지침" },
-        ],
-      },
-      {
-        id: "pneumo",
-        label: "진폐",
-        items: [
-          { id: "pneumo-rehab",    label: "진폐 요양 중 장해 인정 관련 세부 업무처리규정" },
-          { id: "pneumo-1",        label: "진폐 1" },
-          { id: "pneumo-2",        label: "진폐 2" },
-          { id: "pneumo-bereave",  label: "진폐환자 유족급여 지급기준에 관한 지침" },
-        ],
-      },
-      {
-        id: "msk",
-        label: "근골격계 질환",
-        items: [
-          { id: "msk-judge",      label: "근골격계질병 업무상 질병 조사 및 판정 지침" },
-          { id: "msk-principle",  label: "6대 근골격계 상병의 업무관련성 추정의 원칙 적용기준" },
-          { id: "crps",           label: "복합부위통증증후군 업무처리 지침" },
-          { id: "msk-high-freq",  label: "발생빈도가 높은 근골격계 상병 업무상질병 조사 및 판정 지침" },
-          { id: "local-pain",     label: "국소부위 동통 장해등급 인정기준" },
-        ],
-      },
-      {
-        id: "mental",
-        label: "정신 질환",
-        items: [
-          { id: "mental-1",  label: "정신질병 업무관련성 조사 지침 1지침" },
-          { id: "mental-2",  label: "정신질병 업무관련성 조사 지침 2지침" },
-        ],
-      },
-      {
-        id: "cerebro",
-        label: "뇌심혈관계 질환",
-        items: [
-          { id: "cerebro-guide",  label: "뇌혈관질병·심장질병 업무상 질병 조사 및 판정 지침" },
-        ],
-      },
-      {
-        id: "occ-cancer",
-        label: "직업성 암",
-        items: [
-          { id: "cancer-guide",  label: "직업성암 재해조사 및 판단요령" },
-          { id: "cancer-fix",    label: "직업성 암 처리절차 개선" },
-        ],
-      },
-      {
-        id: "asbestos",
-        label: "석면폐증",
-        items: [
-          { id: "asbestos-guide",  label: "석면폐증 업무처리 지침" },
-        ],
-      },
-    ],
-  },
-];
-
-// ─── JichimTab ────────────────────────────────────────────────────────────────
-
-// ─── JichimUploadPanel ────────────────────────────────────────────────────────
-
-function JichimUploadPanel({
-  item,
-  onUploaded,
-}: {
-  item: JichimItem;
-  onUploaded: () => void;
-}) {
-  const fileRef = useRef<HTMLInputElement>(null);
-  const [uploading, setUploading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const handleUpload = async () => {
-    const file = fileRef.current?.files?.[0];
-    if (!file) { setError("PDF 파일을 선택하세요"); return; }
-    if (!file.name.endsWith(".pdf")) { setError("PDF 파일만 업로드 가능합니다"); return; }
-
-    setUploading(true);
-    setError(null);
-    const fd = new FormData();
-    fd.append("itemId", item.id);
-    fd.append("title", item.label);
-    fd.append("file", file);
-
-    const res = await fetch("/api/jichim/upload", { method: "POST", body: fd });
-    setUploading(false);
-    if (!res.ok) {
-      const j = await res.json().catch(() => ({}));
-      setError(j.error ?? "업로드 실패");
-    } else {
-      onUploaded();
-    }
-  };
-
-  return (
-    <div
-      style={{
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        height: "100%",
-        background: "#f9fafb",
-      }}
-    >
-      <div
-        style={{
-          padding: "32px 40px",
-          background: "#fff",
-          border: "1px solid #e5e7eb",
-          borderRadius: 12,
-          textAlign: "center",
-          maxWidth: 440,
-          width: "100%",
-        }}
-      >
-        <div style={{ fontSize: 14, fontWeight: 700, color: "#111827", marginBottom: 6 }}>
-          {item.label}
-        </div>
-        <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 24 }}>
-          PDF 파일을 업로드하면 챕터별로 자동 정리됩니다.
-        </div>
-
-        <input
-          ref={fileRef}
-          type="file"
-          accept=".pdf"
-          style={{ display: "none" }}
-          onChange={() => setError(null)}
-        />
-        <button
-          onClick={() => fileRef.current?.click()}
-          style={{
-            display: "block",
-            width: "100%",
-            padding: "10px 0",
-            fontSize: 13,
-            border: "2px dashed #d1d5db",
-            borderRadius: 8,
-            background: "#f9fafb",
-            color: "#6b7280",
-            cursor: "pointer",
-            marginBottom: 16,
-          }}
-        >
-          {fileRef.current?.files?.[0]?.name ?? "PDF 파일 선택..."}
-        </button>
-
-        {error && (
-          <div style={{ fontSize: 12, color: "#ef4444", marginBottom: 12 }}>{error}</div>
-        )}
-
-        <button
-          onClick={handleUpload}
-          disabled={uploading}
-          style={{
-            display: "block",
-            width: "100%",
-            padding: "10px 0",
-            fontSize: 13,
-            fontWeight: 700,
-            border: "none",
-            borderRadius: 8,
-            background: uploading ? "#9ca3af" : "#1d4ed8",
-            color: "#fff",
-            cursor: uploading ? "not-allowed" : "pointer",
-          }}
-        >
-          {uploading ? "파싱 중..." : "업로드 및 저장"}
-        </button>
-      </div>
-    </div>
-  );
-}
-
-// ─── JichimContentPanel ───────────────────────────────────────────────────────
-
-function JichimContentPanel({
-  item,
-  onDelete,
-}: {
-  item: JichimItem;
-  onDelete: () => void;
-}) {
-  const [regulation, setRegulation] = useState<Regulation | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [deleting, setDeleting] = useState(false);
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    const res = await fetch(`/api/jichim/${item.id}`);
-    if (res.ok) setRegulation(await res.json());
-    setLoading(false);
-  }, [item.id]);
-
-  useEffect(() => { load(); }, [load]);
-
-  const handleDelete = async () => {
-    if (!confirm("이 지침을 삭제하시겠습니까? 다시 업로드할 수 있습니다.")) return;
-    setDeleting(true);
-    await fetch(`/api/jichim/${item.id}`, { method: "DELETE" });
-    onDelete();
-  };
-
-  if (loading) return (
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "#9ca3af", fontSize: 14 }}>
-      불러오는 중...
-    </div>
-  );
-
-  if (!regulation) return (
-    <div style={{ padding: 32, color: "#ef4444", fontSize: 14 }}>데이터를 불러오지 못했습니다.</div>
-  );
-
-  return (
-    <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
-      {/* 삭제 버튼 영역 */}
-      <div style={{ padding: "6px 16px", borderBottom: "1px solid #f3f4f6", background: "#fafafa", display: "flex", justifyContent: "flex-end" }}>
-        <button
-          onClick={handleDelete}
-          disabled={deleting}
-          style={{ fontSize: 11, color: "#9ca3af", background: "none", border: "none", cursor: "pointer", padding: "2px 6px" }}
-        >
-          {deleting ? "삭제 중..." : "지침 삭제 (재업로드 가능)"}
-        </button>
-      </div>
-      <RegulationPanel dataUrl={`/api/jichim/${item.id}`} />
-    </div>
-  );
-}
-
-// ─── JichimTab ────────────────────────────────────────────────────────────────
-
-function JichimTab() {
-  const [selectedItem, setSelectedItem] = useState<JichimItem | null>(null);
-  const [selectedCatId, setSelectedCatId] = useState<string | null>(null);
-  const [expandedCats, setExpandedCats] = useState<Set<string>>(new Set(["disease"]));
-  const [search, setSearch] = useState("");
-  const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [uploadedIds, setUploadedIds] = useState<Set<string>>(new Set());
-  const [loadingList, setLoadingList] = useState(true);
-  const [contentKey, setContentKey] = useState(0);
-
-  // 등록된 지침 목록 로드
-  useEffect(() => {
-    fetch("/api/jichim/list")
-      .then((r) => r.json())
-      .then((ids: string[]) => setUploadedIds(new Set(ids)))
-      .catch(() => {})
-      .finally(() => setLoadingList(false));
-  }, []);
-
-  const isAvailable = (itemId: string) => uploadedIds.has(itemId);
-
-  const handleUploaded = () => {
-    setUploadedIds((prev) => new Set([...prev, selectedItem!.id]));
-    setContentKey((k) => k + 1);
-  };
-
-  const handleDeleted = () => {
-    setUploadedIds((prev) => {
-      const next = new Set(prev);
-      next.delete(selectedItem!.id);
-      return next;
-    });
-    setContentKey((k) => k + 1);
-  };
-
-  const toggleCat = (catId: string) => {
-    setExpandedCats((prev) => {
-      const next = new Set(prev);
-      next.has(catId) ? next.delete(catId) : next.add(catId);
-      return next;
-    });
-  };
-
-  // 모든 item 순회 헬퍼
-  const allItems = () =>
-    JICHIM_CATEGORIES.flatMap((cat) =>
-      cat.subcategories.flatMap((sub) =>
-        sub.items.map((item) => ({ item, cat, sub }))
-      )
-    );
-
-  const searchResults =
-    search.trim().length >= 1
-      ? allItems().filter(({ item }) => item.label.includes(search.trim()))
-      : [];
-
-  const selectedCat = selectedCatId
-    ? JICHIM_CATEGORIES.find((c) => c.id === selectedCatId) ?? null
-    : null;
-
-  const handleSelectItem = (item: JichimItem, catId: string) => {
-    setSelectedItem(item);
-    setSelectedCatId(catId);
-    setSearch("");
-    setContentKey((k) => k + 1);
-  };
-
-  return (
-    <div style={{ display: "flex", height: "calc(100vh - 160px)", gap: 0 }}>
-      {/* Left sidebar */}
-      {sidebarOpen && (
-        <div
-          style={{
-            width: 270,
-            flexShrink: 0,
-            borderRight: "1px solid #e5e7eb",
-            overflowY: "auto",
-            background: "#f9fafb",
-            display: "flex",
-            flexDirection: "column",
-          }}
-        >
-          {/* Search */}
-          <div style={{ padding: "10px 12px", borderBottom: "1px solid #e5e7eb", flexShrink: 0 }}>
-            <input
-              type="text"
-              placeholder="지침 검색..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              style={{
-                width: "100%",
-                padding: "6px 10px",
-                fontSize: 12,
-                border: "1px solid #d1d5db",
-                borderRadius: 6,
-                outline: "none",
-                boxSizing: "border-box",
-              }}
-            />
-          </div>
-
-          {/* Search results OR 3단계 트리 */}
-          {search.trim().length >= 1 ? (
-            <div style={{ flex: 1, overflowY: "auto" }}>
-              {searchResults.length === 0 ? (
-                <div style={{ padding: 14, fontSize: 12, color: "#9ca3af" }}>검색 결과 없음</div>
-              ) : (
-                searchResults.map(({ item, cat, sub }) => (
-                  <button
-                    key={item.id}
-                    onClick={() => handleSelectItem(item, cat.id)}
-                    style={{
-                      display: "block",
-                      width: "100%",
-                      textAlign: "left",
-                      padding: "8px 14px",
-                      fontSize: 12,
-                      border: "none",
-                      cursor: "pointer",
-                      background: "transparent",
-                      borderBottom: "1px solid #f3f4f6",
-                    }}
-                  >
-                    <div style={{ fontSize: 10, color: cat.color.text, marginBottom: 2 }}>
-                      {cat.label} › {sub.label}
-                    </div>
-                    <div style={{ color: "#111827", lineHeight: 1.4 }}>{item.label}</div>
-                  </button>
-                ))
-              )}
-            </div>
-          ) : (
-            <div style={{ flex: 1, overflowY: "auto" }}>
-              {JICHIM_CATEGORIES.map((cat) => {
-                const isCatExpanded = expandedCats.has(cat.id);
-                const isCatActive = cat.subcategories.some((sub) =>
-                  sub.items.some((i) => i.id === selectedItem?.id)
-                );
-                const totalItems = cat.subcategories.reduce((s, sub) => s + sub.items.length, 0);
-                return (
-                  <div key={cat.id}>
-                    {/* 대분류 */}
-                    <button
-                      onClick={() => toggleCat(cat.id)}
-                      style={{
-                        display: "flex", alignItems: "center", width: "100%", textAlign: "left",
-                        padding: "9px 14px", fontSize: 12, fontWeight: 700, border: "none",
-                        cursor: "pointer",
-                        background: isCatActive ? "#eff6ff" : "#f3f4f6",
-                        color: isCatActive ? "#1d4ed8" : "#111827",
-                        gap: 8, borderBottom: "1px solid #e5e7eb",
-                      }}
-                    >
-                      <span style={{
-                        fontSize: 11, padding: "1px 8px", borderRadius: 10,
-                        background: cat.color.bg, color: cat.color.text,
-                        border: `1px solid ${cat.color.border}`, fontWeight: 700, flexShrink: 0,
-                      }}>
-                        {cat.label}
-                      </span>
-                      <span style={{ fontSize: 11, color: "#9ca3af" }}>{totalItems}건</span>
-                      <span style={{
-                        fontSize: 9, marginLeft: "auto", color: "#9ca3af",
-                        transform: isCatExpanded ? "rotate(90deg)" : "none",
-                        display: "inline-block", transition: "transform 0.15s",
-                      }}>▶</span>
-                    </button>
-
-                    {isCatExpanded && cat.subcategories.map((sub) => {
-                      const isSubExpanded = expandedCats.has(`${cat.id}__${sub.id}`);
-                      const isSubActive = sub.items.some((i) => i.id === selectedItem?.id);
-                      return (
-                        <div key={sub.id}>
-                          {/* 소분류 */}
-                          <button
-                            onClick={() => toggleCat(`${cat.id}__${sub.id}`)}
-                            style={{
-                              display: "flex", alignItems: "center", width: "100%", textAlign: "left",
-                              padding: "7px 14px 7px 18px", fontSize: 11, fontWeight: 600,
-                              border: "none", cursor: "pointer",
-                              background: isSubActive ? "#eff6ff" : "#fafafa",
-                              color: isSubActive ? "#1d4ed8" : "#374151",
-                              gap: 6, borderBottom: "1px solid #f3f4f6",
-                            }}
-                          >
-                            <span style={{
-                              fontSize: 8, transform: isSubExpanded ? "rotate(90deg)" : "none",
-                              display: "inline-block", transition: "transform 0.15s", color: "#9ca3af",
-                            }}>▶</span>
-                            <span style={{ flex: 1 }}>{sub.label}</span>
-                            <span style={{ fontSize: 10, color: "#d1d5db" }}>{sub.items.length}</span>
-                          </button>
-
-                          {/* 지침 목록 */}
-                          {isSubExpanded && sub.items.map((item) => {
-                            const isActive = selectedItem?.id === item.id;
-                            return (
-                              <button
-                                key={item.id}
-                                onClick={() => handleSelectItem(item, cat.id)}
-                                style={{
-                                  display: "flex", alignItems: "flex-start", width: "100%",
-                                  textAlign: "left", padding: "6px 12px 6px 28px",
-                                  fontSize: 11, border: "none", cursor: "pointer",
-                                  background: isActive ? "#dbeafe" : "#fff",
-                                  color: isActive ? "#1d4ed8" : "#4b5563",
-                                  fontWeight: isActive ? 600 : 400,
-                                  borderLeft: isActive ? `3px solid ${cat.color.text}` : "3px solid transparent",
-                                  borderBottom: "1px solid #f9fafb", gap: 5,
-                                }}
-                              >
-                                <span style={{ flex: 1, lineHeight: 1.45 }}>{item.label}</span>
-                                {!loadingList && !isAvailable(item.id) && (
-                                  <span style={{
-                                    fontSize: 9, padding: "1px 4px", borderRadius: 3,
-                                    background: "#f3f4f6", color: "#9ca3af", flexShrink: 0, marginTop: 2,
-                                  }}>미등록</span>
-                                )}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      );
-                    })}
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Right content */}
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
-        {/* Toolbar */}
-        <div
-          style={{
-            padding: "8px 12px", borderBottom: "1px solid #e5e7eb", background: "#fff",
-            display: "flex", alignItems: "center", gap: 10, flexShrink: 0,
-          }}
-        >
-          <button
-            onClick={() => setSidebarOpen((v) => !v)}
-            style={{
-              display: "flex", alignItems: "center", gap: 4, padding: "4px 8px",
-              fontSize: 12, border: "1px solid #e5e7eb", borderRadius: 5,
-              background: "#f9fafb", color: "#4b5563", cursor: "pointer", flexShrink: 0,
-            }}
-          >
-            <span style={{ fontSize: 11 }}>{sidebarOpen ? "◀" : "▶"}</span>
-            <span>{sidebarOpen ? "목록 접기" : "목록 펼치기"}</span>
-          </button>
-
-          {selectedItem && selectedCat && (
-            <>
-              <span style={{
-                fontSize: 11, padding: "1px 7px", borderRadius: 10,
-                background: selectedCat.color.bg, color: selectedCat.color.text,
-                border: `1px solid ${selectedCat.color.border}`, fontWeight: 700, flexShrink: 0,
-              }}>
-                {selectedCat.label}
-              </span>
-              <span style={{
-                fontSize: 13, fontWeight: 600, color: "#111827",
-                overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-              }}>
-                {selectedItem.label}
-              </span>
-            </>
-          )}
-        </div>
-
-        {/* 콘텐츠 영역 */}
-        <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>
-          {!selectedItem ? (
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                height: "100%",
-                color: "#9ca3af",
-                fontSize: 14,
-                flexDirection: "column",
-                gap: 8,
-              }}
-            >
-              <span style={{ fontSize: 14, color: "#d1d5db" }}>▣</span>
-              <span>좌측 목록에서 지침을 선택하세요</span>
-            </div>
-          ) : isAvailable(selectedItem.id) ? (
-            <JichimContentPanel
-              key={`content-${selectedItem.id}-${contentKey}`}
-              item={selectedItem}
-              onDelete={handleDeleted}
-            />
-          ) : (
-            <JichimUploadPanel
-              key={`upload-${selectedItem.id}-${contentKey}`}
-              item={selectedItem}
-              onUploaded={handleUploaded}
-            />
-          )}
         </div>
       </div>
     </div>
@@ -1447,13 +779,122 @@ function ChapterView({
   );
 }
 
+// ─── 근로복지공단 지침 ──────────────────────────────────────────────────────────
+
+type GuidanceEntry = {
+  id: string;
+  title: string;
+  category: string;
+  fileUrl: string;
+};
+
+const GUIDANCE_LIST: GuidanceEntry[] = [
+  { id: "g1", title: "소음성 난청 업무처리기준 개선 전문 (2021.12.23. 시행)", category: "소음성 난청", fileUrl: "/docs/소음성_난청_업무처리기준_2021.pdf" },
+];
+
+function GuidelinesTab() {
+  const categories = Array.from(new Set(GUIDANCE_LIST.map((g) => g.category)));
+  const [selectedCat, setSelectedCat] = useState<string>(categories[0] ?? "");
+  const [selectedPdf, setSelectedPdf] = useState<GuidanceEntry | null>(null);
+
+  const filtered = GUIDANCE_LIST.filter((g) => g.category === selectedCat);
+
+  return (
+    <div style={{ display: "flex", height: "calc(100vh - 160px)" }}>
+      {/* 왼쪽: 카테고리 + PDF 목록 */}
+      <div style={{ width: 256, flexShrink: 0, borderRight: "1px solid #e5e7eb", overflowY: "auto", background: "#f9fafb", display: "flex", flexDirection: "column" }}>
+        <div style={{ padding: "10px 12px 6px", fontSize: 10, fontWeight: 700, color: "#9ca3af", letterSpacing: "0.06em" }}>
+          카테고리
+        </div>
+        {categories.map((cat) => (
+          <button
+            key={cat}
+            onClick={() => { setSelectedCat(cat); setSelectedPdf(null); }}
+            style={{
+              display: "block", width: "100%", textAlign: "left",
+              padding: "8px 14px", fontSize: 12, border: "none", cursor: "pointer",
+              background: selectedCat === cat ? "#eff6ff" : "transparent",
+              color: selectedCat === cat ? "#1d4ed8" : "#374151",
+              fontWeight: selectedCat === cat ? 700 : 400,
+              borderLeft: selectedCat === cat ? "3px solid #3b82f6" : "3px solid transparent",
+            }}
+          >
+            {cat}
+            <span style={{ marginLeft: 6, fontSize: 10, color: "#9ca3af" }}>
+              {GUIDANCE_LIST.filter((g) => g.category === cat).length}
+            </span>
+          </button>
+        ))}
+
+        <div style={{ height: 1, background: "#e5e7eb", margin: "8px 0" }} />
+
+        <div style={{ padding: "0 8px 12px", flex: 1, overflowY: "auto" }}>
+          {filtered.map((g) => (
+            <button
+              key={g.id}
+              onClick={() => setSelectedPdf(g)}
+              style={{
+                display: "block", width: "100%", textAlign: "left",
+                padding: "8px 10px", fontSize: 12, border: "none", cursor: "pointer",
+                borderRadius: 6, marginBottom: 2,
+                background: selectedPdf?.id === g.id ? "#dbeafe" : "transparent",
+                color: selectedPdf?.id === g.id ? "#1d4ed8" : "#374151",
+                fontWeight: selectedPdf?.id === g.id ? 600 : 400,
+                lineHeight: 1.45,
+              }}
+            >
+              📄 {g.title}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* 오른쪽: PDF 뷰어 */}
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
+        {selectedPdf ? (
+          <>
+            {/* 툴바 */}
+            <div style={{ padding: "8px 16px", borderBottom: "1px solid #e5e7eb", background: "#fff", display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+              <button
+                onClick={() => setSelectedPdf(null)}
+                style={{ fontSize: 12, color: "#6b7280", background: "none", border: "none", cursor: "pointer", padding: 0 }}
+              >
+                ← 목록으로
+              </button>
+              <span style={{ fontSize: 13, fontWeight: 600, color: "#111827", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {selectedPdf.title}
+              </span>
+              <a
+                href={selectedPdf.fileUrl}
+                download
+                style={{ fontSize: 12, color: "#3b82f6", textDecoration: "none", flexShrink: 0 }}
+              >
+                ⬇ 다운로드
+              </a>
+            </div>
+            {/* 인라인 PDF */}
+            <div style={{ flex: 1, overflow: "auto", background: "#525659" }}>
+              <InlinePdfViewer fileUrl={selectedPdf.fileUrl} />
+            </div>
+          </>
+        ) : (
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", flexDirection: "column", gap: 12, color: "#9ca3af" }}>
+            <span style={{ fontSize: 32 }}>📄</span>
+            <span style={{ fontSize: 14 }}>왼쪽에서 지침을 선택하세요</span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+
 // ─── Main Page ───────────────────────────────────────────────────────────────
 
 const TABS = [
   { id: "law",        label: "관련 법령" },
-  { id: "attachment", label: "별표 · 첨부" },
   { id: "internal",   label: "근로복지공단 내부규정" },
-  { id: "jichim",     label: "근로복지공단 지침" },
+  { id: "guidelines", label: "근로복지공단 지침" },
 ] as const;
 
 type TabId = (typeof TABS)[number]["id"];
@@ -1501,17 +942,8 @@ export default function LawPage() {
       {/* Tab content */}
       <div style={{ flex: 1, overflow: "hidden" }}>
         {activeTab === "law"        && <LawTab />}
-        {activeTab === "attachment" && (
-          <LawAttachmentTab
-            lawGroups={LAW_GROUPS.map((g) => ({
-              id: g.id,
-              groupName: g.groupName,
-              laws: g.laws.map((l) => ({ id: l.id, label: l.label, name: l.name })),
-            }))}
-          />
-        )}
         {activeTab === "internal"   && <InternalRegulationTab />}
-        {activeTab === "jichim"     && <JichimTab />}
+        {activeTab === "guidelines" && <GuidelinesTab />}
       </div>
     </div>
   );
