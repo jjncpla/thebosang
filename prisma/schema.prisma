@@ -1462,3 +1462,81 @@ model DecisionNotice {
   @@index([accidentDate])
   @@index([createdAt])
 }
+
+// 평균임금산정내역서 자동 파싱 이력 (Phase B - P3)
+// 공단이 발신한 평균임금산정내역서 PDF를 OCR + 파싱하여 저장
+// 노무사가 검토 후 WageReviewData로 연결 가능
+model AvgWageNotice {
+  id                String    @id @default(cuid())
+
+  // 사건/재해자/평균임금검토 연결 (선택적)
+  caseId            String?
+  patientId         String?
+  wageReviewId      String?   // WageReviewData FK (노무사가 검토 후 연결)
+
+  // 양식 메타
+  fileName          String
+  fileSize          Int
+  managementNo      String?   // 관리번호 (예: 910-02-99141-7)
+  diagnosisDate     DateTime? // 산정사유발생년월일
+
+  // 사업장
+  workplaceName     String?   // 회사명
+  businessRegNo     String?   // 사업개시번호
+  businessType      String?   // 사업종류 (예: 기타건설업)
+
+  // 산재근로자
+  workerName        String?   // 성명
+  rrnPrefix         String?   // 주민번호 앞 6자리
+  hireDate          DateTime? // 채용일
+  retirementDate    DateTime?
+  occupation        String?   // 직종
+
+  // 임금산정형태
+  wageCalcType      String?   // "통상근로계수 적용" / "특례임금" 등
+  dailyWage         Float?    // 일당
+  commuteCoef       Float?    // 통상근로계수 (0.73 등)
+
+  // 근기법 평균임금
+  baseAvgWage       Float?    // 근기법 평균임금
+
+  // 노동통계 (특례임금 산출 자료)
+  statQuarter       String?   // 적용분기 (예: "2023년도 1분기")
+  statSize          String?   // 사업체 규모 (예: "1규모(5~9)")
+  statTotalDays     Int?      // 총일수 (보통 365)
+  statTotalAmount   Float?    // 총금액
+
+  // 특례임금
+  statWageBase      Float?    // 산재보험법 특례임금액
+
+  // 최종 적용 평균임금
+  finalAvgWage      Float?    // 적용평균임금
+  finalApplyDate    DateTime? // 적용일자
+
+  // 정정청구 트리거 룰 적용 결과
+  // ratio = finalAvgWage / max(baseAvgWage, statWageBase)
+  // ratio < 0.95 → needsCorrection=true
+  needsCorrection   Boolean   @default(false)
+  correctionReason  String?   // "특례임금 대비 적용임금 N% 부족" 등
+
+  // 파싱 결과 전체 (Json)
+  parsedData        Json      // 전체 파싱 구조 (특이사항 포함)
+  ocrText           String?   // 원본 OCR 텍스트 (디버깅용, 100k자 제한)
+
+  // 검증 상태
+  verifyStatus      String?   // "일치" | "불일치" | "부분일치" | "미검증"
+  verifyNote        String?
+
+  // 메타
+  uploadedBy        String?   // userId
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([caseId])
+  @@index([patientId])
+  @@index([wageReviewId])
+  @@index([workerName])
+  @@index([workplaceName])
+  @@index([needsCorrection])
+  @@index([createdAt])
+}
