@@ -56,6 +56,7 @@ const MENU_ITEMS: MenuItem[] = [
     children: [
       { id: "objection-review", label: "처분 검토", path: "/objection/review" },
       { id: "objection-deadline", label: "기일 관리", path: "/objection/deadline" },
+      { id: "avg-wage", label: "평균임금 정정 검토", path: "/wage/avg-wage" },
     ],
   },
   { id: "inquiry", label: "사건 조회", icon: "🔍", path: "/inquiry" },
