@@ -81,14 +81,24 @@ interface SourceGroupPanelProps {
   setRawField: (source: AnyRawSource, i: number, key: keyof WorkHistoryRawEntry, val: unknown) => void;
   removeRawRow: (source: AnyRawSource, i: number) => void;
   addRawRow: (source: AnyRawSource) => void;
+  convertRawToDaily?: (source: AnyRawSource, i: number) => void;
 }
 function SourceGroupPanel(props: SourceGroupPanelProps) {
-  const { title, titleColor, bgColor, sources, activeSrc, setActiveSrc, workHistoryRaw, sourceLabels, inputStyle, years, months, setRawField, removeRawRow, addRawRow, workHistoryDaily, onChangeDaily } = props;
+  const { title, titleColor, bgColor, sources, activeSrc, setActiveSrc, workHistoryRaw, sourceLabels, inputStyle, years, months, setRawField, removeRawRow, addRawRow, workHistoryDaily, onChangeDaily, convertRawToDaily } = props;
   const isDailyTab = activeSrc === "일용직" || activeSrc === "건근공";
+  const dailyHintCount = (workHistoryRaw[activeSrc as keyof WorkHistoryRaw] ?? []).filter((e) => e.isDailyHint).length;
 
   return (
     <div style={{ background: bgColor, borderRadius: 10, padding: 12, border: `1px solid ${titleColor}33`, minWidth: 0, overflow: "hidden" }}>
       <div style={{ fontSize: 13, fontWeight: 700, color: titleColor, marginBottom: 10 }}>{title}</div>
+      {!isDailyTab && dailyHintCount > 0 && (
+        <div style={{ background: "#fef3c7", border: "1px solid #fcd34d", borderRadius: 6, padding: "6px 10px", marginBottom: 10, fontSize: 11, color: "#92400e", display: "flex", alignItems: "center", gap: 6 }}>
+          <span style={{ fontSize: 12 }}>⚠</span>
+          <span>
+            <b>{dailyHintCount}건</b>이 일용직으로 의심됩니다 (사업장명에 "(일용)" 표기). 행 우측 <b style={{ background: "#f59e0b", color: "white", padding: "1px 4px", borderRadius: 3, fontWeight: 700 }}>일용→</b> 버튼으로 일용직 탭에 이동 가능 (총일수는 추정).
+          </span>
+        </div>
+      )}
       {/* 탭 버튼 */}
       <div style={{ display: "flex", gap: 4, marginBottom: 10, flexWrap: "wrap" }}>
         {sources.map((src) => {
@@ -158,11 +168,21 @@ function SourceGroupPanel(props: SourceGroupPanelProps) {
               </tr>
             </thead>
             <tbody>
-              {(workHistoryRaw[activeSrc as keyof WorkHistoryRaw] ?? []).map((row, i) => (
-                <tr key={i}>
+              {(workHistoryRaw[activeSrc as keyof WorkHistoryRaw] ?? []).map((row, i) => {
+                const isHint = row.isDailyHint === true;
+                const rowBg = isHint ? "#fef3c7" : undefined;
+                return (
+                <tr key={i} style={rowBg ? { background: rowBg } : undefined}>
                   {(["company", "department", "jobType"] as (keyof WorkHistoryRawEntry)[]).map(k => (
                     <td key={k} style={{ padding: 2, border: "1px solid #f1f5f9" }}>
-                      <input style={{ ...inputStyle, width: "100%", minWidth: 0, fontSize: 11, boxSizing: "border-box" }} value={String(row[k] ?? "")} onChange={(e) => setRawField(activeSrc, i, k, e.target.value)} />
+                      <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                        {k === "company" && isHint && (
+                          <span title="사업장명에 (일용) 표기 발견 — 일용직 탭으로 이동을 검토하세요" style={{ fontSize: 9, padding: "1px 4px", borderRadius: 3, background: "#f59e0b", color: "white", fontWeight: 700, flexShrink: 0 }}>
+                            일용?
+                          </span>
+                        )}
+                        <input style={{ ...inputStyle, width: "100%", minWidth: 0, fontSize: 11, boxSizing: "border-box" }} value={String(row[k] ?? "")} onChange={(e) => setRawField(activeSrc, i, k, e.target.value)} />
+                      </div>
                     </td>
                   ))}
                   <td style={{ padding: 2, border: "1px solid #f1f5f9" }}>
@@ -185,11 +205,21 @@ function SourceGroupPanel(props: SourceGroupPanelProps) {
                       </select>
                     </div>
                   </td>
-                  <td style={{ padding: 2, border: "1px solid #f1f5f9", textAlign: "center" }}>
+                  <td style={{ padding: 2, border: "1px solid #f1f5f9", textAlign: "center", whiteSpace: "nowrap" }}>
+                    {isHint && convertRawToDaily && (
+                      <button
+                        onClick={() => convertRawToDaily(activeSrc, i)}
+                        title="이 항목을 일용직 탭으로 이동 (총일수는 개월수×20일로 추정, 이동 후 정정 가능)"
+                        style={{ background: "#f59e0b", color: "white", border: "none", borderRadius: 4, padding: "2px 6px", fontSize: 10, cursor: "pointer", fontWeight: 600, marginRight: 4 }}
+                      >
+                        일용→
+                      </button>
+                    )}
                     <button onClick={() => removeRawRow(activeSrc, i)} style={{ background: "none", border: "none", color: "#dc2626", cursor: "pointer", fontSize: 13 }}>✕</button>
                   </td>
                 </tr>
-              ))}
+                );
+              })}
               {(workHistoryRaw[activeSrc as keyof WorkHistoryRaw]?.length ?? 0) === 0 && (
                 <tr><td colSpan={6} style={{ padding: "10px", textAlign: "center", color: "#9ca3af", fontSize: 11 }}>데이터 없음</td></tr>
               )}
@@ -319,6 +349,33 @@ function WorkHistoryDrawerContent({
     const rows = [...(workHistoryRaw[source] ?? [])];
     rows[i] = { ...rows[i], [key]: val };
     onChange({ workHistoryRaw: { ...workHistoryRaw, [source]: rows } });
+  };
+  // 건보·고용산재 등 raw 행을 일용직 dailyEntries로 이동.
+  // totalDays는 기간 개월수 × 20일로 추정 (사용자가 추후 정정 가능).
+  const convertRawToDaily = (source: RawSource, i: number) => {
+    const row = workHistoryRaw[source]?.[i];
+    if (!row) return;
+    const months =
+      Math.max(1, (row.endYear * 12 + row.endMonth) - (row.startYear * 12 + row.startMonth));
+    const totalDays = months * 20;
+    const newEntry: WorkHistoryDailyEntry = {
+      company: row.company,
+      jobType: row.jobType || row.department || "",
+      totalDays,
+      startYear: row.startYear,
+      startMonth: row.startMonth,
+      convertedMonths: Math.ceil(totalDays / 20),
+      source: source,
+      memo: `[추정] ${row.startYear}.${String(row.startMonth).padStart(2,"0")} ~ ${row.endYear}.${String(row.endMonth).padStart(2,"0")} (${months}개월 × 20일 추정). 정확한 일수로 정정 필요.`,
+    };
+    onChangeDaily([...workHistoryDaily, newEntry]);
+    // 원래 raw 행 제거
+    onChange({
+      workHistoryRaw: {
+        ...workHistoryRaw,
+        [source]: (workHistoryRaw[source] ?? []).filter((_, idx) => idx !== i),
+      },
+    });
   };
   const addWorkRow = () => {
     onChange({ workHistory: [...workHistory, { company: "", department: "", jobType: "", startYear: new Date().getFullYear(), startMonth: 1, endYear: new Date().getFullYear(), endMonth: 12, noiseExposure: false, noiseLevel: null, workHours: "", source: "" }] });
@@ -640,6 +697,7 @@ function WorkHistoryDrawerContent({
             setRawField={setRawField}
             removeRawRow={removeRawRow}
             addRawRow={addRawRow}
+            convertRawToDaily={convertRawToDaily}
           />
           {/* 우: 일용직 직업력 산정 */}
           <SourceGroupPanel
@@ -659,6 +717,7 @@ function WorkHistoryDrawerContent({
             setRawField={setRawField}
             removeRawRow={removeRawRow}
             addRawRow={addRawRow}
+            convertRawToDaily={convertRawToDaily}
           />
         </div>
 

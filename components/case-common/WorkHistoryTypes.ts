@@ -23,6 +23,9 @@ export type WorkHistoryRawEntry = {
   noiseExposure: boolean;
   noiseLevel: number | null;
   workHours: string;
+  // 일용직 의심 플래그 — 건보 prompt에서 사업장명에 "(일용)" 등 표기 감지 시 true
+  // UI에서 시각 강조 + "일용직으로 이동" 버튼 노출용
+  isDailyHint?: boolean;
 };
 
 export type WorkHistoryRaw = {
