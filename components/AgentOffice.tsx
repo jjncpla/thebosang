@@ -366,6 +366,16 @@ export default function AgentOffice({ demoMode = 'auto' }: AgentOfficeProps) {
       setIsLive(false);
       return;
     }
+    // 운영 환경(localhost/127.0.0.1 외) — Railway 같은 배포처는 hook이 도달하지 않으므로 DEMO 강제
+    if (
+      demoMode === 'auto' &&
+      typeof window !== 'undefined' &&
+      window.location.hostname !== 'localhost' &&
+      window.location.hostname !== '127.0.0.1'
+    ) {
+      setIsLive(false);
+      return;
+    }
     fetchActivity();
     const i = setInterval(fetchActivity, POLL_INTERVAL_MS);
     return () => clearInterval(i);
