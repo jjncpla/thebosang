@@ -125,9 +125,9 @@ export async function POST(
               {
                 heading: "■ 수령 계좌",
                 rows: [
-                  ["은    행", bankName],
-                  ["계좌번호", bankAccount],
-                  ["예 금 주", bankHolder],
+                  ["은    행", bankName] as [string, string],
+                  ["계좌번호", bankAccount] as [string, string],
+                  ["예 금 주", bankHolder] as [string, string],
                 ],
               },
             ]
@@ -148,7 +148,7 @@ export async function POST(
 
     const fileName = `평균임금정정청구서_${notice.workerName ?? "재해자"}_${dateText.replace(/[년월일\s]/g, "")}.pdf`;
 
-    return new NextResponse(pdfBytes, {
+    return new NextResponse(Buffer.from(pdfBytes), {
       status: 200,
       headers: {
         "Content-Type": "application/pdf",

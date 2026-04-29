@@ -37,7 +37,7 @@ export async function POST(req: NextRequest) {
     const { spec, fileName } = buildSpecByTemplate(template, data);
     const pdfBytes = await buildTextFormPdf(spec);
 
-    return new NextResponse(pdfBytes, {
+    return new NextResponse(Buffer.from(pdfBytes), {
       status: 200,
       headers: {
         "Content-Type": "application/pdf",
