@@ -12,34 +12,37 @@ import {
    타입
    ═══════════════════════════════════════════════════════════════ */
 type RatioType = "wage" | "cpi";
+type AccidentType = "occupational" | "general"; // 직업병 / 일반사고
 
-interface WageResult {
-  ratio: number;
+interface WagePeriod {
+  yearIndex: number;
+  startDate: Date;
+  endDate: Date;
+  days: number;
+  yearlyRatio: number;        // 해당 연차에 적용된 증감 비율
+  cumulativeRatio: number;
   adjustedWage: number;
-  yearlyRatios: { year: number; ratio: number }[];
-}
-
-interface ElderlyResult {
-  age61Date: Date;
-  graceEndDate: Date;
-  reductionStartDate: Date;         // 유예 종료일 + 1일
-  reductionStartYear: number;       // 감액 시작 연도
-  currentAge: number;
-  elderlyBenefitRate: number | null; // 별표1 지급률 (61세 미만이면 null)
+  age: number;
   isReduced: boolean;
-  normalPayRate: number;             // 70% or 90%
-  effectiveRate: number;             // 실제 적용 지급률
-  wageIncrementRatio: number;        // 재해 → 감액 시작 연도 누적 증감 배율
-  wageRatioType: RatioType;          // 적용 증감 유형 (임금/CPI)
-  adjustedWage: number;              // 증감 후 평균임금
+  elderlyRate: number | null;
+  benefitRate: number;
+  benefitLabel: string;
   dailyBenefit: number;
 }
 
+interface CalcResult {
+  ratioType: RatioType;
+  ratioBasis: string;
+  age61Date: Date;
+  graceEndDate: Date;
+  reductionStartDate: Date;
+  periods: WagePeriod[];
+  finalAdjustedWage: number;
+  finalCumulativeRatio: number;
+}
+
 /* ═══════════════════════════════════════════════════════════════
-   고령자 휴업급여 지급률 테이블 (산재법 제55조 별표 1)
-   - 별표 1은 "평균임금 대비 최종 지급률"을 직접 규정함
-   - 70%에서 감액하는 방식이 아니라 별표 1 지급률로 대체됨
-   - 공단 실제 산정: 평균임금 × 70% × (별표1율/70%) = 평균임금 × 별표1율
+   고령자 휴업급여 지급률 (산재법 제55조 별표1)
    ═══════════════════════════════════════════════════════════════ */
 const ELDERLY_BENEFIT_RATE = [
   { minAge: 61, maxAge: 62,             rate: 0.67 },
@@ -50,74 +53,42 @@ const ELDERLY_BENEFIT_RATE = [
 ];
 
 /* ═══════════════════════════════════════════════════════════════
-   2008년 전후 적용 기준 자동 판단
-   산재법 제36조 개정(시행 2008.07.01) 기준
-   - 2008.06.30 이전 재해: 소비자물가변동률(CPI)
-   - 2008.07.01 이후 재해: 전체 근로자 임금 평균액 증감률
-   ═══════════════════════════════════════════════════════════════ */
-function detectRatioType(year: number, month: number): {
-  type: RatioType;
-  basis: string;
-  isAmbiguous: boolean;
-} {
-  if (year < 2008) {
-    return {
-      type: "cpi",
-      basis: "구 산재법 적용 (2008.07.01 이전 재해) → 소비자물가변동률",
-      isAmbiguous: false,
-    };
-  }
-  if (year > 2008) {
-    return {
-      type: "wage",
-      basis: "개정 산재법 제36조 적용 (2008.07.01 이후 재해) → 전체 근로자 임금 평균액 증감률",
-      isAmbiguous: false,
-    };
-  }
-  // 2008년: 월 기준으로 분기
-  if (month < 7) {
-    return {
-      type: "cpi",
-      basis: `2008년 ${month}월 재해 → 2008.07.01 시행 전 → 소비자물가변동률`,
-      isAmbiguous: false,
-    };
-  }
-  return {
-    type: "wage",
-    basis: `2008년 ${month}월 재해 → 개정 산재법 시행 후 → 전체 근로자 임금 평균액 증감률`,
-    isAmbiguous: false,
-  };
-}
-
-/* ═══════════════════════════════════════════════════════════════
    헬퍼 함수
    ═══════════════════════════════════════════════════════════════ */
-function calcWageIncrease(
-  accidentYear: number,
-  targetYear: number,
-  originalWage: number,
-  type: RatioType
-): WageResult {
-  const ratioData = type === "wage" ? WAGE_INCREASE_RATIO : CPI_RATIO;
-  const yearlyRatios: { year: number; ratio: number }[] = [];
-  let cumulativeRatio = 1;
+function detectRatioType(
+  accidentDate: Date,
+  accidentType: AccidentType
+): { type: RatioType; basis: string } {
+  const reformDate = new Date("2008-07-01");
+  const isBeforeReform = accidentDate < reformDate;
 
-  for (let y = accidentYear + 1; y <= targetYear; y++) {
-    const r = ratioData[y] ?? 1;
-    cumulativeRatio *= r;
-    yearlyRatios.push({ year: y, ratio: r });
+  if (isBeforeReform) {
+    return {
+      type: "wage",
+      basis: "구 산재법 (2008.07.01 이전 재해) → 전체 근로자 임금 평균액 증감률",
+    };
   }
-
+  if (accidentType === "occupational") {
+    return {
+      type: "wage",
+      basis: "산재법 시행령 제22조 1호 (직업병) → 전체 근로자 임금 평균액 증감률",
+    };
+  }
   return {
-    ratio: cumulativeRatio,
-    adjustedWage: originalWage * cumulativeRatio,
-    yearlyRatios,
+    type: "cpi",
+    basis: "산재법 시행령 제22조 2호 (일반 사고) → 소비자물가변동률",
   };
 }
 
 function addYears(date: Date, years: number): Date {
   const d = new Date(date);
   d.setFullYear(d.getFullYear() + years);
+  return d;
+}
+
+function addDays(date: Date, days: number): Date {
+  const d = new Date(date);
+  d.setDate(d.getDate() + days);
   return d;
 }
 
@@ -134,7 +105,7 @@ function getElderlyBenefitRate(age: number): number | null {
       return row.rate;
     }
   }
-  return null; // 61세 미만 → 고령자 감액 없음
+  return null;
 }
 
 function formatDate(d: Date): string {
@@ -148,569 +119,400 @@ function formatNumber(n: number, decimals = 0): string {
   });
 }
 
+function diffDays(a: Date, b: Date): number {
+  return Math.floor((b.getTime() - a.getTime()) / 86400000) + 1;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   핵심 산정 로직
+   ═══════════════════════════════════════════════════════════════ */
+function calculatePeriods(args: {
+  accidentDate: Date;
+  birthDate: Date;
+  initialWage: number;
+  endYear: number;
+  accidentType: AccidentType;
+  isLowIncome: boolean;
+}): CalcResult {
+  const { accidentDate, birthDate, initialWage, endYear, accidentType, isLowIncome } = args;
+  const { type: ratioType, basis: ratioBasis } = detectRatioType(accidentDate, accidentType);
+  const ratioData = ratioType === "wage" ? WAGE_INCREASE_RATIO : CPI_RATIO;
+
+  // 주요 분기점
+  const age61Date = addYears(birthDate, 61);
+  const graceEndDate = addYears(accidentDate, 2);
+  const reductionStartDateRaw = addDays(graceEndDate, 1);
+  const reductionStartDate = age61Date > reductionStartDateRaw ? age61Date : reductionStartDateRaw;
+
+  // 분석 종료 시점 = 종료연도 12월 31일
+  const finalDate = new Date(endYear, 11, 31);
+  const normalRate = isLowIncome ? 0.9 : 0.7;
+
+  const periods: WagePeriod[] = [];
+  let currentStart = new Date(accidentDate);
+  let cumulativeRatio = 1;
+  let yearIdx = 1;
+  let yearlyRatio = 1;
+
+  // 안전 가드 (무한루프 방지)
+  let safety = 0;
+
+  while (currentStart <= finalDate && safety < 200) {
+    safety++;
+    // 현재 연차의 자연 종료일 = 재해일 + n주년 - 1일
+    const naturalEnd = addDays(addYears(accidentDate, yearIdx), -1);
+    const periodEnd = naturalEnd < finalDate ? naturalEnd : finalDate;
+
+    // 감액 시작일이 이 구간 안에 있으면 분기
+    const breakpoints: Date[] = [];
+    if (reductionStartDate > currentStart && reductionStartDate <= periodEnd) {
+      breakpoints.push(addDays(reductionStartDate, -1));
+    }
+    breakpoints.push(periodEnd);
+
+    let segStart = new Date(currentStart);
+    for (const bp of breakpoints) {
+      const isReduced = segStart >= reductionStartDate;
+      const age = calcAge(birthDate, segStart);
+      const elderlyRate = isReduced ? getElderlyBenefitRate(age) : null;
+      const benefitRate = elderlyRate !== null ? elderlyRate : normalRate;
+      const adjustedWage = initialWage * cumulativeRatio;
+      const dailyBenefit = adjustedWage * benefitRate;
+      const benefitLabel = isReduced
+        ? `별표1 ${(elderlyRate! * 100).toFixed(0)}%`
+        : `${(normalRate * 100).toFixed(0)}%`;
+
+      periods.push({
+        yearIndex: yearIdx,
+        startDate: new Date(segStart),
+        endDate: new Date(bp),
+        days: diffDays(segStart, bp),
+        yearlyRatio,
+        cumulativeRatio,
+        adjustedWage,
+        age,
+        isReduced,
+        elderlyRate,
+        benefitRate,
+        benefitLabel,
+        dailyBenefit,
+      });
+
+      segStart = addDays(bp, 1);
+    }
+
+    // 다음 연차로
+    currentStart = addDays(periodEnd, 1);
+    if (currentStart > finalDate) break;
+
+    yearIdx++;
+    // 새 연차 시작 = 재해일 n주년 → 그 시점에 해당 연도의 증감률 적용
+    const newYear = currentStart.getFullYear();
+    yearlyRatio = ratioData[newYear] ?? 1;
+    cumulativeRatio *= yearlyRatio;
+  }
+
+  const finalAdjustedWage = initialWage * cumulativeRatio;
+
+  return {
+    ratioType,
+    ratioBasis,
+    age61Date,
+    graceEndDate,
+    reductionStartDate,
+    periods,
+    finalAdjustedWage,
+    finalCumulativeRatio: cumulativeRatio,
+  };
+}
+
 /* ═══════════════════════════════════════════════════════════════
    메인 컴포넌트
    ═══════════════════════════════════════════════════════════════ */
 export default function WageChangeCalcPage() {
   const currentYear = new Date().getFullYear();
 
-  /* --- 섹션1: 임금증감 --- */
-  const [accidentYear, setAccidentYear] = useState(2020);
-  const [accidentMonth, setAccidentMonth] = useState(1);
-  const [targetYear, setTargetYear] = useState(
-    Math.min(currentYear, DATA_END_YEAR)
-  );
-  const [originalWage, setOriginalWage] = useState<string>("50000");
-  const [showDetail, setShowDetail] = useState(false);
-  const [manualOverride, setManualOverride] = useState<RatioType | null>(null);
-
-  const autoDetected = useMemo(
-    () => detectRatioType(accidentYear, accidentMonth),
-    [accidentYear, accidentMonth]
-  );
-  const activeType: RatioType = manualOverride ?? autoDetected.type;
-
-  const wageResult = useMemo(() => {
-    const wage = parseFloat(originalWage) || 0;
-    return calcWageIncrease(accidentYear, targetYear, wage, "wage");
-  }, [accidentYear, targetYear, originalWage]);
-
-  const cpiResult = useMemo(() => {
-    const wage = parseFloat(originalWage) || 0;
-    return calcWageIncrease(accidentYear, targetYear, wage, "cpi");
-  }, [accidentYear, targetYear, originalWage]);
-
-  const activeResult = activeType === "wage" ? wageResult : cpiResult;
-
-  const handleAccidentYearChange = (y: number) => {
-    setAccidentYear(y);
-    if (targetYear <= y) setTargetYear(Math.min(y + 1, DATA_END_YEAR));
-    setManualOverride(null); // 연도 바꾸면 자동 판단 초기화
-  };
-
-  const handleAccidentMonthChange = (m: number) => {
-    setAccidentMonth(m);
-    setManualOverride(null);
-  };
-
-  /* --- 섹션2: 고령자 감액 --- */
-  const [birthDate, setBirthDate] = useState("");
-  const [accidentDate, setAccidentDate] = useState("");
-  const [hasGrace, setHasGrace] = useState(false);
-  const [avgWage, setAvgWage] = useState<string>("80000");
+  // 입력 상태
+  const [accidentType, setAccidentType] = useState<AccidentType>("occupational");
+  const [accidentDateStr, setAccidentDateStr] = useState("2024-01-19");
+  const [birthDateStr, setBirthDateStr] = useState("1949-02-20");
+  const [initialWage, setInitialWage] = useState("126290");
+  const [endYear, setEndYear] = useState<number>(Math.min(currentYear, DATA_END_YEAR));
+  const [officialFinalWage, setOfficialFinalWage] = useState(""); // 공단 산정값 (검증용)
   const [isLowIncome, setIsLowIncome] = useState(false);
 
-  const elderlyResult = useMemo<ElderlyResult | null>(() => {
-    if (!birthDate || !accidentDate) return null;
-    const birth = new Date(birthDate);
-    const accident = new Date(accidentDate);
-    if (isNaN(birth.getTime()) || isNaN(accident.getTime())) return null;
+  // 계산
+  const result = useMemo<CalcResult | null>(() => {
+    const accident = new Date(accidentDateStr);
+    const birth = new Date(birthDateStr);
+    const wage = parseFloat(initialWage);
+    if (
+      isNaN(accident.getTime()) ||
+      isNaN(birth.getTime()) ||
+      isNaN(wage) ||
+      wage <= 0 ||
+      isNaN(endYear) ||
+      endYear < accident.getFullYear()
+    ) {
+      return null;
+    }
+    return calculatePeriods({
+      accidentDate: accident,
+      birthDate: birth,
+      initialWage: wage,
+      endYear,
+      accidentType,
+      isLowIncome,
+    });
+  }, [accidentType, accidentDateStr, birthDateStr, initialWage, endYear, isLowIncome]);
 
-    const today = new Date();
-    const age61Date = addYears(birth, 61);
-    const graceEndDate = addYears(accident, 2);
-
-    // ① 감액 실제 시작일 = 유예 종료일 + 1일 (PDF 검증)
-    const graceEndDateNext = new Date(graceEndDate);
-    graceEndDateNext.setDate(graceEndDateNext.getDate() + 1);
-    const reductionStartDate = age61Date > graceEndDateNext ? age61Date : graceEndDateNext;
-    const reductionStartYear = reductionStartDate.getFullYear();
-
-    // ② 재해발생연도/월 → 2008 분기 자동 판단
-    const accidentYr = accident.getFullYear();
-    const accidentMo = accident.getMonth() + 1;
-    const { type: wageRatioType } = detectRatioType(accidentYr, accidentMo);
-
-    // ③ 재해발생연도 → 감액 시작 연도 사이 누적 증감 적용
-    const wageIncrementResult = calcWageIncrease(accidentYr, reductionStartYear, 1, wageRatioType);
-    const initialWageVal = parseFloat(avgWage) || 0;
-    const adjustedWage = initialWageVal * wageIncrementResult.ratio;
-
-    // ④ 고령자 별표1 지급률 적용
-    const currentAge = calcAge(birth, today);
-    const isReduced = today >= reductionStartDate && currentAge >= 61;
-    const elderlyBenefitRate = isReduced ? getElderlyBenefitRate(currentAge) : null;
-    const normalPayRate = isLowIncome ? 0.9 : 0.7;
-    // 고령자 감액 시: 증감된 평균임금 × 별표1 지급률
-    // 감액 전: 증감된 현재 평균임금 × 통상 지급률
-    const effectiveRate = elderlyBenefitRate !== null ? elderlyBenefitRate : normalPayRate;
-    const dailyBenefit = adjustedWage * effectiveRate;
-
+  // 공단 산정값 비교
+  const verification = useMemo(() => {
+    if (!result || !officialFinalWage) return null;
+    const official = parseFloat(officialFinalWage);
+    if (isNaN(official) || official <= 0) return null;
+    const diff = result.finalAdjustedWage - official;
+    const tol = 1; // 1원 이내 일치
     return {
-      age61Date,
-      graceEndDate,
-      reductionStartDate,
-      reductionStartYear,
-      currentAge,
-      elderlyBenefitRate,
-      isReduced,
-      normalPayRate,
-      effectiveRate,
-      wageIncrementRatio: wageIncrementResult.ratio,
-      wageRatioType,
-      adjustedWage,
-      dailyBenefit,
+      official,
+      computed: result.finalAdjustedWage,
+      diff,
+      isMatch: Math.abs(diff) < tol,
     };
-  }, [birthDate, accidentDate, hasGrace, avgWage, isLowIncome]);
-
-  /* ═══════════════════════════════════════════════════════════════
-     렌더링
-     ═══════════════════════════════════════════════════════════════ */
-  const yearOptions = Array.from(
-    { length: DATA_END_YEAR - DATA_START_YEAR + 1 },
-    (_, i) => DATA_START_YEAR + i
-  );
-
-  const targetYearOptions = Array.from(
-    { length: DATA_END_YEAR - accidentYear },
-    (_, i) => accidentYear + 1 + i
-  );
-
-  const isSameYear = accidentYear === targetYear;
+  }, [result, officialFinalWage]);
 
   return (
-    <div style={{ maxWidth: 800, margin: "0 auto", padding: "24px 16px" }}>
+    <div style={{ maxWidth: 1100, margin: "0 auto", padding: "24px 16px" }}>
       <h1 style={{ fontSize: 24, fontWeight: 700, marginBottom: 8, color: "#29ABE2" }}>
-        임금증감 계산기
+        평균임금 증감 + 고령자 휴업급여 통합 검토
       </h1>
-      <p style={{ color: "#666", fontSize: 14, marginBottom: 32 }}>
-        산재 평균임금의 증감률 적용 및 고령자 휴업급여 감액 계산
+      <p style={{ color: "#666", fontSize: 13, marginBottom: 24, lineHeight: 1.6 }}>
+        재해발생일 ~ 검토시점까지 평균임금 변동 내역과 고령자 별표1 적용 결과를 한번에 산정합니다.<br/>
+        <span style={{ color: "#9ca3af" }}>
+          • 산재법 시행령 제22조 (직업병/일반사고 분기) • 산재법 제55조 별표1 (고령자 감액) • 2년 유예 + 1일 (실무 지침)
+        </span>
       </p>
 
-      {/* ─── 섹션 1: 임금증감 계산 ─── */}
+      {/* ─── 입력 섹션 ─── */}
       <section style={sectionStyle}>
-        <h2 style={sectionTitleStyle}>임금증감률 적용</h2>
+        <h2 style={sectionTitleStyle}>입력 정보</h2>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16, marginBottom: 16 }}>
-          {/* 재해발생연도 */}
-          <label style={labelStyle}>
-            <span style={labelTextStyle}>재해발생연도</span>
-            <select
-              value={accidentYear}
-              onChange={(e) => handleAccidentYearChange(Number(e.target.value))}
-              style={selectStyle}
-            >
-              {yearOptions.map((y) => (
-                <option key={y} value={y}>{y}년</option>
-              ))}
-            </select>
-          </label>
-
-          {/* 재해발생월 — 2008년일 때만 강조 */}
-          <label style={labelStyle}>
-            <span style={{
-              ...labelTextStyle,
-              color: accidentYear === 2008 ? "#dc2626" : "#374151",
-              fontWeight: accidentYear === 2008 ? 700 : 500,
-            }}>
-              재해발생월 {accidentYear === 2008 && <span style={{ fontSize: 11, color: "#dc2626" }}>★ 2008년 필수</span>}
-            </span>
-            <select
-              value={accidentMonth}
-              onChange={(e) => handleAccidentMonthChange(Number(e.target.value))}
-              style={{
-                ...selectStyle,
-                borderColor: accidentYear === 2008 ? "#dc2626" : "#d1d5db",
-                background: accidentYear === 2008 ? "#fff5f5" : "#fff",
-              }}
-            >
-              {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
-                <option key={m} value={m}>{m}월</option>
-              ))}
-            </select>
-          </label>
-
-          {/* 기준연도 */}
-          <label style={labelStyle}>
-            <span style={labelTextStyle}>기준연도 (적용할 연도)</span>
-            <select
-              value={targetYear}
-              onChange={(e) => setTargetYear(Number(e.target.value))}
-              style={selectStyle}
-            >
-              <option value={accidentYear}>{accidentYear}년 (증감 없음)</option>
-              {targetYearOptions.map((y) => (
-                <option key={y} value={y}>{y}년</option>
-              ))}
-            </select>
-          </label>
-        </div>
-
-        {/* 평균임금 */}
-        <label style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 16 }}>
-          <span style={labelTextStyle}>평균임금 (원/일)</span>
-          <input
-            type="text"
-            inputMode="numeric"
-            value={originalWage}
-            onChange={(e) => setOriginalWage(e.target.value.replace(/[^0-9.]/g, ""))}
-            placeholder="예: 50000"
-            style={inputStyle}
-          />
-        </label>
-
-        {/* ── 법령 자동 판단 배너 ── */}
-        <div style={{
-          background: manualOverride ? "#fffbeb" : "#f0fdf4",
-          border: `1px solid ${manualOverride ? "#fde68a" : "#bbf7d0"}`,
-          borderRadius: 8,
-          padding: "12px 16px",
-          marginBottom: 16,
-          display: "flex",
-          alignItems: "flex-start",
-          gap: 10,
-        }}>
-          <span style={{ fontSize: 16, flexShrink: 0 }}>
-            {manualOverride ? "⚠️" : "⚖️"}
-          </span>
-          <div style={{ flex: 1 }}>
-            <p style={{ fontSize: 13, fontWeight: 600, color: "#166534", margin: 0, marginBottom: 2 }}>
-              {manualOverride
-                ? `수동 선택: ${activeType === "wage" ? "전체 근로자 임금 평균액 증감률" : "소비자물가변동률"}`
-                : `자동 판단: ${autoDetected.type === "wage" ? "전체 근로자 임금 평균액 증감률" : "소비자물가변동률"}`}
-            </p>
-            <p style={{ fontSize: 12, color: "#374151", margin: 0 }}>
-              {autoDetected.basis}
-            </p>
-            {manualOverride && (
-              <button
-                onClick={() => setManualOverride(null)}
-                style={{ marginTop: 6, fontSize: 11, color: "#6b7280", background: "none", border: "1px solid #d1d5db", borderRadius: 4, padding: "2px 8px", cursor: "pointer" }}
-              >
-                자동 판단으로 되돌리기
-              </button>
-            )}
+        {/* 재해 유형 */}
+        <div style={{ marginBottom: 16 }}>
+          <span style={labelTextStyle}>재해 유형</span>
+          <div style={{ display: "flex", gap: 12, marginTop: 6 }}>
+            <label style={radioLabel(accidentType === "occupational")}>
+              <input
+                type="radio"
+                name="accidentType"
+                checked={accidentType === "occupational"}
+                onChange={() => setAccidentType("occupational")}
+                style={{ accentColor: "#29ABE2" }}
+              />
+              <span>직업병 <span style={{ fontSize: 11, color: "#6b7280" }}>(소음성 난청, COPD, 진폐, 폐암 등)</span></span>
+            </label>
+            <label style={radioLabel(accidentType === "general")}>
+              <input
+                type="radio"
+                name="accidentType"
+                checked={accidentType === "general"}
+                onChange={() => setAccidentType("general")}
+                style={{ accentColor: "#29ABE2" }}
+              />
+              <span>일반 사고/부상</span>
+            </label>
           </div>
         </div>
 
-        {/* ── 두 증감률 비교 ── */}
-        {!isSameYear && (
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
-            {/* 전체 근로자 임금 증감률 */}
-            <div
-              onClick={() => setManualOverride("wage")}
-              style={{
-                border: `2px solid ${activeType === "wage" ? "#29ABE2" : "#e5e7eb"}`,
-                borderRadius: 10,
-                padding: 16,
-                cursor: "pointer",
-                background: activeType === "wage" ? "#f0f9ff" : "#fafafa",
-                transition: "all 0.15s",
-              }}
-            >
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-                <span style={{ fontSize: 12, fontWeight: 600, color: "#374151" }}>전체 근로자 임금 평균액</span>
-                {autoDetected.type === "wage" && (
-                  <span style={{ fontSize: 10, background: "#dcfce7", color: "#166534", borderRadius: 4, padding: "1px 6px", fontWeight: 700 }}>자동적용</span>
-                )}
-                {manualOverride === "wage" && (
-                  <span style={{ fontSize: 10, background: "#dbeafe", color: "#1d4ed8", borderRadius: 4, padding: "1px 6px", fontWeight: 700 }}>수동선택</span>
-                )}
-              </div>
-              <p style={{ fontSize: 22, fontWeight: 700, color: "#0369a1", margin: 0 }}>
-                {wageResult.ratio.toFixed(4)}배
-              </p>
-              <p style={{ fontSize: 14, color: "#0369a1", margin: "4px 0 0" }}>
-                {formatNumber(wageResult.adjustedWage, 2)}원
-              </p>
-            </div>
-
-            {/* 소비자물가변동률 */}
-            <div
-              onClick={() => setManualOverride("cpi")}
-              style={{
-                border: `2px solid ${activeType === "cpi" ? "#29ABE2" : "#e5e7eb"}`,
-                borderRadius: 10,
-                padding: 16,
-                cursor: "pointer",
-                background: activeType === "cpi" ? "#f0f9ff" : "#fafafa",
-                transition: "all 0.15s",
-              }}
-            >
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-                <span style={{ fontSize: 12, fontWeight: 600, color: "#374151" }}>소비자물가변동률</span>
-                {autoDetected.type === "cpi" && (
-                  <span style={{ fontSize: 10, background: "#dcfce7", color: "#166534", borderRadius: 4, padding: "1px 6px", fontWeight: 700 }}>자동적용</span>
-                )}
-                {manualOverride === "cpi" && (
-                  <span style={{ fontSize: 10, background: "#dbeafe", color: "#1d4ed8", borderRadius: 4, padding: "1px 6px", fontWeight: 700 }}>수동선택</span>
-                )}
-              </div>
-              <p style={{ fontSize: 22, fontWeight: 700, color: "#0369a1", margin: 0 }}>
-                {cpiResult.ratio.toFixed(4)}배
-              </p>
-              <p style={{ fontSize: 14, color: "#0369a1", margin: "4px 0 0" }}>
-                {formatNumber(cpiResult.adjustedWage, 2)}원
-              </p>
-            </div>
-          </div>
-        )}
-
-        {/* 최종 결과 */}
-        <div style={{ background: "#f0f9ff", borderRadius: 8, padding: 20, border: "1px solid #bae6fd" }}>
-          {isSameYear ? (
-            <p style={{ fontSize: 15, color: "#374151", textAlign: "center" }}>
-              재해연도와 기준연도가 동일합니다. 증감 없음 (배율 1.0000)
-            </p>
-          ) : (
-            <div>
-              <p style={{ fontSize: 12, color: "#6b7280", marginBottom: 4 }}>
-                적용 증감률 ({activeType === "wage" ? "전체 근로자 임금 평균액" : "소비자물가변동률"}) 최종 결과
-              </p>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                <div>
-                  <span style={{ fontSize: 12, color: "#6b7280" }}>증감 배율</span>
-                  <p style={{ fontSize: 26, fontWeight: 700, color: "#0369a1", margin: 0 }}>
-                    {activeResult.ratio.toFixed(4)}
-                  </p>
-                </div>
-                <div>
-                  <span style={{ fontSize: 12, color: "#6b7280" }}>증감 적용 평균임금</span>
-                  <p style={{ fontSize: 26, fontWeight: 700, color: "#0369a1", margin: 0 }}>
-                    {formatNumber(activeResult.adjustedWage, 2)}원
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* 연도별 상세 (접기/펼치기) */}
-        {!isSameYear && activeResult.yearlyRatios.length > 0 && (
-          <div style={{ marginTop: 16 }}>
-            <button
-              onClick={() => setShowDetail(!showDetail)}
-              style={{ background: "none", border: "none", color: "#29ABE2", cursor: "pointer", fontSize: 13, fontWeight: 500, padding: 0, display: "flex", alignItems: "center", gap: 4 }}
-            >
-              {showDetail ? "▲" : "▼"} 연도별 증감률 상세 ({activeResult.yearlyRatios.length}개년)
-            </button>
-            {showDetail && (
-              <table style={{ width: "100%", borderCollapse: "collapse", marginTop: 8, fontSize: 13 }}>
-                <thead>
-                  <tr style={{ background: "#f1f5f9", borderBottom: "1px solid #e2e8f0" }}>
-                    <th style={thStyle}>연도</th>
-                    <th style={thStyle}>증감률 ({activeType === "wage" ? "임금" : "CPI"})</th>
-                    <th style={thStyle}>누적 배율</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(() => {
-                    let cum = 1;
-                    return activeResult.yearlyRatios.map((yr) => {
-                      cum *= yr.ratio;
-                      return (
-                        <tr key={yr.year} style={{ borderBottom: "1px solid #f1f5f9" }}>
-                          <td style={tdStyle}>{yr.year}년</td>
-                          <td style={tdStyle}>{yr.ratio.toFixed(4)}</td>
-                          <td style={tdStyle}>{cum.toFixed(4)}</td>
-                        </tr>
-                      );
-                    });
-                  })()}
-                </tbody>
-              </table>
-            )}
-          </div>
-        )}
-      </section>
-
-      {/* ─── 섹션 2: 고령자 휴업급여 감액 ─── */}
-      <section style={sectionStyle}>
-        <h2 style={sectionTitleStyle}>고령자 휴업급여 감액 (산재법 제55조)</h2>
-
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
-          <label style={labelStyle}>
-            <span style={labelTextStyle}>생년월일</span>
-            <input type="date" value={birthDate} onChange={(e) => setBirthDate(e.target.value)} style={inputStyle} />
-          </label>
+        {/* 날짜·임금 */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 12 }}>
           <label style={labelStyle}>
             <span style={labelTextStyle}>재해발생일</span>
-            <input type="date" value={accidentDate} onChange={(e) => setAccidentDate(e.target.value)} style={inputStyle} />
+            <input type="date" value={accidentDateStr} onChange={(e) => setAccidentDateStr(e.target.value)} style={inputStyle} />
           </label>
-        </div>
-
-        {/* 유예 조건 */}
-        <div style={{ marginBottom: 16, background: "#f9fafb", borderRadius: 8, padding: 12 }}>
-          <span style={{ fontSize: 13, fontWeight: 500, color: "#374151", display: "block", marginBottom: 8 }}>
-            유예 조건 (해당 시 재해발생일로부터 2년 유예)
-          </span>
-          <label style={{ display: "flex", alignItems: "flex-start", gap: 6, fontSize: 13, marginBottom: 6, cursor: "pointer" }}>
-            <input
-              type="checkbox"
-              checked={hasGrace}
-              onChange={(e) => setHasGrace(e.target.checked)}
-              style={{ marginTop: 2, accentColor: "#29ABE2" }}
-            />
-            <span>
-              해당 조건 있음
-              <br />
-              <span style={{ color: "#6b7280", fontSize: 12 }}>
-                ① 61세 이후 취업 중인 자 (산재법 제55조)
-                <br />
-                ② 61세 이후 재해를 당한 자 (보상업무처리규정)
-                <br />
-                ③ 61세 이전에 동일 질병으로 장해급여를 받은 자 (산재법 제55조)
-              </span>
-            </span>
-          </label>
-          <p style={{ fontSize: 12, color: "#9ca3af", marginTop: 4, marginBottom: 0 }}>
-            * 실무상 위 조건 해당 여부와 무관하게, 재해발생일로부터 2년간은 감액을 적용하지 않음 (지침)
-          </p>
-        </div>
-
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
           <label style={labelStyle}>
-            <span style={labelTextStyle}>
-              최초 평균임금 (재해 당시, 원/일)
-            </span>
+            <span style={labelTextStyle}>재해자 생년월일</span>
+            <input type="date" value={birthDateStr} onChange={(e) => setBirthDateStr(e.target.value)} style={inputStyle} />
+          </label>
+          <label style={labelStyle}>
+            <span style={labelTextStyle}>증감 종료 기준연도</span>
+            <select value={endYear} onChange={(e) => setEndYear(Number(e.target.value))} style={selectStyle}>
+              {Array.from({ length: DATA_END_YEAR - DATA_START_YEAR + 1 }, (_, i) => DATA_START_YEAR + i)
+                .filter((y) => y >= new Date(accidentDateStr).getFullYear())
+                .map((y) => (
+                  <option key={y} value={y}>{y}년</option>
+                ))}
+            </select>
+          </label>
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 12 }}>
+          <label style={labelStyle}>
+            <span style={labelTextStyle}>최초 평균임금 (재해 당시, 원/일)</span>
             <input
               type="text"
               inputMode="numeric"
-              value={avgWage}
-              onChange={(e) => setAvgWage(e.target.value.replace(/[^0-9.]/g, ""))}
+              value={initialWage}
+              onChange={(e) => setInitialWage(e.target.value.replace(/[^0-9.]/g, ""))}
               placeholder="예: 126290"
               style={inputStyle}
             />
           </label>
-          <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", paddingTop: 20 }}>
+          <label style={labelStyle}>
+            <span style={labelTextStyle}>
+              공단 산정 평균임금 (검증용, 선택)
+            </span>
+            <input
+              type="text"
+              inputMode="numeric"
+              value={officialFinalWage}
+              onChange={(e) => setOfficialFinalWage(e.target.value.replace(/[^0-9.]/g, ""))}
+              placeholder="예: 132679.47"
+              style={inputStyle}
+            />
+          </label>
+          <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", paddingTop: 22 }}>
             <input
               type="checkbox"
               checked={isLowIncome}
               onChange={(e) => setIsLowIncome(e.target.checked)}
               style={{ accentColor: "#29ABE2" }}
             />
-            <span style={{ fontSize: 13, color: "#374151" }}>저소득근로자 (90% 기준 적용)</span>
+            <span style={{ fontSize: 13, color: "#374151" }}>저소득근로자 (90%)</span>
           </label>
         </div>
+      </section>
 
-        {/* 별표 1 지급률 참조 테이블 */}
-        <p style={{ fontSize: 12, color: "#6b7280", marginBottom: 6 }}>
-          산재법 제55조 별표 1 — 고령자 휴업급여 지급률 (평균임금 대비 최종 지급률)
-        </p>
-        <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 16, fontSize: 13 }}>
-          <thead>
-            <tr style={{ background: "#f1f5f9", borderBottom: "1px solid #e2e8f0" }}>
-              <th style={thStyle}>연령</th>
-              <th style={thStyle}>별표 1 지급률</th>
-              <th style={thStyle}>공단 산정식</th>
-            </tr>
-          </thead>
-          <tbody>
-            {ELDERLY_BENEFIT_RATE.map((row) => {
-              const isHighlighted =
-                elderlyResult &&
-                elderlyResult.isReduced &&
-                elderlyResult.currentAge >= row.minAge &&
-                (row.maxAge === null || elderlyResult.currentAge < row.maxAge);
-              return (
-                <tr
-                  key={row.minAge}
-                  style={{
-                    borderBottom: "1px solid #f1f5f9",
-                    background: isHighlighted ? "#dbeafe" : undefined,
-                    fontWeight: isHighlighted ? 700 : undefined,
-                  }}
-                >
-                  <td style={tdStyle}>
-                    만 {row.minAge}세 이상{row.maxAge ? ` ~ ${row.maxAge}세 미만` : ""}
-                    {isHighlighted && <span style={{ marginLeft: 6, fontSize: 11, color: "#1d4ed8" }}>◀ 현재</span>}
-                  </td>
-                  <td style={tdStyle}>{(row.rate * 100).toFixed(0)}%</td>
-                  <td style={{ ...tdStyle, color: "#6b7280" }}>
-                    평균임금 × 70% × {(row.rate / 0.7 * 100).toFixed(1)}/70.0
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+      {/* ─── 자동 판단 + 결과 ─── */}
+      {result && (
+        <>
+          <section style={sectionStyle}>
+            <h2 style={sectionTitleStyle}>자동 판단 결과</h2>
 
-        {/* 결과 */}
-        {elderlyResult && (
-          <div style={{ background: "#f0f9ff", borderRadius: 8, padding: 20, border: "1px solid #bae6fd", marginBottom: 16 }}>
-            {/* 날짜 정보 */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
-              <div>
-                <span style={{ fontSize: 12, color: "#6b7280" }}>만 61세 도달일</span>
-                <p style={{ fontSize: 15, fontWeight: 600, color: "#374151", margin: 0 }}>{formatDate(elderlyResult.age61Date)}</p>
-              </div>
-              <div>
-                <span style={{ fontSize: 12, color: "#6b7280" }}>2년 유예 종료일</span>
-                <p style={{ fontSize: 15, fontWeight: 600, color: "#374151", margin: 0 }}>{formatDate(elderlyResult.graceEndDate)}</p>
-              </div>
-              <div>
-                <span style={{ fontSize: 12, color: "#6b7280" }}>감액 실제 시작일 <span style={{ fontSize: 11, color: "#9ca3af" }}>(유예 종료 +1일)</span></span>
-                <p style={{ fontSize: 15, fontWeight: 600, color: "#0369a1", margin: 0 }}>{formatDate(elderlyResult.reductionStartDate)}</p>
-              </div>
-              <div>
-                <span style={{ fontSize: 12, color: "#6b7280" }}>현재 만 나이</span>
-                <p style={{ fontSize: 15, fontWeight: 600, color: "#374151", margin: 0 }}>만 {elderlyResult.currentAge}세</p>
-              </div>
+            <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 8, padding: "12px 16px", marginBottom: 12 }}>
+              <p style={{ fontSize: 13, fontWeight: 600, color: "#166534", margin: 0, marginBottom: 4 }}>
+                ⚖️ 적용 증감유형: {result.ratioType === "wage" ? "전체 근로자 임금 평균액 증감률" : "소비자물가변동률"}
+              </p>
+              <p style={{ fontSize: 12, color: "#374151", margin: 0 }}>{result.ratioBasis}</p>
             </div>
 
-            {/* 증감 적용 */}
-            {elderlyResult.wageIncrementRatio !== 1 && (
-              <div style={{
-                background: "#f8fafc",
-                border: "1px solid #e2e8f0",
-                borderRadius: 6,
-                padding: "10px 14px",
-                marginBottom: 12,
-                fontSize: 13,
-              }}>
-                <span style={{ color: "#6b7280" }}>
-                  임금증감 ({elderlyResult.wageRatioType === "wage" ? "전체근로자 임금평균액" : "소비자물가변동률"})
-                  &nbsp;재해연도 → {elderlyResult.reductionStartYear}년&nbsp;
-                  <strong style={{ color: "#0369a1" }}>× {elderlyResult.wageIncrementRatio.toFixed(4)}</strong>
-                </span>
-                <div style={{ marginTop: 4, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                  <span style={{ color: "#374151" }}>{formatNumber(parseFloat(avgWage) || 0, 2)}원</span>
-                  <span style={{ color: "#9ca3af" }}>→</span>
-                  <span style={{ fontWeight: 700, color: "#0369a1" }}>{formatNumber(elderlyResult.adjustedWage, 2)}원</span>
-                  <span style={{ fontSize: 11, color: "#9ca3af" }}>(증감 후 평균임금)</span>
-                </div>
-              </div>
-            )}
-
-            {/* 지급률 및 결과 */}
-            <div style={{ borderTop: "1px solid #bae6fd", paddingTop: 12, display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
-              <div>
-                <span style={{ fontSize: 12, color: "#6b7280" }}>감액 여부</span>
-                <p style={{ fontSize: 16, fontWeight: 700, color: elderlyResult.isReduced ? "#dc2626" : "#16a34a", margin: 0 }}>
-                  {elderlyResult.isReduced
-                    ? `감액 적용 → 별표1 ${(elderlyResult.elderlyBenefitRate! * 100).toFixed(0)}%`
-                    : "감액 미적용"}
-                </p>
-              </div>
-              <div>
-                <span style={{ fontSize: 12, color: "#6b7280" }}>실효 지급률</span>
-                <p style={{ fontSize: 16, fontWeight: 700, color: "#0369a1", margin: 0 }}>
-                  {(elderlyResult.effectiveRate * 100).toFixed(0)}%
-                  {!elderlyResult.isReduced && (
-                    <span style={{ fontSize: 12, color: "#6b7280" }}> ({(elderlyResult.normalPayRate * 100).toFixed(0)}%)</span>
-                  )}
-                </p>
-              </div>
-              <div>
-                <span style={{ fontSize: 12, color: "#6b7280" }}>1일 휴업급여</span>
-                <p style={{ fontSize: 22, fontWeight: 700, color: "#0369a1", margin: 0 }}>
-                  {formatNumber(Math.floor(elderlyResult.dailyBenefit), 0)}원{" "}
-                  <span style={{ fontSize: 13, fontWeight: 400 }}>
-                    {Math.round((elderlyResult.dailyBenefit % 1) * 1000)}전
-                  </span>
-                </p>
-              </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }}>
+              <InfoCell label="만 61세 도달일" value={formatDate(result.age61Date)} />
+              <InfoCell label="2년 유예 종료일" value={formatDate(result.graceEndDate)} />
+              <InfoCell label="감액 실제 시작일 (+1일)" value={formatDate(result.reductionStartDate)} highlight />
+              <InfoCell
+                label="검토 종료 시점 평균임금"
+                value={`${formatNumber(result.finalAdjustedWage, 2)}원`}
+                highlight
+              />
             </div>
-          </div>
-        )}
+          </section>
 
-        {/* 주의사항 */}
-        <div style={{ background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 8, padding: 14, fontSize: 13, lineHeight: 1.6, color: "#92400e" }}>
-          <strong>주의</strong>
-          <br />
-          공단이 재해발생일로부터 2년 이내에 감액을 적용하는 경우 정정 청구 가능합니다.
-          <br />
-          법령(산재법 제55조)상 유예 요건(①③)과 지침상 유예 요건(②) 모두 확인하세요.
+          {/* ─── 연차별 평임 누적 테이블 ─── */}
+          <section style={sectionStyle}>
+            <h2 style={sectionTitleStyle}>
+              연차별 평균임금 산정 내역 ({result.periods.length}개 구간)
+            </h2>
+            <div style={{ overflow: "auto" }}>
+              <table style={tableStyle}>
+                <thead>
+                  <tr style={{ background: "#f1f5f9", borderBottom: "2px solid #cbd5e1" }}>
+                    <th style={thStyle}>연차</th>
+                    <th style={thStyle}>기간</th>
+                    <th style={thStyle}>일수</th>
+                    <th style={thStyleRight}>적용 증감률</th>
+                    <th style={thStyleRight}>누적 배율</th>
+                    <th style={thStyleRight}>평균임금 (원/일)</th>
+                    <th style={thStyle}>만 나이</th>
+                    <th style={thStyle}>지급률</th>
+                    <th style={thStyleRight}>1일 휴업급여</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {result.periods.map((p, i) => (
+                    <tr
+                      key={i}
+                      style={{
+                        borderBottom: "1px solid #f1f5f9",
+                        background: p.isReduced ? "#fef3c7" : i % 2 === 0 ? "#fff" : "#fafafa",
+                      }}
+                    >
+                      <td style={tdStyle}>{p.yearIndex}년차</td>
+                      <td style={tdStyle}>
+                        {formatDate(p.startDate)} ~ {formatDate(p.endDate)}
+                      </td>
+                      <td style={{ ...tdStyle, textAlign: "right" }}>{p.days}일</td>
+                      <td style={tdStyleRight}>{p.yearlyRatio.toFixed(4)}</td>
+                      <td style={tdStyleRight}>{p.cumulativeRatio.toFixed(4)}</td>
+                      <td style={tdStyleRight}>{formatNumber(p.adjustedWage, 2)}</td>
+                      <td style={tdStyle}>만 {p.age}세</td>
+                      <td style={tdStyle}>
+                        <span style={{
+                          fontWeight: p.isReduced ? 700 : 400,
+                          color: p.isReduced ? "#92400e" : "#374151",
+                        }}>
+                          {p.benefitLabel}
+                        </span>
+                      </td>
+                      <td style={{ ...tdStyleRight, fontWeight: 700, color: "#0369a1" }}>
+                        {formatNumber(p.dailyBenefit, 0)}원
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p style={{ fontSize: 11, color: "#9ca3af", marginTop: 8 }}>
+              ※ 노란색 행 = 고령자 감액(별표1) 적용 구간 / 평균임금은 재해발생일 1주년 단위로 증감 적용 (산재법 제36조)
+            </p>
+          </section>
+
+          {/* ─── 공단값 비교 ─── */}
+          {verification && (
+            <section style={{
+              ...sectionStyle,
+              background: verification.isMatch ? "#f0fdf4" : "#fef2f2",
+              borderColor: verification.isMatch ? "#bbf7d0" : "#fecaca",
+            }}>
+              <h2 style={{ ...sectionTitleStyle, borderColor: verification.isMatch ? "#16a34a" : "#dc2626" }}>
+                {verification.isMatch ? "✅ 공단 산정값과 일치" : "❌ 공단 산정값과 불일치"}
+              </h2>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
+                <InfoCell label="공단 산정값" value={`${formatNumber(verification.official, 2)}원`} />
+                <InfoCell label="검토 산정값" value={`${formatNumber(verification.computed, 2)}원`} />
+                <InfoCell
+                  label="차이"
+                  value={`${verification.diff >= 0 ? "+" : ""}${formatNumber(verification.diff, 2)}원`}
+                  color={verification.isMatch ? "#16a34a" : "#dc2626"}
+                />
+              </div>
+            </section>
+          )}
+        </>
+      )}
+
+      {/* ─── 법령 안내 ─── */}
+      <section style={{ ...sectionStyle, background: "#fffbeb", borderColor: "#fde68a" }}>
+        <h2 style={{ ...sectionTitleStyle, borderColor: "#f59e0b" }}>법령 근거</h2>
+        <div style={{ fontSize: 13, lineHeight: 1.8, color: "#374151" }}>
+          <p style={{ margin: 0, marginBottom: 6 }}>
+            <strong>산재법 시행령 제22조 (평균임금의 증감)</strong>
+          </p>
+          <ul style={{ margin: 0, paddingLeft: 18 }}>
+            <li>1호 직업병에 걸린 사람: <strong>전체 근로자 임금 평균액 증감률</strong></li>
+            <li>2호 그 밖의 보험가입자(일반 사고): <strong>소비자물가변동률</strong></li>
+          </ul>
+          <p style={{ margin: "10px 0 6px" }}>
+            <strong>산재법 제55조 별표 1 (고령자 휴업급여 지급률)</strong>
+          </p>
+          <ul style={{ margin: 0, paddingLeft: 18 }}>
+            <li>61~62세 67% / 62~63세 64% / 63~64세 61% / 64~65세 58% / 65세+ 50%</li>
+            <li>실무: 재해발생일로부터 2년간 감액 미적용 (지침)</li>
+            <li>감액 실제 시작일 = 유예 종료일 + 1일</li>
+          </ul>
+          <p style={{ margin: "10px 0 0", fontSize: 12, color: "#92400e" }}>
+            ※ 2008.07.01 이전 재해는 종전 규정에 따라 모든 케이스에 임금증감률 적용
+          </p>
         </div>
       </section>
     </div>
@@ -718,22 +520,53 @@ export default function WageChangeCalcPage() {
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   공통 스타일
+   서브 컴포넌트
+   ═══════════════════════════════════════════════════════════════ */
+function InfoCell({
+  label,
+  value,
+  highlight = false,
+  color,
+}: {
+  label: string;
+  value: string;
+  highlight?: boolean;
+  color?: string;
+}) {
+  return (
+    <div
+      style={{
+        background: highlight ? "#dbeafe" : "#f9fafb",
+        border: `1px solid ${highlight ? "#93c5fd" : "#e5e7eb"}`,
+        borderRadius: 8,
+        padding: 10,
+      }}
+    >
+      <div style={{ fontSize: 11, color: "#6b7280", marginBottom: 2 }}>{label}</div>
+      <div style={{ fontSize: 15, fontWeight: 700, color: color ?? (highlight ? "#1d4ed8" : "#111827") }}>
+        {value}
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   스타일
    ═══════════════════════════════════════════════════════════════ */
 const sectionStyle: React.CSSProperties = {
   background: "#fff",
   border: "1px solid #e5e7eb",
   borderRadius: 12,
   padding: 24,
-  marginBottom: 24,
+  marginBottom: 16,
   boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
 };
 
 const sectionTitleStyle: React.CSSProperties = {
-  fontSize: 18,
+  fontSize: 16,
   fontWeight: 600,
-  marginBottom: 20,
-  paddingBottom: 12,
+  marginBottom: 16,
+  paddingBottom: 8,
   borderBottom: "2px solid #29ABE2",
 };
 
@@ -744,7 +577,7 @@ const labelStyle: React.CSSProperties = {
 };
 
 const labelTextStyle: React.CSSProperties = {
-  fontSize: 13,
+  fontSize: 12,
   fontWeight: 500,
   color: "#374151",
 };
@@ -755,25 +588,47 @@ const inputStyle: React.CSSProperties = {
   borderRadius: 6,
   fontSize: 14,
   outline: "none",
-};
-
-const selectStyle: React.CSSProperties = {
-  padding: "8px 12px",
-  border: "1px solid #d1d5db",
-  borderRadius: 6,
-  fontSize: 14,
-  outline: "none",
   background: "#fff",
 };
 
-const thStyle: React.CSSProperties = {
+const selectStyle: React.CSSProperties = {
+  ...inputStyle,
+};
+
+const radioLabel = (active: boolean): React.CSSProperties => ({
+  display: "flex",
+  alignItems: "center",
+  gap: 6,
   padding: "8px 12px",
-  textAlign: "left",
-  fontWeight: 600,
+  border: `2px solid ${active ? "#29ABE2" : "#e5e7eb"}`,
+  background: active ? "#f0f9ff" : "#fff",
+  borderRadius: 8,
+  cursor: "pointer",
+  fontSize: 13,
+  fontWeight: active ? 600 : 400,
+  flex: 1,
+});
+
+const tableStyle: React.CSSProperties = {
+  width: "100%",
+  borderCollapse: "collapse",
   fontSize: 13,
 };
 
-const tdStyle: React.CSSProperties = {
-  padding: "6px 12px",
+const thStyle: React.CSSProperties = {
+  padding: "10px 12px",
   textAlign: "left",
+  fontWeight: 600,
+  fontSize: 12,
+  color: "#374151",
 };
+
+const thStyleRight: React.CSSProperties = { ...thStyle, textAlign: "right" };
+
+const tdStyle: React.CSSProperties = {
+  padding: "8px 12px",
+  fontSize: 13,
+  color: "#374151",
+};
+
+const tdStyleRight: React.CSSProperties = { ...tdStyle, textAlign: "right" };
