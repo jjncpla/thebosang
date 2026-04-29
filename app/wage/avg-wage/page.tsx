@@ -98,6 +98,48 @@ export default function AvgWageNoticePage() {
     }
   }
 
+  /** 평균임금 정정청구서 PDF 다운로드 */
+  async function downloadCorrectionPdf(item: ListItem) {
+    try {
+      const additionalReason = window.prompt(
+        "추가 청구 사유 (선택, 비우면 자동 생성된 사유만 사용)",
+        ""
+      ) ?? "";
+      const bankName = window.prompt("수령 은행 (선택)", "") ?? "";
+      const bankAccount = window.prompt("계좌번호 (선택)", "") ?? "";
+      const bankHolder = window.prompt("예금주 (선택)", item.workerName ?? "") ?? "";
+      const claimantAddr = window.prompt("청구인 주소 (선택)", "") ?? "";
+      const claimantPhone = window.prompt("청구인 연락처 (선택)", "") ?? "";
+
+      const res = await fetch(`/api/avg-wage/${item.id}/correction-pdf`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          additionalReason,
+          bankName,
+          bankAccount,
+          bankHolder,
+          claimantAddr,
+          claimantPhone,
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        alert(`PDF 생성 실패: ${data.error ?? res.statusText}`);
+        return;
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `평균임금정정청구서_${item.workerName ?? "재해자"}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      alert(`PDF 생성 실패: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+
   /** AvgWageNotice → WageReviewData 변환 */
   async function promoteToWageReview(item: ListItem) {
     if (item.wageReviewId) {
@@ -584,24 +626,41 @@ export default function AvgWageNoticePage() {
                       )}
                     </td>
                     <td style={{ padding: 8, textAlign: "center" }}>
-                      {it.wageReviewId ? (
-                        <span
-                          style={{
-                            background: "#dbeafe",
-                            color: "#1e40af",
-                            padding: "2px 6px",
-                            borderRadius: 4,
-                            fontSize: 11,
-                          }}
-                          title={`WageReviewData id=${it.wageReviewId}`}
-                        >
-                          ✅ 변환됨
-                        </span>
-                      ) : (
+                      <div style={{ display: "flex", flexDirection: "column", gap: 4, alignItems: "center" }}>
+                        {it.wageReviewId ? (
+                          <span
+                            style={{
+                              background: "#dbeafe",
+                              color: "#1e40af",
+                              padding: "2px 6px",
+                              borderRadius: 4,
+                              fontSize: 11,
+                            }}
+                            title={`WageReviewData id=${it.wageReviewId}`}
+                          >
+                            ✅ 변환됨
+                          </span>
+                        ) : (
+                          <button
+                            onClick={() => promoteToWageReview(it)}
+                            style={{
+                              background: "#3b82f6",
+                              color: "#fff",
+                              border: "none",
+                              borderRadius: 4,
+                              padding: "4px 8px",
+                              fontSize: 11,
+                              cursor: "pointer",
+                              fontWeight: 500,
+                            }}
+                          >
+                            ➡️ 변환
+                          </button>
+                        )}
                         <button
-                          onClick={() => promoteToWageReview(it)}
+                          onClick={() => downloadCorrectionPdf(it)}
                           style={{
-                            background: "#3b82f6",
+                            background: "#7c3aed",
                             color: "#fff",
                             border: "none",
                             borderRadius: 4,
@@ -610,10 +669,11 @@ export default function AvgWageNoticePage() {
                             cursor: "pointer",
                             fontWeight: 500,
                           }}
+                          title="평균임금 정정청구서 PDF 다운로드"
                         >
-                          ➡️ 변환
+                          📄 정정청구서
                         </button>
-                      )}
+                      </div>
                     </td>
                     <td style={{ padding: 8, textAlign: "center" }}>
                       <button
