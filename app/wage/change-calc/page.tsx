@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import {
   WAGE_INCREASE_RATIO,
   CPI_RATIO,
   DATA_START_YEAR,
   DATA_END_YEAR,
 } from "./wageData";
+import type { ParsedNotice } from "@/lib/notice-parser";
 
 /* ═══════════════════════════════════════════════════════════════
    타입
@@ -241,6 +242,80 @@ export default function WageChangeCalcPage() {
   const [officialFinalWage, setOfficialFinalWage] = useState(""); // 공단 산정값 (검증용)
   const [isLowIncome, setIsLowIncome] = useState(false);
 
+  // PDF 업로드 상태
+  const [parsedNotice, setParsedNotice] = useState<ParsedNotice | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [uploadedFileName, setUploadedFileName] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  async function handleFileUpload(file: File) {
+    setUploading(true);
+    setUploadError(null);
+    setUploadedFileName(file.name);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch("/api/notice/parse", { method: "POST", body: fd });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "파싱 실패");
+
+      const parsed: ParsedNotice = data.parsed;
+      setParsedNotice(parsed);
+
+      // 추출된 필드로 입력 자동 채우기
+      if (parsed.accidentDate) setAccidentDateStr(parsed.accidentDate);
+      if (parsed.birthDate) setBirthDateStr(parsed.birthDate);
+      if (parsed.initialAvgWage) setInitialWage(String(parsed.initialAvgWage));
+
+      // 결정사항/사업장명으로 직업병 vs 일반사고 자동 추론
+      const inferOccupational =
+        /난청|진폐|폐암|COPD|규폐|소음성|직업성|광업소|광업|채굴|용해|용접|아스베스트/i.test(
+          (parsed.businessName ?? "") +
+            " " +
+            (parsed.constructionName ?? "") +
+            " " +
+            (parsed.disabilityGrade ?? "")
+        );
+      if (inferOccupational) setAccidentType("occupational");
+
+      // 마지막 기간 종료일을 종료연도로 자동 설정
+      const lastPeriod = parsed.periods?.[parsed.periods.length - 1];
+      if (lastPeriod?.endDate) {
+        const yr = parseInt(lastPeriod.endDate.slice(0, 4), 10);
+        if (!isNaN(yr) && yr >= DATA_START_YEAR && yr <= DATA_END_YEAR) {
+          setEndYear(yr);
+        }
+      }
+
+      // 공단값 자동 채우기 (휴업급여인 경우 마지막 기간의 평균임금)
+      if (parsed.decisionType === "휴업급여" && lastPeriod) {
+        const formula = lastPeriod.formula;
+        const wageMatch = formula.match(/([\d,]+원\s*\d{0,2}\s*전?)/);
+        if (wageMatch) {
+          const cleaned = wageMatch[1].replace(/[원전,\s]/g, "");
+          const m = cleaned.match(/^(\d+)(\d{2})?$/);
+          if (m) {
+            const won = parseInt(m[1], 10);
+            const jeon = m[2] ? parseInt(m[2], 10) / 100 : 0;
+            setOfficialFinalWage(String(won + jeon));
+          }
+        }
+      }
+    } catch (e: unknown) {
+      setUploadError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  function resetUpload() {
+    setParsedNotice(null);
+    setUploadError(null);
+    setUploadedFileName(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }
+
   // 계산
   const result = useMemo<CalcResult | null>(() => {
     const accident = new Date(accidentDateStr);
@@ -292,6 +367,68 @@ export default function WageChangeCalcPage() {
           • 산재법 시행령 제22조 (직업병/일반사고 분기) • 산재법 제55조 별표1 (고령자 감액) • 2년 유예 + 1일 (실무 지침)
         </span>
       </p>
+
+      {/* ─── 결정통지서 업로드 (자동 입력) ─── */}
+      <section style={{ ...sectionStyle, background: "linear-gradient(180deg, #f0f9ff 0%, #fff 100%)" }}>
+        <h2 style={sectionTitleStyle}>📎 결정통지서 PDF 업로드 (자동 입력)</h2>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="application/pdf"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) handleFileUpload(f);
+            }}
+            disabled={uploading}
+            style={{ flex: 1, minWidth: 240, fontSize: 13 }}
+          />
+          {uploading && (
+            <span style={{ fontSize: 13, color: "#0369a1" }}>
+              ⏳ OCR 처리 중... (10~30초 소요)
+            </span>
+          )}
+          {parsedNotice && !uploading && (
+            <button
+              onClick={resetUpload}
+              style={{
+                padding: "6px 12px",
+                fontSize: 12,
+                border: "1px solid #d1d5db",
+                background: "#fff",
+                borderRadius: 6,
+                cursor: "pointer",
+              }}
+            >
+              초기화
+            </button>
+          )}
+        </div>
+
+        {uploadError && (
+          <div style={{
+            marginTop: 12,
+            padding: "8px 12px",
+            background: "#fef2f2",
+            border: "1px solid #fecaca",
+            borderRadius: 6,
+            fontSize: 13,
+            color: "#dc2626",
+          }}>
+            ❌ {uploadError}
+          </div>
+        )}
+
+        {parsedNotice && !uploading && (
+          <div style={{ marginTop: 16 }}>
+            <NoticeSummary notice={parsedNotice} fileName={uploadedFileName} />
+          </div>
+        )}
+
+        <p style={{ marginTop: 12, fontSize: 11, color: "#9ca3af" }}>
+          ※ 지원: 휴업급여·장해일시금·유족연금·장례비 결정통지서 / 스캔본·이미지 PDF 모두 가능
+        </p>
+      </section>
 
       {/* ─── 입력 섹션 ─── */}
       <section style={sectionStyle}>
@@ -546,6 +683,185 @@ function InfoCell({
       <div style={{ fontSize: 15, fontWeight: 700, color: color ?? (highlight ? "#1d4ed8" : "#111827") }}>
         {value}
       </div>
+    </div>
+  );
+}
+
+function NoticeSummary({
+  notice,
+  fileName,
+}: {
+  notice: ParsedNotice;
+  fileName: string | null;
+}) {
+  const formatNum = (n: number | null | undefined) =>
+    n != null ? n.toLocaleString("ko-KR") : "-";
+
+  const isHuyup = notice.decisionType === "휴업급여";
+  const totalSum = notice.periods.reduce((s, p) => s + (p.amount ?? 0), 0);
+  const periodMatch =
+    notice.paymentAmount && totalSum
+      ? Math.abs(notice.paymentAmount - totalSum) < 100
+      : null;
+
+  return (
+    <div>
+      <div style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 10,
+        marginBottom: 10,
+        flexWrap: "wrap",
+      }}>
+        <span style={{ fontSize: 12, color: "#9ca3af" }}>📄 {fileName}</span>
+        <span style={{
+          background: "#0369a1",
+          color: "#fff",
+          fontSize: 11,
+          padding: "2px 8px",
+          borderRadius: 12,
+          fontWeight: 600,
+        }}>
+          {notice.decisionType}
+        </span>
+        {notice.resultStatus && (
+          <span style={{
+            background: "#dcfce7",
+            color: "#166534",
+            fontSize: 11,
+            padding: "2px 8px",
+            borderRadius: 12,
+            fontWeight: 600,
+          }}>
+            {notice.resultStatus}
+          </span>
+        )}
+      </div>
+
+      {/* 핵심 정보 그리드 */}
+      <div style={{
+        display: "grid",
+        gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
+        gap: 8,
+        marginBottom: 12,
+      }}>
+        <InfoCell label="산재근로자" value={notice.workerName ?? "-"} />
+        <InfoCell label="생년월일" value={notice.birthDate ?? notice.birthDateRaw ?? "-"} />
+        <InfoCell label="재해발생일" value={notice.accidentDate ?? "-"} />
+        <InfoCell label="결정일" value={notice.decisionDate ?? "-"} />
+        <InfoCell
+          label="최초 평균임금"
+          value={notice.initialAvgWage ? `${formatNum(notice.initialAvgWage)}원` : "-"}
+          highlight
+        />
+        <InfoCell
+          label="지급결정액"
+          value={notice.paymentAmount ? `${formatNum(notice.paymentAmount)}원` : "-"}
+          highlight
+        />
+      </div>
+
+      {/* 사업장 정보 */}
+      {(notice.businessName || notice.constructionName) && (
+        <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 12 }}>
+          🏢 {notice.businessName ?? "-"}
+          {notice.constructionName && ` / ${notice.constructionName}`}
+        </div>
+      )}
+
+      {/* 기간별 산정내역 (휴업급여 등) */}
+      {notice.periods.length > 0 && (
+        <details open style={{ marginBottom: 12 }}>
+          <summary style={{ fontSize: 13, fontWeight: 600, color: "#374151", cursor: "pointer", marginBottom: 8 }}>
+            기간별 산정내역 ({notice.periods.length}개)
+            {periodMatch !== null && (
+              <span style={{
+                marginLeft: 8,
+                fontSize: 11,
+                color: periodMatch ? "#16a34a" : "#dc2626",
+              }}>
+                {periodMatch ? "✅ 합계 일치" : "⚠️ 합계 불일치"}
+              </span>
+            )}
+          </summary>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+            <thead>
+              <tr style={{ background: "#f1f5f9", borderBottom: "1px solid #cbd5e1" }}>
+                <th style={{ padding: 6, textAlign: "left", fontWeight: 600 }}>#</th>
+                <th style={{ padding: 6, textAlign: "left", fontWeight: 600 }}>기간</th>
+                <th style={{ padding: 6, textAlign: "left", fontWeight: 600 }}>산정내역</th>
+                <th style={{ padding: 6, textAlign: "right", fontWeight: 600 }}>금액</th>
+              </tr>
+            </thead>
+            <tbody>
+              {notice.periods.map((p) => (
+                <tr key={p.index} style={{ borderBottom: "1px solid #f1f5f9" }}>
+                  <td style={{ padding: 6 }}>{p.index}</td>
+                  <td style={{ padding: 6 }}>{p.startDate} ~ {p.endDate}</td>
+                  <td style={{ padding: 6, fontFamily: "monospace", fontSize: 11, color: "#374151" }}>
+                    {p.formula}
+                  </td>
+                  <td style={{ padding: 6, textAlign: "right", fontWeight: 600, color: "#0369a1" }}>
+                    {p.amount ? `${formatNum(p.amount)}원` : "-"}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </details>
+      )}
+
+      {/* 장해 정보 */}
+      {(notice.disabilityGrade || notice.disabilityDays) && (
+        <div style={{ background: "#fef9c3", borderRadius: 8, padding: 10, marginBottom: 12 }}>
+          <div style={{ fontSize: 12, fontWeight: 600, color: "#854d0e", marginBottom: 4 }}>
+            장해 정보
+          </div>
+          <div style={{ fontSize: 12, color: "#374151" }}>
+            등급: {notice.disabilityGrade ?? "-"} / 일수: {formatNum(notice.disabilityDays)}일
+            {notice.disabilityUnitWage && ` / 일당: ${formatNum(notice.disabilityUnitWage)}원`}
+            {notice.disabilityTotalAmount && ` / 결정액: ${formatNum(notice.disabilityTotalAmount)}원`}
+          </div>
+          {notice.legacyDeduction && (
+            <div style={{ fontSize: 12, color: "#dc2626", marginTop: 4 }}>
+              ※ 기수령액 차감: {formatNum(notice.legacyDeduction)}원
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* 청력 정보 */}
+      {notice.hearingDb && (
+        <div style={{ background: "#dbeafe", borderRadius: 8, padding: 10, marginBottom: 12 }}>
+          <div style={{ fontSize: 12, fontWeight: 600, color: "#1e40af", marginBottom: 4 }}>
+            청력 데이터
+          </div>
+          <div style={{ fontSize: 12, color: "#374151" }}>
+            청력 좌 {notice.hearingDb.left}dB / 우 {notice.hearingDb.right}dB
+            {notice.speechDiscrim && (
+              <> / 어음명료도 좌 {notice.speechDiscrim.left}% / 우 {notice.speechDiscrim.right}%</>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* 검증 안내 */}
+      {isHuyup ? (
+        <div style={{ background: "#dbeafe", color: "#1e40af", padding: 10, borderRadius: 8, fontSize: 12 }}>
+          ✅ 휴업급여 통지서입니다. 아래 입력 정보가 자동으로 채워졌습니다. 연차별 평임 산정 결과를 확인하세요.
+        </div>
+      ) : (
+        <div style={{ background: "#fffbeb", color: "#92400e", padding: 10, borderRadius: 8, fontSize: 12 }}>
+          ⚠️ {notice.decisionType} 통지서 — 본 도구는 평균임금 증감 검증용입니다. 등급 일수·가족구성 등 추가 검증 로직은 향후 단계에서 추가 예정입니다.
+        </div>
+      )}
+
+      {/* 경고 */}
+      {notice.warnings.length > 0 && (
+        <div style={{ marginTop: 8, fontSize: 11, color: "#92400e" }}>
+          ⚠️ {notice.warnings.join(" · ")}
+        </div>
+      )}
     </div>
   );
 }
