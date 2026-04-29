@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
-import { CAT1_LIST, CAT2_MAP } from "../../lib/constants/info-categories";
 
 const PdfViewerModal = dynamic(() => import("../../components/PdfViewerModal"), { ssr: false });
 const InlinePdfViewer = dynamic(() => import("../../components/InlinePdfViewer"), { ssr: false });
@@ -782,6 +781,31 @@ function ChapterView({
 
 // ─── 근로복지공단 지침 ──────────────────────────────────────────────────────────
 
+const G_CAT1 = [
+  { key: "산재일반", label: "산재 일반" },
+  { key: "상병별",   label: "상병별 상세" },
+] as const;
+
+const G_CAT2: Record<string, { key: string; label: string }[]> = {
+  산재일반: [
+    { key: "요양",     label: "요양" },
+    { key: "보상",     label: "보상" },
+    { key: "평균임금", label: "평균임금" },
+    { key: "기타일반", label: "기타" },
+  ],
+  상병별: [
+    { key: "소음성난청", label: "소음성 난청" },
+    { key: "COPD",       label: "COPD (만성폐쇄성폐질환)" },
+    { key: "진폐",       label: "진폐" },
+    { key: "근골격계",   label: "근골격계 질환" },
+    { key: "정신질환",   label: "정신 질환" },
+    { key: "뇌심혈관계", label: "뇌심혈관계 질환" },
+    { key: "직업성암",   label: "직업성 암" },
+    { key: "석면폐증",   label: "석면폐증" },
+    { key: "기타상병",   label: "기타" },
+  ],
+};
+
 type GuidanceEntry = {
   id: string;
   title: string;
@@ -791,15 +815,14 @@ type GuidanceEntry = {
 };
 
 const GUIDANCE_LIST: GuidanceEntry[] = [
-  /* ── 1. 산재·직업병 일반 > 난청 ── */
-  { id: "g1", cat1: "산재직업병", cat2: "난청", title: "소음성 난청 업무처리기준 개선 전문 (2021.12.23. 시행)", fileUrl: "/docs/소음성_난청_업무처리기준_2021.pdf" },
+  { id: "g1", cat1: "상병별", cat2: "소음성난청", title: "소음성 난청 업무처리기준 개선 전문 (2021.12.23. 시행)", fileUrl: "/docs/소음성_난청_업무처리기준_2021.pdf" },
 ];
 
-type SelState = { cat1?: string; cat2?: string };
+type GSelState = { cat1?: string; cat2?: string };
 
 function GuidelinesTab() {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
-  const [sel, setSel] = useState<SelState>({});
+  const [sel, setSel] = useState<GSelState>({});
   const [selectedPdf, setSelectedPdf] = useState<GuidanceEntry | null>(null);
 
   function toggleExpand(key: string) {
@@ -824,7 +847,7 @@ function GuidelinesTab() {
   return (
     <div style={{ display: "flex", height: "calc(100vh - 160px)" }}>
       {/* 왼쪽: 트리 사이드바 */}
-      <div style={{ width: 256, flexShrink: 0, borderRight: "1px solid #e5e7eb", overflowY: "auto", background: "#f9fafb", display: "flex", flexDirection: "column" }}>
+      <div style={{ width: 240, flexShrink: 0, borderRight: "1px solid #e5e7eb", overflowY: "auto", background: "#f9fafb", display: "flex", flexDirection: "column" }}>
         <div style={{ padding: "8px 10px" }}>
           {/* 전체 */}
           <button
@@ -840,29 +863,25 @@ function GuidelinesTab() {
             <span style={{ fontSize: 10, color: "#9ca3af" }}>{GUIDANCE_LIST.length}</span>
           </button>
 
-          {CAT1_LIST.map(c1 => {
+          {G_CAT1.map(c1 => {
             const count = cntPdf(c1.key);
-            const c2List = CAT2_MAP[c1.key] ?? [];
+            const c2List = G_CAT2[c1.key] ?? [];
             const open = expanded.has(c1.key);
             const active = sel.cat1 === c1.key && !sel.cat2;
 
             return (
               <div key={c1.key}>
                 <button
-                  onClick={() => {
-                    toggleExpand(c1.key);
-                    setSel({ cat1: c1.key });
-                    setSelectedPdf(null);
-                  }}
+                  onClick={() => { toggleExpand(c1.key); setSel({ cat1: c1.key }); setSelectedPdf(null); }}
                   style={{
                     display: "flex", alignItems: "center", gap: 4, width: "100%", textAlign: "left",
                     padding: "6px 8px", fontSize: 12, border: "none", cursor: "pointer", borderRadius: 4,
                     background: active ? "#dbeafe" : "transparent",
-                    color: active ? "#1d4ed8" : "#374151", fontWeight: active ? 700 : 500,
+                    color: active ? "#1d4ed8" : "#374151", fontWeight: active ? 700 : 600,
                   }}
                 >
                   <span style={{ fontSize: 9, color: "#9ca3af", width: 12, textAlign: "center" }}>
-                    {c2List.length > 0 ? (open ? "▼" : "▶") : ""}
+                    {open ? "▼" : "▶"}
                   </span>
                   <span style={{ flex: 1, lineHeight: 1.4 }}>{c1.label}</span>
                   <span style={{ fontSize: 10, color: "#9ca3af" }}>{count}</span>
@@ -883,7 +902,7 @@ function GuidelinesTab() {
                       }}
                     >
                       <span style={{ flex: 1 }}>{c2.label}</span>
-                      <span style={{ fontSize: 10, color: "#9ca3af" }}>{c2Count}</span>
+                      <span style={{ fontSize: 10, color: c2Count > 0 ? "#9ca3af" : "#d1d5db" }}>{c2Count}</span>
                     </button>
                   );
                 })}
@@ -923,8 +942,8 @@ function GuidelinesTab() {
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                 {filtered.map(g => {
-                  const c1Label = CAT1_LIST.find(c => c.key === g.cat1)?.label.replace(/^\d+\.\s*/, "") ?? g.cat1;
-                  const c2Label = g.cat2 ? (CAT2_MAP[g.cat1]?.find(c => c.key === g.cat2)?.label ?? g.cat2) : null;
+                  const c1Label = G_CAT1.find(c => c.key === g.cat1)?.label ?? g.cat1;
+                  const c2Label = g.cat2 ? (G_CAT2[g.cat1]?.find(c => c.key === g.cat2)?.label ?? g.cat2) : null;
                   return (
                     <button
                       key={g.id}
