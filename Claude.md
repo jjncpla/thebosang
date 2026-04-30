@@ -166,16 +166,20 @@ Task tool로 자동 위임되며, 호출 흔적이 Claude Code UI에 별도 turn
 
 | 에이전트 | 정의 파일 | 역할 |
 |---------|----------|------|
-| **code** | `.claude/agents/code.md` | TBSS 코드 작성·수정 전반 (Next.js / Prisma / React / 권한·인증 / UI). 일상 작업의 90%+ |
+| **code** | `.claude/agents/code.md` | TBSS 코드 작성·수정 전반 (Next.js / Prisma / React / 권한·인증 / UI). 일상 작업의 80%+ |
 | **ocr-parser** | `.claude/agents/ocr-parser.md` | 산재 양식 OCR 파싱 + DB 인입 (평균임금산정내역서·결정통지서·자료보완 요청 등) |
 | **form-pdf** | `.claude/agents/form-pdf.md` | 산재 신청 양식 PDF 자동생성 (pdf-lib + NotoSansKR + 좌표계) |
+| **qa-tester** | `.claude/agents/qa-tester.md` | 테스트 시나리오, 디버깅, 더미 데이터, 보안 리뷰. 1인+직원 수동 테스트 한계 보완 |
 | **planning** | `.claude/agents/planning.md` | PRD 작성, Phase 로드맵, 기획서 정합성. 코드 변경 안 함 |
 
 **위임 우선순위**:
 - 코드 작업 → 기본 `code`
 - OCR 텍스트에서 필드 추출 / DB 인입 작업 → `ocr-parser`
 - pdf-lib 좌표 / 한국어 폰트 / 양식 spec 작업 → `form-pdf`
+- 테스트·디버깅·더미 데이터·보안 리뷰 → `qa-tester`
 - 신규 기능 구상 / 기획서 업데이트 → `planning`
+
+> **qa-tester 상시 운영**: 본 에이전트는 호출 시점에만 작동. 상시 트리거(PR마다 자동 리뷰, 매일 아침 점검 등)는 GitHub Actions / Claude Code schedule / Railway 크론으로 별도 셋업 예정.
 
 > v1 (`agents/dev.md`, `agents/design.md`, `agents/security.md`, `agents/orchestrator.md`)은 deprecated.
 > design / security는 `code` 에이전트 내부 체크리스트로 흡수됨. 이전 파일은 `agents/` 폴더에 보존.
