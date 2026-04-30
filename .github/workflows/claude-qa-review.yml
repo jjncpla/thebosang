@@ -1,0 +1,59 @@
+name: Claude qa-tester PR Review
+
+# qa-tester 서브에이전트 자동 호출 — secret 필요 (ANTHROPIC_API_KEY)
+# secret 미설정 시 본 워크플로만 실패. pr-validation.yml은 정상 작동.
+# 자세한 셋업: .github/README.md 참조
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  issue_comment:
+    types: [created]
+
+jobs:
+  qa-review:
+    name: qa-tester 자동 리뷰
+    # PR 이벤트면 무조건 실행. 댓글 이벤트면 "@claude" 멘션 시에만.
+    if: |
+      github.event_name == 'pull_request' ||
+      (github.event_name == 'issue_comment' &&
+       github.event.issue.pull_request != null &&
+       contains(github.event.comment.body, '@claude'))
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # base 브랜치와 diff 위해 전체 히스토리 필요
+
+      - name: Claude qa-tester 실행
+        uses: anthropics/claude-code-action@v1
+        with:
+          prompt: |
+            이 PR을 qa-tester 서브에이전트 관점으로 리뷰한다.
+
+            ## 작업 절차
+            1. base 브랜치 대비 변경 파일 확인 (`git diff origin/${{ github.base_ref || 'main' }}..HEAD`)
+            2. `.claude/agents/qa-tester.md`의 작업 4영역 적용:
+               - 테스트 시나리오 (회귀 점검 누락 여부)
+               - 디버깅 (에러 가능성, 흔한 함정)
+               - 더미 데이터 (실명/실주민번호 노출 여부)
+               - 보안 리뷰 (auth 누락, 권한 분기, env 노출, 주민번호 마스킹)
+            3. 발견된 이슈는 심각도 분류: 🔴 Critical / 🟠 High / 🟡 Medium / 🔵 Low
+
+            ## 출력 규칙
+            - PR에 코멘트로 결과 요약을 남긴다
+            - 코드 자동 수정 금지 (code 에이전트가 별도로 처리)
+            - Critical/High 이슈가 있으면 명시적으로 "병합 보류 권고" 표시
+            - 단순한 변경(typo, 주석 등)이면 "리뷰 통과" 한 줄로 종료
+
+            ## 참조 문서
+            - CLAUDE.md (절대 원칙)
+            - docs/통합기획서.md (권한 / Phase)
+            - docs/기획서_보안.md (권한 매트릭스)
+            - .claude/agents/qa-tester.md (본 에이전트 매뉴얼)
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
