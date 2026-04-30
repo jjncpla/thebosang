@@ -24,14 +24,21 @@ export default function ReExamClaimFormPage() {
     attachments: "",
   });
   const [generating, setGenerating] = useState(false);
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
   function update<K extends keyof typeof data>(key: K, value: typeof data[K]) {
     setData((prev) => ({ ...prev, [key]: value }));
+    if (errors[key as string]) {
+      setErrors((prev) => ({ ...prev, [key as string]: "" }));
+    }
   }
 
   async function generate() {
-    if (!data.claimantName || !data.reasonText) {
-      alert("청구인 성명, 청구 이유는 필수 입력입니다.");
+    const newErrors: Record<string, string> = {};
+    if (!data.claimantName.trim()) newErrors.claimantName = "필수 입력 항목입니다.";
+    if (!data.reasonText.trim()) newErrors.reasonText = "필수 입력 항목입니다.";
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
       return;
     }
     setGenerating(true);
@@ -72,6 +79,9 @@ export default function ReExamClaimFormPage() {
   const labelStyle: React.CSSProperties = { display: "block", fontSize: 13, color: "#374151", fontWeight: 500, marginBottom: 4 };
   const inputStyle: React.CSSProperties = { width: "100%", padding: "8px 10px", border: "1px solid #d1d5db", borderRadius: 6, fontSize: 14, boxSizing: "border-box" };
   const fieldStyle: React.CSSProperties = { marginBottom: 12 };
+  const requiredMark: React.CSSProperties = { color: "#dc2626", marginLeft: 2 };
+  const errStyle: React.CSSProperties = { fontSize: 12, color: "#dc2626", marginTop: 4 };
+  const errorInputStyle: React.CSSProperties = { ...inputStyle, borderColor: "#dc2626" };
 
   return (
     <div style={containerStyle}>
@@ -83,11 +93,16 @@ export default function ReExamClaimFormPage() {
       <div style={cardStyle}>
         <h2 style={{ fontSize: 16, fontWeight: 600, marginBottom: 12 }}>청구인 정보</h2>
         <div style={fieldStyle}>
-          <label style={labelStyle}>성명 *</label>
-          <input style={inputStyle} value={data.claimantName} onChange={(e) => update("claimantName", e.target.value)} />
+          <label style={labelStyle}>성명<span style={requiredMark}>*</span></label>
+          <input
+            style={errors.claimantName ? errorInputStyle : inputStyle}
+            value={data.claimantName}
+            onChange={(e) => update("claimantName", e.target.value)}
+          />
+          {errors.claimantName && <div style={errStyle}>{errors.claimantName}</div>}
         </div>
         <div style={fieldStyle}><label style={labelStyle}>주민번호</label>
-          <input style={inputStyle} value={data.claimantRRN} onChange={(e) => update("claimantRRN", e.target.value)} placeholder="ex: 800101-1******" /></div>
+          <input style={inputStyle} value={data.claimantRRN} onChange={(e) => update("claimantRRN", e.target.value)} placeholder="예: 800101-1******" /></div>
         <div style={fieldStyle}><label style={labelStyle}>주소</label>
           <input style={inputStyle} value={data.claimantAddr} onChange={(e) => update("claimantAddr", e.target.value)} /></div>
         <div style={fieldStyle}><label style={labelStyle}>연락처</label>
@@ -101,7 +116,7 @@ export default function ReExamClaimFormPage() {
         <div style={fieldStyle}><label style={labelStyle}>원처분일자</label>
           <input style={inputStyle} type="date" value={data.decisionDate} onChange={(e) => update("decisionDate", e.target.value)} /></div>
         <div style={fieldStyle}><label style={labelStyle}>원처분내용</label>
-          <input style={inputStyle} value={data.decisionContent} onChange={(e) => update("decisionContent", e.target.value)} placeholder="ex: 장해급여 부지급 처분" /></div>
+          <input style={inputStyle} value={data.decisionContent} onChange={(e) => update("decisionContent", e.target.value)} placeholder="예: 장해급여 부지급 처분" /></div>
         <div style={fieldStyle}><label style={labelStyle}>상병명</label>
           <input style={inputStyle} value={data.diagnosisName} onChange={(e) => update("diagnosisName", e.target.value)} /></div>
       </div>
@@ -111,9 +126,9 @@ export default function ReExamClaimFormPage() {
         <div style={fieldStyle}><label style={labelStyle}>심사 결정일</label>
           <input style={inputStyle} type="date" value={data.examDecisionDate} onChange={(e) => update("examDecisionDate", e.target.value)} /></div>
         <div style={fieldStyle}><label style={labelStyle}>심사 결정내용</label>
-          <input style={inputStyle} value={data.examDecisionContent} onChange={(e) => update("examDecisionContent", e.target.value)} placeholder="ex: 기각 / 각하" /></div>
+          <input style={inputStyle} value={data.examDecisionContent} onChange={(e) => update("examDecisionContent", e.target.value)} placeholder="예: 기각 / 각하" /></div>
         <div style={fieldStyle}><label style={labelStyle}>심사 사건번호</label>
-          <input style={inputStyle} value={data.examCaseNo} onChange={(e) => update("examCaseNo", e.target.value)} placeholder="ex: 2025-심사-1234" /></div>
+          <input style={inputStyle} value={data.examCaseNo} onChange={(e) => update("examCaseNo", e.target.value)} placeholder="예: 2025-심사-1234" /></div>
         <div style={fieldStyle}><label style={labelStyle}>관리번호</label>
           <input style={inputStyle} value={data.managementNo} onChange={(e) => update("managementNo", e.target.value)} /></div>
       </div>
@@ -122,10 +137,23 @@ export default function ReExamClaimFormPage() {
         <h2 style={{ fontSize: 16, fontWeight: 600, marginBottom: 12 }}>청구 내용</h2>
         <div style={fieldStyle}><label style={labelStyle}>청구 취지 (비우면 자동 생성)</label>
           <textarea style={{ ...inputStyle, height: 60, fontFamily: "inherit", resize: "vertical" }} value={data.purpose} onChange={(e) => update("purpose", e.target.value)} /></div>
-        <div style={fieldStyle}><label style={labelStyle}>청구 이유 *</label>
-          <textarea style={{ ...inputStyle, height: 200, fontFamily: "inherit", resize: "vertical" }} value={data.reasonText} onChange={(e) => update("reasonText", e.target.value)} placeholder="단락 구분: 빈 줄(엔터 2번)" /></div>
+        <div style={fieldStyle}>
+          <label style={labelStyle}>청구 이유<span style={requiredMark}>*</span></label>
+          <textarea
+            style={{
+              ...(errors.reasonText ? errorInputStyle : inputStyle),
+              height: 200,
+              fontFamily: "inherit",
+              resize: "vertical",
+            }}
+            value={data.reasonText}
+            onChange={(e) => update("reasonText", e.target.value)}
+            placeholder="단락 구분: 빈 줄(엔터 2번)"
+          />
+          {errors.reasonText && <div style={errStyle}>{errors.reasonText}</div>}
+        </div>
         <div style={fieldStyle}><label style={labelStyle}>첨부서류 (줄바꿈/콤마 구분)</label>
-          <textarea style={{ ...inputStyle, height: 80, fontFamily: "inherit", resize: "vertical" }} value={data.attachments} onChange={(e) => update("attachments", e.target.value)} placeholder="ex: 심사결정서 사본, 처분통지서 사본 등" /></div>
+          <textarea style={{ ...inputStyle, height: 80, fontFamily: "inherit", resize: "vertical" }} value={data.attachments} onChange={(e) => update("attachments", e.target.value)} placeholder="예: 심사결정서 사본, 처분통지서 사본 등" /></div>
       </div>
 
       <div style={cardStyle}>
