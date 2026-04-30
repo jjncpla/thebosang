@@ -19,14 +19,22 @@ export default function AdditionalInjuryFormPage() {
     agentLicenseNo: "",
   });
   const [generating, setGenerating] = useState(false);
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
   function update<K extends keyof typeof data>(key: K, value: typeof data[K]) {
     setData((prev) => ({ ...prev, [key]: value }));
+    if (errors[key as string]) {
+      setErrors((prev) => ({ ...prev, [key as string]: "" }));
+    }
   }
 
   async function generate() {
-    if (!data.claimantName || !data.additionalDiagnosis || !data.reasonText) {
-      alert("청구인 성명, 추가 상병명, 신청 사유는 필수입니다.");
+    const newErrors: Record<string, string> = {};
+    if (!data.claimantName.trim()) newErrors.claimantName = "필수 입력 항목입니다.";
+    if (!data.additionalDiagnosis.trim()) newErrors.additionalDiagnosis = "필수 입력 항목입니다.";
+    if (!data.reasonText.trim()) newErrors.reasonText = "필수 입력 항목입니다.";
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
       return;
     }
     setGenerating(true);
@@ -60,6 +68,9 @@ export default function AdditionalInjuryFormPage() {
   const labelStyle: React.CSSProperties = { display: "block", fontSize: 13, color: "#374151", fontWeight: 500, marginBottom: 4 };
   const inputStyle: React.CSSProperties = { width: "100%", padding: "8px 10px", border: "1px solid #d1d5db", borderRadius: 6, fontSize: 14, boxSizing: "border-box" };
   const fieldStyle: React.CSSProperties = { marginBottom: 12 };
+  const requiredMark: React.CSSProperties = { color: "#dc2626", marginLeft: 2 };
+  const errStyle: React.CSSProperties = { fontSize: 12, color: "#dc2626", marginTop: 4 };
+  const errorInputStyle: React.CSSProperties = { ...inputStyle, borderColor: "#dc2626" };
 
   return (
     <div style={containerStyle}>
@@ -70,8 +81,15 @@ export default function AdditionalInjuryFormPage() {
 
       <div style={cardStyle}>
         <h2 style={{ fontSize: 16, fontWeight: 600, marginBottom: 12 }}>신청인 정보</h2>
-        <div style={fieldStyle}><label style={labelStyle}>성명 *</label>
-          <input style={inputStyle} value={data.claimantName} onChange={(e) => update("claimantName", e.target.value)} /></div>
+        <div style={fieldStyle}>
+          <label style={labelStyle}>성명<span style={requiredMark}>*</span></label>
+          <input
+            style={errors.claimantName ? errorInputStyle : inputStyle}
+            value={data.claimantName}
+            onChange={(e) => update("claimantName", e.target.value)}
+          />
+          {errors.claimantName && <div style={errStyle}>{errors.claimantName}</div>}
+        </div>
         <div style={fieldStyle}><label style={labelStyle}>주민번호</label>
           <input style={inputStyle} value={data.claimantRRN} onChange={(e) => update("claimantRRN", e.target.value)} /></div>
         <div style={fieldStyle}><label style={labelStyle}>주소</label>
@@ -85,9 +103,17 @@ export default function AdditionalInjuryFormPage() {
       <div style={cardStyle}>
         <h2 style={{ fontSize: 16, fontWeight: 600, marginBottom: 12 }}>상병 정보</h2>
         <div style={fieldStyle}><label style={labelStyle}>기존 인정 상병</label>
-          <input style={inputStyle} value={data.originalDiagnosis} onChange={(e) => update("originalDiagnosis", e.target.value)} placeholder="ex: 양측 감각신경성 난청" /></div>
-        <div style={fieldStyle}><label style={labelStyle}>추가 상병명 *</label>
-          <input style={inputStyle} value={data.additionalDiagnosis} onChange={(e) => update("additionalDiagnosis", e.target.value)} placeholder="ex: 이명 / 청각장애 등" /></div>
+          <input style={inputStyle} value={data.originalDiagnosis} onChange={(e) => update("originalDiagnosis", e.target.value)} placeholder="예: 양측 감각신경성 난청" /></div>
+        <div style={fieldStyle}>
+          <label style={labelStyle}>추가 상병명<span style={requiredMark}>*</span></label>
+          <input
+            style={errors.additionalDiagnosis ? errorInputStyle : inputStyle}
+            value={data.additionalDiagnosis}
+            onChange={(e) => update("additionalDiagnosis", e.target.value)}
+            placeholder="예: 이명 / 청각장애 등"
+          />
+          {errors.additionalDiagnosis && <div style={errStyle}>{errors.additionalDiagnosis}</div>}
+        </div>
         <div style={fieldStyle}><label style={labelStyle}>진단일</label>
           <input style={inputStyle} type="date" value={data.diagnosisDate} onChange={(e) => update("diagnosisDate", e.target.value)} /></div>
         <div style={fieldStyle}><label style={labelStyle}>진단 의료기관</label>
@@ -95,8 +121,21 @@ export default function AdditionalInjuryFormPage() {
       </div>
 
       <div style={cardStyle}>
-        <h2 style={{ fontSize: 16, fontWeight: 600, marginBottom: 12 }}>신청 사유 *</h2>
-        <textarea style={{ ...inputStyle, height: 200, fontFamily: "inherit", resize: "vertical" }} value={data.reasonText} onChange={(e) => update("reasonText", e.target.value)} placeholder="단락 구분: 빈 줄(엔터 2번)" />
+        <h2 style={{ fontSize: 16, fontWeight: 600, marginBottom: 12 }}>
+          신청 사유<span style={requiredMark}>*</span>
+        </h2>
+        <textarea
+          style={{
+            ...(errors.reasonText ? errorInputStyle : inputStyle),
+            height: 200,
+            fontFamily: "inherit",
+            resize: "vertical",
+          }}
+          value={data.reasonText}
+          onChange={(e) => update("reasonText", e.target.value)}
+          placeholder="단락 구분: 빈 줄(엔터 2번)"
+        />
+        {errors.reasonText && <div style={errStyle}>{errors.reasonText}</div>}
       </div>
 
       <div style={cardStyle}>
