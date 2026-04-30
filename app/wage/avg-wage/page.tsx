@@ -2,6 +2,23 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { ParsedAvgWage } from "@/lib/avg-wage-parser";
+import FormModal, { type FormModalField } from "@/components/ui/FormModal";
+
+type ListItem = {
+  id: string;
+  fileName: string;
+  workerName: string | null;
+  workplaceName: string | null;
+  diagnosisDate: string | null;
+  baseAvgWage: number | null;
+  statWageBase: number | null;
+  finalAvgWage: number | null;
+  needsCorrection: boolean;
+  correctionReason: string | null;
+  verifyStatus: string | null;
+  wageReviewId: string | null;
+  createdAt: string;
+};
 
 /** 평균임금산정내역서 OCR 자동 인입 검토 페이지 */
 export default function AvgWageNoticePage() {
@@ -13,21 +30,12 @@ export default function AvgWageNoticePage() {
   const [showRaw, setShowRaw] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  type ListItem = {
-    id: string;
-    fileName: string;
-    workerName: string | null;
-    workplaceName: string | null;
-    diagnosisDate: string | null;
-    baseAvgWage: number | null;
-    statWageBase: number | null;
-    finalAvgWage: number | null;
-    needsCorrection: boolean;
-    correctionReason: string | null;
-    verifyStatus: string | null;
-    wageReviewId: string | null;
-    createdAt: string;
-  };
+  // 모달 상태
+  const [pdfModalItem, setPdfModalItem] = useState<ListItem | null>(null);
+  const [pdfModalSubmitting, setPdfModalSubmitting] = useState(false);
+  const [promoteModalItem, setPromoteModalItem] = useState<ListItem | null>(null);
+  const [promoteModalSubmitting, setPromoteModalSubmitting] = useState(false);
+
   const [recent, setRecent] = useState<ListItem[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [filterCorrection, setFilterCorrection] = useState<"all" | "needs" | "ok">("all");
@@ -98,29 +106,26 @@ export default function AvgWageNoticePage() {
     }
   }
 
-  /** 평균임금 정정청구서 PDF 다운로드 */
-  async function downloadCorrectionPdf(item: ListItem) {
-    try {
-      const additionalReason = window.prompt(
-        "추가 청구 사유 (선택, 비우면 자동 생성된 사유만 사용)",
-        ""
-      ) ?? "";
-      const bankName = window.prompt("수령 은행 (선택)", "") ?? "";
-      const bankAccount = window.prompt("계좌번호 (선택)", "") ?? "";
-      const bankHolder = window.prompt("예금주 (선택)", item.workerName ?? "") ?? "";
-      const claimantAddr = window.prompt("청구인 주소 (선택)", "") ?? "";
-      const claimantPhone = window.prompt("청구인 연락처 (선택)", "") ?? "";
+  /** 평균임금 정정청구서 PDF 다운로드 - 모달 열기 */
+  function openPdfModal(item: ListItem) {
+    setPdfModalItem(item);
+  }
 
-      const res = await fetch(`/api/avg-wage/${item.id}/correction-pdf`, {
+  /** 평균임금 정정청구서 PDF 실제 생성 */
+  async function submitPdfModal(values: Record<string, string>) {
+    if (!pdfModalItem) return;
+    setPdfModalSubmitting(true);
+    try {
+      const res = await fetch(`/api/avg-wage/${pdfModalItem.id}/correction-pdf`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          additionalReason,
-          bankName,
-          bankAccount,
-          bankHolder,
-          claimantAddr,
-          claimantPhone,
+          additionalReason: values.additionalReason ?? "",
+          bankName: values.bankName ?? "",
+          bankAccount: values.bankAccount ?? "",
+          bankHolder: values.bankHolder ?? "",
+          claimantAddr: values.claimantAddr ?? "",
+          claimantPhone: values.claimantPhone ?? "",
         }),
       });
       if (!res.ok) {
@@ -132,34 +137,41 @@ export default function AvgWageNoticePage() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `평균임금정정청구서_${item.workerName ?? "재해자"}.pdf`;
+      a.download = `평균임금정정청구서_${pdfModalItem.workerName ?? "재해자"}.pdf`;
       a.click();
       URL.revokeObjectURL(url);
+      setPdfModalItem(null);
     } catch (e) {
       alert(`PDF 생성 실패: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setPdfModalSubmitting(false);
     }
   }
 
-  /** AvgWageNotice → WageReviewData 변환 */
-  async function promoteToWageReview(item: ListItem) {
+  /** AvgWageNotice → WageReviewData 변환 - 모달 열기 */
+  function openPromoteModal(item: ListItem) {
     if (item.wageReviewId) {
       alert(`이미 WageReviewData로 변환됨 (id=${item.wageReviewId})`);
       return;
     }
-    const tfName = window.prompt("TF명 입력 (예: 울산북부TF)", "");
-    if (!tfName) return;
-    const patientName = window.prompt("재해자 성명", item.workerName ?? "");
-    if (!patientName) return;
-    const caseType = window.prompt("사건 종류 (예: 소음성 난청 / 진폐 / COPD)", "소음성 난청");
-    if (!caseType) return;
-    const caseId = window.prompt("Case ID (없으면 비움)", "") || null;
-    const reviewManagerName = window.prompt("검토 담당자명 (선택)", "") || null;
+    setPromoteModalItem(item);
+  }
 
+  /** WageReviewData 변환 실제 실행 */
+  async function submitPromoteModal(values: Record<string, string>) {
+    if (!promoteModalItem) return;
+    setPromoteModalSubmitting(true);
     try {
-      const res = await fetch(`/api/avg-wage/${item.id}/promote`, {
+      const res = await fetch(`/api/avg-wage/${promoteModalItem.id}/promote`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tfName, patientName, caseType, caseId, reviewManagerName }),
+        body: JSON.stringify({
+          tfName: values.tfName,
+          patientName: values.patientName,
+          caseType: values.caseType,
+          caseId: values.caseId || null,
+          reviewManagerName: values.reviewManagerName || null,
+        }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -167,9 +179,12 @@ export default function AvgWageNoticePage() {
         return;
       }
       alert(`✅ WageReviewData 생성 완료 (id=${data.wageReviewId})`);
+      setPromoteModalItem(null);
       fetchRecent();
     } catch (e) {
       alert(`변환 실패: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setPromoteModalSubmitting(false);
     }
   }
 
@@ -642,7 +657,7 @@ export default function AvgWageNoticePage() {
                           </span>
                         ) : (
                           <button
-                            onClick={() => promoteToWageReview(it)}
+                            onClick={() => openPromoteModal(it)}
                             style={{
                               background: "#3b82f6",
                               color: "#fff",
@@ -658,7 +673,7 @@ export default function AvgWageNoticePage() {
                           </button>
                         )}
                         <button
-                          onClick={() => downloadCorrectionPdf(it)}
+                          onClick={() => openPdfModal(it)}
                           style={{
                             background: "#7c3aed",
                             color: "#fff",
@@ -690,6 +705,104 @@ export default function AvgWageNoticePage() {
           </div>
         )}
       </div>
+
+      {/* ─── 정정청구서 PDF 입력 모달 ─── */}
+      <FormModal
+        open={!!pdfModalItem}
+        title="평균임금 정정청구서 입력"
+        description={
+          pdfModalItem
+            ? `${pdfModalItem.workerName ?? "재해자"} (${pdfModalItem.workplaceName ?? "사업장 미상"}) - 추가 정보를 입력 후 PDF를 생성합니다. 빈 칸은 양식에서 비워둡니다.`
+            : undefined
+        }
+        fields={
+          [
+            {
+              key: "additionalReason",
+              label: "추가 청구 사유 (선택)",
+              type: "textarea",
+              placeholder: "비우면 자동 생성된 사유만 사용",
+              helpText: "OCR 자동 판정 사유 외에 노무사가 추가하고 싶은 내용",
+            },
+            { key: "bankName", label: "수령 은행 (선택)", type: "text" },
+            { key: "bankAccount", label: "계좌번호 (선택)", type: "text" },
+            {
+              key: "bankHolder",
+              label: "예금주 (선택)",
+              type: "text",
+              defaultValue: pdfModalItem?.workerName ?? "",
+            },
+            { key: "claimantAddr", label: "청구인 주소 (선택)", type: "text" },
+            { key: "claimantPhone", label: "청구인 연락처 (선택)", type: "text" },
+          ] as FormModalField[]
+        }
+        submitLabel="📄 PDF 다운로드"
+        cancelLabel="취소"
+        submitting={pdfModalSubmitting}
+        onSubmit={submitPdfModal}
+        onCancel={() => setPdfModalItem(null)}
+      />
+
+      {/* ─── WageReviewData 변환 모달 ─── */}
+      <FormModal
+        open={!!promoteModalItem}
+        title="WageReviewData로 변환"
+        description={
+          promoteModalItem
+            ? `${promoteModalItem.workerName ?? "재해자"} (${promoteModalItem.workplaceName ?? "사업장 미상"}) - 사건 정보를 입력해 평균임금 검토 자료로 변환합니다.`
+            : undefined
+        }
+        fields={
+          [
+            {
+              key: "tfName",
+              label: "TF명",
+              type: "text",
+              placeholder: "예: 울산북부TF",
+              required: true,
+            },
+            {
+              key: "patientName",
+              label: "재해자 성명",
+              type: "text",
+              required: true,
+              defaultValue: promoteModalItem?.workerName ?? "",
+            },
+            {
+              key: "caseType",
+              label: "사건 종류",
+              type: "select",
+              required: true,
+              defaultValue: "소음성 난청",
+              options: [
+                { value: "소음성 난청", label: "소음성 난청" },
+                { value: "진폐", label: "진폐" },
+                { value: "COPD", label: "COPD" },
+                { value: "근골격계", label: "근골격계" },
+                { value: "직업성암", label: "직업성암" },
+                { value: "업무상사고", label: "업무상사고" },
+                { value: "기타", label: "기타" },
+              ],
+            },
+            {
+              key: "caseId",
+              label: "Case ID (선택)",
+              type: "text",
+              placeholder: "기존 사건과 연결할 경우만 입력",
+            },
+            {
+              key: "reviewManagerName",
+              label: "검토 담당자명 (선택)",
+              type: "text",
+            },
+          ] as FormModalField[]
+        }
+        submitLabel="➡️ 변환"
+        cancelLabel="취소"
+        submitting={promoteModalSubmitting}
+        onSubmit={submitPromoteModal}
+        onCancel={() => setPromoteModalItem(null)}
+      />
     </div>
   );
 }

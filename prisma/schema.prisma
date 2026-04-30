@@ -434,6 +434,12 @@ model MusculoskeletalDetail {
   claimCycle             String?
   memo                   String?
 
+  // 양식 학습 결과 추가 필드 (P5)
+  injuryDescription   String?  // 구체적 상해 내용 (textarea)
+  restTimePattern     String?  // 휴식시간 (예: "1일 2회, 1회 30분")
+  qualityReviewStatus String?  // 질병판정위원회 진행 상태 (제출대기/심의예정/심의완료/재심의 등)
+  concurrentDiseases  Json?    // 동반 상병 배열 (예: [{name: "어깨", grade: "12급"}, ...])
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -466,6 +472,12 @@ model OccupationalAccidentDetail {
   claimCycle             String?
   memo                   String?
 
+  // 양식 학습 결과 추가 필드 (P5)
+  injuryDescription   String?  // 구체적 상해 내용 (textarea)
+  restTimePattern     String?  // 휴식시간 (예: "1일 2회, 1회 30분")
+  qualityReviewStatus String?  // 질병판정위원회 진행 상태
+  concurrentDiseases  Json?    // 동반 상병 배열
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -486,6 +498,13 @@ model OccupationalCancerDetail {
   holidayBenefitPeriod String?
   paymentStatus        String?
   memo                 String?
+
+  // 양식 학습 결과 추가 필드 (P5)
+  cancerType         String?  // 폐암 / 혈액암 / 방광암 / 대장암 / 위암 / 백혈병 / 기타
+  occupation         String?  // 직종
+  exposureSubstance  String?  // 노출 발암물질 (석면, 벤젠, 라돈 등)
+  exposurePeriod     String?  // 노출 기간 (예: "1980 ~ 2010")
+  concurrentDiseases Json?    // 동반 상병 배열 (폐암+COPD+난청 동반 청구 패턴)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

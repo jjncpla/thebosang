@@ -129,12 +129,35 @@ export async function GET(req: NextRequest) {
             disabilityGrade: true,
           },
         },
-        copd: { select: { caseId: true } },
-        pneumoconiosis: { select: { caseId: true } },
-        musculoskeletal: { select: { caseId: true } },
-        occupationalAccident: { select: { caseId: true } },
-        occupationalCancer: { select: { caseId: true } },
-        bereaved: { select: { caseId: true } },
+        copd: { select: { caseId: true, disposalType: true, disabilityDispositionGrade: true } },
+        pneumoconiosis: { select: { caseId: true, precisionResult: true, disposalType: true } },
+        musculoskeletal: {
+          select: {
+            caseId: true,
+            bodyPart: true,
+            diseaseName: true,
+            disposalType: true,
+            qualityReviewStatus: true,
+          },
+        },
+        occupationalAccident: {
+          select: {
+            caseId: true,
+            bodyPart: true,
+            diseaseName: true,
+            disposalType: true,
+            qualityReviewStatus: true,
+          },
+        },
+        occupationalCancer: {
+          select: {
+            caseId: true,
+            cancerType: true,
+            diseaseName: true,
+            disposalType: true,
+          },
+        },
+        bereaved: { select: { caseId: true, diseaseName: true, disposalType: true } },
       },
     });
     const queryMs = Date.now() - t0;
