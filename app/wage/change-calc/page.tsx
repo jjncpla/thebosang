@@ -1052,7 +1052,10 @@ function NoticeSummary({
         <InfoCell label="결정일" value={notice.decisionDate ?? "-"} />
         <InfoCell
           label="최종 증감임금"
-          value={notice.initialAvgWage ? `${formatNum(notice.initialAvgWage)}원` : "-"}
+          value={(() => {
+            const v = notice.initialAvgWage ?? notice.disabilityUnitWage;
+            return v ? `${formatNum(v)}원` : "-";
+          })()}
           highlight
         />
         <InfoCell

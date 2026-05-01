@@ -58,7 +58,7 @@ const MENU_ITEMS: MenuItem[] = [
       { id: "objection-deadline", label: "기일 관리", path: "/objection/deadline" },
     ],
   },
-  { id: "inquiry", label: "사건 조회 (담당)", icon: "🔍", path: "/inquiry" },
+  { id: "inquiry", label: "담당 사건 조회", icon: "🔍", path: "/inquiry" },
   { id: "branch", label: "지사장 관리·운영", icon: "🏢", path: "/branch", restricted: "org" },
   { id: "admin", label: "관리자 페이지", icon: "⚙", path: "/admin", restricted: "admin" },
 ];
