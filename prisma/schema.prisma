@@ -704,6 +704,18 @@ model ObjectionReview {
   assignedTo   String?
   assignedUser User?    @relation("ObjectionReviewAssignee", fields: [assignedTo], references: [id])
   memo           String?
+  // 송무 인계 (관리파일 엑셀 L~U열)
+  litigationFirstReview      String?   // L. 송무 인계 1차 검토 (예: "완료")
+  litigationFirstDraftAt     DateTime? // M. 1차 기안 일자
+  litigationFirstDraftResult String?   // N. 1차 기안 결과 (예: "소송 진행", "기각")
+  litigationContractStatus   String?   // O. 송무 약정여부 (예: "완료")
+  litigationContractSent     String?   // P. 송무 약정서 송부 여부 (예: "완료")
+  litigationSecondDraftAt    DateTime? // Q. 2차 기안 일자
+  // R~U: 승소 시 기입 그룹
+  litigationPoaReceived      String?   // R. 위임장·인감증명서 수령 (예: "완료")
+  litigationFinalDecision    String?   // S. 최종 처분 (예: "완료")
+  litigationPostHandling     String?   // T. 후처리 여부 (예: "완료")
+  litigationPostHandler      String?   // U. 후처리 담당자 (이름)
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 

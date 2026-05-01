@@ -14,6 +14,8 @@ export async function GET(req: NextRequest) {
   const dateTo = searchParams.get("dateTo");
   const search = searchParams.get("search");
   const tfName = searchParams.get("tfName");
+  const branchName = searchParams.get("branchName");
+  const tfNames = searchParams.getAll("tfNames"); // 지사 단위 필터링 시 다중 TF 매칭
   const routeMain = searchParams.get("routeMain");
   const page = parseInt(searchParams.get("page") ?? "1");
   const pageSize = parseInt(searchParams.get("pageSize") ?? "50");
@@ -21,19 +23,51 @@ export async function GET(req: NextRequest) {
   const where: Record<string, unknown> = {};
   if (status) where.status = status;
   if (managerId) where.managerId = managerId;
-  if (tfName) where.tfName = tfName;
   if (routeMain) where.routeMain = routeMain;
   if (caseType) where.caseTypes = { has: caseType };
+
+  // 지사 / TF 필터:
+  //  - 단일 TF 지정: tfName 일치
+  //  - 지사만 지정: branchName 일치 OR 그 지사의 TF 목록 중 하나에 매칭 (둘 중 하나라도 있으면 노출)
+  if (tfName) {
+    where.tfName = tfName;
+  } else if (branchName || tfNames.length > 0) {
+    const orClauses: Array<Record<string, unknown>> = [];
+    if (branchName) orClauses.push({ branchName });
+    if (tfNames.length > 0) orClauses.push({ tfName: { in: tfNames } });
+    if (orClauses.length === 1) Object.assign(where, orClauses[0]);
+    else where.OR = orClauses;
+  }
+
   if (dateFrom || dateTo) {
     where.visitDate = {};
     if (dateFrom) (where.visitDate as Record<string, unknown>).gte = new Date(dateFrom);
     if (dateTo) (where.visitDate as Record<string, unknown>).lte = new Date(dateTo + "T23:59:59");
   }
   if (search) {
-    where.OR = [
+    const searchOr = [
       { name: { contains: search, mode: "insensitive" } },
       { phone: { contains: search } },
     ];
+    // 지사 필터의 OR과 검색 OR이 충돌하지 않도록 AND 결합
+    if (where.OR) {
+      where.AND = [{ OR: where.OR }, { OR: searchOr }];
+      delete where.OR;
+    } else {
+      where.OR = searchOr;
+    }
+  }
+
+  // stats: 지사 / TF 필터가 걸리면 같은 범위 안에서 재집계
+  const statsScope: Record<string, unknown> = {};
+  if (tfName) {
+    statsScope.tfName = tfName;
+  } else if (branchName || tfNames.length > 0) {
+    const orClauses: Array<Record<string, unknown>> = [];
+    if (branchName) orClauses.push({ branchName });
+    if (tfNames.length > 0) orClauses.push({ tfName: { in: tfNames } });
+    if (orClauses.length === 1) Object.assign(statsScope, orClauses[0]);
+    else statsScope.OR = orClauses;
   }
 
   const [total, items] = await Promise.all([
@@ -47,12 +81,12 @@ export async function GET(req: NextRequest) {
     }),
   ]);
 
-  // stats
+  // stats (지사·TF 필터 적용 후 다시 집계)
   const [totalCount, contractCount, waitingCount, closedCount] = await Promise.all([
-    prisma.consultation.count(),
-    prisma.consultation.count({ where: { status: "약정" } }),
-    prisma.consultation.count({ where: { status: "연락대기" } }),
-    prisma.consultation.count({ where: { status: "종결" } }),
+    prisma.consultation.count({ where: statsScope }),
+    prisma.consultation.count({ where: { ...statsScope, status: "약정" } }),
+    prisma.consultation.count({ where: { ...statsScope, status: "연락대기" } }),
+    prisma.consultation.count({ where: { ...statsScope, status: "종결" } }),
   ]);
 
   return NextResponse.json({ items, total, page, pageSize, stats: { total: totalCount, contract: contractCount, waiting: waitingCount, closed: closedCount } });
