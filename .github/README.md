@@ -23,14 +23,24 @@ PR open/synchronize 시 + main push 시 자동 실행. **secret 필요 없음**.
 
 ### 2. `workflows/claude-qa-review.yml` — qa-tester 자동 리뷰 (secret 필요)
 
-PR open/synchronize 시 + PR 댓글에 `@claude` 멘션 시 실행. **`ANTHROPIC_API_KEY` secret 필요**.
+다음 4가지 트리거에서 작동. **`ANTHROPIC_API_KEY` secret 필요**.
+
+| 트리거 | 시점 | 결과 위치 |
+|-------|------|----------|
+| ① **PR open/synchronize/reopened** | PR 만들거나 업데이트 | PR 코멘트 |
+| ② **main push** ⭐ | main에 직접 푸시 (이정준 fast-forward 흐름) | commit comment |
+| ③ **PR 댓글 `@claude`** | PR에서 멘션 | PR 코멘트 |
+| ④ **수동 (workflow_dispatch)** | Actions UI "Run workflow" | run summary |
+
+> **⭐ main push 트리거가 핵심**: 이정준 운영 방식이 PR 안 만들고 main에 직접 fast-forward 푸시하기 때문. 이 트리거 없으면 워크플로가 거의 발동 안 함.
 
 **작동**:
-- `.claude/agents/qa-tester.md` 매뉴얼 따라 PR 변경 사항 자동 리뷰
+- `.claude/agents/qa-tester.md` 매뉴얼 따라 변경 사항 자동 리뷰
 - 4영역(테스트/디버깅/더미/보안) 점검
-- 결과를 PR 코멘트로 작성
-- Critical/High 이슈 발견 시 머지 보류 권고
+- 결과를 PR 코멘트 또는 commit comment로
+- Critical/High 이슈 발견 시 병합 보류/롤백 권고
 - 코드 자동 수정 안 함 (제안만)
+- 단순 변경(typo/주석/문서)은 "리뷰 통과" 한 줄로 종료 (비용 절약)
 
 **secret 미설정 시**: 본 워크플로만 실패. `pr-validation.yml`은 정상 작동.
 
@@ -51,22 +61,43 @@ PR open/synchronize 시 + PR 댓글에 `@claude` 멘션 시 실행. **`ANTHROPIC
 4. **Secret**: 위에서 복사한 `sk-ant-...` 키 붙여넣기
 5. "Add secret" 클릭
 
-### Step 3. 동작 확인
-- 다음 PR을 열면 자동으로 워크플로가 실행됨
-- Actions 탭에서 진행 상황 확인 가능
-- PR에 qa-tester가 코멘트를 남기면 정상 작동
+### Step 3. 동작 확인 (3가지 방법 중 택1)
+
+**방법 A. 수동 실행 (가장 빠름, 추천)**
+1. https://github.com/jjncpla/thebosang/actions/workflows/claude-qa-review.yml 접속
+2. 우측 "Run workflow" 클릭 → 브랜치 `main` 선택 → "Run workflow"
+3. 1~2분 후 run summary에 qa-tester 결과 표시
+
+**방법 B. main 직접 푸시 (이정준 일상 흐름)**
+- 평소처럼 main에 fast-forward 푸시하면 자동 발동
+- commit comment(GitHub repo > Commits > 해당 커밋)에 결과 표시
+
+**방법 C. PR 만들기 (선택적)**
+- 다음 PR 열면 자동 실행
+- PR 코멘트에 결과 표시
 
 ---
 
 ## 비용 예상 (Claude API)
 
+이정준 운영 패턴(main fast-forward) 기준 — **트리거당 1회 호출**.
+
 | 항목 | 예상 비용 |
 |------|----------|
-| PR 1건당 (변경 적음) | ~$0.05 |
-| PR 1건당 (변경 많음, 50+ 파일) | ~$0.30 |
-| 월 30 PR 가정 | $1.5 ~ $9 |
+| 트리거 1회 (변경 적음, typo/문서만) | ~$0.01 (조기 종료) |
+| 트리거 1회 (변경 적음, 코드) | ~$0.05 |
+| 트리거 1회 (변경 많음, 50+ 파일) | ~$0.30 |
+| **이정준 일 평균 푸시 5~10회 가정** | **월 $5 ~ $30** |
 
-> Claude Sonnet 기준. 비용이 걱정되면 `claude-qa-review.yml`의 `if:` 조건에 `github.event_name == 'issue_comment'`만 남겨서 **`@claude` 멘션 시에만 호출**되도록 변경 가능.
+> Claude Sonnet 기준. 단순 변경은 prompt에서 "리뷰 통과" 한 줄로 조기 종료하도록 지시되어 비용 절감됨.
+
+### 비용 더 줄이고 싶을 때
+
+**옵션 1**: main push 트리거 제거 — `claude-qa-review.yml`의 `on:` 섹션에서 `push: branches: [main]` 4줄 삭제. 그러면 PR + 댓글 멘션 + 수동만 발동.
+
+**옵션 2**: 댓글 멘션 전용 — `on:` 섹션에서 `pull_request:`와 `push:` 모두 삭제. `@claude` 멘션 시에만 호출됨.
+
+**옵션 3**: 사용 한도 설정 — Anthropic console > Settings > Spend limits에서 월 $10/$30 등 한도 설정. 초과 시 자동 차단.
 
 ---
 

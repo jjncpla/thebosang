@@ -1,23 +1,29 @@
-name: Claude qa-tester PR Review
+name: Claude qa-tester Review
 
 # qa-tester 서브에이전트 자동 호출 — secret 필요 (ANTHROPIC_API_KEY)
 # secret 미설정 시 본 워크플로만 실패. pr-validation.yml은 정상 작동.
 # 자세한 셋업: .github/README.md 참조
 
 on:
+  # ① PR 트리거 (정식 PR 흐름)
   pull_request:
     types: [opened, synchronize, reopened]
+  # ② main 직접 푸시 트리거 (이정준 fast-forward 운영 패턴 — 결과는 commit comment)
+  push:
+    branches: [main]
+  # ③ PR 댓글 @claude 멘션 트리거
   issue_comment:
     types: [created]
+  # ④ 수동 실행 (GitHub Actions UI에서 "Run workflow" — 시험·점검용)
+  workflow_dispatch:
 
 jobs:
   qa-review:
     name: qa-tester 자동 리뷰
-    # PR 이벤트면 무조건 실행. 댓글 이벤트면 "@claude" 멘션 시에만.
+    # 댓글 이벤트는 @claude 멘션 + PR 댓글일 때만. 다른 이벤트는 항상 실행.
     if: |
-      github.event_name == 'pull_request' ||
-      (github.event_name == 'issue_comment' &&
-       github.event.issue.pull_request != null &&
+      github.event_name != 'issue_comment' ||
+      (github.event.issue.pull_request != null &&
        contains(github.event.comment.body, '@claude'))
     runs-on: ubuntu-latest
     permissions:
@@ -27,28 +33,34 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0   # base 브랜치와 diff 위해 전체 히스토리 필요
+          fetch-depth: 0   # diff 계산 위해 전체 히스토리 필요
 
       - name: Claude qa-tester 실행
         uses: anthropics/claude-code-action@v1
         with:
           prompt: |
-            이 PR을 qa-tester 서브에이전트 관점으로 리뷰한다.
+            이 변경 사항을 qa-tester 서브에이전트 관점으로 리뷰한다.
+
+            ## 변경 파악
+            - 이벤트 타입: ${{ github.event_name }}
+            - PR 이벤트면 base 대비 diff: `git diff origin/${{ github.base_ref || 'main' }}..HEAD`
+            - main push 이벤트면 직전 커밋 대비 diff: `git diff HEAD~1..HEAD`
+            - 변경 파일이 없거나 docs/주석만 있으면 "리뷰 통과" 한 줄로 종료
 
             ## 작업 절차
-            1. base 브랜치 대비 변경 파일 확인 (`git diff origin/${{ github.base_ref || 'main' }}..HEAD`)
-            2. `.claude/agents/qa-tester.md`의 작업 4영역 적용:
-               - 테스트 시나리오 (회귀 점검 누락 여부)
-               - 디버깅 (에러 가능성, 흔한 함정)
-               - 더미 데이터 (실명/실주민번호 노출 여부)
-               - 보안 리뷰 (auth 누락, 권한 분기, env 노출, 주민번호 마스킹)
-            3. 발견된 이슈는 심각도 분류: 🔴 Critical / 🟠 High / 🟡 Medium / 🔵 Low
+            `.claude/agents/qa-tester.md`의 작업 4영역 적용:
+            1. 테스트 시나리오 (회귀 점검 누락 여부)
+            2. 디버깅 (에러 가능성, 흔한 함정 — Prisma generate 누락, AUTH_URL, 클라이언트 env 노출 등)
+            3. 더미 데이터 (실명/실주민번호 노출 여부)
+            4. 보안 리뷰 (auth 누락, 권한 분기, env 노출, 주민번호 마스킹, 텔레그램 webhook 검증)
+
+            발견된 이슈는 심각도 분류: 🔴 Critical / 🟠 High / 🟡 Medium / 🔵 Low
 
             ## 출력 규칙
-            - PR에 코멘트로 결과 요약을 남긴다
+            - PR 이벤트면 PR에 코멘트로, push 이벤트면 commit comment로 결과 요약
             - 코드 자동 수정 금지 (code 에이전트가 별도로 처리)
-            - Critical/High 이슈가 있으면 명시적으로 "병합 보류 권고" 표시
-            - 단순한 변경(typo, 주석 등)이면 "리뷰 통과" 한 줄로 종료
+            - Critical/High 이슈가 있으면 명시적으로 "병합 보류 / 롤백 권고" 표시
+            - 단순한 변경(typo, 주석, 문서만)이면 "리뷰 통과" 한 줄로 종료 (비용 절약)
 
             ## 참조 문서
             - CLAUDE.md (절대 원칙)
