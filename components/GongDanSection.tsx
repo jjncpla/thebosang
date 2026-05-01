@@ -6,20 +6,19 @@ import {
   MENTAL_DISEASE_STATS, DISEASE_COMMITTEE_STATS,
   PNEUMOCONIOSIS_STATS, SME_BASE_PAY, BASE_PAY_BY_REGION,
 } from "@/lib/constants/gongdan";
-import { KWC_BRANCH_DETAILS, KWC_DEFAULT_DETAIL, type KwcDepartment } from "@/lib/constants/kwc-branches";
+import {
+  KWC_BRANCH_DETAILS, KWC_DEFAULT_DETAIL,
+  normalizeDepartmentStaffs,
+  type KwcDepartment, type KwcStaff,
+} from "@/lib/constants/kwc-branches";
 
-// 담당자명 client-side persist (localStorage)
-// key 형식: "kwc-staff-name|{branchName}|{deptName}|{staffIdx}" → 담당자명
-const STAFF_NAME_KEY_PREFIX = "kwc-staff-name|";
-const NEW_STAFF_KEY = "kwc-extra-staffs"; // 사용자가 직접 추가한 담당자
-
-type ExtraStaff = {
-  branch: string;
-  dept: string;
-  position?: string;
+// 2026-05-02 v2: 서버(KwcBranchStaff)에서 이름·직책을 가져온다.
+// 이전 localStorage 키들은 deprecated.
+type ServerStaffOverride = {
+  departmentName: string;
   phone: string;
-  task: string;
-  name?: string;
+  name?: string | null;
+  position?: string | null;
 };
 
 type GMenu = "branch"|"stats"|"disease"|"basepay"|"medical"|"partner";
@@ -57,10 +56,17 @@ export default function GongDanSection() {
       fetch("/data/gongdan-partner-hospitals.json").then(r=>r.json()).then(setPartners).catch(()=>{});
   }, [menu]);
 
-  const filteredBranches = useMemo(() =>
-    branches.filter(b =>
-      !branchQuery || b.name.includes(branchQuery) || b.address.includes(branchQuery) || b.jurisdiction.includes(branchQuery)
-    ), [branches, branchQuery]);
+  const filteredBranches = useMemo(() => {
+    const q = branchQuery.trim();
+    if (!q) return branches;
+    return branches.filter(b => {
+      if (b.name.includes(q) || b.address.includes(q) || b.jurisdiction.includes(q)) return true;
+      // 부서명까지 매칭
+      const detail = KWC_BRANCH_DETAILS[b.name];
+      if (detail?.departments?.some(d => d.name.includes(q))) return true;
+      return false;
+    });
+  }, [branches, branchQuery]);
 
   const filteredMedical = useMemo(() =>
     medQuery.length >= 2
@@ -536,6 +542,7 @@ const tdStyle: React.CSSProperties = {
 
 // ─── 지사 안내 (보강) ────────────────────────────────────────────────────────
 
+// 2026-05-02 v2: 좌측 검색·리스트 + 우측 단일 지사 상세 패턴
 function BranchInfoSection({
   branches,
   filteredBranches,
@@ -549,22 +556,63 @@ function BranchInfoSection({
 }) {
   const [selectedName, setSelectedName] = useState<string | null>(null);
 
+  // 첫 검색 결과를 기본 선택 (지사 미선택 상태 방지)
+  useEffect(() => {
+    if (!selectedName && filteredBranches.length > 0) {
+      setSelectedName(filteredBranches[0].name);
+    }
+  }, [filteredBranches, selectedName]);
+
   const selectedBranch = useMemo(
     () => branches.find(b => b.name === selectedName),
     [branches, selectedName]
   );
   const selectedDetail = selectedName ? KWC_BRANCH_DETAILS[selectedName] : undefined;
 
-  const phone = selectedBranch?.tel ?? selectedBranch?.phone;
+  // 서버에서 사용자가 입력한 이름·직책 가져오기 (지사가 바뀔 때마다)
+  const [serverOverrides, setServerOverrides] = useState<ServerStaffOverride[]>([]);
+  useEffect(() => {
+    if (!selectedName) { setServerOverrides([]); return; }
+    let cancelled = false;
+    fetch(`/api/kwc-branch-staff?branchKey=${encodeURIComponent(selectedName)}`)
+      .then(r => r.ok ? r.json() : { records: [] })
+      .then(data => { if (!cancelled) setServerOverrides(data.records ?? []); })
+      .catch(() => { if (!cancelled) setServerOverrides([]); });
+    return () => { cancelled = true; };
+  }, [selectedName]);
+
+  const upsertOverride = async (departmentName: string, phone: string, fields: { name?: string; position?: string }) => {
+    if (!selectedName) return;
+    // 즉시 UI 업데이트 (optimistic)
+    setServerOverrides(prev => {
+      const idx = prev.findIndex(o => o.departmentName === departmentName && o.phone === phone);
+      const next: ServerStaffOverride = {
+        departmentName, phone,
+        name: fields.name ?? prev[idx]?.name ?? null,
+        position: fields.position ?? prev[idx]?.position ?? null,
+      };
+      if (idx === -1) return [...prev, next];
+      const copy = prev.slice();
+      copy[idx] = next;
+      return copy;
+    });
+    try {
+      await fetch("/api/kwc-branch-staff", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ branchKey: selectedName, departmentName, phone, ...fields }),
+      });
+    } catch { /* noop — 다음 PATCH 또는 새 진입 시 서버에서 재조회 */ }
+  };
 
   return (
     <div>
-      {/* 검색 + 통계 */}
+      {/* 상단 검색바 */}
       <div style={{ marginBottom: 14, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
         <input
           value={branchQuery}
-          onChange={e => setBranchQuery(e.target.value)}
-          placeholder="기관명·지역·관할구역 검색..."
+          onChange={e => { setBranchQuery(e.target.value); setSelectedName(null); }}
+          placeholder="기관명·지역·관할구역·부서명 검색..."
           style={{ padding: "8px 12px", fontSize: 13, border: "1px solid #d1d5db", borderRadius: 6, width: 280 }}
         />
         <span style={{ fontSize: 12, color: "#6b7280" }}>
@@ -580,429 +628,319 @@ function BranchInfoSection({
         </a>
       </div>
 
-      <div style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
-        {/* 좌측: 카드 그리드 */}
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))",
-            gap: 10,
-          }}>
-            {filteredBranches.map((b, i) => {
-              const detail = KWC_BRANCH_DETAILS[b.name];
-              const hasDetail = !!detail;
-              const isSelected = selectedName === b.name;
-              return (
-                <button
-                  key={b.name + i}
-                  onClick={() => setSelectedName(b.name)}
-                  style={{
-                    textAlign: "left", cursor: "pointer",
-                    background: isSelected ? "#eff6ff" : "#fff",
-                    border: `1px solid ${isSelected ? "#3b82f6" : "#e5e7eb"}`,
-                    borderRadius: 8, padding: "12px 14px",
-                    display: "flex", flexDirection: "column", gap: 6,
-                    boxShadow: isSelected ? "0 0 0 2px rgba(59,130,246,0.1)" : "none",
-                  }}
-                >
-                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    <span style={{ fontSize: 13, fontWeight: 700, color: "#1e40af", flex: 1, lineHeight: 1.4 }}>
-                      {b.name}
+      <div style={{ display: "flex", gap: 16, alignItems: "flex-start", minHeight: "calc(100vh - 240px)" }}>
+        {/* 좌측: 검색 결과 리스트 */}
+        <div style={{
+          width: 260, flexShrink: 0,
+          background: "#fff", border: "1px solid #e5e7eb", borderRadius: 8,
+          maxHeight: "calc(100vh - 240px)", overflowY: "auto",
+        }}>
+          {filteredBranches.length === 0 && (
+            <div style={{ padding: 16, fontSize: 12, color: "#9ca3af" }}>검색 결과 없음</div>
+          )}
+          {filteredBranches.map((b, i) => {
+            const detail = KWC_BRANCH_DETAILS[b.name];
+            const hasDetail = !!detail;
+            const isSelected = selectedName === b.name;
+            return (
+              <button
+                key={b.name + i}
+                onClick={() => setSelectedName(b.name)}
+                style={{
+                  width: "100%", textAlign: "left", cursor: "pointer",
+                  background: isSelected ? "#eff6ff" : "transparent",
+                  border: "none", borderBottom: "1px solid #f3f4f6",
+                  borderLeft: isSelected ? "3px solid #29ABE2" : "3px solid transparent",
+                  padding: "10px 12px",
+                  display: "flex", flexDirection: "column", gap: 3,
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <span style={{
+                    fontSize: 12, fontWeight: isSelected ? 700 : 600,
+                    color: isSelected ? "#1e40af" : "#111827", flex: 1, lineHeight: 1.4,
+                  }}>
+                    {b.name}
+                  </span>
+                  {hasDetail && (
+                    <span style={{ fontSize: 9, padding: "1px 5px", borderRadius: 3, background: "#8DC63F", color: "#fff", fontWeight: 700 }}>
+                      상세
                     </span>
-                    {hasDetail && (
-                      <span style={{ fontSize: 9, padding: "1px 5px", borderRadius: 3, background: "#8DC63F", color: "#fff", fontWeight: 700 }}>
-                        상세
-                      </span>
-                    )}
-                  </div>
-                  <div style={{ fontSize: 11, color: "#374151", lineHeight: 1.5 }}>
-                    {b.address}
-                  </div>
-                  {b.jurisdiction && (
-                    <div style={{ fontSize: 10, color: "#6b7280", lineHeight: 1.4, paddingTop: 4, borderTop: "1px dashed #e5e7eb" }}>
-                      <span style={{ fontWeight: 600, color: "#9ca3af" }}>관할: </span>
-                      {b.jurisdiction}
-                    </div>
                   )}
-                  <div style={{ display: "flex", gap: 8, fontSize: 11, color: "#059669" }}>
-                    <span>📞 {b.tel ?? b.phone ?? "-"}</span>
+                </div>
+                {b.jurisdiction && (
+                  <div style={{ fontSize: 10, color: "#6b7280", lineHeight: 1.4 }}>
+                    {b.jurisdiction.length > 30 ? b.jurisdiction.slice(0, 30) + "…" : b.jurisdiction}
                   </div>
-                </button>
-              );
-            })}
-          </div>
+                )}
+              </button>
+            );
+          })}
         </div>
 
-        {/* 우측: 상세 패널 (선택 시) */}
-        {selectedBranch && (
-          <div style={{
-            width: 360, flexShrink: 0, position: "sticky", top: 0,
-            background: "#fff", border: "1px solid #e5e7eb", borderRadius: 8,
-            padding: 16, maxHeight: "calc(100vh - 200px)", overflowY: "auto",
-          }}>
-            <div style={{ display: "flex", alignItems: "flex-start", gap: 8, marginBottom: 12 }}>
-              <h3 style={{ flex: 1, margin: 0, fontSize: 15, fontWeight: 700, color: "#111827", lineHeight: 1.4 }}>
-                {selectedBranch.name}
-              </h3>
-              <button
-                onClick={() => setSelectedName(null)}
-                style={{ fontSize: 14, background: "none", border: "none", color: "#9ca3af", cursor: "pointer" }}
-              >✕</button>
+        {/* 우측: 선택된 지사 상세 */}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          {!selectedBranch && (
+            <div style={{
+              padding: 40, textAlign: "center", fontSize: 13, color: "#9ca3af",
+              background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: 8,
+            }}>
+              좌측에서 지사를 선택하세요.
             </div>
-
-            {/* 주소 */}
-            <DetailRow label="주소" value={selectedBranch.address} />
-            {selectedDetail?.postalCode && (
-              <DetailRow label="우편번호" value={selectedDetail.postalCode} />
-            )}
-
-            {/* 연락처 */}
-            {phone && <DetailRow label="전화" value={<a href={`tel:${phone}`} style={{ color: "#059669", textDecoration: "none" }}>{phone}</a>} />}
-            {selectedDetail?.representativeTel && selectedDetail.representativeTel !== phone && (
-              <DetailRow label="대표번호" value={<a href={`tel:${selectedDetail.representativeTel}`} style={{ color: "#059669", textDecoration: "none" }}>{selectedDetail.representativeTel}</a>} />
-            )}
-            {selectedBranch.fax && <DetailRow label="팩스" value={selectedBranch.fax} />}
-            {selectedDetail?.email && <DetailRow label="이메일" value={selectedDetail.email} />}
-
-            {/* 운영시간 */}
-            <DetailRow label="운영시간" value={selectedDetail?.hours ?? KWC_DEFAULT_DETAIL.hours ?? "-"} />
-
-            {/* 관할 */}
-            {selectedBranch.jurisdiction && (
-              <DetailRow label="관할" value={selectedBranch.jurisdiction} />
-            )}
-
-            {/* 교통편 */}
-            {selectedDetail?.directions && (
-              <DetailRow label="교통편" value={selectedDetail.directions} />
-            )}
-            {selectedDetail?.parkingInfo && (
-              <DetailRow label="주차" value={selectedDetail.parkingInfo} />
-            )}
-
-            {/* 주요 업무 */}
-            <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid #e5e7eb" }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: "#9ca3af", marginBottom: 6 }}>주요 업무</div>
-              <ul style={{ margin: 0, padding: "0 0 0 18px", fontSize: 12, color: "#374151", lineHeight: 1.7 }}>
-                {(selectedDetail?.services ?? KWC_DEFAULT_DETAIL.services ?? []).map((s, i) => (
-                  <li key={i}>{s}</li>
-                ))}
-              </ul>
-            </div>
-
-            {/* 부서별 정보 */}
-            {selectedDetail?.departments && selectedDetail.departments.length > 0 && (
-              <div style={{ marginTop: 12, paddingTop: 10, borderTop: "1px solid #e5e7eb" }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: "#9ca3af", marginBottom: 8 }}>
-                  부서별 정보 ({selectedDetail.departments.length}개)
-                </div>
-                {selectedDetail.departments.map((dept, di) => (
-                  <DepartmentCard
-                    key={dept.name + di}
-                    branchName={selectedBranch.name}
-                    dept={dept}
-                  />
-                ))}
-                <div style={{ marginTop: 6, padding: "6px 10px", background: "#fef9c3", borderRadius: 4, fontSize: 10, color: "#92400e", lineHeight: 1.5 }}>
-                  ⓘ 담당자명은 공단 홈페이지에 공개되지 않습니다. 직접 입력하면 이 브라우저에 자동 저장되며, 향후 서버 저장 기능을 추가할 예정입니다.
-                </div>
-              </div>
-            )}
-
-            {/* 특수부서 */}
-            {selectedDetail?.specialUnits && selectedDetail.specialUnits.length > 0 && (
-              <div style={{ marginTop: 12, paddingTop: 10, borderTop: "1px solid #e5e7eb" }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: "#9ca3af", marginBottom: 6 }}>특수부서</div>
-                {selectedDetail.specialUnits.map((u, i) => (
-                  <div key={i} style={{ marginBottom: 8, padding: "8px 10px", background: "#f9fafb", borderRadius: 6 }}>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: "#1e40af" }}>{u.name}</div>
-                    {u.address && <div style={{ fontSize: 11, color: "#6b7280", marginTop: 2 }}>{u.address}</div>}
-                    {u.tel && <div style={{ fontSize: 11, color: "#059669", marginTop: 2 }}>📞 {u.tel}</div>}
-                    {u.fax && <div style={{ fontSize: 11, color: "#6b7280", marginTop: 2 }}>FAX: {u.fax}</div>}
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* 상세 정보 미보강 안내 */}
-            {!selectedDetail && (
-              <div style={{ marginTop: 12, padding: "8px 10px", background: "#fef9c3", borderRadius: 6, fontSize: 11, color: "#92400e", lineHeight: 1.5 }}>
-                ⓘ 이 지사는 추가 상세 정보(우편번호·교통편 등)가 아직 등록되지 않았습니다.
-                기본 업무·운영시간 정보만 표시됩니다.
-              </div>
-            )}
-          </div>
-        )}
+          )}
+          {selectedBranch && (
+            <BranchDetailPanel
+              branch={selectedBranch}
+              detail={selectedDetail}
+              overrides={serverOverrides}
+              onSaveOverride={upsertOverride}
+            />
+          )}
+        </div>
       </div>
+    </div>
+  );
+}
+
+// ─── 우측 상세 패널 ─────────────────────────────────────────────────────────
+
+function BranchDetailPanel({
+  branch,
+  detail,
+  overrides,
+  onSaveOverride,
+}: {
+  branch: Branch;
+  detail?: import("@/lib/constants/kwc-branches").KwcBranchDetail;
+  overrides: ServerStaffOverride[];
+  onSaveOverride: (deptName: string, phone: string, fields: { name?: string; position?: string }) => void;
+}) {
+  return (
+    <div style={{
+      background: "#fff", border: "1px solid #e5e7eb", borderRadius: 8, padding: 18,
+    }}>
+      <h3 style={{ margin: "0 0 12px", fontSize: 17, fontWeight: 700, color: "#111827" }}>
+        {branch.name}
+      </h3>
+
+      {/* 메타 정보 */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "4px 16px", marginBottom: 14 }}>
+        <DetailRow label="주소" value={branch.address} />
+        {detail?.postalCode && <DetailRow label="우편번호" value={detail.postalCode} />}
+        {branch.fax && <DetailRow label="팩스" value={branch.fax} />}
+        {detail?.email && <DetailRow label="이메일" value={detail.email} />}
+        <DetailRow label="운영시간" value={detail?.hours ?? KWC_DEFAULT_DETAIL.hours ?? "-"} />
+        {branch.jurisdiction && <DetailRow label="관할" value={branch.jurisdiction} />}
+        {detail?.directions && <DetailRow label="교통편" value={detail.directions} />}
+        {detail?.parkingInfo && <DetailRow label="주차" value={detail.parkingInfo} />}
+      </div>
+
+      {/* 주요 업무 */}
+      {(detail?.services ?? KWC_DEFAULT_DETAIL.services ?? []).length > 0 && (
+        <div style={{ marginBottom: 16, paddingTop: 10, borderTop: "1px solid #e5e7eb" }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: "#9ca3af", marginBottom: 6 }}>주요 업무</div>
+          <ul style={{ margin: 0, padding: "0 0 0 18px", fontSize: 12, color: "#374151", lineHeight: 1.7 }}>
+            {(detail?.services ?? KWC_DEFAULT_DETAIL.services ?? []).map((s, i) => (
+              <li key={i}>{s}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* 부서별 표 */}
+      {detail?.departments && detail.departments.length > 0 && (
+        <div style={{ marginBottom: 16, paddingTop: 10, borderTop: "1px solid #e5e7eb" }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: "#9ca3af", marginBottom: 8 }}>
+            부서별 담당자 ({detail.departments.length}개 부서)
+          </div>
+          {detail.departments.map((dept, di) => (
+            <DepartmentTable
+              key={dept.name + di}
+              dept={dept}
+              overrides={overrides.filter(o => o.departmentName === dept.name)}
+              onSaveOverride={(phone, fields) => onSaveOverride(dept.name, phone, fields)}
+            />
+          ))}
+          <div style={{ marginTop: 8, padding: "6px 10px", background: "#fef9c3", borderRadius: 4, fontSize: 10, color: "#92400e", lineHeight: 1.5 }}>
+            ⓘ 직책·이름은 직접 입력하면 서버에 저장되어 모든 사용자에게 공유됩니다. 전화·업무 내용은 공단 홈페이지 자동 추출.
+          </div>
+        </div>
+      )}
+
+      {/* 특수부서 */}
+      {detail?.specialUnits && detail.specialUnits.length > 0 && (
+        <div style={{ paddingTop: 10, borderTop: "1px solid #e5e7eb" }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: "#9ca3af", marginBottom: 6 }}>특수부서</div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 8 }}>
+            {detail.specialUnits.map((u, i) => (
+              <div key={i} style={{ padding: "8px 10px", background: "#f9fafb", borderRadius: 6, border: "1px solid #e5e7eb" }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: "#1e40af" }}>{u.name}</div>
+                {u.address && <div style={{ fontSize: 11, color: "#6b7280", marginTop: 2 }}>{u.address}</div>}
+                {u.tel && <div style={{ fontSize: 11, color: "#059669", marginTop: 2 }}>📞 {u.tel}</div>}
+                {u.fax && <div style={{ fontSize: 11, color: "#6b7280", marginTop: 2 }}>FAX: {u.fax}</div>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* 상세 미보강 안내 */}
+      {!detail && (
+        <div style={{ marginTop: 12, padding: "8px 10px", background: "#fef9c3", borderRadius: 6, fontSize: 11, color: "#92400e", lineHeight: 1.5 }}>
+          ⓘ 이 지사는 부서별 담당자 정보가 아직 등록되지 않았습니다. 공단 홈페이지에서 추후 추출 예정.
+        </div>
+      )}
     </div>
   );
 }
 
 function DetailRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
-    <div style={{ display: "flex", gap: 8, marginBottom: 6, fontSize: 12, lineHeight: 1.5 }}>
-      <div style={{ width: 60, flexShrink: 0, color: "#9ca3af", fontWeight: 600 }}>{label}</div>
+    <div style={{ display: "flex", gap: 8, marginBottom: 4, fontSize: 12, lineHeight: 1.5 }}>
+      <div style={{ width: 64, flexShrink: 0, color: "#9ca3af", fontWeight: 600 }}>{label}</div>
       <div style={{ flex: 1, color: "#374151" }}>{value}</div>
     </div>
   );
 }
 
-// ─── 부서 카드 ──────────────────────────────────────────────────────────────
+// ─── 부서 표 (행 = staff) ─────────────────────────────────────────────────
 
-function DepartmentCard({ branchName, dept }: { branchName: string; dept: KwcDepartment }) {
-  const [expanded, setExpanded] = useState(false);
-  const baseStaffs = dept.staffs ?? [];
-
-  // 사용자 추가 담당자 (localStorage)
-  const [extras, setExtras] = useState<ExtraStaff[]>([]);
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    try {
-      const raw = window.localStorage.getItem(NEW_STAFF_KEY);
-      if (raw) {
-        const all: ExtraStaff[] = JSON.parse(raw);
-        setExtras(all.filter(s => s.branch === branchName && s.dept === dept.name));
-      }
-    } catch { /* noop */ }
-  }, [branchName, dept.name]);
-
-  const persistExtras = (next: ExtraStaff[]) => {
-    if (typeof window === "undefined") return;
-    try {
-      const raw = window.localStorage.getItem(NEW_STAFF_KEY);
-      const all: ExtraStaff[] = raw ? JSON.parse(raw) : [];
-      const others = all.filter(s => !(s.branch === branchName && s.dept === dept.name));
-      window.localStorage.setItem(NEW_STAFF_KEY, JSON.stringify([...others, ...next]));
-    } catch { /* noop */ }
-    setExtras(next);
-  };
-
-  const totalStaffCount = baseStaffs.length + extras.length;
+function DepartmentTable({
+  dept,
+  overrides,
+  onSaveOverride,
+}: {
+  dept: KwcDepartment;
+  overrides: ServerStaffOverride[];
+  onSaveOverride: (phone: string, fields: { name?: string; position?: string }) => void;
+}) {
+  const staffs = useMemo(() => normalizeDepartmentStaffs(dept), [dept]);
 
   return (
-    <div style={{ marginBottom: 8, padding: "10px 12px", background: "#f9fafb", borderRadius: 6, border: "1px solid #e5e7eb" }}>
-      <div
-        onClick={() => setExpanded(!expanded)}
-        style={{ cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}
-      >
-        <span style={{ fontSize: 12, fontWeight: 700, color: "#1e40af", flex: 1 }}>
-          {dept.name}
-        </span>
-        {totalStaffCount > 0 && (
-          <span style={{ fontSize: 10, color: "#6b7280", padding: "1px 6px", background: "#e5e7eb", borderRadius: 10 }}>
-            {totalStaffCount}명
-          </span>
-        )}
-        <span style={{ fontSize: 11, color: "#9ca3af" }}>{expanded ? "▼" : "▶"}</span>
+    <div style={{ marginBottom: 14, border: "1px solid #e5e7eb", borderRadius: 6, overflow: "hidden" }}>
+      <div style={{
+        display: "flex", alignItems: "center", gap: 8,
+        padding: "8px 12px", background: "#f9fafb", borderBottom: "1px solid #e5e7eb",
+      }}>
+        <span style={{ fontSize: 13, fontWeight: 700, color: "#1e40af" }}>{dept.name}</span>
+        {dept.fax && <span style={{ fontSize: 11, color: "#6b7280" }}>FAX: {dept.fax}</span>}
+        <span style={{ fontSize: 11, color: "#9ca3af", marginLeft: "auto" }}>{staffs.length}명</span>
       </div>
 
-      {/* 항상 표시 */}
-      {dept.representativeTel && (
-        <div style={{ fontSize: 11, color: "#059669", marginTop: 4 }}>
-          📞 <a href={`tel:${dept.representativeTel}`} style={{ color: "#059669", textDecoration: "none" }}>{dept.representativeTel}</a>
-        </div>
-      )}
-      {dept.fax && (
-        <div style={{ fontSize: 11, color: "#6b7280", marginTop: 2 }}>FAX: {dept.fax}</div>
-      )}
-      {dept.responsibilities && dept.responsibilities.length > 0 && (
-        <div style={{ fontSize: 11, color: "#374151", marginTop: 4, lineHeight: 1.5 }}>
-          {dept.responsibilities.join(" · ")}
-        </div>
-      )}
-
-      {/* 펼쳤을 때만 담당자 표 */}
-      {expanded && (
-        <div style={{ marginTop: 10, paddingTop: 8, borderTop: "1px dashed #d1d5db" }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: "#6b7280", marginBottom: 6 }}>담당자</div>
-          {totalStaffCount === 0 ? (
-            <div style={{ fontSize: 11, color: "#9ca3af", marginBottom: 6 }}>등록된 담당자가 없습니다. 아래에서 추가할 수 있습니다.</div>
-          ) : (
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11, marginBottom: 8 }}>
-              <thead>
-                <tr style={{ background: "#fff" }}>
-                  <th style={staffThStyle}>직책</th>
-                  <th style={staffThStyle}>전화</th>
-                  <th style={staffThStyle}>담당업무</th>
-                  <th style={staffThStyle}>이름</th>
-                </tr>
-              </thead>
-              <tbody>
-                {baseStaffs.map((staff, si) => (
-                  <StaffRow
-                    key={"base-" + si}
-                    storageKey={`${STAFF_NAME_KEY_PREFIX}${branchName}|${dept.name}|${si}`}
-                    position={staff.position}
-                    phone={staff.phone}
-                    task={staff.task}
-                    initialName={staff.name}
-                  />
-                ))}
-                {extras.map((staff, si) => (
-                  <StaffRow
-                    key={"extra-" + si}
-                    position={staff.position}
-                    phone={staff.phone}
-                    task={staff.task}
-                    initialName={staff.name}
-                    onRemove={() => {
-                      const next = extras.filter((_, i) => i !== si);
-                      persistExtras(next);
-                    }}
-                    onChangeName={(name) => {
-                      const next = extras.map((s, i) => i === si ? { ...s, name } : s);
-                      persistExtras(next);
-                    }}
-                  />
-                ))}
-              </tbody>
-            </table>
-          )}
-          <AddStaffForm
-            onAdd={(s) => persistExtras([...extras, { branch: branchName, dept: dept.name, ...s }])}
-          />
-        </div>
+      {staffs.length === 0 ? (
+        <div style={{ padding: "8px 12px", fontSize: 11, color: "#9ca3af" }}>등록된 담당자 없음</div>
+      ) : (
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+          <thead>
+            <tr style={{ background: "#fff" }}>
+              <th style={{ ...staffThStyle, width: 60 }}>직책</th>
+              <th style={{ ...staffThStyle, width: 90 }}>이름</th>
+              <th style={{ ...staffThStyle, width: 110 }}>전화</th>
+              <th style={{ ...staffThStyle, width: 160 }}>업무 중분류</th>
+              <th style={staffThStyle}>업무 내용</th>
+            </tr>
+          </thead>
+          <tbody>
+            {staffs.map((staff, si) => {
+              const ov = overrides.find(o => o.phone === staff.phone);
+              return (
+                <StaffRow
+                  key={staff.phone || `idx-${si}`}
+                  staff={staff}
+                  serverName={ov?.name ?? null}
+                  serverPosition={ov?.position ?? null}
+                  onSave={(fields) => {
+                    if (!staff.phone) return; // phone이 없는 fallback row는 저장 불가
+                    onSaveOverride(staff.phone, fields);
+                  }}
+                />
+              );
+            })}
+          </tbody>
+        </table>
       )}
     </div>
   );
 }
 
 function StaffRow({
-  storageKey,
-  position,
-  phone,
-  task,
-  initialName,
-  onRemove,
-  onChangeName,
+  staff,
+  serverName,
+  serverPosition,
+  onSave,
 }: {
-  storageKey?: string;
-  position?: string;
-  phone: string;
-  task: string;
-  initialName?: string;
-  onRemove?: () => void;
-  onChangeName?: (name: string) => void;
+  staff: KwcStaff;
+  serverName: string | null;
+  serverPosition: string | null;
+  onSave: (fields: { name?: string; position?: string }) => void;
 }) {
-  const [name, setName] = useState(initialName ?? "");
+  const [position, setPosition] = useState("");
+  const [name, setName] = useState("");
 
-  // localStorage 로딩 (storageKey 가 있을 때만)
-  useEffect(() => {
-    if (!storageKey || typeof window === "undefined") return;
-    try {
-      const v = window.localStorage.getItem(storageKey);
-      if (v) setName(v);
-    } catch { /* noop */ }
-  }, [storageKey]);
+  // 서버 값 반영 (변경 시)
+  useEffect(() => { setPosition(serverPosition ?? ""); }, [serverPosition]);
+  useEffect(() => { setName(serverName ?? ""); }, [serverName]);
 
-  const handleNameChange = (v: string) => {
-    setName(v);
-    if (storageKey && typeof window !== "undefined") {
-      try {
-        if (v) window.localStorage.setItem(storageKey, v);
-        else window.localStorage.removeItem(storageKey);
-      } catch { /* noop */ }
-    }
-    onChangeName?.(v);
-  };
+  const tasksMain = staff.tasksMain && staff.tasksMain.length > 0
+    ? staff.tasksMain.join(", ")
+    : "-";
+  const tasksDetail = staff.tasksDetail || "-";
+  const editable = !!staff.phone; // phone 없는 fallback 행은 편집 불가
 
   return (
     <tr>
-      <td style={staffTdStyle}>{position || "-"}</td>
       <td style={staffTdStyle}>
-        <a href={`tel:${phone}`} style={{ color: "#059669", textDecoration: "none" }}>{phone}</a>
+        <input
+          value={position}
+          onChange={e => setPosition(e.target.value)}
+          onBlur={() => {
+            if (editable && (position || serverPosition)) {
+              onSave({ position });
+            }
+          }}
+          placeholder="-"
+          disabled={!editable}
+          style={editInputStyle(editable)}
+        />
       </td>
-      <td style={{ ...staffTdStyle, color: "#374151", textAlign: "left" }}>{task}</td>
       <td style={staffTdStyle}>
         <input
           value={name}
-          onChange={e => handleNameChange(e.target.value)}
-          placeholder="입력"
-          style={{
-            width: "100%", padding: "2px 4px", fontSize: 11,
-            border: "1px solid #e5e7eb", borderRadius: 3, background: "#fff",
+          onChange={e => setName(e.target.value)}
+          onBlur={() => {
+            if (editable && (name || serverName)) {
+              onSave({ name });
+            }
           }}
+          placeholder="-"
+          disabled={!editable}
+          style={editInputStyle(editable)}
         />
-        {onRemove && (
-          <button
-            type="button"
-            onClick={onRemove}
-            style={{ marginLeft: 4, fontSize: 10, color: "#dc2626", background: "none", border: "none", cursor: "pointer" }}
-            title="삭제"
-          >✕</button>
-        )}
       </td>
+      <td style={staffTdStyle}>
+        {staff.phone
+          ? <a href={`tel:${staff.phone}`} style={{ color: "#059669", textDecoration: "none" }}>{staff.phone}</a>
+          : <span style={{ color: "#9ca3af" }}>-</span>}
+      </td>
+      <td style={{ ...staffTdStyle, textAlign: "left", color: "#374151" }}>{tasksMain}</td>
+      <td style={{ ...staffTdStyle, textAlign: "left", color: "#6b7280", lineHeight: 1.5 }}>{tasksDetail}</td>
     </tr>
   );
 }
 
-function AddStaffForm({ onAdd }: { onAdd: (s: { position?: string; phone: string; task: string; name?: string }) => void }) {
-  const [position, setPosition] = useState("");
-  const [phone, setPhone] = useState("");
-  const [task, setTask] = useState("");
-  const [name, setName] = useState("");
-
-  const submit = () => {
-    if (!phone.trim() || !task.trim()) return;
-    onAdd({
-      position: position.trim() || undefined,
-      phone: phone.trim(),
-      task: task.trim(),
-      name: name.trim() || undefined,
-    });
-    setPosition(""); setPhone(""); setTask(""); setName("");
-  };
-
-  return (
-    <div style={{ display: "flex", gap: 4, alignItems: "center", marginTop: 4 }}>
-      <input
-        value={position}
-        onChange={e => setPosition(e.target.value)}
-        placeholder="직책"
-        style={addInputStyle(50)}
-      />
-      <input
-        value={phone}
-        onChange={e => setPhone(e.target.value)}
-        placeholder="전화*"
-        style={addInputStyle(90)}
-      />
-      <input
-        value={task}
-        onChange={e => setTask(e.target.value)}
-        placeholder="담당업무*"
-        style={{ ...addInputStyle(0), flex: 1 }}
-      />
-      <input
-        value={name}
-        onChange={e => setName(e.target.value)}
-        placeholder="이름"
-        style={addInputStyle(50)}
-      />
-      <button
-        type="button"
-        onClick={submit}
-        disabled={!phone.trim() || !task.trim()}
-        style={{
-          fontSize: 11, padding: "3px 8px",
-          background: (phone.trim() && task.trim()) ? "#1e40af" : "#cbd5e1",
-          color: "#fff", border: "none", borderRadius: 3,
-          cursor: (phone.trim() && task.trim()) ? "pointer" : "not-allowed",
-        }}
-      >+ 추가</button>
-    </div>
-  );
-}
-
 const staffThStyle: React.CSSProperties = {
-  padding: "4px 6px", fontSize: 10, fontWeight: 700,
-  color: "#6b7280", borderBottom: "1px solid #e5e7eb", textAlign: "center", whiteSpace: "nowrap",
+  padding: "5px 8px", fontSize: 10, fontWeight: 700,
+  color: "#6b7280", borderBottom: "1px solid #e5e7eb",
+  textAlign: "center", whiteSpace: "nowrap", background: "#fff",
 };
 const staffTdStyle: React.CSSProperties = {
-  padding: "4px 6px", fontSize: 11, color: "#374151",
-  borderBottom: "1px solid #f3f4f6", textAlign: "center",
+  padding: "4px 8px", fontSize: 11, color: "#374151",
+  borderBottom: "1px solid #f3f4f6", textAlign: "center", verticalAlign: "top",
 };
-const addInputStyle = (w: number): React.CSSProperties => ({
-  padding: "3px 5px", fontSize: 11, border: "1px solid #d1d5db", borderRadius: 3,
-  width: w > 0 ? w : undefined,
+const editInputStyle = (enabled: boolean): React.CSSProperties => ({
+  width: "100%", padding: "2px 4px", fontSize: 11,
+  border: "1px solid #e5e7eb", borderRadius: 3,
+  background: enabled ? "#fff" : "#f3f4f6",
+  color: enabled ? "#374151" : "#9ca3af",
+  cursor: enabled ? "text" : "not-allowed",
 });

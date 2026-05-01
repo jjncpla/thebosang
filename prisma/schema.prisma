@@ -1595,3 +1595,21 @@ model AvgWageNotice {
   @@index([needsCorrection])
   @@index([createdAt])
 }
+
+// 근로복지공단 지사 부서 담당자 — 사용자 입력 정보 저장
+// 전화번호(phone)는 공단 홈페이지 표 행을 식별하는 키. 이름/직책은 노무사가 직접 입력.
+// branchKey = lib/constants/kwc-branches.ts 의 KWC_BRANCH_DETAILS 키 (예: "부산지역본부")
+model KwcBranchStaff {
+  id             String   @id @default(cuid())
+  branchKey      String   // 지사 키 (예: "부산지역본부")
+  departmentName String   // 부서명 (예: "재활보상2부")
+  phone          String   // 직통 전화번호 (행 식별)
+  name           String?  // 담당자 이름 (사용자 입력)
+  position       String?  // 직책 (사용자 입력)
+  updatedBy      String?  // 편집자 User.id
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([branchKey, departmentName, phone])
+  @@index([branchKey])
+}
