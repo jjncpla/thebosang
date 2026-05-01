@@ -90,7 +90,7 @@ export async function POST(req: NextRequest) {
     try {
       // Get year subfolders (e.g. 2025년, 2024년)
       const yearFolders = await synoListFolders(nasUrl, sid, rootPath);
-      let allFolderNames: { name: string; parentPath: string }[] = [];
+      const allFolderNames: { name: string; parentPath: string }[] = [];
 
       if (yearFolders.length > 0) {
         // Scan each year subfolder

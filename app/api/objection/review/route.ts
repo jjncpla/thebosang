@@ -86,7 +86,10 @@ export async function POST(req: NextRequest) {
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await req.json();
-  let { tfName, patientName, caseType, approvalStatus, progressStatus, decisionDate, hasInfoDisclosure, infoDisclosureStatus, memo, caseId } = body;
+  // reassign되는 필드 (caseId 자동 조회 fallback에서)
+  let { tfName, patientName, caseType, progressStatus } = body;
+  // reassign되지 않는 필드 — const로 분리
+  const { approvalStatus, decisionDate, hasInfoDisclosure, infoDisclosureStatus, memo, caseId } = body;
 
   // caseId 제공 시 케이스 데이터 자동 조회 (처분검토 자동 반영용)
   if (caseId && (!tfName || !patientName)) {

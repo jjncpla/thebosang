@@ -165,7 +165,7 @@ export async function buildTextFormPdf(spec: TextFormSpec): Promise<Uint8Array> 
   pdf.registerFontkit(fontkit);
   const font = await pdf.embedFont(loadFontBytes());
 
-  let page = pdf.addPage([A4_W, A4_H]);
+  const page = pdf.addPage([A4_W, A4_H]);
   let ctx: DrawCtx = { page, font, pdf, y: A4_H - MARGIN };
 
   // ── 제목 ──

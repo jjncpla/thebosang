@@ -139,7 +139,7 @@ function robustParseJson(rawText: string): { name?: string; sources?: Record<str
   try { return JSON.parse(txt) } catch { /* try harder */ }
   const first = txt.indexOf("{")
   if (first === -1) return null
-  let candidate = txt.slice(first).replace(/```\s*$/i, "").trim()
+  const candidate = txt.slice(first).replace(/```\s*$/i, "").trim()
   try { return JSON.parse(candidate) } catch { /* repair */ }
   // Truncated JSON: trim trailing partial fields and close brackets
   for (let cutoff = candidate.length; cutoff > 200; cutoff--) {

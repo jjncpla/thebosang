@@ -119,7 +119,7 @@ export default function NewCasePage() {
         })
         .catch(() => {});
     }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);  
 
   const searchPatients = async () => {
     if (!searchQuery.trim()) return;
