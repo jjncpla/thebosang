@@ -62,6 +62,7 @@ const MENU_ITEMS: MenuItem[] = [
     children: [
       { id: "objection-review", label: "처분 검토", path: "/objection/review" },
       { id: "objection-deadline", label: "기일 관리", path: "/objection/deadline" },
+      { id: "decision-notice", label: "결정통지서 OCR", path: "/notice/decision" },
       { id: "avg-wage", label: "평균임금 정정 검토", path: "/wage/avg-wage" },
       { id: "objection-forms", label: "이의제기 양식 작성", path: "/forms/objection" },
     ],

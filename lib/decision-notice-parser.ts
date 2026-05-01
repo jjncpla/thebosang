@@ -402,3 +402,139 @@ export function evaluateAutoIngest(parsed: ParsedResolutionNotice): AutoIngestDe
     blockedReason: "OCR 추출 신뢰도 낮음 — 사용자 수기 입력 권장",
   };
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   사건 매칭 후보 검색 (수동 매칭용)
+   Patient.name + Case.caseType + Case.kwcOfficeName 기준
+   ═══════════════════════════════════════════════════════════════ */
+
+export type MatchCandidate = {
+  caseId: string;
+  patientId: string;
+  patientName: string;
+  caseType: string;
+  status: string;
+  kwcOfficeName: string | null;
+  tfName: string | null;
+  branch: string | null;
+  receptionDate: string | null;
+  matchScore: number;          // 0~100, 높을수록 가능성 높음
+  matchReasons: string[];      // 매칭 근거
+};
+
+/**
+ * diseaseCategory를 Case.caseType (HEARING_LOSS / COPD / ...)으로 매핑
+ */
+function mapDiseaseCategoryToCaseType(cat: DiseaseCategory): string | null {
+  switch (cat) {
+    case "HEARING_LOSS": return "HEARING_LOSS";
+    case "PNEUMOCONIOSIS": return "PNEUMOCONIOSIS";
+    case "COPD": return "COPD";
+    case "MUSCULOSKELETAL": return "MUSCULOSKELETAL";
+    case "LUNG_CANCER": return "OCCUPATIONAL_CANCER";
+    case "GENERAL": return null; // 일반산재 → 여러 caseType 가능 → 필터 안 함
+    default: return null;
+  }
+}
+
+/**
+ * comwelBranch ("근로복지공단 울산지사") → Case.kwcOfficeName ("울산") 변환
+ */
+function normalizeKwcOffice(branch: string | null): string | null {
+  if (!branch) return null;
+  const m = branch.match(/근로복지공단\s*([가-힣]+?)(?:지사|지역본부)/);
+  return m ? m[1] : null;
+}
+
+/**
+ * Prisma client(any 허용)를 받아 매칭 후보 검색.
+ * 파라미터로 prisma 받음 — 순환 참조 회피. lib/decision-notice-parser.ts는
+ * Prisma 의존이 없도록 런타임에서만 prisma.case.findMany 호출.
+ */
+type PrismaLike = {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  case: { findMany: (args: any) => Promise<any[]> };
+};
+
+export async function getMatchCandidates(
+  parsed: ParsedResolutionNotice,
+  prismaClient: PrismaLike
+): Promise<MatchCandidate[]> {
+  if (!parsed.workerName) {
+    return [];
+  }
+
+  const targetCaseType = mapDiseaseCategoryToCaseType(parsed.diseaseCategory);
+  const targetKwcOffice = normalizeKwcOffice(parsed.comwelBranch);
+
+  // Patient.name 일치하는 사건 모두 조회
+  const where: Record<string, unknown> = {
+    patient: {
+      name: parsed.workerName,
+    },
+  };
+  if (targetCaseType) {
+    where.caseType = targetCaseType;
+  }
+
+  type CaseRow = {
+    id: string;
+    patientId: string;
+    caseType: string;
+    status: string;
+    kwcOfficeName: string | null;
+    tfName: string | null;
+    branch: string | null;
+    receptionDate: Date | null;
+    patient: { name: string };
+  };
+
+  const cases = (await prismaClient.case.findMany({
+    where,
+    include: {
+      patient: { select: { name: true } },
+    },
+    orderBy: { createdAt: "desc" },
+    take: 20,
+  })) as CaseRow[];
+
+  return cases.map((c) => {
+    const reasons: string[] = [];
+    let score = 0;
+
+    // 재해자명 일치 — 기본 50점
+    if (c.patient.name === parsed.workerName) {
+      score += 50;
+      reasons.push(`재해자명 일치 (${c.patient.name})`);
+    }
+
+    // caseType 일치 — 30점
+    if (targetCaseType && c.caseType === targetCaseType) {
+      score += 30;
+      reasons.push(`사건유형 일치 (${c.caseType})`);
+    }
+
+    // kwcOfficeName 일치 — 20점
+    if (targetKwcOffice && c.kwcOfficeName === targetKwcOffice) {
+      score += 20;
+      reasons.push(`관할공단 일치 (${c.kwcOfficeName})`);
+    } else if (targetKwcOffice && c.kwcOfficeName && c.kwcOfficeName.includes(targetKwcOffice)) {
+      score += 10;
+      reasons.push(`관할공단 부분일치 (${c.kwcOfficeName})`);
+    }
+
+    return {
+      caseId: c.id,
+      patientId: c.patientId,
+      patientName: c.patient.name,
+      caseType: c.caseType,
+      status: c.status,
+      kwcOfficeName: c.kwcOfficeName,
+      tfName: c.tfName,
+      branch: c.branch,
+      receptionDate: c.receptionDate ? c.receptionDate.toISOString().slice(0, 10) : null,
+      matchScore: score,
+      matchReasons: reasons,
+    };
+  }).sort((a, b) => b.matchScore - a.matchScore);
+}

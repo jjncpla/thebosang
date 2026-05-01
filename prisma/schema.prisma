@@ -60,6 +60,12 @@ model Case {
   subAgent   String? // 소속/대리인
   isOneStop  Boolean @default(false)
 
+  // 사건 출처/소개 (Z 드라이브 마스터 DB 학습 결과 기반)
+  introducer         String?  // 소개자 — 사건 소개해준 사람 이름
+  salesStaff         String?  // 외부 영업담당자 (User FK 외 평문 이름 보관용)
+  caseChannel        String?  // 사건경로 — 영업/소개/내방/온라인 등 분류 (salesRoute와 별개)
+  preliminaryConsult String?  // 예비 문진 결과/메모
+
   // 약정
   contractDate DateTime?
 
@@ -1557,5 +1563,76 @@ model AvgWageNotice {
   @@index([workerName])
   @@index([workplaceName])
   @@index([needsCorrection])
+  @@index([createdAt])
+}
+
+// ─────────────────────────────────────────────
+// 결정통지서 OCR 인입 (Phase B-7)
+// 근로복지공단 요양·보험급여 결정통지서 (별지 제6호 서식)
+// 분석 근거: docs/forms-learning/결정통지서_OCR_정확도_비교.md
+// ─────────────────────────────────────────────
+model ResolutionNotice {
+  id String @id @default(cuid())
+
+  // 사건/재해자 연결 (선택 — 매칭 안 되면 null)
+  caseId    String?
+  patientId String?
+
+  // 업로더 (User FK는 String 참조만, 관계는 user.prisma에서 정의 안 됨)
+  uploadedById String?
+
+  // 양식 메타
+  originalFileName String
+  fileSize         Int?
+  pageCount        Int?
+  ocrEngine        String  @default("DOCAI") // "DOCAI" / "TESSERACT"
+
+  // === 추출 18필드 ===
+  // Confidence 높음
+  resolutionDate  DateTime? // 결정일/통지일 (처분일)
+  noticeNumber    String?   // 산재보험관리번호 (관리번호)
+  kwcOfficeName   String?   // 근로복지공단 OOO지사
+  postalCode      String?   // 우편번호 (5자리)
+  decisionType    String?   // 승인 / 불승인 / 일부승인 / null
+
+  // Confidence 중간
+  recipientName       String?   // 받는사람 (재해자명)
+  medicalInstitution  String?   // 의료기관명
+  medicalInstNo       String?   // 의료기관번호
+  injuryName          String?   // 상병명
+  icdCode             String?   // ICD-10 코드
+  treatmentPeriodStart DateTime? // 요양기간 시작
+  treatmentPeriodEnd   DateTime? // 요양기간 종료
+
+  // Confidence 낮음
+  rejectionReason  String? // 불승인 사유 (자유 텍스트)
+  calculationDetail String? // 결정내용 상세 (입원/통원 일수)
+  feeNotice        String? // 통지사항 (수수료지급 등)
+
+  // 파생
+  diseaseCategory String? // HEARING_LOSS / PNEUMOCONIOSIS / COPD / LUNG_CANCER / MUSCULOSKELETAL / GENERAL / UNKNOWN
+
+  // === 자동 인입 판정 ===
+  autoIngestConfidence String  @default("LOW") // "HIGH" / "MEDIUM" / "LOW"
+  requiresUserReview   Boolean @default(true)
+  appliedToCase        Boolean @default(false) // 인입 완료 여부
+  appliedAt            DateTime?
+  appliedById          String? // 적용 처리한 사용자
+
+  // 파싱 결과 + 원본 OCR 텍스트
+  parsedData Json    // 전체 ParsedResolutionNotice 구조
+  rawText    String? // 디버깅용 원본 OCR 텍스트 (100k자 제한)
+  warnings   Json?   // string[] 경고
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([caseId])
+  @@index([patientId])
+  @@index([recipientName])
+  @@index([decisionType])
+  @@index([requiresUserReview])
+  @@index([appliedToCase])
+  @@index([resolutionDate])
   @@index([createdAt])
 }
