@@ -12,17 +12,6 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const {
     tfName, patientName, caseType, approvalStatus, progressStatus, decisionDate,
     hasInfoDisclosure, infoDisclosureStatus, memo, caseId,
-    // 송무 인계 (L~U열)
-    litigationFirstReview,
-    litigationFirstDraftAt,
-    litigationFirstDraftResult,
-    litigationContractStatus,
-    litigationContractSent,
-    litigationSecondDraftAt,
-    litigationPoaReceived,
-    litigationFinalDecision,
-    litigationPostHandling,
-    litigationPostHandler,
   } = body;
 
   // 부분 업데이트 지원: undefined 인 필드는 변경하지 않음
@@ -41,17 +30,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   }
   if (memo !== undefined) data.memo = memo || null;
   if (caseId !== undefined) data.caseId = caseId || null;
-  // 송무 인계 필드들
-  if (litigationFirstReview !== undefined) data.litigationFirstReview = litigationFirstReview || null;
-  if (litigationFirstDraftAt !== undefined) data.litigationFirstDraftAt = litigationFirstDraftAt ? new Date(litigationFirstDraftAt) : null;
-  if (litigationFirstDraftResult !== undefined) data.litigationFirstDraftResult = litigationFirstDraftResult || null;
-  if (litigationContractStatus !== undefined) data.litigationContractStatus = litigationContractStatus || null;
-  if (litigationContractSent !== undefined) data.litigationContractSent = litigationContractSent || null;
-  if (litigationSecondDraftAt !== undefined) data.litigationSecondDraftAt = litigationSecondDraftAt ? new Date(litigationSecondDraftAt) : null;
-  if (litigationPoaReceived !== undefined) data.litigationPoaReceived = litigationPoaReceived || null;
-  if (litigationFinalDecision !== undefined) data.litigationFinalDecision = litigationFinalDecision || null;
-  if (litigationPostHandling !== undefined) data.litigationPostHandling = litigationPostHandling || null;
-  if (litigationPostHandler !== undefined) data.litigationPostHandler = litigationPostHandler || null;
+  // (송무 인계 필드는 ObjectionCase 모델로 이동됨 — /api/objection/cases/[id] PATCH에서 처리)
 
   const item = await prisma.objectionReview.update({
     where: { id },

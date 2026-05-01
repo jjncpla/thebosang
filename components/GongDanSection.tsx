@@ -6,7 +6,21 @@ import {
   MENTAL_DISEASE_STATS, DISEASE_COMMITTEE_STATS,
   PNEUMOCONIOSIS_STATS, SME_BASE_PAY, BASE_PAY_BY_REGION,
 } from "@/lib/constants/gongdan";
-import { KWC_BRANCH_DETAILS, KWC_DEFAULT_DETAIL } from "@/lib/constants/kwc-branches";
+import { KWC_BRANCH_DETAILS, KWC_DEFAULT_DETAIL, type KwcDepartment } from "@/lib/constants/kwc-branches";
+
+// 담당자명 client-side persist (localStorage)
+// key 형식: "kwc-staff-name|{branchName}|{deptName}|{staffIdx}" → 담당자명
+const STAFF_NAME_KEY_PREFIX = "kwc-staff-name|";
+const NEW_STAFF_KEY = "kwc-extra-staffs"; // 사용자가 직접 추가한 담당자
+
+type ExtraStaff = {
+  branch: string;
+  dept: string;
+  position?: string;
+  phone: string;
+  task: string;
+  name?: string;
+};
 
 type GMenu = "branch"|"stats"|"disease"|"basepay"|"medical"|"partner";
 
@@ -676,6 +690,25 @@ function BranchInfoSection({
               </ul>
             </div>
 
+            {/* 부서별 정보 */}
+            {selectedDetail?.departments && selectedDetail.departments.length > 0 && (
+              <div style={{ marginTop: 12, paddingTop: 10, borderTop: "1px solid #e5e7eb" }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: "#9ca3af", marginBottom: 8 }}>
+                  부서별 정보 ({selectedDetail.departments.length}개)
+                </div>
+                {selectedDetail.departments.map((dept, di) => (
+                  <DepartmentCard
+                    key={dept.name + di}
+                    branchName={selectedBranch.name}
+                    dept={dept}
+                  />
+                ))}
+                <div style={{ marginTop: 6, padding: "6px 10px", background: "#fef9c3", borderRadius: 4, fontSize: 10, color: "#92400e", lineHeight: 1.5 }}>
+                  ⓘ 담당자명은 공단 홈페이지에 공개되지 않습니다. 직접 입력하면 이 브라우저에 자동 저장되며, 향후 서버 저장 기능을 추가할 예정입니다.
+                </div>
+              </div>
+            )}
+
             {/* 특수부서 */}
             {selectedDetail?.specialUnits && selectedDetail.specialUnits.length > 0 && (
               <div style={{ marginTop: 12, paddingTop: 10, borderTop: "1px solid #e5e7eb" }}>
@@ -685,6 +718,7 @@ function BranchInfoSection({
                     <div style={{ fontSize: 12, fontWeight: 700, color: "#1e40af" }}>{u.name}</div>
                     {u.address && <div style={{ fontSize: 11, color: "#6b7280", marginTop: 2 }}>{u.address}</div>}
                     {u.tel && <div style={{ fontSize: 11, color: "#059669", marginTop: 2 }}>📞 {u.tel}</div>}
+                    {u.fax && <div style={{ fontSize: 11, color: "#6b7280", marginTop: 2 }}>FAX: {u.fax}</div>}
                   </div>
                 ))}
               </div>
@@ -712,3 +746,263 @@ function DetailRow({ label, value }: { label: string; value: React.ReactNode }) 
     </div>
   );
 }
+
+// ─── 부서 카드 ──────────────────────────────────────────────────────────────
+
+function DepartmentCard({ branchName, dept }: { branchName: string; dept: KwcDepartment }) {
+  const [expanded, setExpanded] = useState(false);
+  const baseStaffs = dept.staffs ?? [];
+
+  // 사용자 추가 담당자 (localStorage)
+  const [extras, setExtras] = useState<ExtraStaff[]>([]);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const raw = window.localStorage.getItem(NEW_STAFF_KEY);
+      if (raw) {
+        const all: ExtraStaff[] = JSON.parse(raw);
+        setExtras(all.filter(s => s.branch === branchName && s.dept === dept.name));
+      }
+    } catch { /* noop */ }
+  }, [branchName, dept.name]);
+
+  const persistExtras = (next: ExtraStaff[]) => {
+    if (typeof window === "undefined") return;
+    try {
+      const raw = window.localStorage.getItem(NEW_STAFF_KEY);
+      const all: ExtraStaff[] = raw ? JSON.parse(raw) : [];
+      const others = all.filter(s => !(s.branch === branchName && s.dept === dept.name));
+      window.localStorage.setItem(NEW_STAFF_KEY, JSON.stringify([...others, ...next]));
+    } catch { /* noop */ }
+    setExtras(next);
+  };
+
+  const totalStaffCount = baseStaffs.length + extras.length;
+
+  return (
+    <div style={{ marginBottom: 8, padding: "10px 12px", background: "#f9fafb", borderRadius: 6, border: "1px solid #e5e7eb" }}>
+      <div
+        onClick={() => setExpanded(!expanded)}
+        style={{ cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}
+      >
+        <span style={{ fontSize: 12, fontWeight: 700, color: "#1e40af", flex: 1 }}>
+          {dept.name}
+        </span>
+        {totalStaffCount > 0 && (
+          <span style={{ fontSize: 10, color: "#6b7280", padding: "1px 6px", background: "#e5e7eb", borderRadius: 10 }}>
+            {totalStaffCount}명
+          </span>
+        )}
+        <span style={{ fontSize: 11, color: "#9ca3af" }}>{expanded ? "▼" : "▶"}</span>
+      </div>
+
+      {/* 항상 표시 */}
+      {dept.representativeTel && (
+        <div style={{ fontSize: 11, color: "#059669", marginTop: 4 }}>
+          📞 <a href={`tel:${dept.representativeTel}`} style={{ color: "#059669", textDecoration: "none" }}>{dept.representativeTel}</a>
+        </div>
+      )}
+      {dept.fax && (
+        <div style={{ fontSize: 11, color: "#6b7280", marginTop: 2 }}>FAX: {dept.fax}</div>
+      )}
+      {dept.responsibilities && dept.responsibilities.length > 0 && (
+        <div style={{ fontSize: 11, color: "#374151", marginTop: 4, lineHeight: 1.5 }}>
+          {dept.responsibilities.join(" · ")}
+        </div>
+      )}
+
+      {/* 펼쳤을 때만 담당자 표 */}
+      {expanded && (
+        <div style={{ marginTop: 10, paddingTop: 8, borderTop: "1px dashed #d1d5db" }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: "#6b7280", marginBottom: 6 }}>담당자</div>
+          {totalStaffCount === 0 ? (
+            <div style={{ fontSize: 11, color: "#9ca3af", marginBottom: 6 }}>등록된 담당자가 없습니다. 아래에서 추가할 수 있습니다.</div>
+          ) : (
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11, marginBottom: 8 }}>
+              <thead>
+                <tr style={{ background: "#fff" }}>
+                  <th style={staffThStyle}>직책</th>
+                  <th style={staffThStyle}>전화</th>
+                  <th style={staffThStyle}>담당업무</th>
+                  <th style={staffThStyle}>이름</th>
+                </tr>
+              </thead>
+              <tbody>
+                {baseStaffs.map((staff, si) => (
+                  <StaffRow
+                    key={"base-" + si}
+                    storageKey={`${STAFF_NAME_KEY_PREFIX}${branchName}|${dept.name}|${si}`}
+                    position={staff.position}
+                    phone={staff.phone}
+                    task={staff.task}
+                    initialName={staff.name}
+                  />
+                ))}
+                {extras.map((staff, si) => (
+                  <StaffRow
+                    key={"extra-" + si}
+                    position={staff.position}
+                    phone={staff.phone}
+                    task={staff.task}
+                    initialName={staff.name}
+                    onRemove={() => {
+                      const next = extras.filter((_, i) => i !== si);
+                      persistExtras(next);
+                    }}
+                    onChangeName={(name) => {
+                      const next = extras.map((s, i) => i === si ? { ...s, name } : s);
+                      persistExtras(next);
+                    }}
+                  />
+                ))}
+              </tbody>
+            </table>
+          )}
+          <AddStaffForm
+            onAdd={(s) => persistExtras([...extras, { branch: branchName, dept: dept.name, ...s }])}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function StaffRow({
+  storageKey,
+  position,
+  phone,
+  task,
+  initialName,
+  onRemove,
+  onChangeName,
+}: {
+  storageKey?: string;
+  position?: string;
+  phone: string;
+  task: string;
+  initialName?: string;
+  onRemove?: () => void;
+  onChangeName?: (name: string) => void;
+}) {
+  const [name, setName] = useState(initialName ?? "");
+
+  // localStorage 로딩 (storageKey 가 있을 때만)
+  useEffect(() => {
+    if (!storageKey || typeof window === "undefined") return;
+    try {
+      const v = window.localStorage.getItem(storageKey);
+      if (v) setName(v);
+    } catch { /* noop */ }
+  }, [storageKey]);
+
+  const handleNameChange = (v: string) => {
+    setName(v);
+    if (storageKey && typeof window !== "undefined") {
+      try {
+        if (v) window.localStorage.setItem(storageKey, v);
+        else window.localStorage.removeItem(storageKey);
+      } catch { /* noop */ }
+    }
+    onChangeName?.(v);
+  };
+
+  return (
+    <tr>
+      <td style={staffTdStyle}>{position || "-"}</td>
+      <td style={staffTdStyle}>
+        <a href={`tel:${phone}`} style={{ color: "#059669", textDecoration: "none" }}>{phone}</a>
+      </td>
+      <td style={{ ...staffTdStyle, color: "#374151", textAlign: "left" }}>{task}</td>
+      <td style={staffTdStyle}>
+        <input
+          value={name}
+          onChange={e => handleNameChange(e.target.value)}
+          placeholder="입력"
+          style={{
+            width: "100%", padding: "2px 4px", fontSize: 11,
+            border: "1px solid #e5e7eb", borderRadius: 3, background: "#fff",
+          }}
+        />
+        {onRemove && (
+          <button
+            type="button"
+            onClick={onRemove}
+            style={{ marginLeft: 4, fontSize: 10, color: "#dc2626", background: "none", border: "none", cursor: "pointer" }}
+            title="삭제"
+          >✕</button>
+        )}
+      </td>
+    </tr>
+  );
+}
+
+function AddStaffForm({ onAdd }: { onAdd: (s: { position?: string; phone: string; task: string; name?: string }) => void }) {
+  const [position, setPosition] = useState("");
+  const [phone, setPhone] = useState("");
+  const [task, setTask] = useState("");
+  const [name, setName] = useState("");
+
+  const submit = () => {
+    if (!phone.trim() || !task.trim()) return;
+    onAdd({
+      position: position.trim() || undefined,
+      phone: phone.trim(),
+      task: task.trim(),
+      name: name.trim() || undefined,
+    });
+    setPosition(""); setPhone(""); setTask(""); setName("");
+  };
+
+  return (
+    <div style={{ display: "flex", gap: 4, alignItems: "center", marginTop: 4 }}>
+      <input
+        value={position}
+        onChange={e => setPosition(e.target.value)}
+        placeholder="직책"
+        style={addInputStyle(50)}
+      />
+      <input
+        value={phone}
+        onChange={e => setPhone(e.target.value)}
+        placeholder="전화*"
+        style={addInputStyle(90)}
+      />
+      <input
+        value={task}
+        onChange={e => setTask(e.target.value)}
+        placeholder="담당업무*"
+        style={{ ...addInputStyle(0), flex: 1 }}
+      />
+      <input
+        value={name}
+        onChange={e => setName(e.target.value)}
+        placeholder="이름"
+        style={addInputStyle(50)}
+      />
+      <button
+        type="button"
+        onClick={submit}
+        disabled={!phone.trim() || !task.trim()}
+        style={{
+          fontSize: 11, padding: "3px 8px",
+          background: (phone.trim() && task.trim()) ? "#1e40af" : "#cbd5e1",
+          color: "#fff", border: "none", borderRadius: 3,
+          cursor: (phone.trim() && task.trim()) ? "pointer" : "not-allowed",
+        }}
+      >+ 추가</button>
+    </div>
+  );
+}
+
+const staffThStyle: React.CSSProperties = {
+  padding: "4px 6px", fontSize: 10, fontWeight: 700,
+  color: "#6b7280", borderBottom: "1px solid #e5e7eb", textAlign: "center", whiteSpace: "nowrap",
+};
+const staffTdStyle: React.CSSProperties = {
+  padding: "4px 6px", fontSize: 11, color: "#374151",
+  borderBottom: "1px solid #f3f4f6", textAlign: "center",
+};
+const addInputStyle = (w: number): React.CSSProperties => ({
+  padding: "3px 5px", fontSize: 11, border: "1px solid #d1d5db", borderRadius: 3,
+  width: w > 0 ? w : undefined,
+});

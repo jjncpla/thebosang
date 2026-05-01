@@ -129,6 +129,8 @@ type FormData = {
   memo: string;
   progressNote: string;
   reminderDate: string;
+  branchName: string;
+  tfName: string;
 };
 
 const emptyForm: FormData = {
@@ -147,7 +149,44 @@ const emptyForm: FormData = {
   memo: "",
   progressNote: "",
   reminderDate: "",
+  branchName: "",
+  tfName: "",
 };
+
+// 지사/TF 선택 헬퍼 (모달 내부 사용)
+function BranchSelect({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const { tfByBranch } = useBranches();
+  return (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      style={{ border: "1px solid #e5e7eb", borderRadius: 6, padding: "7px 10px", fontSize: 13, color: "#374151", background: "#f9fafb", outline: "none", width: "100%" }}
+    >
+      <option value="">선택</option>
+      {Object.keys(tfByBranch).map((b) => (
+        <option key={b} value={b}>{b}</option>
+      ))}
+    </select>
+  );
+}
+
+function TfSelect({ branchName, value, onChange }: { branchName: string; value: string; onChange: (v: string) => void }) {
+  const { tfByBranch } = useBranches();
+  const tfList = branchName ? tfByBranch[branchName] ?? [] : [];
+  return (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      disabled={!branchName}
+      style={{ border: "1px solid #e5e7eb", borderRadius: 6, padding: "7px 10px", fontSize: 13, color: "#374151", background: "#f9fafb", outline: "none", width: "100%" }}
+    >
+      <option value="">{branchName ? "선택" : "지사 먼저 선택"}</option>
+      {tfList.map((t) => (
+        <option key={t} value={t}>{t}</option>
+      ))}
+    </select>
+  );
+}
 
 function ConsultationModal({
   initial,
@@ -179,6 +218,8 @@ function ConsultationModal({
       memo: initial.memo ?? "",
       progressNote: initial.progressNote ?? "",
       reminderDate: toInputDate(initial.reminderDate),
+      branchName: initial.branchName ?? "",
+      tfName: initial.tfName ?? "",
     };
   });
   const [saving, setSaving] = useState(false);
@@ -279,6 +320,14 @@ function ConsultationModal({
           <div>
             <label style={labelStyle}>방문(연락)일자</label>
             <input type="date" style={inputStyle} value={form.visitDate} onChange={(e) => set("visitDate", e.target.value)} />
+          </div>
+          <div>
+            <label style={labelStyle}>담당 지사</label>
+            <BranchSelect value={form.branchName} onChange={(v) => { set("branchName", v); set("tfName", ""); }} />
+          </div>
+          <div>
+            <label style={labelStyle}>담당 TF</label>
+            <TfSelect branchName={form.branchName} value={form.tfName} onChange={(v) => set("tfName", v)} />
           </div>
           <div>
             <label style={labelStyle}>상담경로 대분류</label>

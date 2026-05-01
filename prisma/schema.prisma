@@ -687,6 +687,30 @@ model TfMessage {
 }
 
 // ─────────────────────────────────────────────
+// 통합 캘린더 webhook 이벤트 (Idempotency / Redundancy / Rollback)
+// - 1차: 외부 시스템(Telegram / Google Calendar 등) webhook 수신
+// - 2차: 1시간 cron backup-poll로 누락분 보충
+// - (source, externalId) 기준 중복 차단
+// - processedAt 으로 처리 완료/대기 추적
+// ─────────────────────────────────────────────
+model WebhookEvent {
+  id           String    @id @default(cuid())
+  source       String    // "telegram" | "telegram_special_clinic" | "google_calendar" | "kwc_calendar" | ...
+  externalId   String    // 외부 시스템의 고유 ID (telegram message_id, gcal event id 등)
+  eventType    String?   // 이벤트 종류 (예: "schedule_created", "schedule_updated", "schedule_deleted", "special_clinic_message")
+  payload      Json      // 원본 webhook 페이로드 (보존 — rollback / 재처리용)
+  processedAt  DateTime? // 처리 완료 시각 (null = 미처리)
+  processedBy  String?   // "webhook" (1차) | "cron_backup" (2차)
+  errorMessage String?   @db.Text // 처리 실패 시 에러 메시지
+  retries      Int       @default(0)
+  createdAt    DateTime  @default(now())
+
+  @@unique([source, externalId])
+  @@index([source, processedAt])
+  @@index([processedAt, createdAt])
+}
+
+// ─────────────────────────────────────────────
 // 이의제기 최초총현황 (결정 수신 후 검토)
 // ─────────────────────────────────────────────
 model ObjectionReview {
@@ -704,18 +728,6 @@ model ObjectionReview {
   assignedTo   String?
   assignedUser User?    @relation("ObjectionReviewAssignee", fields: [assignedTo], references: [id])
   memo           String?
-  // 송무 인계 (관리파일 엑셀 L~U열)
-  litigationFirstReview      String?   // L. 송무 인계 1차 검토 (예: "완료")
-  litigationFirstDraftAt     DateTime? // M. 1차 기안 일자
-  litigationFirstDraftResult String?   // N. 1차 기안 결과 (예: "소송 진행", "기각")
-  litigationContractStatus   String?   // O. 송무 약정여부 (예: "완료")
-  litigationContractSent     String?   // P. 송무 약정서 송부 여부 (예: "완료")
-  litigationSecondDraftAt    DateTime? // Q. 2차 기안 일자
-  // R~U: 승소 시 기입 그룹
-  litigationPoaReceived      String?   // R. 위임장·인감증명서 수령 (예: "완료")
-  litigationFinalDecision    String?   // S. 최종 처분 (예: "완료")
-  litigationPostHandling     String?   // T. 후처리 여부 (예: "완료")
-  litigationPostHandler      String?   // U. 후처리 담당자 (이름)
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
@@ -769,6 +781,18 @@ model ObjectionCase {
   // 소송 상태
   litigationStatus      String?   // 소송 검토중 / 소송 검토 완료 / 소송 진행중 / 소송 종료
   wageCorrectStatus     String?   // 접수 대기 / 진행중 / 처분완료
+  // 송무 인계 (관리파일 엑셀 L~U열)
+  litigationFirstReview      String?   // L. 송무 인계 1차 검토 (예: "완료")
+  litigationFirstDraftAt     DateTime? // M. 1차 기안 일자
+  litigationFirstDraftResult String?   // N. 1차 기안 결과 (예: "소송 진행", "기각")
+  litigationContractStatus   String?   // O. 송무 약정여부 (예: "완료")
+  litigationContractSent     String?   // P. 송무 약정서 송부 여부 (예: "완료")
+  litigationSecondDraftAt    DateTime? // Q. 2차 기안 일자
+  // R~U: 승소 시 기입 그룹
+  litigationPoaReceived      String?   // R. 위임장·인감증명서 수령 (예: "완료")
+  litigationFinalDecision    String?   // S. 최종 처분 (예: "완료")
+  litigationPostHandling     String?   // T. 후처리 여부 (예: "완료")
+  litigationPostHandler      String?   // U. 후처리 담당자 (이름)
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
 }

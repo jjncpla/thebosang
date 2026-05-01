@@ -28,25 +28,10 @@ export async function GET(req: NextRequest) {
     where,
     include: {
       manager: { select: { id: true, name: true } },
-      // 송무 인계 탭에서 관리파일 L~U열 표시용
-      review: {
-        select: {
-          id: true,
-          litigationFirstReview: true,
-          litigationFirstDraftAt: true,
-          litigationFirstDraftResult: true,
-          litigationContractStatus: true,
-          litigationContractSent: true,
-          litigationSecondDraftAt: true,
-          litigationPoaReceived: true,
-          litigationFinalDecision: true,
-          litigationPostHandling: true,
-          litigationPostHandler: true,
-        },
-      },
     },
     orderBy: { createdAt: "desc" },
   });
+  // 송무 인계 필드(L~U)는 ObjectionCase 자체 필드로 자동 포함됨
 
   // 소송인계 탭이면 autoItems 제외
   if (type === "litigation") {
