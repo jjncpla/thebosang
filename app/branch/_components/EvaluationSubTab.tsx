@@ -104,7 +104,7 @@ export default function EvaluationSubTab({ year, quarter, month, branch, viewMon
 // ══════════════════════════════════════════════════════════
 // (1) 외근직 평가
 // ══════════════════════════════════════════════════════════
-function OutdoorEval({ year, quarter, month, branch, viewMonths }: Props) {
+function OutdoorEval({ year, quarter, month, branch }: Props) {
   const [loading, setLoading] = useState(false)
   const [contacts, setContacts] = useState<ContactItem[]>([])
   const [salesData, setSalesData] = useState<Record<string, number>>({})       // staffName → 약정건수 합계
@@ -351,7 +351,7 @@ function IndoorEval({ year, quarter, month, branch }: IndoorEvalProps) {
       const grades: Record<string, string> = {}
       const reasons: Record<string, string> = {}
       for (const e of allEvals) {
-        const key = `${e.userId}_${periods.find(p => true) || periods[0]}`
+        const key = `${e.userId}_${periods[0]}`
         grades[key] = e.grade || ''
         reasons[key] = e.gradeReason || ''
       }

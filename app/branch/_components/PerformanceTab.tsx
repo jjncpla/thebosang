@@ -1586,7 +1586,7 @@ export default function PerformanceTab() {
 
 // ─── 직접 추가 폼 ─────────────────────────────────────────────────
 function AddSettlementForm({
-  branchName, year, defaultMonth, userNames, users,
+  year, defaultMonth, userNames, users,
   onSave, onCancel,
 }: {
   branchName: string

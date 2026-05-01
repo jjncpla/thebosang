@@ -1727,7 +1727,7 @@ function BasicInfoTab({ caseData, onUpdated }: { caseData: CaseData; onUpdated: 
           <label style={{ fontSize: 12, color: "#6b7280" }}>영업담당자</label>
           <ContactSelector
             value={form.salesManager}
-            onChange={(name, mobile, userId) => setForm({ ...form, salesManager: name, salesManagerId: userId ?? null })}
+            onChange={(name, _mobile, userId) => setForm({ ...form, salesManager: name, salesManagerId: userId ?? null })}
             placeholder="영업담당자 이름 검색"
           />
         </div>
@@ -1735,7 +1735,7 @@ function BasicInfoTab({ caseData, onUpdated }: { caseData: CaseData; onUpdated: 
           <label style={{ fontSize: 12, color: "#6b7280" }}>실무담당자</label>
           <ContactSelector
             value={form.caseManager}
-            onChange={(name, mobile, userId) => setForm({ ...form, caseManager: name, caseManagerId: userId ?? null })}
+            onChange={(name, _mobile, userId) => setForm({ ...form, caseManager: name, caseManagerId: userId ?? null })}
             placeholder="실무담당자 이름 검색"
           />
         </div>
@@ -1743,7 +1743,7 @@ function BasicInfoTab({ caseData, onUpdated }: { caseData: CaseData; onUpdated: 
           <label style={{ fontSize: 12, color: "#6b7280" }}>지사</label>
           <BranchSelector
             value={form.branch}
-            onChange={(branch, officePhone) => setForm({ ...form, branch })}
+            onChange={(branch, _officePhone) => setForm({ ...form, branch })}
           />
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>

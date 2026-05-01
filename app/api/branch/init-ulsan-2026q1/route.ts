@@ -129,7 +129,7 @@ const DATA_MAR = [
 
 const DATA = [...DATA_JAN, ...DATA_FEB, ...DATA_MAR]
 
-export async function GET(req: NextRequest) {
+export async function GET(_req: NextRequest) {
   const session = await auth()
   if (!session?.user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 

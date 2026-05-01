@@ -4,7 +4,7 @@ import { prisma } from '@/lib/prisma'
 
 const WRITE_ROLES = ['ADMIN', '조직관리자']
 
-export async function GET(req: NextRequest) {
+export async function GET(_req: NextRequest) {
   const session = await auth()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
