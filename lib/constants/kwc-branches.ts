@@ -8,23 +8,39 @@
 // 기본 95개 기관 데이터는 public/data/gongdan-branches.json (주소·관할·전화·팩스만)
 // 이 파일에서는 우편번호·교통편·업무내용·운영시간·부서·담당자 등 보강 정보를 제공
 
-// ─── 타입 ────────────────────────────────────────────────────────────────────
+// ─── 타입 (2026-05-02 v2 재설계) ────────────────────────────────────────────
+//
+// 변경 배경: 노무사는 대표전화 대신 부서별 담당자에게 직통한다.
+//   공단 페이지에 표 형태로 [부서|전화|업무 중분류|업무 내용]이 있으므로
+//   각 행을 하나의 KwcStaff로 추출. 같은 부서명의 여러 행은 staffs[] 로 묶음.
+// 호환성: 기존 1차 추출 데이터의 `responsibilities`/`representativeTel`/`task` 필드는
+//   deprecated이지만 마이그레이션 비용을 고려해 그대로 둠. UI는 새 필드(tasksMain/tasksDetail)
+//   를 우선 표시하고, 비어있으면 legacy 필드를 fallback으로 변환해서 보여줌.
 
-// 부서별 담당자 (담당자명은 공단 페이지에 없음 — 사용자가 추후 입력)
+// 부서별 담당자 (= 공단 표의 한 행)
 export type KwcStaff = {
-  position?: string;       // 직책 (예: "팀장", "주무관") — 공단 페이지에 있을 수 있음
-  phone: string;           // 직통 전화번호
-  task: string;            // 담당업무 (예: "소음성 난청 1차 심사")
-  name?: string;           // 담당자명 — 사용자가 추후 입력 (현재는 placeholder)
+  // 공단 홈페이지 fixed (자동 추출, 사용자 편집 불가)
+  phone: string;            // 직통 전화번호 (행 식별 키)
+  tasksMain?: string[];     // 업무 중분류 (예: ["산재 멘토링", "요양재활"])
+  tasksDetail?: string;     // 업무 내용 본문 (그대로 텍스트)
+  // 사용자 입력 (DB 저장 — KwcBranchStaff 모델)
+  name?: string;            // 담당자 이름
+  position?: string;        // 직책 (예: "팀장", "주무관")
+  // ─ legacy (1차 추출 데이터 호환용. 새 데이터는 tasksMain/tasksDetail 사용) ─
+  /** @deprecated tasksMain 또는 tasksDetail 사용 */
+  task?: string;
 };
 
 // 지사 부서
 export type KwcDepartment = {
   name: string;                 // 부서명 (예: "재활보상1부")
   fax?: string;                 // 부서 팩스 (있으면)
-  responsibilities?: string[];  // 부서 담당업무 리스트
-  staffs?: KwcStaff[];          // 담당자 목록
-  representativeTel?: string;   // 부서 대표 전화 (있으면)
+  staffs?: KwcStaff[];          // 담당자(행) 목록
+  // ─ legacy (대표전화는 노무사가 안 씀. UI에서 표시 안 함) ─
+  /** @deprecated 사용자 요구로 대표전화 표시 안 함. 데이터 보존만. */
+  representativeTel?: string;
+  /** @deprecated staffs[].tasksMain 사용. UI는 staffs가 비어있으면 이 값을 fallback으로 변환 표시. */
+  responsibilities?: string[];
 };
 
 export type KwcSpecialUnit = {
@@ -36,15 +52,39 @@ export type KwcSpecialUnit = {
 
 export type KwcBranchDetail = {
   postalCode?: string;        // 우편번호
-  representativeTel?: string; // 대표 전화 (1588-0075 등 콜센터 번호)
   email?: string;
-  hours?: string;             // 운영 시간 (예: "평일 09:00-18:00")
+  hours?: string;             // 운영 시간
   directions?: string;        // 교통편 / 오시는 길
   parkingInfo?: string;       // 주차 안내
   services?: string[];        // 주요 업무 / 서비스 항목
-  departments?: KwcDepartment[];     // 부서 목록 (신규)
-  specialUnits?: KwcSpecialUnit[];   // 특수부서 (예: 소음성난청전담TF)
+  departments?: KwcDepartment[];
+  specialUnits?: KwcSpecialUnit[];
+  // ─ legacy ─
+  /** @deprecated 사용자 요구로 대표전화 표시 안 함. */
+  representativeTel?: string;
 };
+
+// ─ 헬퍼: legacy KwcDepartment를 새 staffs 형식으로 정규화 ─
+// staffs가 비어있고 responsibilities가 있으면 가상의 1행 staff(전화 없음, tasksMain만)로 변환.
+// staffs[i].task 가 있고 tasksMain 이 없으면 task → tasksMain[0]로 옮김.
+export function normalizeDepartmentStaffs(dept: KwcDepartment): KwcStaff[] {
+  const list = (dept.staffs ?? []).map(s => {
+    if (!s.tasksMain && !s.tasksDetail && s.task) {
+      return { ...s, tasksMain: [s.task] };
+    }
+    return s;
+  });
+  if (list.length > 0) return list;
+  // staffs가 비어있을 때 — responsibilities를 표시용 "1행"으로 변환
+  if (dept.responsibilities && dept.responsibilities.length > 0) {
+    return [{
+      phone: dept.representativeTel ?? "",
+      tasksMain: dept.responsibilities,
+      tasksDetail: undefined,
+    }];
+  }
+  return [];
+}
 
 // ─── 데이터 ──────────────────────────────────────────────────────────────────
 
@@ -246,7 +286,6 @@ export const KWC_BRANCH_DETAILS: Record<string, KwcBranchDetail> = {
   // ─── 부산권 ────────────────────────────────────────────────────────────
   부산지역본부: {
     postalCode: "48731",
-    representativeTel: "1588-0075",
     hours: STD_HOURS,
     directions: "부산지하철 1호선 초량역 10번 출구 도보 5분",
     parkingInfo: "건물 지하주차장 이용 가능 (협소하여 대중교통 권장)",
@@ -259,17 +298,223 @@ export const KWC_BRANCH_DETAILS: Record<string, KwcBranchDetail> = {
       "근로자 복지사업 (퇴직연금, 임금채권, 신용보증)",
       "일자리안정자금 지원",
     ],
+    // 2026-05-02 v2: 공단 홈페이지 직원검색 표 전체 추출 (130+ 행)
     departments: [
-      { name: "경영지원부", fax: "0505-284-1101", representativeTel: "051-661-0110", responsibilities: ["지역본부 및 관할지사의 주요업무계획 수립", "각종 행정지원"], staffs: [] },
-      { name: "가입지원1부", fax: "0505-284-3100", responsibilities: ["보험 적용 및 부과", "피보험자자격관리(동구·사하구·서구·중구)"], staffs: [] },
-      { name: "가입지원2부", fax: "0505-351-4100", responsibilities: ["보험 적용 및 부과", "피보험자자격관리(남구·영도구)"], staffs: [] },
-      { name: "재활보상1부", fax: "0505-296-2100", responsibilities: ["유족급여 및 재해상담"], staffs: [] },
-      { name: "재활보상2부", fax: "0505-042-2200", responsibilities: ["요양재활", "장해 및 내일찾기서비스"], staffs: [] },
-      { name: "부정수급예방부", fax: "0505-084-2102", responsibilities: ["부정수급, 부당이득", "구상채권"], staffs: [] },
-      { name: "송무부", fax: "0505-284-5100", responsibilities: ["행정소송 수행 및 소송비용 회수", "민사소송"], staffs: [] },
-      { name: "복지사업부", fax: "0505-301-6100", responsibilities: ["일자리안정자금 지원", "퇴직연금", "임금채권", "신용보증"], staffs: [] },
-      { name: "산재의학센터", fax: "0505-067-2103", responsibilities: ["진료비심사", "본인부담금확인", "장해통합심사"], staffs: [] },
-      { name: "소음성난청전담TF", fax: "0505-720-5911", responsibilities: ["부산·울산·경남지역 소음성 난청 업무"], staffs: [] },
+      {
+        name: "경영지원부", fax: "0505-284-1101",
+        staffs: [
+          { phone: "051-661-0110", tasksMain: ["경영지원/복지", "총괄"], tasksDetail: "경영지원부 업무총괄, 윤리경영, 안전" },
+          { phone: "051-661-0106", tasksMain: ["경영지원/복지", "행정지원"], tasksDetail: "채용, 조직문화, 사회공헌" },
+          { phone: "051-661-0104", tasksMain: ["경영지원/복지"], tasksDetail: "인사, 개인정보, 보안" },
+          { phone: "051-661-0111", tasksMain: ["경영지원/복지", "행정지원"], tasksDetail: "경영지원 업무 전반 추진, 감사 등" },
+          { phone: "051-661-0109", tasksMain: ["행정지원"], tasksDetail: "업무용 차량 및 기관장 차량운전, 주차관리, 외부인력관리, 고객안내" },
+          { phone: "051-661-0108", tasksMain: ["경영지원/복지"], tasksDetail: "일상 경비, 지출, 경리" },
+          { phone: "051-661-0105", tasksMain: ["경영지원/복지"], tasksDetail: "예산, 구매, 자산관리" },
+          { phone: "051-661-0139", tasksMain: ["경영지원/복지"], tasksDetail: "CS 경영, 홍보, 우편물 관리" },
+        ],
+      },
+      {
+        name: "가입지원1부", fax: "0505-284-3100",
+        staffs: [
+          { phone: "051-661-0213", tasksMain: ["보험가입조사", "건설업종(건설업·일반업)"], tasksDetail: "미가입재해(건설), 피보험자 확인청구서, 근로자성 조사업무(노동부 등 외부 의뢰건), 사업종류변경(변경신고 및 재활보상부 의뢰건)" },
+          { phone: "051-661-0157", tasksMain: ["보험적용 및 부과", "근로자 고용신고", "적용"], tasksDetail: "서구(남부민), 중구(동광, 중앙)" },
+          { phone: "051-661-0211", tasksMain: ["보험가입조사"], tasksDetail: "보험가입조사" },
+          { phone: "051-661-0162", tasksMain: ["보험가입조사"], tasksDetail: "보험가입조사" },
+          { phone: "051-661-0240", tasksMain: ["보험적용 및 부과", "근로자 고용신고", "피보험자 자격관리"], tasksDetail: "동구(초량), 중구(대창, 영주, 신창)" },
+          { phone: "051-661-0173", tasksMain: ["보험적용 및 부과", "피보험자 자격관리"], tasksDetail: "사하구(구평), 동구(수정), 중구(보수), 서구(암남, 아미, 초장)" },
+          { phone: "051-661-0224", tasksMain: ["보험가입조사", "보험적용 및 부과", "적용", "피보험자 자격관리"], tasksDetail: "동구(범일), 사하구(괴정, 감천), 중구(광복)" },
+          { phone: "051-661-0204", tasksMain: ["보험적용 및 부과", "근로자 고용신고", "근로자정보입력", "적용"], tasksDetail: "사하구(신평), 남구(용호), 중구(창선), 서구(토성)" },
+          { phone: "051-661-0265", tasksMain: ["보험가입조사"], tasksDetail: "보험가입조사" },
+        ],
+      },
+      {
+        name: "가입지원2부", fax: "0505-351-4100",
+        staffs: [
+          { phone: "051-661-0155", tasksMain: ["총괄"], tasksDetail: "가입지원1, 2부 업무 총괄" },
+          { phone: "051-661-0133", tasksMain: ["건설업종(건설업·일반업)"], tasksDetail: "건설업 확정정산" },
+          { phone: "051-661-0227", tasksMain: ["피보험자 자격관리"], tasksDetail: "근로내용확인신고, 근로자정보변경, 휴직, 전보(전근), 외국인 및 공무원 가입(탈퇴), 하수급인명세서[동구, 사하구(괴정, 당리, 신평, 장림, 하단), 서구(남부민, 부민, 부용)]" },
+          { phone: "051-661-0216", tasksMain: ["보험적용 및 부과", "근로자 고용신고", "피보험자 자격관리", "보험료 부과"], tasksDetail: "사하구(장림, 당리), 동구(좌천), 중구(대청), 서구(서대신)" },
+          { phone: "051-661-0132", tasksMain: ["건설업종(건설업·일반업)"], tasksDetail: "건설업 확정정산 업무 총괄" },
+          { phone: "051-661-0235", tasksMain: ["피보험자 자격관리"], tasksDetail: "근로내용확인신고, 근로자정보변경, 휴직, 전보(전근), 외국인 및 공무원 가입(탈퇴), 하수급인명세서(중구, 사하구(감천, 구평, 다대), 서구(동대신, 서대신, 토성, 아미, 초장, 충무, 암남))" },
+          { phone: "051-661-0212", tasksMain: ["피보험자 자격관리"], tasksDetail: "근로내용확인신고, 근로자정보변경, 휴직, 전보(전근), 외국인 및 공무원 가입(탈퇴), 하수급인명세서(남구)" },
+          { phone: "051-661-0214", tasksMain: ["보험적용 및 부과", "근로자 고용신고", "피보험자 자격관리"], tasksDetail: "남구(대연(용소로,석포로,못골로, 유엔로),영도구(청학,대평,남항,대교), 서구(부민)" },
+          { phone: "051-661-0134", tasksMain: ["건설업종(건설업·일반업)"], tasksDetail: "건설업 확정정산" },
+          { phone: "051-661-0205", tasksMain: ["건설업종(건설업·일반업)"], tasksDetail: "건설업 확정정산 업무" },
+          { phone: "051-661-0226", tasksMain: ["보험적용 및 부과", "근로자 고용신고", "피보험자 자격관리", "보험료 부과"], tasksDetail: "남구(용당, 우암), 사하구(다대), 영도구(봉래), 중구(부평)" },
+          { phone: "051-661-0225", tasksMain: ["피보험자 자격관리"], tasksDetail: "근로내용확인신고, 근로자정보변경, 휴직, 전보(전근), 외국인 및 공무원 가입(탈퇴), 하수급인명세서(영도구)" },
+          { phone: "051-661-0239", tasksMain: ["보험적용 및 부과", "근로자 고용신고", "피보험자 자격관리", "보험료 부과"], tasksDetail: "남구(문현동), 영도구(동삼, 신선), 서구(부용, 동대신)" },
+          { phone: "051-661-0130", tasksMain: ["건설업종(건설업·일반업)"], tasksDetail: "건설업 확정정산 업무" },
+          { phone: "051-661-0201", tasksMain: ["보험적용 및 부과", "건설업종(건설업·일반업)"], tasksDetail: "미가입재해(건설), 피보험자 확인청구서, 근로자성 조사업무(노동부 등 외부 의뢰건), 사업종류변경(변경신고 및 재활보상부 의뢰건)" },
+          { phone: "051-661-0203", tasksMain: ["보험적용 및 부과", "근로자 고용신고", "피보험자 자격관리", "보험료 부과"], tasksDetail: "사하구(하단), 중구(남포), 서구(충무), 영도구(영선)" },
+          { phone: "051-661-0223", tasksMain: ["보험적용 및 부과", "근로자 고용신고", "피보험자 자격관리", "보험료 부과"], tasksDetail: "남구[대연(유엔평화로, 기타)], 남구(감만)" },
+        ],
+      },
+      {
+        name: "재활보상1부", fax: "0505-296-2100",
+        staffs: [
+          { phone: "051-661-0298", tasksMain: ["총괄"], tasksDetail: "재활보상1부 업무총괄" },
+          { phone: "051-661-0281", tasksMain: ["재해조사", "재요양", "진폐"], tasksDetail: "최초 및 재요양(순번제), 평균임금 산정, 휴업급여 최초분" },
+          { phone: "051-661-0141", tasksMain: ["재해조사", "재요양", "진폐"], tasksDetail: "최초 및 재요양(순번제), 평균임금 산정, 휴업급여 최초분" },
+          { phone: "051-661-0251", tasksMain: ["재해조사"], tasksDetail: "최초 및 재요양(순번제), 평균임금 산정, 휴업급여 최초분" },
+          { phone: "051-661-0278", tasksMain: ["재해조사", "재요양", "진폐"], tasksDetail: "최초 및 재요양(순번제), 평균임금 산정, 휴업급여 최초분" },
+          { phone: "051-661-0291", tasksMain: ["재해조사", "재요양", "진폐"], tasksDetail: "업무상질병(근골격계) 전담팀" },
+          { phone: "051-661-0296", tasksMain: ["재해조사"], tasksDetail: "업무상질병(근골격계) 전담팀" },
+          { phone: "051-661-0294", tasksMain: ["재해조사", "재요양", "진폐"], tasksDetail: "업무상질병(근골격계) 전담팀" },
+          { phone: "051-661-0275", tasksMain: ["유족급여(지급결정)"], tasksDetail: "유족급여 및 장례비 처리, 업무상 질병(근골격계) 처리" },
+          { phone: "051-661-0246", tasksMain: ["유족급여(지급결정)", "재해조사"], tasksDetail: "유족급여 및 장례비 처리, 업무상 질병(근골격계) 처리" },
+          { phone: "051-661-0280", tasksMain: ["재해조사"], tasksDetail: "최초 및 재요양(순번제), 평균임금 산정, 휴업급여 최초분" },
+          { phone: "051-661-0241", tasksMain: ["재해조사"], tasksDetail: "최초 및 재요양(순번제), 평균임금 산정, 휴업급여 최초분" },
+          { phone: "051-661-0219", tasksMain: ["재해조사", "재요양", "진폐"], tasksDetail: "최초 및 재요양(순번제), 평균임금 산정, 휴업급여 최초분" },
+          { phone: "051-661-0218", tasksMain: ["재해조사", "재요양", "진폐"], tasksDetail: "최초 및 재요양(순번제), 평균임금 산정, 휴업급여 최초분" },
+          { phone: "051-661-0282", tasksMain: ["재해조사", "재요양"], tasksDetail: "최초 및 재요양(순번제), 평균임금 산정, 휴업급여 최초분" },
+          { phone: "051-661-0279", tasksMain: ["재해조사"], tasksDetail: "업무상질병(근골격계) 전담팀" },
+          { phone: "051-661-0277", tasksMain: ["재해조사", "재요양"], tasksDetail: "민원서류 접수 전 상담" },
+        ],
+      },
+      {
+        name: "재활보상2부", fax: "0505-042-2200",
+        staffs: [
+          { phone: "051-661-0178", tasksMain: ["요양재활", "총괄"], tasksDetail: "부서 업무 총괄" },
+          { phone: "051-661-0254", tasksMain: ["요양재활"], tasksDetail: "[요양관리] 영도구 영도병원, 사하구 감천동 중앙U병원, 중구(메리놀병원 제외) 병원, 서구(대학병원, 동아대학교대신병원, 삼육부산병원, 바른병원 제외)병원" },
+          { phone: "051-661-0260", tasksMain: ["요양재활", "요양비 및 대체청구", "장해급여(지급결정)"], tasksDetail: "남구(봉생힐링병원, 성모병원 제외) 병원" },
+          { phone: "051-661-0297", tasksMain: ["요양재활", "요양비 및 대체청구", "장해급여(지급결정)"], tasksDetail: "[요양관리] 동구(봉생병원, 세일병원 제외)병원, 서구 바른병원" },
+          { phone: "051-661-0128", tasksMain: ["요양재활", "요양비 및 대체청구", "장해급여(지급결정)"], tasksDetail: "[요양관리] 동아대학교병원, 동아대학교대신병원(서구), 사하구 장림동(하나병원 제외) 병원" },
+          { phone: "051-661-0262", tasksMain: ["요양재활", "요양비 및 대체청구"], tasksDetail: "[요양관리] 사하구 더탄탄병원, 큐병원, 프라임병원" },
+          { phone: "051-661-0245", tasksMain: ["요양재활"], tasksDetail: "[재활지원팀] 직업훈련 및 재취업 지원 업무(요양종결지사: 부산동부, 부산중부, 울산남부, 관외), 취업설명회(박람회), 취업지원기관 업무 총괄" },
+          { phone: "051-661-0271", tasksMain: ["요양재활", "요양비 및 대체청구", "장해급여(지급결정)"], tasksDetail: "[요양관리] 영도구(영도병원 제외) 병원, 사하구 다대동 병원" },
+          { phone: "051-661-0266", tasksMain: ["요양재활", "요양비 및 대체청구", "장해급여(지급결정)"], tasksDetail: "[요양관리] 부산대학교병원(서구)" },
+          { phone: "051-661-0250", tasksMain: ["요양재활", "요양비 및 대체청구", "장해급여(지급결정)"], tasksDetail: "동구 세일병원, 사하구 감천동(중앙U병원 제외), 신평동(강동병원 제외), 구평동 병원, 남구 성모병원" },
+          { phone: "051-661-0267", tasksMain: ["요양재활", "요양비 및 대체청구", "장해급여(지급결정)"], tasksDetail: "[요양관리] 사하구 강동병원, 괴정동(더탄탄병원 제외) 병원" },
+          { phone: "051-661-0206", tasksMain: ["요양재활", "요양비 및 대체청구", "장해급여(지급결정)"], tasksDetail: "[요양관리] 사하구 하나병원" },
+          { phone: "051-661-0263", tasksMain: ["요양재활", "요양비 및 대체청구", "연금업무담당", "장해급여(지급결정)"], tasksDetail: "재활 업무 총괄, [요양관리] 사하구 굳건병원, 서구 삼육부산병원, 장해재판정, 연금관리업무, 멘토링프로그램 관련 업무" },
+          { phone: "051-661-0258", tasksMain: ["요양재활"], tasksDetail: "[재활지원팀] 직업훈련 및 재취업 지원 업무(요양종결지사: 부산본부, 부산북부, 울산중부, 양산), 직업훈련업무 총괄(홍보, 보고 등), 재취업관련 지역사회자원 업무 총괄" },
+          { phone: "051-661-0268", tasksMain: ["요양재활", "요양비 및 대체청구", "장해급여(지급결정)"], tasksDetail: "[요양관리] 사하구 하단동(큐병원, 프라임병원 제외), 당리동(굳건병원 제외) 병원" },
+          { phone: "051-661-0253", tasksMain: ["산재 멘토링", "산재창업지원", "요양재활", "요양비 및 대체청구", "장해급여(지급결정)"], tasksDetail: "요양, 장해 업무 총괄, [요양관리] 고신대학교복음병원(서구), 봉생병원(동구), 봉생힐링병원(남구), 메리놀병원(중구), 의료기관 지정·변경·취소 관련 업무" },
+        ],
+      },
+      {
+        name: "부정수급예방부", fax: "0505-084-2102",
+        staffs: [
+          { phone: "051-661-0120", tasksMain: ["부정수급예방부"], tasksDetail: "부서 내 업무 총괄" },
+          { phone: "051-661-0174", tasksMain: ["구상금회수"], tasksDetail: "구상, 부당이득 업무총괄, 민사부당이득금 관리(창업점포)" },
+          { phone: "051-661-0176", tasksMain: ["구상금회수"], tasksDetail: "구상금 관리(부산지역본부, 부산동부)" },
+          { phone: "051-661-0124", tasksMain: ["구상금회수"], tasksDetail: "구상금 관리(울산중부, 부산북부), 부서경리" },
+          { phone: "051-661-0234", tasksMain: ["구상금회수"], tasksDetail: "구상금 관리(부산중부, 통영)" },
+          { phone: "051-661-0126", tasksMain: ["부정수급조사"], tasksDetail: "부정수급조사, 진료기록분석" },
+          { phone: "051-661-0169", tasksMain: ["구상금회수"], tasksDetail: "구상금 관리(창원)" },
+          { phone: "051-661-0125", tasksMain: ["부당이득금회수"], tasksDetail: "국세, 민사 부당이득금관리(울산, 북부, 동부, 중부, 지본), 부서 내 서무" },
+          { phone: "051-661-0122", tasksMain: ["부정수급조사"], tasksDetail: "부정수급조사, 조사팀 서무" },
+          { phone: "051-661-0123", tasksMain: ["부정수급조사"], tasksDetail: "부정수급조사" },
+          { phone: "051-661-0172", tasksMain: ["구상금회수"], tasksDetail: "구상금 관리(양산, 김해), 구상팀 기금 관리업무" },
+          { phone: "051-661-0121", tasksMain: ["부정수급조사"], tasksDetail: "부정수급조사 업무 총괄" },
+          { phone: "051-661-0127", tasksMain: ["부당이득금회수"], tasksDetail: "국세, 민사 부당이득금 관리(창원, 진주, 양산, 김해, 통영), 구상금 관리(진주)" },
+          { phone: "051-661-0170", tasksMain: ["구상금회수"], tasksDetail: "구상금 관리(울산2024.7.1.이전), 울산남부, 구상팀 서무" },
+        ],
+      },
+      {
+        name: "송무부", fax: "0505-284-5100",
+        staffs: [
+          { phone: "051-661-0160", tasksMain: ["소송"], tasksDetail: "행정 및 민사소송 총괄" },
+          { phone: "051-661-0161", tasksMain: ["소송"], tasksDetail: "행정소송" },
+          { phone: "051-661-0247", tasksMain: ["소송"], tasksDetail: "행정소송 총괄" },
+          { phone: "051-661-0166", tasksMain: ["소송"], tasksDetail: "행정소송" },
+          { phone: "051-661-0163", tasksMain: ["소송"], tasksDetail: "행정소송" },
+          { phone: "051-661-0177", tasksMain: ["소송"], tasksDetail: "민사소송" },
+          { phone: "051-661-0188", tasksMain: ["소송"], tasksDetail: "행정 및 민사소송" },
+          { phone: "051-661-0200", tasksMain: ["소송"], tasksDetail: "민사소송" },
+          { phone: "051-661-0180", tasksMain: ["소송"], tasksDetail: "민사소송 총괄" },
+          { phone: "051-661-0171", tasksMain: ["소송"], tasksDetail: "민사소송" },
+          { phone: "051-661-0168", tasksMain: ["소송"], tasksDetail: "행정소송" },
+          { phone: "051-661-0164", tasksMain: ["소송"], tasksDetail: "행정소송" },
+          { phone: "051-661-0167", tasksMain: ["소송"], tasksDetail: "행정소송" },
+        ],
+      },
+      {
+        name: "복지사업부", fax: "0505-301-6100",
+        staffs: [
+          { phone: "051-661-0190", tasksMain: ["총괄"], tasksDetail: "복지사업부 총괄" },
+          { phone: "051-661-0135", tasksMain: ["임금채권"], tasksDetail: "임금채권회수(진주지사)" },
+          { phone: "051-661-0195", tasksMain: ["임금채권"], tasksDetail: "임금채권 회수(부산동부지사), 국고관리" },
+          { phone: "051-661-0181", tasksMain: ["임금채권"], tasksDetail: "가압류(순번제)" },
+          { phone: "051-661-0196", tasksMain: ["임금채권"], tasksDetail: "임금채권 회수(울산남부지사, 울산중부지사)" },
+          { phone: "051-661-0182", tasksMain: ["임금채권"], tasksDetail: "임금채권 회수(부산북부지사)" },
+          { phone: "051-661-0237", tasksMain: ["복지"], tasksDetail: "간이대지급금 지급(동구, 중구, 영도구), 도산대지급금지급, 일반근로자 융자 및 이차보전(자녀양육비), 산재근로자 생활안정자금" },
+          { phone: "051-661-0194", tasksMain: ["임금채권"], tasksDetail: "임금채권 회수(김해지사)" },
+          { phone: "051-661-0192", tasksMain: ["임금채권", "퇴직연금"], tasksDetail: "임금채권, 융자사업, 퇴직연금 업무관리, 임금채권(양산지사), 일자리지원 업무관리, 가압류(순번제)" },
+          { phone: "051-661-0137", tasksMain: ["신용보증(구상채권)"], tasksDetail: "신용보증 구상채권(부산동부지사, 부산중부지사)" },
+          { phone: "051-661-0187", tasksMain: ["퇴직연금", "복지"], tasksDetail: "퇴직연금" },
+          { phone: "051-661-0142", tasksMain: ["일자리지원업무"], tasksDetail: "신용보증 회수 및 고용유지대부 업무 관리, 체불청산사업주 및 창업점포융자 채권관리, 임금채권 부정, 부당(행정심판) 이득 관리" },
+          { phone: "051-661-0185", tasksMain: ["복지"], tasksDetail: "간이대지급금지급(사하구, 남구, 서구), 체불청산사업주 및 체불근로자 생계비 융자, 소액생계비융자, 노부모요양비 융자 및 이차보전" },
+          { phone: "051-661-0151", tasksMain: ["일자리지원업무", "신용보증(구상채권)"], tasksDetail: "신용보증 구상채권(통영지사, 김해지사, 울산남부지사)" },
+          { phone: "051-661-0186", tasksMain: ["퇴직연금", "복지"], tasksDetail: "퇴직연금" },
+          { phone: "051-661-0189", tasksMain: ["신용보증(구상채권)"], tasksDetail: "신용보증 구상채권(부산지역본부, 양산지사, 진주지사), 고용유지대부 채권관리" },
+          { phone: "051-661-0138", tasksMain: ["임금채권"], tasksDetail: "임금채권 회수(부산지역본부)" },
+          { phone: "051-661-0183", tasksMain: ["임금채권"], tasksDetail: "임금채권 회수(창원지사(창원시))" },
+          { phone: "051-661-0184", tasksMain: ["임금채권"], tasksDetail: "임금채권 회수(통영지사)" },
+          { phone: "051-661-0148", tasksMain: ["임금채권"], tasksDetail: "임금채권 회수(창원지사(의령군, 창녕군, 함안군), 부산중부지사)" },
+          { phone: "051-661-0165", tasksMain: ["일자리지원업무"], tasksDetail: "일자리 지원금 환수 등 사후관리(대구관내), 융자(직업훈련생계비, 혼례비)" },
+          { phone: "051-661-0149", tasksMain: ["일자리지원업무", "복지"], tasksDetail: "일자리 지원금 환수 등 사후관리(부산지역 관내), 일반근로자 생활안정자금융자(의료비, 장례비)" },
+          { phone: "051-661-0198", tasksMain: ["신용보증(구상채권)"], tasksDetail: "신용보증 구상채권(창원지사, 울산중부지사, 부산북부지사)" },
+        ],
+      },
+      {
+        name: "산재의학센터", fax: "0505-067-2103",
+        staffs: [
+          { phone: "051-661-0286", tasksMain: ["총괄"], tasksDetail: "장해전문심사회의 간사, 자문의사회의 간사, 부서 업무 총괄" },
+          { phone: "051-661-0150", tasksMain: ["진료비·약제비심사"], tasksDetail: "부산북부지사(사상구, 강서구) 진료비·약제비 심사" },
+          { phone: "051-661-0152", tasksMain: ["진료비·약제비심사"], tasksDetail: "부산지역본부(부산대), 창원지사(마산회원구, 마산합포구, 창원기타(함안, 창녕, 의령), 삼성창원병원) 진료비·약제비 심사" },
+          { phone: "051-661-0284", tasksMain: ["본인부담확인"], tasksDetail: "진료비 본인부담금 확인요청서 처리 업무" },
+          { phone: "051-661-0259", tasksMain: ["의학자문", "장해통합심사 지원"], tasksDetail: "장해통합심사회의 간사(정형+신경), 장해통합심사(정형, 신경/정형, 정신건강의학과, 이비인후과, 안과)업무(순번제)" },
+          { phone: "051-661-0238", tasksMain: ["진료비·약제비심사"], tasksDetail: "장해전문심사(이비인후과) 간사 및 일정 관리, 장해통합심사(정형, 신경, 정신건강의학과, 이비인후과, 안과)업무(순번제)" },
+          { phone: "051-661-0276", tasksMain: ["진료비·약제비심사"], tasksDetail: "창원지사(마산회원구, 성산구, 창원기타(진해), 창원경상대병원) 진료비·약제비 심사" },
+          { phone: "051-661-0228", tasksMain: ["장해통합심사 지원"], tasksDetail: "장해전문심사(정형) 간사 및 일정 관리, 장해통합심사(정형, 신경, 정신건강의학과, 이비인후과, 안과)업무(순번제)" },
+          { phone: "051-661-0269", tasksMain: ["장해통합심사 지원"], tasksDetail: "장해전문심사(정형) 간사 및 일정 관리, 장해통합심사(정형, 신경/정형, 정신건강의학과, 이비인후과, 안과)업무(순번제)" },
+          { phone: "051-661-0202", tasksMain: ["진료비·약제비심사"], tasksDetail: "부산지역본부(서구-부산대제외), 남구, 사하구) 진료비·약제비 심사" },
+          { phone: "051-661-0232", tasksMain: ["장해통합심사 지원"], tasksDetail: "장해전문심사(정형, 신경/정형, 정신건강의학과, 이비인후과, 안과)업무(순번제)" },
+          { phone: "051-661-0288", tasksMain: ["진료비·약제비심사"], tasksDetail: "통영지사 진료비·약제비 심사" },
+          { phone: "051-661-0145", tasksMain: ["진료비·약제비심사"], tasksDetail: "부산지역본부(영도구), 진주지사 진료비·약제비 심사" },
+          { phone: "051-661-0257", tasksMain: ["의학자문"], tasksDetail: "자문의사 회의(내과, 이비인후과, 치과, 비뇨의학과) 온라인 의학자문(내과(소화기), 비뇨의학과, 이비인후과(정), 정신건강의학과) 간사 및 운영" },
+          { phone: "051-661-0220", tasksMain: ["진료비·약제비심사"], tasksDetail: "울산남부지사(동구, 울산대학교병원), 울산중부지사(중구) 진료비·약제비 심사" },
+          { phone: "051-661-0143", tasksMain: ["진료비·약제비심사"], tasksDetail: "울산남부지사(남구) 진료비·약제비 심사" },
+          { phone: "051-661-0292", tasksMain: ["진료비·약제비심사"], tasksDetail: "부산동부지사(해운대구, 금정구, 해운대백병원) 진료비·약제비 심사" },
+          { phone: "051-661-0221", tasksMain: ["진료비·약제비심사"], tasksDetail: "자문의사 회의(안과), 온라인 의학자문(내과(순환기), 안과) 간사 및 운영" },
+          { phone: "051-661-0273", tasksMain: ["장해통합심사 지원"], tasksDetail: "장해전문심사(정형, 신경/정형, 정신건강의학과, 이비인후과, 안과) 업무(순번제)" },
+          { phone: "051-661-0222", tasksMain: ["의학자문"], tasksDetail: "온라인 의학자문(내과(호흡기), 치과, 이비인후과(오)) 운영" },
+          { phone: "051-661-0287", tasksMain: ["진료비·약제비심사"], tasksDetail: "울산중부지사(울주군), 김해지사 진료비·약제비 심사" },
+          { phone: "051-661-0293", tasksMain: ["진료비·약제비심사"], tasksDetail: "부산지역본부(동구), 양산지사 진료비·약제비 심사" },
+          { phone: "051-661-0289", tasksMain: ["진료비·약제비심사"], tasksDetail: "부산중부지사 진료비·약제비 심사, 본인부담업무 총괄, 진료-요양 연계반 운영" },
+          { phone: "051-661-0285", tasksMain: ["진료비·약제비심사"], tasksDetail: "부산동부지사(기장군), 부산북부지사(북구), 울산중부지사(북구) 진료비·약제비 심사" },
+          { phone: "051-661-0244", tasksMain: ["장해통합심사 지원"], tasksDetail: "장해전문심사(이비인후과) 간사 및 일정 관리, 장해통합심사(정형, 신경, 정신건강의학과, 이비인후과, 안과)업무(순번제)" },
+          { phone: "051-661-0272", tasksMain: ["장해통합심사 지원"], tasksDetail: "장해통합심사회의 간사(안과), 장해통합심사(정형, 신경/정형, 정신과, 이비인후과, 안과) 업무(순번제)" },
+          { phone: "051-661-0295", tasksMain: ["진료비·약제비심사"], tasksDetail: "부산지역본부(중구), 부산동부지사(동래구, 수영구) 진료비, 약제비 심사" },
+        ],
+      },
+      {
+        name: "소음성난청전담TF", fax: "0505-720-5911",
+        staffs: [
+          { phone: "051-771-0050", tasksMain: ["장해급여(지급결정)"], tasksDetail: "소음성 난청 업무총괄" },
+          { phone: "051-771-0052", tasksMain: ["장해급여(지급결정)"], tasksDetail: "소음성 난청, 부서 서무" },
+          { phone: "051-771-0053", tasksMain: ["장해급여(지급결정)"], tasksDetail: "소음성 난청" },
+          { phone: "051-771-0054", tasksMain: ["장해급여(지급결정)"], tasksDetail: "소음성 난청" },
+          { phone: "051-771-0055", tasksMain: ["장해급여(지급결정)"], tasksDetail: "소음성 난청, 부서 경리" },
+          { phone: "051-771-0056", tasksMain: ["장해급여(지급결정)"], tasksDetail: "소음성 난청" },
+          { phone: "051-771-0057", tasksMain: ["장해급여(지급결정)"], tasksDetail: "소음성 난청" },
+          { phone: "051-771-0058", tasksMain: ["장해급여(지급결정)"], tasksDetail: "소음성 난청" },
+          { phone: "051-771-0059", tasksMain: ["장해급여(지급결정)"], tasksDetail: "소음성 난청" },
+          { phone: "051-771-0060", tasksMain: ["장해급여(지급결정)"], tasksDetail: "소음성 난청, 온라인의학자문 및 1차 특별진찰 의뢰" },
+          { phone: "051-771-0061", tasksMain: ["장해급여(지급결정)"], tasksDetail: "소음성 난청" },
+          { phone: "051-771-0062", tasksMain: ["장해급여(지급결정)"], tasksDetail: "소음성 난청" },
+          { phone: "051-771-0063", tasksMain: ["장해급여(지급결정)"], tasksDetail: "소음성 난청" },
+          { phone: "051-771-0064", tasksMain: ["장해급여(지급결정)"], tasksDetail: "소음성 난청" },
+          { phone: "051-771-0065", tasksMain: ["장해급여(지급결정)"], tasksDetail: "소음성 난청" },
+          { phone: "051-771-0066", tasksMain: ["장해급여(지급결정)"], tasksDetail: "소음성 난청" },
+          { phone: "051-771-0067", tasksMain: ["장해급여(지급결정)"], tasksDetail: "소음성 난청" },
+          { phone: "051-771-0068", tasksMain: ["장해급여(지급결정)"], tasksDetail: "소음성 난청" },
+          { phone: "051-771-0069", tasksMain: ["장해급여(지급결정)"], tasksDetail: "소음성 난청" },
+          { phone: "051-771-0070", tasksMain: ["장해급여(지급결정)"], tasksDetail: "소음성 난청, 온라인의학자문 및 1차 특별진찰 의뢰" },
+          { phone: "051-771-0072", tasksMain: ["장해급여(지급결정)"], tasksDetail: "소음성 난청" },
+        ],
+      },
     ],
     specialUnits: [
       { name: "소음성난청전담TF", address: "부산광역시 금정구 중앙대로1763번길 26, 3층 (46274)", fax: "0505-720-5911" },
