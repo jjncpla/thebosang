@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { ALL_TF_LIST } from "@/lib/constants/tf";
+import { useBranches } from "@/lib/hooks/useBranches";
 
 const TF_UNASSIGNED = "TF미지정";
 
@@ -659,12 +660,17 @@ function Section({
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function SettlementPage() {
+  const { tfByBranch: TF_BY_BRANCH } = useBranches();
   const [items, setItems] = useState<SettlementItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [importModalOpen, setImportModalOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<SettlementItem | null>(null);
   const [form, setForm] = useState<Omit<SettlementItem, "id" | "sortOrder">>(EMPTY_FORM);
+
+  // 지사 / TF 필터
+  const [filterBranch, setFilterBranch] = useState<string>("");
+  const [filterTf, setFilterTf] = useState<string>("");
 
   const load = useCallback(async () => {
     const res = await fetch("/api/settlement");
@@ -675,11 +681,35 @@ export default function SettlementPage() {
 
   useEffect(() => { load(); }, [load]);
 
+  // 지사 선택 시 그 지사의 TF만 필터링
+  const branchTfs: string[] = filterBranch ? (TF_BY_BRANCH[filterBranch] ?? []) : [];
+
+  // 지사·TF 필터에 따라 표시할 items 필터링
+  const filteredItems = items.filter((i) => {
+    if (filterTf) return i.tfGroup === filterTf;
+    if (filterBranch) {
+      // 지사의 TF 목록에 속한 tfGroup이거나, branchName이 텍스트로 일치하는 항목
+      if (branchTfs.includes(i.tfGroup)) return true;
+      if (i.branchName && i.branchName.includes(filterBranch.replace("노무법인 더보상 ", "").replace(/지사$/, ""))) return true;
+      return false;
+    }
+    return true;
+  });
+
   // 실제 TF 목록: DB에 있는 것 중 ALL_TF_LIST에 속한 것만 (순서 유지)
-  const activeTfs = ALL_TF_LIST.filter((tf) =>
-    items.some((i) => i.tfGroup === tf)
-  );
-  const hasUnassigned = items.some((i) => !i.tfGroup || i.tfGroup === TF_UNASSIGNED || !ALL_TF_LIST.includes(i.tfGroup));
+  // 지사 선택 시 그 지사의 TF만, TF 선택 시 그 TF만 노출
+  const activeTfs = (filterTf ? [filterTf] : (filterBranch ? branchTfs : ALL_TF_LIST))
+    .filter((tf) => filteredItems.some((i) => i.tfGroup === tf));
+  const hasUnassigned = !filterTf && !filterBranch && filteredItems.some((i) => !i.tfGroup || i.tfGroup === TF_UNASSIGNED || !ALL_TF_LIST.includes(i.tfGroup));
+
+  // 지사·TF 필터에 따른 합계 (총 건수, 지급완료, 분할납부 합계)
+  const summary = {
+    total: filteredItems.length,
+    paid: filteredItems.filter((i) => i.isPaid).length,
+    installment: filteredItems.filter((i) => i.isInstallment).length,
+    unsettled: filteredItems.filter((i) => i.category === "미정산").length,
+    upcoming: filteredItems.filter((i) => i.category === "정산예정").length,
+  };
 
   function openAdd(tfGroup: string, category: Category) {
     setEditTarget(null);
@@ -765,10 +795,10 @@ export default function SettlementPage() {
   }
 
   const getItems = (tf: string, category: Category) =>
-    items.filter((i) => i.tfGroup === tf && i.category === category);
+    filteredItems.filter((i) => i.tfGroup === tf && i.category === category);
 
   const getUnassignedItems = (category: Category) =>
-    items.filter((i) => (
+    filteredItems.filter((i) => (
       (!i.tfGroup || i.tfGroup === TF_UNASSIGNED || !ALL_TF_LIST.includes(i.tfGroup))
       && i.category === category
     ));
@@ -826,9 +856,10 @@ export default function SettlementPage() {
   };
 
   const isEmpty = !loading && activeTfs.length === 0 && !hasUnassigned;
+  const isFiltered = filterBranch || filterTf;
 
   return (
-    <div style={{ maxWidth: 860, margin: "0 auto", padding: "24px 16px" }}>
+    <div style={{ maxWidth: 1080, margin: "0 auto", padding: "24px 16px" }}>
       {/* 헤더 */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
         <div>
@@ -850,15 +881,78 @@ export default function SettlementPage() {
         </div>
       </div>
 
+      {/* 지사 → TF 선택 */}
+      <div style={{ background: "white", borderRadius: 10, border: "1px solid #e5e7eb", padding: "14px 16px", marginBottom: 12, boxShadow: "0 1px 3px rgba(0,0,0,0.05)" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+          <div>
+            <label style={{ fontSize: 11, color: "#6b7280", fontWeight: 700, display: "block", marginBottom: 4 }}>지사 선택</label>
+            <select
+              value={filterBranch}
+              onChange={(e) => { setFilterBranch(e.target.value); setFilterTf(""); }}
+              style={{ border: "1px solid #e5e7eb", borderRadius: 6, padding: "6px 12px", fontSize: 13, color: "#374151", background: "#f9fafb", cursor: "pointer", minWidth: 200 }}
+            >
+              <option value="">전체 지사</option>
+              {Object.keys(TF_BY_BRANCH).map((b) => (
+                <option key={b} value={b}>{b}</option>
+              ))}
+            </select>
+          </div>
+          {filterBranch && (
+            <div>
+              <label style={{ fontSize: 11, color: "#6b7280", fontWeight: 700, display: "block", marginBottom: 4 }}>TF 선택</label>
+              <select
+                value={filterTf}
+                onChange={(e) => setFilterTf(e.target.value)}
+                style={{ border: "1px solid #e5e7eb", borderRadius: 6, padding: "6px 12px", fontSize: 13, color: "#374151", background: "#f9fafb", cursor: "pointer", minWidth: 180 }}
+              >
+                <option value="">전체 TF</option>
+                {branchTfs.map((tf) => (
+                  <option key={tf} value={tf}>{tf}</option>
+                ))}
+              </select>
+            </div>
+          )}
+          {(filterBranch || filterTf) && (
+            <div style={{ marginLeft: "auto", display: "flex", gap: 12, alignItems: "center", fontSize: 12, color: "#374151" }}>
+              <span>총 <b style={{ color: "#2563eb" }}>{summary.total}</b>건</span>
+              <span style={{ color: "#9ca3af" }}>·</span>
+              <span>미정산 <b style={{ color: "#dc2626" }}>{summary.unsettled}</b></span>
+              <span>예정 <b style={{ color: "#2563eb" }}>{summary.upcoming}</b></span>
+              <span style={{ color: "#9ca3af" }}>·</span>
+              <span>지급완료 <b style={{ color: "#eab308" }}>{summary.paid}</b></span>
+              <span>분할 <b style={{ color: "#9333ea" }}>{summary.installment}</b></span>
+              <button
+                onClick={() => { setFilterBranch(""); setFilterTf(""); }}
+                style={{ ...actionBtn, marginLeft: 8 }}
+              >초기화</button>
+            </div>
+          )}
+        </div>
+      </div>
+
       {loading ? (
         <p style={{ color: "#6b7280", textAlign: "center", marginTop: 60 }}>불러오는 중...</p>
       ) : isEmpty ? (
         <div style={{ textAlign: "center", padding: "60px 0", background: "#f9fafb", borderRadius: 10, border: "2px dashed #e5e7eb" }}>
-          <p style={{ color: "#9ca3af", fontSize: 15, margin: "0 0 16px" }}>등록된 정산 항목이 없습니다</p>
-          <div style={{ display: "flex", gap: 8, justifyContent: "center" }}>
-            <button onClick={() => setImportModalOpen(true)} style={btnSecondary}>📋 텍스트 가져오기</button>
-            <button onClick={() => { setEditTarget(null); setForm(EMPTY_FORM); setModalOpen(true); }} style={btnPrimary}>첫 항목 추가하기</button>
-          </div>
+          {isFiltered ? (
+            <>
+              <p style={{ color: "#9ca3af", fontSize: 15, margin: "0 0 16px" }}>
+                선택한 {filterTf || filterBranch} 범위에 정산 항목이 없습니다
+              </p>
+              <button
+                onClick={() => { setFilterBranch(""); setFilterTf(""); }}
+                style={btnSecondary}
+              >필터 초기화</button>
+            </>
+          ) : (
+            <>
+              <p style={{ color: "#9ca3af", fontSize: 15, margin: "0 0 16px" }}>등록된 정산 항목이 없습니다</p>
+              <div style={{ display: "flex", gap: 8, justifyContent: "center" }}>
+                <button onClick={() => setImportModalOpen(true)} style={btnSecondary}>📋 텍스트 가져오기</button>
+                <button onClick={() => { setEditTarget(null); setForm(EMPTY_FORM); setModalOpen(true); }} style={btnPrimary}>첫 항목 추가하기</button>
+              </div>
+            </>
+          )}
         </div>
       ) : (
         <>

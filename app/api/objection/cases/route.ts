@@ -26,7 +26,25 @@ export async function GET(req: NextRequest) {
 
   const items = await prisma.objectionCase.findMany({
     where,
-    include: { manager: { select: { id: true, name: true } } },
+    include: {
+      manager: { select: { id: true, name: true } },
+      // 송무 인계 탭에서 관리파일 L~U열 표시용
+      review: {
+        select: {
+          id: true,
+          litigationFirstReview: true,
+          litigationFirstDraftAt: true,
+          litigationFirstDraftResult: true,
+          litigationContractStatus: true,
+          litigationContractSent: true,
+          litigationSecondDraftAt: true,
+          litigationPoaReceived: true,
+          litigationFinalDecision: true,
+          litigationPostHandling: true,
+          litigationPostHandler: true,
+        },
+      },
+    },
     orderBy: { createdAt: "desc" },
   });
 

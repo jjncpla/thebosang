@@ -29,6 +29,20 @@ const LITIGATION_STATUS_OPTIONS = ["소송 검토중", "소송 검토 완료", "
 
 type Manager = { id: string; name: string };
 
+type ReviewLitigationFields = {
+  id: string;
+  litigationFirstReview: string | null;
+  litigationFirstDraftAt: string | null;
+  litigationFirstDraftResult: string | null;
+  litigationContractStatus: string | null;
+  litigationContractSent: string | null;
+  litigationSecondDraftAt: string | null;
+  litigationPoaReceived: string | null;
+  litigationFinalDecision: string | null;
+  litigationPostHandling: string | null;
+  litigationPostHandler: string | null;
+};
+
 type ObjectionCase = {
   id: string;
   tfName: string;
@@ -54,6 +68,9 @@ type ObjectionCase = {
   wageCorrectStatus: string | null;
   caseId?: string | null;
   isAutoFilled?: boolean;
+  // 연결된 ObjectionReview의 송무 인계 필드 (관리파일 L~U)
+  reviewId?: string | null;
+  review?: ReviewLitigationFields | null;
 };
 
 type WageItem = {
@@ -323,6 +340,155 @@ function WageDateModal({ item, onClose, onSave }: {
   );
 }
 
+// ── LitigationHandoverModal ────────────────────────────────────────────────────
+// 송무 인계 — 관리파일 엑셀 L~U 10개 필드 편집 (ObjectionReview에 저장)
+const COMPLETION_OPTIONS = ["", "완료", "진행중", "보류"];
+const FIRST_DRAFT_RESULT_OPTIONS = ["", "소송 진행", "기각", "취하", "검토중"];
+
+function LitigationHandoverModal({ item, onClose, onSave }: {
+  item: ObjectionCase;
+  onClose: () => void;
+  onSave: (reviewId: string, payload: Record<string, unknown>) => Promise<void>;
+}) {
+  const r = item.review;
+  const [form, setForm] = useState<Record<string, string>>({
+    litigationFirstReview: r?.litigationFirstReview ?? "",
+    litigationFirstDraftAt: toInputDate(r?.litigationFirstDraftAt ?? null),
+    litigationFirstDraftResult: r?.litigationFirstDraftResult ?? "",
+    litigationContractStatus: r?.litigationContractStatus ?? "",
+    litigationContractSent: r?.litigationContractSent ?? "",
+    litigationSecondDraftAt: toInputDate(r?.litigationSecondDraftAt ?? null),
+    litigationPoaReceived: r?.litigationPoaReceived ?? "",
+    litigationFinalDecision: r?.litigationFinalDecision ?? "",
+    litigationPostHandling: r?.litigationPostHandling ?? "",
+    litigationPostHandler: r?.litigationPostHandler ?? "",
+  });
+  const [saving, setSaving] = useState(false);
+  const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }));
+
+  const inputStyle: React.CSSProperties = { border: "1px solid #e5e7eb", borderRadius: 6, padding: "6px 10px", fontSize: 12, color: "#374151", background: "#f9fafb", outline: "none", width: "100%" };
+  const labelStyle: React.CSSProperties = { fontSize: 11, color: "#6b7280", fontWeight: 700, display: "block", marginBottom: 3 };
+
+  const handleSave = async () => {
+    if (!r?.id) {
+      alert("연결된 처분검토 레코드(ObjectionReview)가 없습니다. 먼저 처분검토에 사건을 등록하세요.");
+      return;
+    }
+    setSaving(true);
+    try {
+      await onSave(r.id, {
+        litigationFirstReview: form.litigationFirstReview || null,
+        litigationFirstDraftAt: form.litigationFirstDraftAt || null,
+        litigationFirstDraftResult: form.litigationFirstDraftResult || null,
+        litigationContractStatus: form.litigationContractStatus || null,
+        litigationContractSent: form.litigationContractSent || null,
+        litigationSecondDraftAt: form.litigationSecondDraftAt || null,
+        litigationPoaReceived: form.litigationPoaReceived || null,
+        litigationFinalDecision: form.litigationFinalDecision || null,
+        litigationPostHandling: form.litigationPostHandling || null,
+        litigationPostHandler: form.litigationPostHandler || null,
+      });
+      onClose();
+    } catch {
+      alert("저장 오류");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <>
+      <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 999 }} />
+      <div style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)", background: "white", borderRadius: 12, padding: 24, zIndex: 1000, maxWidth: 720, width: "95%", maxHeight: "90vh", overflowY: "auto", boxShadow: "0 20px 60px rgba(0,0,0,0.3)", fontFamily: "'Malgun Gothic','Apple SD Gothic Neo','Segoe UI',sans-serif" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+          <h2 style={{ margin: 0, fontSize: 15, fontWeight: 800, color: "#111827" }}>송무 인계 진행 — {item.patientName}</h2>
+          <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "#6b7280" }}>✕</button>
+        </div>
+        {!r?.id && (
+          <div style={{ marginBottom: 12, padding: "8px 12px", background: "#fef3c7", border: "1px solid #fde68a", borderRadius: 6, fontSize: 11, color: "#92400e" }}>
+            ⚠️ 이 사건은 처분검토(ObjectionReview)와 연결되어 있지 않아 저장이 불가합니다.
+          </div>
+        )}
+
+        {/* 일반 송무 인계 (L~Q) */}
+        <div style={{ background: "#f0f9ff", border: "1px solid #bae6fd", borderRadius: 8, padding: "12px 14px", marginBottom: 10 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: "#0369a1", marginBottom: 10 }}>송무 인계 진행 (L~Q)</div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "8px 12px" }}>
+            <div>
+              <label style={labelStyle}>송무 인계 1차 검토</label>
+              <select style={inputStyle} value={form.litigationFirstReview} onChange={e => set("litigationFirstReview", e.target.value)}>
+                {COMPLETION_OPTIONS.map(o => <option key={o} value={o}>{o || "선택"}</option>)}
+              </select>
+            </div>
+            <div>
+              <label style={labelStyle}>1차 기안일</label>
+              <input type="date" style={inputStyle} value={form.litigationFirstDraftAt} onChange={e => set("litigationFirstDraftAt", e.target.value)} />
+            </div>
+            <div>
+              <label style={labelStyle}>1차 기안 결과</label>
+              <select style={inputStyle} value={form.litigationFirstDraftResult} onChange={e => set("litigationFirstDraftResult", e.target.value)}>
+                {FIRST_DRAFT_RESULT_OPTIONS.map(o => <option key={o} value={o}>{o || "선택"}</option>)}
+              </select>
+            </div>
+            <div>
+              <label style={labelStyle}>송무 약정</label>
+              <select style={inputStyle} value={form.litigationContractStatus} onChange={e => set("litigationContractStatus", e.target.value)}>
+                {COMPLETION_OPTIONS.map(o => <option key={o} value={o}>{o || "선택"}</option>)}
+              </select>
+            </div>
+            <div>
+              <label style={labelStyle}>송무 약정서 송부</label>
+              <select style={inputStyle} value={form.litigationContractSent} onChange={e => set("litigationContractSent", e.target.value)}>
+                {COMPLETION_OPTIONS.map(o => <option key={o} value={o}>{o || "선택"}</option>)}
+              </select>
+            </div>
+            <div>
+              <label style={labelStyle}>2차 기안일</label>
+              <input type="date" style={inputStyle} value={form.litigationSecondDraftAt} onChange={e => set("litigationSecondDraftAt", e.target.value)} />
+            </div>
+          </div>
+        </div>
+
+        {/* 승소 시 기입 (R~U) */}
+        <div style={{ background: "#fdf4ff", border: "1px dashed #d8b4fe", borderRadius: 8, padding: "12px 14px" }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: "#7c3aed", marginBottom: 10 }}>승소 시 기입 (R~U)</div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px 12px" }}>
+            <div>
+              <label style={labelStyle}>위임장·인감증명서 수령</label>
+              <select style={inputStyle} value={form.litigationPoaReceived} onChange={e => set("litigationPoaReceived", e.target.value)}>
+                {COMPLETION_OPTIONS.map(o => <option key={o} value={o}>{o || "선택"}</option>)}
+              </select>
+            </div>
+            <div>
+              <label style={labelStyle}>최종 처분</label>
+              <select style={inputStyle} value={form.litigationFinalDecision} onChange={e => set("litigationFinalDecision", e.target.value)}>
+                {COMPLETION_OPTIONS.map(o => <option key={o} value={o}>{o || "선택"}</option>)}
+              </select>
+            </div>
+            <div>
+              <label style={labelStyle}>후처리 여부</label>
+              <select style={inputStyle} value={form.litigationPostHandling} onChange={e => set("litigationPostHandling", e.target.value)}>
+                {COMPLETION_OPTIONS.map(o => <option key={o} value={o}>{o || "선택"}</option>)}
+              </select>
+            </div>
+            <div>
+              <label style={labelStyle}>후처리 담당자</label>
+              <input type="text" style={inputStyle} value={form.litigationPostHandler} onChange={e => set("litigationPostHandler", e.target.value)} placeholder="이름" />
+            </div>
+          </div>
+        </div>
+
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 16 }}>
+          <button onClick={onClose} style={{ border: "1px solid #e5e7eb", borderRadius: 6, padding: "8px 18px", fontSize: 13, color: "#374151", background: "white", cursor: "pointer" }}>취소</button>
+          <button onClick={handleSave} disabled={saving || !r?.id} style={{ background: "#29ABE2", color: "white", border: "none", borderRadius: 6, padding: "8px 18px", fontSize: 13, fontWeight: 700, cursor: saving || !r?.id ? "not-allowed" : "pointer", opacity: saving || !r?.id ? 0.6 : 1 }}>
+            {saving ? "저장 중..." : "저장"}
+          </button>
+        </div>
+      </div>
+    </>
+  );
+}
+
 // ── Main Page ──────────────────────────────────────────────────────────────────
 export default function ObjectionDeadlinePage() {
   const [tab, setTab] = useState<"objection" | "litigation" | "wage">("objection");
@@ -346,6 +512,9 @@ export default function ObjectionDeadlinePage() {
 
   // Wage date modal
   const [wageModal, setWageModal] = useState<WageItem | null>(null);
+
+  // 송무 인계 진행 (L~U) 편집 모달
+  const [litHandoverModal, setLitHandoverModal] = useState<ObjectionCase | null>(null);
 
   // Date info
   const today = new Date();
@@ -450,6 +619,16 @@ export default function ObjectionDeadlinePage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ ...item, managerId: item.manager?.id ?? null, litigationStatus }),
     });
+    await fetchLitigation();
+  };
+
+  const handleLitigationHandoverSave = async (reviewId: string, payload: Record<string, unknown>) => {
+    const res = await fetch(`/api/objection/review/${reviewId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new Error();
     await fetchLitigation();
   };
 
@@ -558,6 +737,7 @@ export default function ObjectionDeadlinePage() {
     <div style={{ padding: 24, minHeight: "100%", background: "#f1f5f9", fontFamily: "'Malgun Gothic','Apple SD Gothic Neo','Segoe UI',sans-serif" }}>
       {modal && <CaseModal initial={target} managers={managers} onClose={() => { setModal(false); setTarget(null); }} onSave={handleSave} tfOptions={TF_OPTIONS} />}
       {wageModal && <WageDateModal item={wageModal} onClose={() => setWageModal(null)} onSave={handleWageDateSave} />}
+      {litHandoverModal && <LitigationHandoverModal item={litHandoverModal} onClose={() => setLitHandoverModal(null)} onSave={handleLitigationHandoverSave} />}
 
       {/* Header */}
       <div style={{ marginBottom: 12, display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
@@ -746,42 +926,105 @@ export default function ObjectionDeadlinePage() {
             <div style={{ overflowX: "auto" }}>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
                 <thead>
+                  {/* 그룹 헤더 — 기본정보 / 송무 인계 진행 (L~Q) / 승소 시 기입 (R~U) */}
+                  <tr style={{ background: "#29ABE2", borderBottom: "1px solid #1A8BBF" }}>
+                    <th colSpan={7} style={{ ...thStyle, textAlign: "center", borderRight: "1px solid #1A8BBF", fontSize: 11 }}>기본 정보</th>
+                    <th colSpan={6} style={{ ...thStyle, textAlign: "center", background: "#0EA5E9", borderRight: "1px solid #1A8BBF", fontSize: 11 }}>송무 인계 진행 (L~Q)</th>
+                    <th colSpan={4} style={{ ...thStyle, textAlign: "center", background: "#7C3AED", borderRight: "1px solid #1A8BBF", fontSize: 11 }}>승소 시 기입 (R~U)</th>
+                    <th style={{ ...thStyle, textAlign: "center", fontSize: 11 }}>관리</th>
+                  </tr>
                   <tr style={{ background: "#29ABE2", borderBottom: "2px solid #1A8BBF" }}>
-                    {["TF","성명","사건분류","심사결과","재심사결과","소송 상태","소송 메모","관리"].map(h => (
+                    {/* 기본 정보 (7) */}
+                    {["TF","성명","사건분류","심사결과","재심사결과","소송 상태","소송 메모"].map(h => (
                       <th key={h} style={thStyle}>{h}</th>
                     ))}
+                    {/* 송무 인계 진행 (6) — L~Q */}
+                    {[
+                      "송무 인계 1차 검토",
+                      "1차 기안일",
+                      "1차 기안 결과",
+                      "송무 약정",
+                      "송무 약정서 송부",
+                      "2차 기안일",
+                    ].map(h => (
+                      <th key={h} style={{ ...thStyle, background: "#0EA5E9" }}>{h}</th>
+                    ))}
+                    {/* 승소 시 기입 (4) — R~U */}
+                    {[
+                      "위임장·인감증명서 수령",
+                      "최종 처분",
+                      "후처리",
+                      "후처리 담당자",
+                    ].map(h => (
+                      <th key={h} style={{ ...thStyle, background: "#7C3AED" }}>{h}</th>
+                    ))}
+                    {/* 관리 */}
+                    <th style={thStyle}>편집</th>
                   </tr>
                 </thead>
                 <tbody>
                   {litigationItems.length === 0 && (
-                    <tr><td colSpan={8} style={{ padding: "40px 16px", textAlign: "center", color: "#9ca3af", fontSize: 13 }}>소송 인계 사건이 없습니다</td></tr>
+                    <tr><td colSpan={18} style={{ padding: "40px 16px", textAlign: "center", color: "#9ca3af", fontSize: 13 }}>소송 인계 사건이 없습니다</td></tr>
                   )}
-                  {litigationItems.map(item => (
-                    <tr key={item.id} style={{ borderBottom: "1px solid #f1f5f9" }}>
-                      <td style={{ padding: "10px 12px", color: "#374151" }}>{item.tfName}</td>
-                      <td style={{ padding: "10px 12px", fontWeight: 600, color: "#111827" }}>{item.patientName}</td>
-                      <td style={{ padding: "10px 12px", color: "#6b7280" }}>{CASE_TYPE_LABELS[item.caseType] || item.caseType}</td>
-                      <td style={{ padding: "10px 12px", color: "#374151" }}>{item.examResult ?? "-"}</td>
-                      <td style={{ padding: "10px 12px", color: "#374151" }}>{item.reExamResult ?? "-"}</td>
-                      <td style={{ padding: "10px 12px" }}>
-                        {item.litigationStatus
-                          ? <span style={{ display: "inline-block", padding: "2px 8px", borderRadius: 999, fontSize: 10, fontWeight: 600, background: "#f0f9ff", color: "#0369a1" }}>{item.litigationStatus}</span>
-                          : <span style={{ color: "#9ca3af", fontSize: 11 }}>미설정</span>}
-                      </td>
-                      <td style={{ padding: "10px 12px", color: "#6b7280", maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.litigationMemo ?? "-"}</td>
-                      <td style={{ padding: "10px 12px" }}>
-                        <select
-                          value={item.litigationStatus ?? ""}
-                          onChange={e => handleLitigationStatusChange(item.id, e.target.value)}
-                          onClick={e => e.stopPropagation()}
-                          style={{ border: "1px solid #e5e7eb", borderRadius: 5, padding: "3px 8px", fontSize: 11, color: "#374151", background: "#f9fafb", cursor: "pointer" }}
-                        >
-                          <option value="">-- 상태 변경 --</option>
-                          {LITIGATION_STATUS_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
-                        </select>
-                      </td>
-                    </tr>
-                  ))}
+                  {litigationItems.map(item => {
+                    const r = item.review;
+                    const cellMuted: React.CSSProperties = { padding: "8px 10px", color: "#6b7280", fontSize: 11, whiteSpace: "nowrap" };
+                    const cellBlue: React.CSSProperties = { ...cellMuted, background: "#f0f9ff" };
+                    const cellPurple: React.CSSProperties = { ...cellMuted, background: "#fdf4ff" };
+                    const renderStatus = (v: string | null | undefined) => {
+                      if (!v) return <span style={{ color: "#cbd5e1" }}>-</span>;
+                      const isDone = v === "완료";
+                      return <span style={{ display: "inline-block", padding: "2px 7px", borderRadius: 999, fontSize: 10, fontWeight: 700, background: isDone ? "#dcfce7" : "#fef9c3", color: isDone ? "#166534" : "#92400e" }}>{v}</span>;
+                    };
+                    return (
+                      <tr key={item.id} style={{ borderBottom: "1px solid #f1f5f9" }}>
+                        {/* 기본 정보 */}
+                        <td style={{ padding: "10px 12px", color: "#374151" }}>{item.tfName}</td>
+                        <td style={{ padding: "10px 12px", fontWeight: 600, color: "#111827" }}>{item.patientName}</td>
+                        <td style={{ padding: "10px 12px", color: "#6b7280" }}>{CASE_TYPE_LABELS[item.caseType] || item.caseType}</td>
+                        <td style={{ padding: "10px 12px", color: "#374151" }}>{item.examResult ?? "-"}</td>
+                        <td style={{ padding: "10px 12px", color: "#374151" }}>{item.reExamResult ?? "-"}</td>
+                        <td style={{ padding: "10px 12px" }}>
+                          <select
+                            value={item.litigationStatus ?? ""}
+                            onChange={e => handleLitigationStatusChange(item.id, e.target.value)}
+                            onClick={e => e.stopPropagation()}
+                            style={{ border: "1px solid #e5e7eb", borderRadius: 5, padding: "3px 8px", fontSize: 11, color: "#374151", background: "#f9fafb", cursor: "pointer" }}
+                          >
+                            <option value="">-- 상태 --</option>
+                            {LITIGATION_STATUS_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
+                          </select>
+                        </td>
+                        <td style={{ padding: "10px 12px", color: "#6b7280", maxWidth: 140, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.litigationMemo ?? "-"}</td>
+
+                        {/* 송무 인계 진행 (L~Q) */}
+                        <td style={cellBlue}>{renderStatus(r?.litigationFirstReview)}</td>
+                        <td style={{ ...cellBlue, fontFamily: "monospace" }}>{formatDate(r?.litigationFirstDraftAt ?? null)}</td>
+                        <td style={cellBlue}>{r?.litigationFirstDraftResult ?? <span style={{ color: "#cbd5e1" }}>-</span>}</td>
+                        <td style={cellBlue}>{renderStatus(r?.litigationContractStatus)}</td>
+                        <td style={cellBlue}>{renderStatus(r?.litigationContractSent)}</td>
+                        <td style={{ ...cellBlue, fontFamily: "monospace" }}>{formatDate(r?.litigationSecondDraftAt ?? null)}</td>
+
+                        {/* 승소 시 기입 (R~U) */}
+                        <td style={cellPurple}>{renderStatus(r?.litigationPoaReceived)}</td>
+                        <td style={cellPurple}>{renderStatus(r?.litigationFinalDecision)}</td>
+                        <td style={cellPurple}>{renderStatus(r?.litigationPostHandling)}</td>
+                        <td style={cellPurple}>{r?.litigationPostHandler ?? <span style={{ color: "#cbd5e1" }}>-</span>}</td>
+
+                        {/* 편집 */}
+                        <td style={{ padding: "10px 12px", textAlign: "center" }}>
+                          <button
+                            onClick={() => setLitHandoverModal(item)}
+                            disabled={!r?.id}
+                            title={!r?.id ? "처분검토(ObjectionReview) 연결 필요" : "송무 인계 진행 편집"}
+                            style={{ border: "1px solid #29ABE2", borderRadius: 5, padding: "3px 9px", fontSize: 11, color: r?.id ? "#29ABE2" : "#cbd5e1", background: "white", cursor: r?.id ? "pointer" : "not-allowed" }}
+                          >
+                            편집
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

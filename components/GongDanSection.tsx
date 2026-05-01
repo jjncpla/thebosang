@@ -6,10 +6,12 @@ import {
   MENTAL_DISEASE_STATS, DISEASE_COMMITTEE_STATS,
   PNEUMOCONIOSIS_STATS, SME_BASE_PAY, BASE_PAY_BY_REGION,
 } from "@/lib/constants/gongdan";
+import { KWC_BRANCH_DETAILS, KWC_DEFAULT_DETAIL } from "@/lib/constants/kwc-branches";
 
 type GMenu = "branch"|"stats"|"disease"|"basepay"|"medical"|"partner";
 
-type Branch = { id:string; name:string; address:string; jurisdiction:string; phone:string; fax:string; hours:string };
+// gongdan-branches.json 의 실제 필드 (no/name/address/jurisdiction/tel/fax)
+type Branch = { no?:number; id?:string; name:string; address:string; jurisdiction:string; tel?:string; phone?:string; fax:string; hours?:string };
 type Medical = { code:string; name:string; address:string; tel:string };
 type Partner = { hospital:string; partner:string; period:string };
 
@@ -93,36 +95,7 @@ export default function GongDanSection() {
 
         {/* 🏢 지사 안내 */}
         {menu === "branch" && (
-          <div>
-            <div style={{marginBottom:12,display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
-              <input value={branchQuery} onChange={e=>setBranchQuery(e.target.value)}
-                placeholder="기관명·지역·관할구역 검색..."
-                style={{padding:"8px 12px",fontSize:13,border:"1px solid #d1d5db",borderRadius:6,width:240}} />
-              <span style={{fontSize:12,color:"#6b7280"}}>총 {branches.length}개 기관 (2025.09 기준)</span>
-            </div>
-            <div style={{overflowX:"auto"}}>
-              <table style={{width:"100%",borderCollapse:"collapse",fontSize:12,minWidth:700}}>
-                <thead>
-                  <tr style={{background:"#f3f4f6"}}>
-                    {["기관명","주소","관할구역","전화번호","팩스"].map(h=>(
-                      <th key={h} style={{padding:"8px 10px",textAlign:"left",fontWeight:600,color:"#374151",borderBottom:"2px solid #e5e7eb",whiteSpace:"nowrap"}}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredBranches.map((b,i)=>(
-                    <tr key={i} style={{background:i%2===0?"#fff":"#f9fafb",borderBottom:"1px solid #f3f4f6"}}>
-                      <td style={{padding:"7px 10px",fontWeight:600,color:"#1e40af",whiteSpace:"nowrap"}}>{b.name}</td>
-                      <td style={{padding:"7px 10px",color:"#374151"}}>{b.address}</td>
-                      <td style={{padding:"7px 10px",color:"#6b7280",fontSize:11}}>{b.jurisdiction}</td>
-                      <td style={{padding:"7px 10px",whiteSpace:"nowrap"}}><a href={`tel:${b.phone}`} style={{color:"#059669",textDecoration:"none"}}>{b.phone}</a></td>
-                      <td style={{padding:"7px 10px",color:"#9ca3af",fontSize:11}}>{b.fax}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
+          <BranchInfoSection branches={branches} filteredBranches={filteredBranches} branchQuery={branchQuery} setBranchQuery={setBranchQuery} />
         )}
 
         {/* 📊 산재 통계 */}
@@ -546,3 +519,196 @@ const thStyle: React.CSSProperties = {
 const tdStyle: React.CSSProperties = {
   padding:"7px 10px",textAlign:"center",borderBottom:"1px solid #f3f4f6",color:"#374151",fontSize:12,
 };
+
+// ─── 지사 안내 (보강) ────────────────────────────────────────────────────────
+
+function BranchInfoSection({
+  branches,
+  filteredBranches,
+  branchQuery,
+  setBranchQuery,
+}: {
+  branches: Branch[];
+  filteredBranches: Branch[];
+  branchQuery: string;
+  setBranchQuery: (s: string) => void;
+}) {
+  const [selectedName, setSelectedName] = useState<string | null>(null);
+
+  const selectedBranch = useMemo(
+    () => branches.find(b => b.name === selectedName),
+    [branches, selectedName]
+  );
+  const selectedDetail = selectedName ? KWC_BRANCH_DETAILS[selectedName] : undefined;
+
+  const phone = selectedBranch?.tel ?? selectedBranch?.phone;
+
+  return (
+    <div>
+      {/* 검색 + 통계 */}
+      <div style={{ marginBottom: 14, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+        <input
+          value={branchQuery}
+          onChange={e => setBranchQuery(e.target.value)}
+          placeholder="기관명·지역·관할구역 검색..."
+          style={{ padding: "8px 12px", fontSize: 13, border: "1px solid #d1d5db", borderRadius: 6, width: 280 }}
+        />
+        <span style={{ fontSize: 12, color: "#6b7280" }}>
+          총 {branches.length}개 기관 · {filteredBranches.length}개 검색됨
+        </span>
+        <a
+          href="https://www.comwel.or.kr/comwel/intr/srch/srch.jsp"
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{ marginLeft: "auto", fontSize: 12, color: "#1e40af", textDecoration: "none" }}
+        >
+          공단 지사 검색 ↗
+        </a>
+      </div>
+
+      <div style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
+        {/* 좌측: 카드 그리드 */}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))",
+            gap: 10,
+          }}>
+            {filteredBranches.map((b, i) => {
+              const detail = KWC_BRANCH_DETAILS[b.name];
+              const hasDetail = !!detail;
+              const isSelected = selectedName === b.name;
+              return (
+                <button
+                  key={b.name + i}
+                  onClick={() => setSelectedName(b.name)}
+                  style={{
+                    textAlign: "left", cursor: "pointer",
+                    background: isSelected ? "#eff6ff" : "#fff",
+                    border: `1px solid ${isSelected ? "#3b82f6" : "#e5e7eb"}`,
+                    borderRadius: 8, padding: "12px 14px",
+                    display: "flex", flexDirection: "column", gap: 6,
+                    boxShadow: isSelected ? "0 0 0 2px rgba(59,130,246,0.1)" : "none",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: "#1e40af", flex: 1, lineHeight: 1.4 }}>
+                      {b.name}
+                    </span>
+                    {hasDetail && (
+                      <span style={{ fontSize: 9, padding: "1px 5px", borderRadius: 3, background: "#8DC63F", color: "#fff", fontWeight: 700 }}>
+                        상세
+                      </span>
+                    )}
+                  </div>
+                  <div style={{ fontSize: 11, color: "#374151", lineHeight: 1.5 }}>
+                    {b.address}
+                  </div>
+                  {b.jurisdiction && (
+                    <div style={{ fontSize: 10, color: "#6b7280", lineHeight: 1.4, paddingTop: 4, borderTop: "1px dashed #e5e7eb" }}>
+                      <span style={{ fontWeight: 600, color: "#9ca3af" }}>관할: </span>
+                      {b.jurisdiction}
+                    </div>
+                  )}
+                  <div style={{ display: "flex", gap: 8, fontSize: 11, color: "#059669" }}>
+                    <span>📞 {b.tel ?? b.phone ?? "-"}</span>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* 우측: 상세 패널 (선택 시) */}
+        {selectedBranch && (
+          <div style={{
+            width: 360, flexShrink: 0, position: "sticky", top: 0,
+            background: "#fff", border: "1px solid #e5e7eb", borderRadius: 8,
+            padding: 16, maxHeight: "calc(100vh - 200px)", overflowY: "auto",
+          }}>
+            <div style={{ display: "flex", alignItems: "flex-start", gap: 8, marginBottom: 12 }}>
+              <h3 style={{ flex: 1, margin: 0, fontSize: 15, fontWeight: 700, color: "#111827", lineHeight: 1.4 }}>
+                {selectedBranch.name}
+              </h3>
+              <button
+                onClick={() => setSelectedName(null)}
+                style={{ fontSize: 14, background: "none", border: "none", color: "#9ca3af", cursor: "pointer" }}
+              >✕</button>
+            </div>
+
+            {/* 주소 */}
+            <DetailRow label="주소" value={selectedBranch.address} />
+            {selectedDetail?.postalCode && (
+              <DetailRow label="우편번호" value={selectedDetail.postalCode} />
+            )}
+
+            {/* 연락처 */}
+            {phone && <DetailRow label="전화" value={<a href={`tel:${phone}`} style={{ color: "#059669", textDecoration: "none" }}>{phone}</a>} />}
+            {selectedDetail?.representativeTel && selectedDetail.representativeTel !== phone && (
+              <DetailRow label="대표번호" value={<a href={`tel:${selectedDetail.representativeTel}`} style={{ color: "#059669", textDecoration: "none" }}>{selectedDetail.representativeTel}</a>} />
+            )}
+            {selectedBranch.fax && <DetailRow label="팩스" value={selectedBranch.fax} />}
+            {selectedDetail?.email && <DetailRow label="이메일" value={selectedDetail.email} />}
+
+            {/* 운영시간 */}
+            <DetailRow label="운영시간" value={selectedDetail?.hours ?? KWC_DEFAULT_DETAIL.hours ?? "-"} />
+
+            {/* 관할 */}
+            {selectedBranch.jurisdiction && (
+              <DetailRow label="관할" value={selectedBranch.jurisdiction} />
+            )}
+
+            {/* 교통편 */}
+            {selectedDetail?.directions && (
+              <DetailRow label="교통편" value={selectedDetail.directions} />
+            )}
+            {selectedDetail?.parkingInfo && (
+              <DetailRow label="주차" value={selectedDetail.parkingInfo} />
+            )}
+
+            {/* 주요 업무 */}
+            <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid #e5e7eb" }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: "#9ca3af", marginBottom: 6 }}>주요 업무</div>
+              <ul style={{ margin: 0, padding: "0 0 0 18px", fontSize: 12, color: "#374151", lineHeight: 1.7 }}>
+                {(selectedDetail?.services ?? KWC_DEFAULT_DETAIL.services ?? []).map((s, i) => (
+                  <li key={i}>{s}</li>
+                ))}
+              </ul>
+            </div>
+
+            {/* 특수부서 */}
+            {selectedDetail?.specialUnits && selectedDetail.specialUnits.length > 0 && (
+              <div style={{ marginTop: 12, paddingTop: 10, borderTop: "1px solid #e5e7eb" }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: "#9ca3af", marginBottom: 6 }}>특수부서</div>
+                {selectedDetail.specialUnits.map((u, i) => (
+                  <div key={i} style={{ marginBottom: 8, padding: "8px 10px", background: "#f9fafb", borderRadius: 6 }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: "#1e40af" }}>{u.name}</div>
+                    {u.address && <div style={{ fontSize: 11, color: "#6b7280", marginTop: 2 }}>{u.address}</div>}
+                    {u.tel && <div style={{ fontSize: 11, color: "#059669", marginTop: 2 }}>📞 {u.tel}</div>}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* 상세 정보 미보강 안내 */}
+            {!selectedDetail && (
+              <div style={{ marginTop: 12, padding: "8px 10px", background: "#fef9c3", borderRadius: 6, fontSize: 11, color: "#92400e", lineHeight: 1.5 }}>
+                ⓘ 이 지사는 추가 상세 정보(우편번호·교통편 등)가 아직 등록되지 않았습니다.
+                기본 업무·운영시간 정보만 표시됩니다.
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function DetailRow({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div style={{ display: "flex", gap: 8, marginBottom: 6, fontSize: 12, lineHeight: 1.5 }}>
+      <div style={{ width: 60, flexShrink: 0, color: "#9ca3af", fontWeight: 600 }}>{label}</div>
+      <div style={{ flex: 1, color: "#374151" }}>{value}</div>
+    </div>
+  );
+}
