@@ -327,6 +327,8 @@ function PreviewPane({ item, onClose }: { item: Attachment; onClose: () => void 
       </div>
       <div style={{ flex: 1, overflow: "auto", display: "flex", justifyContent: "center", alignItems: isImage ? "center" : "stretch" }}>
         {isImage ? (
+          // 첨부파일 modal 미리보기 — API endpoint 동적 src, modal 트래픽이라 LCP 무관
+          // eslint-disable-next-line @next/next/no-img-element
           <img
             src={`/api/law/attachments/${item.id}/file?inline=1`}
             alt={item.title}

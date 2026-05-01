@@ -410,6 +410,8 @@ export default function PracticalFormsPage() {
               좌측에서 서식을 선택하세요.
             </div>
           ) : previewType === "png" ? (
+            // 동적 PNG 미리보기 + onError fallback이 있는 좌표 에디터 — Next.js <Image>는 width/height 강제라 부적합
+            // eslint-disable-next-line @next/next/no-img-element
             <img
               src={previewUrl}
               alt="서식 미리보기"

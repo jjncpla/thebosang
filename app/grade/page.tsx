@@ -1,12 +1,10 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
-import { useSession, signOut } from "next-auth/react";
-import DisabilityTable from "../../components/DisabilityTable";
+import { useState, useEffect } from "react";
+import { useSession } from "next-auth/react";
 import HearingTable from "../../components/HearingTable";
 import PneumoconiosisTable from "../../components/PneumoconiosisTable";
 import { hearingTable } from "../../data/hearing";
-import Link from 'next/link';
 import GongDanSection from "../../components/GongDanSection";
 import InfoBoardSection from "../../components/InfoBoardSection";
 import WageChangeCalc from "../wage/change-calc/page";
@@ -16,7 +14,6 @@ import WageChangeCalc from "../wage/change-calc/page";
    ═══════════════════════════════════════════════════════════════ */
 interface MinWageData { 시급: number; 일급: number; 월급: number; }
 interface CompData    { 최저: number; 최고: number; }
-interface RateData    { wageRate: number; cpiRate: number; }
 
 type Message = {
   id:         number;

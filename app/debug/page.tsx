@@ -1,3 +1,5 @@
+/* eslint-disable @next/next/no-img-element */
+// 좌표 디버그용 internal 페이지 — Next.js <Image> 대신 raw <img> 사용 (CSS positioning + 디버그 트래픽이라 LCP 무관)
 'use client';
 
 import { useRef } from 'react';
@@ -32,6 +34,7 @@ export default function DebugPage() {
     >
       <img
         src="/form-backgrounds/disability-claim-v1-page1.jpg"
+        alt="장해급여 청구서 양식 좌표 디버그 배경"
         style={{
           width: '100%',
           height: '100%',

@@ -25,6 +25,18 @@ const eslintConfig = defineConfig([
       "@typescript-eslint/no-require-imports": "warn",
       // 한글 텍스트의 따옴표 가독성 위해 의도적 사용 (`"(일용)"` 등) — error → warn
       "react/no-unescaped-entities": "warn",
+      // unused-vars: 의도적 _underscore prefix는 무시 (API Route req, destructure 일부 등)
+      "@typescript-eslint/no-unused-vars": ["warn", {
+        argsIgnorePattern: "^_",
+        varsIgnorePattern: "^_",
+        caughtErrorsIgnorePattern: "^_",
+        destructuredArrayIgnorePattern: "^_",
+      }],
+      // unused-expressions: ternary/short-circuit statement 허용 (`x ? a() : b()`, `x && a()` 등 의도적 패턴)
+      "@typescript-eslint/no-unused-expressions": ["warn", {
+        allowTernary: true,
+        allowShortCircuit: true,
+      }],
     },
   },
   // Override default ignores of eslint-config-next.
@@ -34,6 +46,8 @@ const eslintConfig = defineConfig([
     "build/**",
     "next-env.d.ts",
     "lib/generated/**",
+    // 좌표 디버그 작업 중 남은 stray 데이터 파일 — 어디서도 import 안 됨, 보존만
+    "input.js",
   ]),
 ]);
 

@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useCallback, Suspense } from "react";
 import { useRouter, useParams, useSearchParams } from "next/navigation";
-import { CASE_TYPE_LABELS, DISPOSAL_TYPE, GRADE_TYPE, STATUS_BY_CASE_TYPE, HEARING_LOSS_STATUS, CASE_STATUS_LABELS, CASE_STATUS_COLORS } from "@/lib/constants/case";
+import { CASE_TYPE_LABELS, DISPOSAL_TYPE, STATUS_BY_CASE_TYPE, HEARING_LOSS_STATUS, CASE_STATUS_LABELS, CASE_STATUS_COLORS } from "@/lib/constants/case";
 import ContactSelector from "@/components/ui/ContactSelector";
 import BranchSelector from "@/components/ui/BranchSelector";
 import DateSegmentInput from "@/components/ui/DateSegmentInput";
@@ -16,7 +16,7 @@ const SPECIAL_HOSPITALS: string[] = (specialHospitalsData as { hospital: string 
 const S = { fontFamily: "'Malgun Gothic', 'Apple SD Gothic Neo', 'Segoe UI', sans-serif" };
 
 import { WorkHistorySection } from "@/components/case-common/WorkHistorySection";
-import type { WorkHistoryItem, WorkHistoryRawEntry, WorkHistoryRaw, WorkHistoryDailyEntry } from "@/components/case-common/WorkHistoryTypes";
+import type { WorkHistoryItem, WorkHistoryRaw, WorkHistoryDailyEntry } from "@/components/case-common/WorkHistoryTypes";
 
 type HearingLossExam = {
   id: string;
