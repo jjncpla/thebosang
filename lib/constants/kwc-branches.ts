@@ -1,9 +1,12 @@
 // 근로복지공단 지사 상세 정보
-// 출처: https://www.comwel.or.kr/comwel/intr/srch/srch.jsp?board_no=107 (2026-05-01 WebFetch 일괄 추출)
-//   board_no=107 게시판 7페이지에서 추출된 68개 지역본부·지사·특수형태근로종사자센터
-//   누락: 공단본부, 산재심사위원회, 6개 업무상질병판정위원회, 11개 병원,
-//         재활공학연구소, 직업환경연구원, 근로복지연구원, 인재개발원, 고객센터
-//         (이들은 별도 게시판 또는 별도 페이지로 관리됨 — 사용자가 추후 보강)
+// 출처:
+//   1차 (2026-05-01): https://www.comwel.or.kr/comwel/intr/srch/srch.jsp?board_no=107
+//       — board_no=107 게시판 7페이지에서 68개 지역본부·지사·특수형태근로종사자센터
+//   2차 (2026-05-02): 27개 별도 기관 보강
+//       - srch_diz.jsp?article_no=…&mode=view  — 9개 업무상질병판정위원회
+//       - intr/maps.jsp + intr/orgn/bran/comt/intr.jsp — 공단본부 + 산업재해보상보험심사위원회
+//       - comwel.or.kr/[병원도메인]/index.jsp  — 11개 산재병원 (요양병원 2 포함)
+//       - hrdcenter.comwel.or.kr + 공공데이터 — 인재개발원·근로복지연구원·재활공학연구소·직업환경연구원·고객센터 5개
 //
 // 기본 95개 기관 데이터는 public/data/gongdan-branches.json (주소·관할·전화·팩스만)
 // 이 파일에서는 우편번호·교통편·업무내용·운영시간·부서·담당자 등 보강 정보를 제공
@@ -4244,6 +4247,622 @@ export const KWC_BRANCH_DETAILS: Record<string, KwcBranchDetail> = {
       { name: "경영복지부", fax: "0505-810-1100", representativeTel: "033-371-6120", responsibilities: ["대부사업", "임금채권보장사업", "퇴직연금 사업"], staffs: [] },
       { name: "재활보상부", fax: "0505-520-2100", representativeTel: "033-371-6160", responsibilities: ["산재요양결정", "보험급여지급", "진료비심사", "진폐업무"], staffs: [] },
       { name: "가입지원부", fax: "0505-499-3100", representativeTel: "033-371-6140", responsibilities: ["고용보험 가입", "산재보험 가입", "피보험자 자격관리"], staffs: [] },
+    ],
+  },
+
+  // ─── 본부·심사위 (출처: comwel.or.kr/intr/maps.jsp, intr/orgn/bran/comt/intr.jsp — 2026-05-02 추출) ──
+  공단본부: {
+    postalCode: "44428",
+    representativeTel: "1588-0075",
+    hours: STD_HOURS,
+    directions: "KTX 울산역에서 15005번(급행) 승차 → 근로복지공단·산업인력공단 정류장 하차 / 시외고속버스터미널에서 217번 승차 동일 정류장 하차",
+    services: [
+      "공단 경영기획·총괄",
+      "산재보상 정책 기획",
+      "디지털보험관리",
+      "의료복지 정책 기획",
+      "감사",
+    ],
+    departments: [
+      { name: "이사장실", representativeTel: "1588-0075", responsibilities: ["공단 운영 총괄"], staffs: [] },
+      { name: "경영기획이사실", representativeTel: "1588-0075", responsibilities: ["경영기획", "예산", "인사"], staffs: [] },
+      { name: "산재보상이사실", representativeTel: "1588-0075", responsibilities: ["산재보상 정책", "재활지원"], staffs: [] },
+      { name: "디지털보험관리이사실", representativeTel: "1588-0075", responsibilities: ["고용·산재보험 가입", "보험료 부과"], staffs: [] },
+      { name: "의료복지이사실", representativeTel: "1588-0075", responsibilities: ["공단 운영 의료기관", "근로자 복지사업"], staffs: [] },
+      { name: "감사실", representativeTel: "1588-0075", responsibilities: ["내부 감사", "윤리경영"], staffs: [] },
+    ],
+  },
+
+  산업재해보상보험심사위원회: {
+    postalCode: "07254",
+    representativeTel: "1588-0075",
+    hours: STD_HOURS,
+    services: [
+      "산재보험 심사청구 사건 심리 및 의결",
+      "최초 보험급여 결정에 대한 불복 심사",
+    ],
+    departments: [
+      { name: "심사1부", representativeTel: "1588-0075", responsibilities: ["심사청구 사건 심리", "요양·휴업급여 등"], staffs: [] },
+      { name: "심사2부", representativeTel: "1588-0075", responsibilities: ["심사청구 사건 심리", "장해·유족급여 등"], staffs: [] },
+      { name: "심사3부", representativeTel: "1588-0075", responsibilities: ["심사청구 사건 심리", "직업병·뇌심혈관질환 등"], staffs: [] },
+    ],
+  },
+
+  // ─── 업무상질병판정위원회 9개 (출처: srch_diz.jsp?article_no=…&mode=view — 2026-05-02 추출) ──
+  서울남부업무상질병판정위원회: {
+    postalCode: "07254",
+    representativeTel: "1588-0075",
+    hours: STD_HOURS,
+    directions: "마을버스 영등포03번 또는 지하철 신길역·영등포역 이용. 주차장 협소, 대중교통 권장",
+    services: [
+      "업무상질병 심의사건 (서울강남·서울동부·서울남부·서울관악·서울서초)",
+      "암 등 기타질환(전국) 심의",
+    ],
+    departments: [
+      {
+        name: "운영지원부", fax: "0505-979-7777", representativeTel: "1644-1269",
+        responsibilities: ["업무상질병 심의사건 심사 및 판정", "위원회 운영 총괄"],
+        staffs: [
+          { phone: "02-2280-2616", tasksMain: ["운영지원부"], tasksDetail: "위원회 사무 총괄·간사 업무" },
+        ],
+      },
+    ],
+  },
+
+  서울북부업무상질병판정위원회: {
+    postalCode: "04548",
+    representativeTel: "1588-0075",
+    hours: STD_HOURS,
+    directions: "지하철 2·5호선 을지로4가역 10번 출구에서 을지로3가역 방향 약 250m (삼풍넥서스빌딩 7층)",
+    parkingInfo: "건물 내 주차장 이용 가능 (주차료 별도 부담)",
+    services: [
+      "업무상질병 심의사건 (서울지역본부, 서울서부·서울북부·의정부·남양주·서울성동, 강원특별자치도 소재 지사)",
+    ],
+    departments: [
+      {
+        name: "운영지원부", fax: "0505-044-1201", representativeTel: "1644-1372",
+        responsibilities: ["업무상질병 심의사건 심사 및 판정", "위원회 운영 총괄"],
+        staffs: [
+          { phone: "1644-1372", tasksMain: ["운영지원부 대표"], tasksDetail: "위원회 사건 심의·간사 (위원장 1701, 사건심의 1702-1717)" },
+        ],
+      },
+    ],
+  },
+
+  부산업무상질병판정위원회: {
+    postalCode: "48729",
+    representativeTel: "1588-0075",
+    hours: STD_HOURS,
+    directions: "부산지하철 1호선 부산진역 2번 출구에서 부산역 방향 약 200m (한국감정원 부산동부지사 7층)",
+    services: [
+      "업무상질병 심의사건 (부산·울산광역시 소재 지사, 양산지사)",
+    ],
+    departments: [
+      {
+        name: "운영지원부", fax: "0505-310-3113", representativeTel: "1644-2306",
+        responsibilities: ["업무상질병 심의사건 심사 및 판정", "위원회 운영 총괄"],
+        staffs: [
+          { phone: "051-795-3090", tasksMain: ["업무 총괄"], tasksDetail: "운영지원부 업무 총괄" },
+          { phone: "051-795-0808", tasksMain: ["판정위원회 총괄"], tasksDetail: "판정위원회 업무 총괄" },
+          { phone: "051-795-3065", tasksMain: ["심의사건"], tasksDetail: "업무상질병 심의사건" },
+          { phone: "051-795-3067", tasksMain: ["심의사건"], tasksDetail: "업무상질병 심의사건" },
+          { phone: "051-795-3068", tasksMain: ["심의사건"], tasksDetail: "업무상질병 심의사건" },
+          { phone: "051-795-3069", tasksMain: ["심의사건"], tasksDetail: "업무상질병 심의사건" },
+          { phone: "051-795-3070", tasksMain: ["심의사건"], tasksDetail: "업무상질병 심의사건" },
+          { phone: "051-795-3071", tasksMain: ["심의사건"], tasksDetail: "업무상질병 심의사건" },
+        ],
+      },
+    ],
+  },
+
+  경남업무상질병판정위원회: {
+    postalCode: "51504",
+    representativeTel: "1588-0075",
+    hours: STD_HOURS,
+    directions: "간선버스 106·109·150번, 지선버스 210·213번 경창상가 하차 약 300m (신텍타워 10층)",
+    parkingInfo: "1일 30분 무료",
+    services: [
+      "업무상질병 심의사건 (경상남도 소재 지사, 양산지사 제외)",
+    ],
+    departments: [
+      {
+        name: "운영지원부", fax: "0505-720-1202", representativeTel: "1644-2313",
+        responsibilities: ["업무상질병 심의사건 심사 및 판정", "위원회 운영 총괄"],
+        staffs: [
+          { phone: "055-716-2100", tasksMain: ["운영지원부 대표"], tasksDetail: "운영지원부 대표 (직통 2100~2114)" },
+        ],
+      },
+    ],
+  },
+
+  대구업무상질병판정위원회: {
+    postalCode: "42425",
+    representativeTel: "1588-0075",
+    hours: STD_HOURS,
+    directions: "지하철 1호선 교대역 2번 출구. 버스 349·405·410·503·649·805번",
+    parkingInfo: "지하주차장 이용 가능",
+    services: [
+      "업무상질병 심의사건 (대구광역시, 경상북도 소재 지사)",
+    ],
+    departments: [
+      {
+        name: "운영지원부", fax: "0505-073-1313", representativeTel: "053-601-7150",
+        responsibilities: ["업무상질병 심의사건 심사 및 판정", "위원회 운영 총괄"],
+        staffs: [
+          { phone: "053-601-7150", tasksMain: ["운영지원부"], tasksDetail: "운영지원부 직통 (7150~7159)" },
+        ],
+      },
+    ],
+  },
+
+  경인북부업무상질병판정위원회: {
+    postalCode: "21417",
+    representativeTel: "1588-0075",
+    hours: STD_HOURS,
+    directions: "전철 1호선 송내역 1번 출구에서 중앙병원 방향 도보 약 13분. 송내남부역 버스(8·16·20·30·105-1) 중앙병원 정류장 하차",
+    services: [
+      "업무상질병 심의사건 (인천광역시, 경기도 소재 지사 — 의정부·남양주 제외)",
+    ],
+    departments: [
+      {
+        name: "운영지원부", fax: "0505-284-3355", representativeTel: "1644-4332",
+        responsibilities: ["업무상질병 심의사건 심사 및 판정", "위원회 운영 총괄"],
+        staffs: [
+          { phone: "1644-4332", tasksMain: ["운영지원부 대표"], tasksDetail: "심의 안건 검토, 판정서 통지, 위원 위촉" },
+        ],
+      },
+    ],
+  },
+
+  경인남부업무상질병판정위원회: {
+    postalCode: "16489",
+    representativeTel: "1588-0075",
+    hours: STD_HOURS,
+    directions: "수인분당선 수원지청역 8번 출구에서 동수원우체국 방면으로 약 350m (도보 5분, 세영빌딩 14층 1402호)",
+    parkingInfo: "내방고객 1시간 무료, 이후 추가요금 발생",
+    services: [
+      "업무상질병 심의사건 (수원·화성·용인·평택·안양·성남)",
+    ],
+    departments: [
+      {
+        name: "운영지원부", fax: "0505-720-5918", representativeTel: "1588-0075",
+        responsibilities: ["업무상질병 심의사건 심사 및 판정", "위원회 운영 총괄"],
+        staffs: [],
+      },
+    ],
+  },
+
+  광주업무상질병판정위원회: {
+    postalCode: "61687",
+    representativeTel: "1588-0075",
+    hours: STD_HOURS,
+    services: [
+      "업무상질병 심의사건 (광주광역시, 전라북도, 전라남도, 제주특별자치도 소재 지사)",
+    ],
+    departments: [
+      {
+        name: "운영지원부", fax: "0505-282-8116", representativeTel: "1644-5356",
+        responsibilities: ["업무상질병 심의사건 심사 및 판정", "위원회 운영 총괄"],
+        staffs: [
+          { phone: "062-975-0590", tasksMain: ["운영지원부"], tasksDetail: "위원회 업무 총괄" },
+          { phone: "062-975-0500", tasksMain: ["심의회 담당"], tasksDetail: "근골격, 뇌심, 정신질병 등 사건 담당 (직통 0500~0561)" },
+        ],
+      },
+    ],
+  },
+
+  대전업무상질병판정위원회: {
+    postalCode: "35209",
+    representativeTel: "1588-0075",
+    hours: STD_HOURS,
+    services: [
+      "업무상질병 심의사건 (대전광역시, 세종특별자치시, 충청북도, 충청남도 소재 지사)",
+    ],
+    departments: [
+      {
+        name: "운영지원부", fax: "0505-282-9911", representativeTel: "1644-7096",
+        responsibilities: ["업무상질병 심의사건 심사 및 판정", "위원회 운영 총괄"],
+        staffs: [
+          { phone: "1644-7096", tasksMain: ["운영지원부 대표"], tasksDetail: "위원회 운영 총괄 (2023.5.30. 사학연금회관빌딩 9층 → 15층 이전)" },
+        ],
+      },
+    ],
+  },
+
+  // ─── 산재병원 11개 (출처: comwel.or.kr/[병원도메인]/index.jsp — 2026-05-02 추출) ──
+  인천병원: {
+    postalCode: "21417",
+    representativeTel: "032-5000-114",
+    hours: "평일 08:30-17:30 (토·일·공휴일 휴무)",
+    services: [
+      "내과", "외과", "정형외과", "신경외과", "신경과", "재활의학과",
+      "비뇨의학과", "정신건강의학과", "응급의학과", "영상의학과",
+      "진단검사의학과", "소아청소년과", "산부인과", "마취통증의학과",
+      "치과", "건강관리센터", "이비인후과",
+    ],
+    departments: [
+      {
+        name: "원무팀", fax: "032-512-9932", representativeTel: "032-5000-114",
+        responsibilities: ["진료 접수", "원무 업무"],
+        staffs: [],
+      },
+      {
+        name: "진료협력센터", representativeTel: "032-500-0567",
+        responsibilities: ["입원·전원·의뢰·회송 상담"],
+        staffs: [],
+      },
+    ],
+  },
+
+  안산병원: {
+    postalCode: "15324",
+    representativeTel: "031-5001-114",
+    hours: "평일 08:30-17:30 (토·일·공휴일 휴무)",
+    services: [
+      "내과", "외과", "신경외과", "정형외과", "산부인과", "소아청소년과",
+      "치과", "신경과", "정신건강의학과", "영상의학과", "마취통증의학과",
+      "진단검사의학과", "직업환경의학과", "응급의학과", "재활의학과",
+      "피부비뇨의학과", "척추·재활전문센터", "드림건강증진센터",
+      "운전재활훈련", "간호·간병통합서비스 병동(108병상)",
+    ],
+    departments: [
+      {
+        name: "원무팀", fax: "031-506-8001", representativeTel: "031-5001-114",
+        responsibilities: ["진료 접수", "원무 업무"],
+        staffs: [],
+      },
+      {
+        name: "진료협력센터", representativeTel: "031-500-1868",
+        responsibilities: ["입원·전원·의뢰·회송 상담"],
+        staffs: [],
+      },
+    ],
+  },
+
+  창원병원: {
+    postalCode: "51524",
+    representativeTel: "055-280-0300",
+    hours: "평일 08:30-17:30 (토 잠정중단, 일·공휴일 휴무)",
+    services: [
+      "내과", "신경과", "외과", "정형외과", "신경외과", "마취통증의학과",
+      "산부인과", "비뇨의학과", "영상의학과", "진단검사의학과",
+      "재활의학과", "치과", "이비인후과", "가정의학과", "응급실",
+    ],
+    departments: [
+      {
+        name: "원무팀", fax: "055-282-5681", representativeTel: "055-280-7777",
+        responsibilities: ["진료 접수", "원무 업무"],
+        staffs: [],
+      },
+      {
+        name: "진료협력센터", representativeTel: "055-280-7706",
+        responsibilities: ["입원·전원·의뢰·회송 상담"],
+        staffs: [],
+      },
+    ],
+  },
+
+  대구병원: {
+    postalCode: "41405",
+    representativeTel: "053-715-7575",
+    hours: "평일 08:30-17:30 (진료 09:00-17:00, 토·일·공휴일 휴무)",
+    services: [
+      "재활의학과", "정형외과", "내과", "영상의학과", "이비인후과", "직업환경의학과",
+    ],
+    departments: [
+      {
+        name: "원무팀", fax: "053-715-7729", representativeTel: "053-715-7575",
+        responsibilities: ["진료 접수", "원무 업무"],
+        staffs: [],
+      },
+      {
+        name: "진료협력센터", representativeTel: "053-715-7777",
+        responsibilities: ["입원·전원·의뢰·회송 상담"],
+        staffs: [],
+      },
+    ],
+  },
+
+  순천병원: {
+    postalCode: "57947",
+    representativeTel: "061-720-7114",
+    hours: "평일 08:30-17:30 (점심 12:30-13:30, 일·공휴일 휴무)",
+    services: [
+      "내과(1·2·3과)", "외과", "정형외과", "신경외과", "여성의학과",
+      "재활의학과(1·2·3과)", "치과", "건강관리센터", "정신건강의학과",
+      "종합재활치료센터", "간호간병통합병동", "골관절·척추 전문센터",
+      "치매 조기진단센터",
+    ],
+    departments: [
+      {
+        name: "원무팀", fax: "061-720-7102", representativeTel: "061-720-7114",
+        responsibilities: ["진료 접수", "원무 업무"],
+        staffs: [],
+      },
+      {
+        name: "진료협력센터", representativeTel: "061-720-7103",
+        responsibilities: ["입원·전원·의뢰·회송 상담"],
+        staffs: [],
+      },
+    ],
+  },
+
+  대전병원: {
+    postalCode: "34384",
+    representativeTel: "042-670-5114",
+    hours: "평일 08:30-17:30 (토·일·공휴일 휴무, 응급의료센터 365일 24시간 운영)",
+    services: [
+      "내과", "외과", "정형외과", "신경외과", "치과(위탁)", "가정의학과",
+      "마취통증의학과", "영상의학과", "진단검사의학과", "재활의학과",
+      "정신건강의학과", "산부인과", "신경과", "이비인후과", "응급의료센터",
+    ],
+    departments: [
+      {
+        name: "원무팀", fax: "042-631-8250", representativeTel: "042-670-5114",
+        responsibilities: ["진료 접수", "원무 업무"],
+        staffs: [],
+      },
+      {
+        name: "진료협력센터", representativeTel: "042-670-5265",
+        responsibilities: ["입원·의뢰 상담"],
+        staffs: [],
+      },
+    ],
+  },
+
+  태백병원: {
+    postalCode: "26052",
+    representativeTel: "033-580-3114",
+    hours: "평일 08:30-17:30 / 토 08:30-12:30 (일·공휴일 휴무, 응급실 24시간)",
+    services: [
+      "재활의학과", "내과(인공신장실)", "정형외과", "영상의학과",
+      "진단검사의학과", "일반외과", "신경외과", "산부인과", "이비인후과",
+      "정신건강의학과", "마취통증의학과", "소아·청소년과(야간)", "치과",
+      "응급실(24시간)",
+    ],
+    departments: [
+      {
+        name: "원무팀", fax: "033-581-8547", representativeTel: "033-580-3114",
+        responsibilities: ["진료 접수", "원무 업무"],
+        staffs: [],
+      },
+      {
+        name: "진료협력센터", representativeTel: "033-580-3122",
+        responsibilities: ["입원·의뢰 상담"],
+        staffs: [],
+      },
+    ],
+  },
+
+  동해병원: {
+    postalCode: "25738",
+    representativeTel: "033-530-3100",
+    hours: "평일 08:30-17:30 (토·일·공휴일 휴무)",
+    services: [
+      "내과", "외과", "정형외과", "신경외과", "재활의학과", "응급의학과",
+      "영상의학과", "직업환경의학과", "이비인후과", "산부인과",
+    ],
+    departments: [
+      {
+        name: "원무팀", fax: "033-532-3136", representativeTel: "033-530-3100",
+        responsibilities: ["진료 접수", "원무 업무"],
+        staffs: [],
+      },
+      {
+        name: "진료협력센터", representativeTel: "033-530-3960",
+        responsibilities: ["입원·의뢰·회송 상담"],
+        staffs: [],
+      },
+    ],
+  },
+
+  정선병원: {
+    representativeTel: "033-560-7100",
+    hours: "평일 08:30-17:30 (토·일·공휴일 휴무, 응급실 상시 진료)",
+    services: [
+      "내과", "직업환경의학과", "영상의학과", "건강관리과",
+      "응급실", "진단검사의학실",
+    ],
+    departments: [
+      {
+        name: "원무팀", fax: "033-562-8110", representativeTel: "033-560-7100",
+        responsibilities: ["진료 접수", "원무 업무"],
+        staffs: [],
+      },
+      {
+        name: "진료협력센터", representativeTel: "033-560-7105",
+        responsibilities: ["입원·의뢰·회송 상담"],
+        staffs: [],
+      },
+    ],
+  },
+
+  경기요양병원: {
+    representativeTel: "031-351-3083",
+    hours: "평일 08:30-17:30 (토·일·공휴일 휴무)",
+    services: [
+      "신경과", "재활의학과", "가정의학과", "요양 (장기재활·치료)",
+    ],
+    departments: [
+      {
+        name: "원무팀", fax: "031-351-3086", representativeTel: "031-351-3083",
+        responsibilities: ["진료 접수", "원무 업무"],
+        staffs: [],
+      },
+      {
+        name: "진료협력센터", representativeTel: "031-371-5280",
+        responsibilities: ["입원·의뢰·회송 상담"],
+        staffs: [],
+      },
+    ],
+  },
+
+  태백요양병원: {
+    postalCode: "26052",
+    representativeTel: "033-580-3700",
+    hours: "평일 08:30-17:30 (토·일·공휴일 휴무)",
+    services: [
+      "가정의학과", "신경외과", "55병상 요양",
+    ],
+    departments: [
+      {
+        name: "원무팀", fax: "033-580-3777", representativeTel: "033-580-3700",
+        responsibilities: ["진료 접수", "원무 업무"],
+        staffs: [],
+      },
+      {
+        name: "진료협력센터", representativeTel: "033-580-3722",
+        responsibilities: ["입원·의뢰 상담"],
+        staffs: [],
+      },
+    ],
+  },
+
+  // ─── 연구·교육·CS (출처: 공공데이터 + 기관 홈페이지 — 2026-05-02 추출) ──
+  인재개발원: {
+    postalCode: "27803",
+    representativeTel: "043-539-5505",
+    hours: STD_HOURS,
+    directions: "충북 진천군 광혜원면 구암길 64-13. 진천터미널/이천 방면 시외버스 광혜원 정류장 하차 후 택시 이용",
+    services: [
+      "공단 직원 직무교육 및 연수",
+      "산재·고용보험 사업주 교육",
+      "노사 상생 교육",
+      "교육연수 시설 운영 (숙박·강의실)",
+    ],
+    departments: [
+      {
+        name: "운영지원부", representativeTel: "043-539-5505",
+        responsibilities: ["인재개발원 운영 총괄", "예산·시설 관리", "숙박·식당 운영"],
+        staffs: [],
+      },
+      {
+        name: "교육연수부", representativeTel: "043-539-5505",
+        responsibilities: ["연간 교육과정 기획", "강사 위촉", "교재 개발", "사이버 교육"],
+        staffs: [],
+      },
+    ],
+  },
+
+  근로복지연구원: {
+    postalCode: "07254",
+    representativeTel: "1588-0075",
+    email: "master@kcomwel.or.kr",
+    hours: STD_HOURS,
+    services: [
+      "산재보험·고용보험 정책 연구",
+      "근로복지 정책 연구",
+      "노동복지 빅데이터 분석",
+    ],
+    departments: [
+      {
+        name: "조사연구부", representativeTel: "1588-0075",
+        responsibilities: ["산재보험패널조사", "정책 영향 평가"],
+        staffs: [],
+      },
+      {
+        name: "연구1부", representativeTel: "1588-0075",
+        responsibilities: ["산재보상 정책 연구"],
+        staffs: [],
+      },
+      {
+        name: "연구2부", representativeTel: "1588-0075",
+        responsibilities: ["근로복지 사업 연구"],
+        staffs: [],
+      },
+      {
+        name: "노동복지빅데이터센터", representativeTel: "1588-0075",
+        responsibilities: ["빅데이터 수집·분석", "정책 시뮬레이션"],
+        staffs: [],
+      },
+    ],
+  },
+
+  재활공학연구소: {
+    postalCode: "21417",
+    representativeTel: "1588-0075",
+    hours: STD_HOURS,
+    directions: "인천광역시 부평구 경인로10번길 26 (구산동, 인천병원 인근)",
+    services: [
+      "의지·보조기 연구개발",
+      "맞춤형 보조기구 제작·지원",
+      "보조기구 시험인증",
+      "재활공학 R&D",
+    ],
+    departments: [
+      {
+        name: "연구실", representativeTel: "1588-0075",
+        responsibilities: ["재활공학 R&D", "신기술 개발"],
+        staffs: [],
+      },
+      {
+        name: "시험인증센터", representativeTel: "1588-0075",
+        responsibilities: ["보조기구 시험 및 KS·국제 인증"],
+        staffs: [],
+      },
+      {
+        name: "의지보조기실", representativeTel: "1588-0075",
+        responsibilities: ["산재근로자 의지·보조기 제작 및 지급"],
+        staffs: [],
+      },
+      {
+        name: "운영지원부", representativeTel: "1588-0075",
+        responsibilities: ["연구소 운영 총괄", "예산·인사·시설"],
+        staffs: [],
+      },
+    ],
+  },
+
+  직업환경연구원: {
+    representativeTel: "1588-0075",
+    hours: STD_HOURS,
+    directions: "안산병원 부설 (경기도 안산시 상록구 구룡로 87 일동, 안산병원과 동일 부지)",
+    services: [
+      "직업병 업무관련성 평가",
+      "직업병 발병기전 연구",
+      "특진(특별진찰) 위탁 검사",
+      "유해요인 노출 평가",
+    ],
+    departments: [
+      {
+        name: "업무관련성평가부", representativeTel: "1588-0075",
+        responsibilities: ["업무상질병 인과관계 평가", "특진 보고서 작성"],
+        staffs: [],
+      },
+      {
+        name: "발병기전연구부", representativeTel: "1588-0075",
+        responsibilities: ["직업병 발병기전 연구", "유해요인 데이터 분석"],
+        staffs: [],
+      },
+    ],
+  },
+
+  고객센터: {
+    postalCode: "44428",
+    representativeTel: "1588-0075",
+    hours: "평일 09:00-18:00 (점심 12:00-13:00 운영, 주말·공휴일 휴무)",
+    services: [
+      "산재보험·고용보험 일반 문의 응대",
+      "사이버 고객상담 (chat·이메일)",
+      "민원 접수 및 단순 안내",
+      "타 부서 상담원 연결",
+    ],
+    departments: [
+      {
+        name: "운영지원1부", representativeTel: "1588-0075",
+        responsibilities: ["고객센터 운영 총괄", "콜센터 인력 관리"],
+        staffs: [],
+      },
+      {
+        name: "운영지원2부", representativeTel: "1588-0075",
+        responsibilities: ["콜 통계·품질 관리", "응대 매뉴얼 개선"],
+        staffs: [],
+      },
+      {
+        name: "운영지원3부", representativeTel: "1588-0075",
+        responsibilities: ["사이버 상담 운영", "민원 회신 관리"],
+        staffs: [],
+      },
     ],
   },
 };
