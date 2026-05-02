@@ -747,20 +747,29 @@ function BranchDetailPanel({
         </div>
       )}
 
-      {/* 부서별 표 */}
+      {/* 부서별 표 — 재활보상부 최상단 + 기본 펼침, 그 외 부서는 기본 접힘 */}
       {detail?.departments && detail.departments.length > 0 && (
         <div style={{ marginBottom: 16, paddingTop: 10, borderTop: "1px solid #e5e7eb" }}>
           <div style={{ fontSize: 12, fontWeight: 700, color: "#9ca3af", marginBottom: 8 }}>
             부서별 담당자 ({detail.departments.length}개 부서)
           </div>
-          {detail.departments.map((dept, di) => (
-            <DepartmentTable
-              key={dept.name + di}
-              dept={dept}
-              overrides={overrides.filter(o => o.departmentName === dept.name)}
-              onSaveOverride={(phone, fields) => onSaveOverride(dept.name, phone, fields)}
-            />
-          ))}
+          {[...detail.departments]
+            .sort((a, b) => {
+              const aRehab = a.name.includes("재활보상");
+              const bRehab = b.name.includes("재활보상");
+              if (aRehab && !bRehab) return -1;
+              if (!aRehab && bRehab) return 1;
+              return 0;
+            })
+            .map((dept, di) => (
+              <DepartmentTable
+                key={dept.name + di}
+                dept={dept}
+                defaultOpen={dept.name.includes("재활보상")}
+                overrides={overrides.filter(o => o.departmentName === dept.name)}
+                onSaveOverride={(phone, fields) => onSaveOverride(dept.name, phone, fields)}
+              />
+            ))}
           <div style={{ marginTop: 8, padding: "6px 10px", background: "#fef9c3", borderRadius: 4, fontSize: 10, color: "#92400e", lineHeight: 1.5 }}>
             ⓘ 직책·이름은 직접 입력하면 서버에 저장되어 모든 사용자에게 공유됩니다. 전화·업무 내용은 공단 홈페이지 자동 추출.
           </div>
@@ -807,27 +816,39 @@ function DetailRow({ label, value }: { label: string; value: React.ReactNode }) 
 
 function DepartmentTable({
   dept,
+  defaultOpen = false,
   overrides,
   onSaveOverride,
 }: {
   dept: KwcDepartment;
+  defaultOpen?: boolean;
   overrides: ServerStaffOverride[];
   onSaveOverride: (phone: string, fields: { name?: string; position?: string }) => void;
 }) {
   const staffs = useMemo(() => normalizeDepartmentStaffs(dept), [dept]);
+  const [open, setOpen] = useState(defaultOpen);
 
   return (
     <div style={{ marginBottom: 14, border: "1px solid #e5e7eb", borderRadius: 6, overflow: "hidden" }}>
-      <div style={{
-        display: "flex", alignItems: "center", gap: 8,
-        padding: "8px 12px", background: "#f9fafb", borderBottom: "1px solid #e5e7eb",
-      }}>
+      <div
+        onClick={() => setOpen((v) => !v)}
+        style={{
+          display: "flex", alignItems: "center", gap: 8,
+          padding: "8px 12px", background: "#f9fafb",
+          borderBottom: open ? "1px solid #e5e7eb" : "none",
+          cursor: "pointer", userSelect: "none",
+        }}
+        title={open ? "접기" : "펼치기"}
+      >
+        <span style={{ fontSize: 11, color: "#6b7280", width: 12, display: "inline-block" }}>
+          {open ? "▼" : "▶"}
+        </span>
         <span style={{ fontSize: 13, fontWeight: 700, color: "#1e40af" }}>{dept.name}</span>
         {dept.fax && <span style={{ fontSize: 11, color: "#6b7280" }}>FAX: {dept.fax}</span>}
         <span style={{ fontSize: 11, color: "#9ca3af", marginLeft: "auto" }}>{staffs.length}명</span>
       </div>
 
-      {staffs.length === 0 ? (
+      {!open ? null : staffs.length === 0 ? (
         <div style={{ padding: "8px 12px", fontSize: 11, color: "#9ca3af" }}>등록된 담당자 없음</div>
       ) : (
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
