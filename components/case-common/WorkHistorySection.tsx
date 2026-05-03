@@ -347,22 +347,17 @@ function WorkHistoryDrawerContent({
     try {
       const { PDFDocument } = await import("pdf-lib");
 
-      // 1) PDF 청크 분할 — 페이지 수에 따라 자동 조정
-      // ≤5p: 단일 청크 (테스트 결과 1p 분할이 오히려 변동 ↑)
-      // 6-10p: 3페이지
-      // 11-20p: 4페이지
-      // 21+p: 5페이지
+      // 1) PDF 청크 분할 — 페이지 수에 따라 자동 조정 (A1 정책: 헤비 케이스 더 작게)
+      // ≤5p: 단일 청크
+      // 6-15p: 3페이지
+      // 16+p: 3페이지 (헤비 케이스 정확도 ↑, 강한곤 고용보험 일관성 보강)
       type Chunk = { blob: Blob; chunkName: string; docType: string; chunkIndex: number };
       const allChunks: Chunk[] = [];
       for (const { file, docType } of valid) {
         const buffer = await file.arrayBuffer();
-        // 암호화된 PDF (관청 발급 등)도 처리 가능하도록
         const srcDoc = await PDFDocument.load(buffer, { ignoreEncryption: true });
         const totalPages = srcDoc.getPageCount();
-        const CHUNK_PAGES = totalPages <= 5 ? totalPages
-                          : totalPages <= 10 ? 3
-                          : totalPages <= 20 ? 4
-                          : 5;
+        const CHUNK_PAGES = totalPages <= 5 ? totalPages : 3;
         let fileChunkIndex = 0;
         for (let start = 0; start < totalPages; start += CHUNK_PAGES) {
           const end = Math.min(start + CHUNK_PAGES, totalPages);
