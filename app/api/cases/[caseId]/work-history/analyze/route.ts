@@ -15,7 +15,7 @@ function getAIClient() {
 
 // JSON 파서 (마크다운 블록 + 잘림 복구)
 function repairTruncatedJson(s: string): string {
-  let stack: string[] = []
+  const stack: string[] = []
   let inStr = false, esc = false
   let lastCompleteIdx = 0
   for (let i = 0; i < s.length; i++) {
