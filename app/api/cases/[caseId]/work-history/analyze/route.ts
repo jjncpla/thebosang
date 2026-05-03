@@ -43,27 +43,38 @@ function repairTruncatedJson(s: string): string {
   return result
 }
 
-function parseJson(text: string): { sources: Record<string, unknown[]>; dailyEntries: unknown[]; name: string } {
+function parseJson(text: string): { sources: Record<string, unknown[]>; dailyEntries: unknown[]; name: string; success: boolean } {
   const fallback = {
     sources: { 고용산재: [], 건보: [], 소득금액: [], 연금: [] } as Record<string, unknown[]>,
     dailyEntries: [] as unknown[],
     name: "",
+    success: false,
   }
   try {
-    const cleaned = text.replace(/^```(?:json)?\s*/, "").replace(/\s*```\s*$/, "").trim()
-    const m = cleaned.match(/\{[\s\S]*\}/)
-    if (!m) throw new Error("JSON not found")
+    // 마크다운 코드블록 다양한 변형 제거
+    let cleaned = text.trim()
+    cleaned = cleaned.replace(/^```(?:json|JSON)?\s*\n?/, "")
+    cleaned = cleaned.replace(/\n?```\s*$/, "")
+    cleaned = cleaned.trim()
+
+    // 첫 { 부터 시작하는 JSON
+    const startIdx = cleaned.indexOf("{")
+    if (startIdx < 0) throw new Error("JSON not found")
+    cleaned = cleaned.slice(startIdx)
+
     let parsed
     try {
-      parsed = JSON.parse(m[0])
+      parsed = JSON.parse(cleaned)
     } catch {
-      const repaired = repairTruncatedJson(m[0])
+      // 잘림 복구 시도
+      const repaired = repairTruncatedJson(cleaned)
       parsed = JSON.parse(repaired)
     }
     return {
       sources: parsed.sources ?? fallback.sources,
       dailyEntries: parsed.dailyEntries ?? [],
       name: parsed.name ?? "",
+      success: true,
     }
   } catch {
     return fallback
@@ -158,10 +169,19 @@ export async function POST(
         }
 
         const t0 = Date.now()
-        const text = await callGemini(base64, getPromptForDocType(effectiveDocType))
+        let text = await callGemini(base64, getPromptForDocType(effectiveDocType))
+        let parsed = parseJson(text)
+        // JSON 파싱 실패 시 1회 자동 재시도 (Gemini 출력 변동 대응)
+        if (!parsed.success) {
+          console.warn(`[${chunkName}] JSON parse failed, retrying once...`)
+          text = await callGemini(base64, getPromptForDocType(effectiveDocType))
+          parsed = parseJson(text)
+          if (!parsed.success) {
+            console.error(`[${chunkName}] JSON parse failed after retry. Text:`, text.slice(0, 300))
+          }
+        }
         const elapsedMs = Date.now() - t0
-
-        const { sources, dailyEntries, name } = parseJson(text)
+        const { sources, dailyEntries, name } = parsed
         console.log(`[${chunkName}] 추출 완료 (${elapsedMs}ms) — 고용산재:${sources.고용산재?.length ?? 0} 건보:${sources.건보?.length ?? 0} 연금:${sources.연금?.length ?? 0} 일용직:${dailyEntries.length}`)
 
         send({ type: "result", sources, dailyEntries, name })
