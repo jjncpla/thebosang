@@ -469,7 +469,8 @@ function WorkHistoryDrawerContent({
       const allChunks: Chunk[] = [];
       for (const { file, docType } of valid) {
         const buffer = await file.arrayBuffer();
-        const srcDoc = await PDFDocument.load(buffer);
+        // 암호화된 PDF (관청 발급 등)도 처리 가능하도록
+        const srcDoc = await PDFDocument.load(buffer, { ignoreEncryption: true });
         const totalPages = srcDoc.getPageCount();
         const CHUNK_PAGES = totalPages <= 5 ? totalPages
                           : totalPages <= 10 ? 3
