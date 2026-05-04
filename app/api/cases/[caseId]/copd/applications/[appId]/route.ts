@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { syncCopdCaseStatus, syncCopdCaseEvents } from "@/lib/copd-status";
+import { syncFromCopdDecision } from "@/lib/case-sync";
 
 const parseDate = (v: unknown) => (v ? new Date(v as string) : null);
 const parseNumber = (v: unknown) =>
@@ -67,6 +68,7 @@ export async function PUT(
       // 처분
       disposalType: body.disposalType ?? null,
       disposalDate: parseDate(body.disposalDate),
+      disposalNoticeReceivedAt: parseDate(body.disposalNoticeReceivedAt),
       disposalReason: body.disposalReason ?? null,
       // 재진행
       reExamPossibleDate: parseDate(body.reExamPossibleDate),
@@ -95,9 +97,10 @@ export async function PUT(
       data,
     });
 
-    // 마지막 회차 기준으로 Case.status 자동 동기화 + 캘린더 이벤트 갱신
+    // 마지막 회차 기준으로 Case.status 자동 동기화 + 캘린더 이벤트 갱신 + 처분검토 자동 인입
     const newStatus = await syncCopdCaseStatus(caseId);
     await syncCopdCaseEvents(caseId);
+    await syncFromCopdDecision(caseId);
 
     return NextResponse.json({ ...updated, _caseStatus: newStatus });
   } catch (err) {

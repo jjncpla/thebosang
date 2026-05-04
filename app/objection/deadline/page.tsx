@@ -176,13 +176,13 @@ function CaseModal({ initial, managers, onClose, onSave, tfOptions }: {
   };
 
   const handleCaseSelect = (c: { id: string; patient?: { name: string }; tfName?: string; caseType?: string }) => {
-    const caseTypeMap: Record<string, string> = { HEARING_LOSS: "난청", COPD: "COPD", PNEUMOCONIOSIS: "진폐", MUSCULOSKELETAL: "근골격계" };
+    // caseType은 영문 enum 그대로 저장 (표시 시점에만 CASE_TYPE_LABELS로 변환)
     setForm(prev => ({
       ...prev,
       caseId: c.id,
       tfName: c.tfName || prev.tfName,
       patientName: c.patient?.name || prev.patientName,
-      caseType: caseTypeMap[c.caseType ?? ""] || c.caseType || prev.caseType,
+      caseType: c.caseType || prev.caseType,
     }));
     setCaseSearchResults([]);
     setCaseSearchQuery("");

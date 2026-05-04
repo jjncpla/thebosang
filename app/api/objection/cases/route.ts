@@ -42,7 +42,10 @@ export async function GET(req: NextRequest) {
   const existingCaseIds = items.map(r => r.caseId).filter(Boolean) as string[];
 
   const objectionWhere: Record<string, unknown> = {
-    status: 'OBJECTION',
+    OR: [
+      { status: 'OBJECTION' }, // HEARING_LOSS 영문
+      { status: '이의제기' }, // COPD/근골격계 한글
+    ],
     ...(existingCaseIds.length > 0 ? { id: { notIn: existingCaseIds } } : {}),
     ...(tfName ? { tfName } : {}),
   };
@@ -54,18 +57,35 @@ export async function GET(req: NextRequest) {
     include: {
       patient: { select: { name: true } },
       hearingLoss: { select: { decisionReceivedAt: true } },
+      copd: {
+        select: {
+          applications: {
+            orderBy: { applicationRound: 'desc' },
+            take: 1,
+            select: { disposalDate: true, disabilityDispositionDate: true },
+          },
+        },
+      },
     },
     orderBy: { createdAt: 'desc' },
   });
 
-  const autoItems = objectionCases.map(c => ({
+  const autoItems = objectionCases.map(c => {
+    let autoDecisionDate: string | null = null;
+    if (c.caseType === 'HEARING_LOSS') {
+      autoDecisionDate = c.hearingLoss?.decisionReceivedAt?.toISOString() ?? null;
+    } else if (c.caseType === 'COPD') {
+      const latest = c.copd?.applications[0];
+      autoDecisionDate = (latest?.disabilityDispositionDate ?? latest?.disposalDate)?.toISOString() ?? null;
+    }
+    return {
     id: `auto_${c.id}`,
     tfName: c.tfName ?? '',
     patientName: c.patient.name,
     caseType: c.caseType,
     approvalStatus: '불승인',
     progressStatus: '진행중',
-    decisionDate: c.hearingLoss?.decisionReceivedAt?.toISOString() ?? null,
+    decisionDate: autoDecisionDate,
     examClaimDate: null,
     examResult: null,
     examResultDate: null,
@@ -86,7 +106,8 @@ export async function GET(req: NextRequest) {
     isAutoFilled: true,
     createdAt: c.createdAt,
     updatedAt: c.updatedAt,
-  }));
+    };
+  });
 
   return NextResponse.json([...autoItems, ...items]);
 }

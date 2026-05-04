@@ -441,9 +441,10 @@ model CopdApplication {
   occResult         String?
 
   // 요양 처분
-  disposalType   String? // "승인" / "부지급" / "반려" / "보류"
-  disposalDate   DateTime?
-  disposalReason String?
+  disposalType             String? // "승인" / "부지급" / "반려" / "보류"
+  disposalDate             DateTime?
+  disposalNoticeReceivedAt DateTime? // 결정통지서 수령일 (90일 이의제기 D-day 기산점)
+  disposalReason           String?
 
   // 재진행 가능일 (특진 종료일 + 1년)
   reExamPossibleDate DateTime?

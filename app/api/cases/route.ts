@@ -206,10 +206,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "patientId 필수" }, { status: 400 });
     }
 
+    const finalCaseType = caseType ?? "HEARING_LOSS";
+    // COPD 사건은 default 한글 status를 사용 (lib/copd-status.ts와 일치)
+    const initialStatus = finalCaseType === "COPD" ? "접수대기" : undefined;
     const newCase = await prisma.case.create({
       data: {
         patientId,
-        caseType: caseType ?? "HEARING_LOSS",
+        caseType: finalCaseType,
+        ...(initialStatus ? { status: initialStatus } : {}),
         tfName: tfName ?? null,
         branch: branch ?? null,
         subAgent: subAgent ?? null,
@@ -225,6 +229,14 @@ export async function POST(req: NextRequest) {
         patient: { select: { id: true, name: true, ssn: true, phone: true } },
       },
     });
+
+    // COPD 사건은 CopdDetail + 1차 회차를 자동 생성하여 status/캘린더 동기화 즉시 가능하도록
+    if (finalCaseType === "COPD") {
+      const detail = await prisma.copdDetail.create({ data: { caseId: newCase.id } });
+      await prisma.copdApplication.create({
+        data: { copdDetailId: detail.id, applicationRound: 1 },
+      });
+    }
 
     return NextResponse.json(newCase, { status: 201 });
   } catch (err) {

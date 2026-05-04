@@ -268,6 +268,101 @@ export async function syncFromObjectionReview(reviewId: string) {
 }
 
 /**
+ * COPD 회차 처분 결정 시 ObjectionReview 자동 upsert
+ * - CopdApplication.disposalType (요양) + disabilityDispositionType (장해) 종합 판정
+ * - 가장 최근 회차(applicationRound 내림차순) 기준
+ * - 우선순위: 장해 처분이 입력되면 그것을 기준, 없으면 요양 처분
+ */
+export async function syncFromCopdDecision(caseId: string) {
+  const caseInfo = await prisma.case.findUnique({
+    where: { id: caseId },
+    include: {
+      patient: { select: { name: true } },
+      copd: {
+        include: {
+          applications: {
+            orderBy: { applicationRound: "desc" },
+            take: 1,
+          },
+        },
+      },
+    },
+  });
+  if (!caseInfo || caseInfo.caseType !== "COPD") return;
+  const latest = caseInfo.copd?.applications[0];
+  if (!latest) return;
+
+  // 결정 산출
+  let approval: "승인" | "불승인" | null = null;
+  let decisionDate: Date | null = null;
+
+  // 90일 이의제기 D-day 기산은 결정통지 수령일 기준 — 입력됐으면 그것을 우선 사용
+  const noticeDate = latest.disposalNoticeReceivedAt ?? null;
+  if (latest.disabilityDispositionType === "부지급") {
+    approval = "불승인";
+    decisionDate = noticeDate ?? latest.disabilityDispositionDate ?? latest.disposalDate ?? null;
+  } else if (latest.disabilityDispositionType === "일시금" || latest.disabilityDispositionType === "연금") {
+    approval = "승인";
+    decisionDate = noticeDate ?? latest.disabilityDispositionDate ?? null;
+  } else if (latest.disposalType === "승인") {
+    approval = "승인";
+    decisionDate = noticeDate ?? latest.disposalDate ?? null;
+  } else if (latest.disposalType === "부지급") {
+    approval = "불승인";
+    decisionDate = noticeDate ?? latest.disposalDate ?? null;
+  }
+  // "반려"/"보류"/null은 처분이 아직 확정되지 않은 상태로 간주 → Review 생성 안 함
+
+  if (!approval) {
+    // 처분이 철회된 경우 — 기존 자동 생성 Review가 있으면 정리 (사용자 수동 입력은 보존: progressStatus가 비어있고 memo 표식이 있는 것만 정리)
+    const auto = await prisma.objectionReview.findFirst({
+      where: { caseId, memo: { contains: "[COPD_AUTO]" } },
+    });
+    if (auto) await prisma.objectionReview.delete({ where: { id: auto.id } }).catch(() => {});
+    return;
+  }
+
+  // upsert
+  let review = await prisma.objectionReview.findFirst({ where: { caseId } });
+  if (!review) {
+    review = await prisma.objectionReview.findFirst({
+      where: {
+        caseType: "COPD",
+        tfName: caseInfo.tfName ?? "",
+        patientName: caseInfo.patient?.name ?? "",
+        caseId: null,
+      },
+    });
+  }
+  if (review) {
+    await prisma.objectionReview.update({
+      where: { id: review.id },
+      data: {
+        caseId: review.caseId ?? caseId,
+        approvalStatus: approval,
+        decisionDate: decisionDate ?? review.decisionDate,
+      },
+    });
+  } else {
+    await prisma.objectionReview.create({
+      data: {
+        caseId,
+        tfName: caseInfo.tfName ?? "",
+        patientName: caseInfo.patient?.name ?? "",
+        caseType: "COPD",
+        approvalStatus: approval,
+        progressStatus: "",
+        decisionDate,
+        memo: "[COPD_AUTO] 회차 처분 자동 인입 — 회차 R" + latest.applicationRound,
+      },
+    });
+  }
+
+  // 결정 확정 → 업무처리부 자동 생성 (HEARING_LOSS와 동일)
+  await autoGenerateLaborAttorneyRecord(caseId);
+}
+
+/**
  * ObjectionCase 변경 시 ObjectionReview(+ Case) 싱크
  * - progressStatus=종결이면 ObjectionReview 종결 + Case.status CLOSED
  * - progressStatus=진행중이면 review를 '이의제기 진행'으로 유지
@@ -298,10 +393,19 @@ export async function syncFromObjectionCase(objectionCaseId: string) {
   }
 
   if (review.caseId) {
-    const caseStatus = oc.progressStatus === "종결" ? "CLOSED" : "OBJECTION";
-    const c = await prisma.case.findUnique({ where: { id: review.caseId }, select: { status: true } });
-    if (c && c.status !== caseStatus) {
-      await prisma.case.update({ where: { id: review.caseId }, data: { status: caseStatus } });
+    const c = await prisma.case.findUnique({
+      where: { id: review.caseId },
+      select: { status: true, caseType: true },
+    });
+    if (c) {
+      // caseType별로 status 값 도메인 분리: HEARING_LOSS는 영문 enum, 그 외(COPD 등)는 한글
+      const caseStatus =
+        c.caseType === "HEARING_LOSS"
+          ? oc.progressStatus === "종결" ? "CLOSED" : "OBJECTION"
+          : oc.progressStatus === "종결" ? "종결" : "이의제기";
+      if (c.status !== caseStatus) {
+        await prisma.case.update({ where: { id: review.caseId }, data: { status: caseStatus } });
+      }
     }
   }
 }
