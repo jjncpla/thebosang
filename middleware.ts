@@ -17,10 +17,11 @@ export default auth((req) => {
     }
   }
 
-  // /cases/db, /cases/import 는 ADMIN 만 접근 가능
+  // /cases/db, /cases/import 는 ADMIN 만 접근 가능 (단, /cases/import-small 은 STAFF 허용)
   if (
     req.nextUrl.pathname.startsWith("/cases/db") ||
-    req.nextUrl.pathname.startsWith("/cases/import")
+    (req.nextUrl.pathname.startsWith("/cases/import") &&
+      !req.nextUrl.pathname.startsWith("/cases/import-small"))
   ) {
     if (req.auth.user?.role !== "ADMIN") {
       const homeUrl = new URL("/", req.nextUrl.origin);
