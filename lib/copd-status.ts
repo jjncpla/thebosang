@@ -76,6 +76,7 @@ const STATUS_PRIORITY: Record<string, number> = {
   전문완료: 5,
   수치미달: 6,
   재진행가능: 6,
+  직력미달: 6,
   이의제기: 7,
   보류: 7,
   반려: 8,
@@ -222,7 +223,7 @@ export async function syncCopdCaseEvents(caseId: string): Promise<void> {
 export async function syncCopdCaseStatus(caseId: string): Promise<string | null> {
   const detail = await prisma.copdDetail.findUnique({
     where: { caseId },
-    include: { applications: true },
+    include: { applications: { orderBy: { applicationRound: "asc" } } }, // 회차 순서 보장 (priority reduce 결정성)
   });
   // CopdDetail / 회차가 없는 경우 — Case.status를 한글 default "접수대기"로 보정 (CONSULTING 박제 방지)
   if (!detail || detail.applications.length === 0) {

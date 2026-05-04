@@ -60,7 +60,18 @@ export default function CopdToolsPage() {
       </div>
 
       <div style={card}>
-        <h2 style={{ fontSize: 15, fontWeight: 700, marginBottom: 6 }}>2. COPD 테스트 재해자 생성</h2>
+        <h2 style={{ fontSize: 15, fontWeight: 700, marginBottom: 6 }}>2. legacy caseType 한글 → 영문 enum 마이그레이션</h2>
+        <p style={{ fontSize: 13, color: "#6b7280", marginBottom: 12 }}>
+          ObjectionCase / ObjectionReview / WageReviewData에 한글로 저장된 caseType (예: &quot;난청&quot; → &quot;HEARING_LOSS&quot;)을 영문 enum으로 일괄 변환. 멱등.
+        </p>
+        <button onClick={() => call("migrate-legacy-casetype")} disabled={busy === "migrate-legacy-casetype"}
+          style={btn("#7c3aed", busy === "migrate-legacy-casetype")}>
+          {busy === "migrate-legacy-casetype" ? "실행 중..." : "🔄 caseType 영문 통일"}
+        </button>
+      </div>
+
+      <div style={card}>
+        <h2 style={{ fontSize: 15, fontWeight: 700, marginBottom: 6 }}>3. COPD 테스트 재해자 생성</h2>
         <p style={{ fontSize: 13, color: "#6b7280", marginBottom: 12 }}>
           엑셀 첫 케이스(홍순덕) 패턴 기반 더미 재해자 + COPD 사건 + 1차 신청(수치미달, 재진행 가능)을 생성합니다.
           이미 존재하면 기존 케이스를 재사용합니다. 생성 후 자동으로 상세 페이지로 이동합니다.

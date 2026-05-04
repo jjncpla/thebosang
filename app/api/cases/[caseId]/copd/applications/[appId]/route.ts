@@ -83,11 +83,13 @@ export async function PUT(
     };
 
     // 재진행 가능일 자동 계산: 마지막 특진일(2차 우선, 없으면 1차) + 1년
+    // UTC 기준으로 처리 — KST/UTC 경계 자정 부근 입력에서 1일 어긋남 방지
+    // (윤년: 2024-02-29 → 2025-03-01로 자동 조정. Date 표준 동작)
     if (!data.reExamPossibleDate && data.examResult === "수치미달") {
       const lastExam = data.exam2Date ?? data.exam1Date;
       if (lastExam) {
         const d = new Date(lastExam);
-        d.setFullYear(d.getFullYear() + 1);
+        d.setUTCFullYear(d.getUTCFullYear() + 1);
         data.reExamPossibleDate = d;
       }
     }
@@ -119,6 +121,7 @@ export async function DELETE(
     await prisma.copdApplication.delete({ where: { id: appId } });
     await syncCopdCaseStatus(caseId);
     await syncCopdCaseEvents(caseId);
+    await syncFromCopdDecision(caseId);
     return NextResponse.json({ ok: true });
   } catch (err) {
     console.error("[DELETE copd/applications/:id]", err);

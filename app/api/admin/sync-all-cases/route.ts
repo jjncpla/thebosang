@@ -179,6 +179,7 @@ export async function POST() {
   for (const r of allReviews) {
     const cId = r.caseId ?? reviewCaseIdMap.get(r.id);
     if (!cId) continue;
+    if (caseTypeOf.get(cId) !== "HEARING_LOSS") continue; // COPD/근골격계 등은 HearingLossDetail 만들지 않음
     const dt = approvalToDecisionType(r.approvalStatus);
     if (!dt) continue;
     const existing = hlMap.get(cId);
