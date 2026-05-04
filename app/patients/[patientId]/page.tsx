@@ -1229,6 +1229,17 @@ function CopdTab({ caseId }: { caseId: string }) {
 
   return (
     <div>
+      {/* 신규 상세 페이지 안내 */}
+      <div style={{ background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: 8, padding: "10px 14px", marginBottom: 14, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+        <span style={{ fontSize: 12, color: "#1d4ed8" }}>
+          💡 회차별 반복 신청 / 1초율·1초량 분리 / 질판위 분기를 지원하는 신규 상세 페이지를 사용하세요.
+        </span>
+        <a href={`/cases/${caseId}/copd`}
+          style={{ background: "#1d4ed8", color: "white", textDecoration: "none", borderRadius: 6, padding: "6px 14px", fontSize: 12, fontWeight: 700, whiteSpace: "nowrap" }}>
+          📋 신규 상세 페이지 열기 →
+        </a>
+      </div>
+
       {/* (1) 사건초기 */}
       <div style={secWrap}>
         <AccordionHeader open={sec1Open} onToggle={() => setSec1Open((o) => !o)} label="(1) 사건초기" />

@@ -60,6 +60,7 @@ export async function GET(
       patient: true,
       caseManager: true,
       hearingLoss: { include: { exams: true } },
+      copd: true,
     },
   });
 
@@ -67,7 +68,14 @@ export async function GET(
 
   const patient = caseData.patient;
   const manager = caseData.caseManager;
-  const detail = caseData.hearingLoss as (typeof caseData.hearingLoss & {
+  // COPD 케이스에서도 동일 양식 사용 시 firstExamDate를 CopdDetail.firstExamDate로 보충
+  const copdFallback = caseData.copd
+    ? {
+        firstClinic: caseData.copd.firstClinic,
+        firstExamDate: caseData.copd.firstExamDate,
+      }
+    : null;
+  const detail = (caseData.hearingLoss ?? copdFallback) as (typeof caseData.hearingLoss & {
     bankName?: string | null;
     bankAccount?: string | null;
     bankAccountHolder?: string | null;
@@ -192,7 +200,8 @@ export async function GET(
         const bf = parseBirthDate(patient.ssn ?? "");
         const df = parseDateFields(detail?.firstExamDate ?? null);
 
-        drawText(page, "장해급여 청구(소음성 난청)",                    184, 664, font, 9);
+        const claimSubject = caseData.caseType === "COPD" ? "장해급여 청구(COPD)" : "장해급여 청구(소음성 난청)";
+        drawText(page, claimSubject,                                     184, 664, font, 9);
         drawText(page, patient.name ?? "",                              193, 629, font, 9);
         drawText(page, `${bf.Y1}${bf.Y2}${bf.Y3}${bf.Y4}.${bf.M1}${bf.M2}.${bf.D1}${bf.D2}`, 452, 629, font, 9);
         drawText(page, patient.address ?? "",                           186, 599, font, 8);
@@ -205,7 +214,10 @@ export async function GET(
         drawText(page, manager?.officeTel ?? "",                        227, 400, font, 9);
         drawText(page, manager?.officeTel ?? "",                        342, 400, font, 9);
         drawText(page, manager?.officeFax ?? "",                        450, 391, font, 9);
-        drawText(page, "소음성 난청 장해급여 청구에 관한 사항 일체",    271, 356, font, 9);
+        const claimDetail = caseData.caseType === "COPD"
+          ? "COPD 장해급여 청구에 관한 사항 일체"
+          : "소음성 난청 장해급여 청구에 관한 사항 일체";
+        drawText(page, claimDetail,                                       271, 356, font, 9);
         drawText(page, `${df.연도}.${df.월자}.${df.일자}`,             199, 315, font, 9);
         drawText(page, today.연도, 340, 203, font, 9);
         drawText(page, today.월자, 412, 203, font, 9);
