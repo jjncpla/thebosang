@@ -34,6 +34,9 @@ jobs:
       contents: read
       pull-requests: write
       issues: write
+      # claude-code-action@v1은 API key 모드에서도 OIDC 토큰 요청 (Anthropic 서버 검증용으로 추정).
+      # 누락 시 "Could not fetch an OIDC token" 에러로 워크플로 실패.
+      id-token: write
     steps:
       - uses: actions/checkout@v4
         with:
