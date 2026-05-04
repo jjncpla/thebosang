@@ -162,6 +162,8 @@ async function main() {
   let processed = 0;
 
   // 무료 티어: 단일 worker + interval 보장
+  // 캐시 skip 등 API 호출 안 한 경우는 즉시 다음으로 (RPM 제한 안 적용)
+  const NO_API_STATUSES = new Set(["ocr_text_cached", "src_missing", "too_large"]);
   const queue = [...batch];
   async function worker() {
     while (queue.length) {
@@ -177,11 +179,13 @@ async function main() {
       const eta = (pending.length - processed) / rate;
       const msg = `[batch ${processed}/${batch.length} | total ${done.size + processed}/${total}] elapsed=${elapsed.toFixed(0)}s rate=${rate.toFixed(2)}/s eta_total=${eta.toFixed(0)}s status=${JSON.stringify(byStatus)}`;
       fs.writeFileSync(PROGRESS, msg + "\n");
-      if (processed % 10 === 0 || processed === batch.length) console.log(msg);
-      // RPM 제한 — 다음 요청까지 최소 REQUEST_INTERVAL_MS 보장
-      const reqElapsed = Date.now() - reqStart;
-      if (reqElapsed < REQUEST_INTERVAL_MS && queue.length > 0) {
-        await new Promise((r) => setTimeout(r, REQUEST_INTERVAL_MS - reqElapsed));
+      if (processed % 50 === 0 || processed === batch.length) console.log(msg);
+      // API 호출했을 때만 RPM 제한 적용 (캐시는 즉시 skip)
+      if (!NO_API_STATUSES.has(s)) {
+        const reqElapsed = Date.now() - reqStart;
+        if (reqElapsed < REQUEST_INTERVAL_MS && queue.length > 0) {
+          await new Promise((r) => setTimeout(r, REQUEST_INTERVAL_MS - reqElapsed));
+        }
       }
     }
   }
