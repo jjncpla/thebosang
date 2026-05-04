@@ -10,6 +10,7 @@ export async function GET(req: NextRequest) {
   const month = searchParams.get("month")
   const tfName = searchParams.get("tfName")
   const clinicType = searchParams.get("clinicType")
+  const diseaseType = searchParams.get("diseaseType") // 다중값: "HEARING_LOSS,COPD" 형태
   const status = searchParams.get("status") ?? "scheduled"
 
   let dateFrom: Date, dateTo: Date
@@ -28,6 +29,10 @@ export async function GET(req: NextRequest) {
   }
   if (tfName) where.tfName = { contains: tfName }
   if (clinicType) where.clinicType = clinicType
+  if (diseaseType) {
+    const list = diseaseType.split(",").map((s) => s.trim()).filter(Boolean)
+    if (list.length > 0) where.diseaseType = { in: list }
+  }
   if (status !== "all") where.status = status
 
   // 응답 경량화: rawMessage·sourceDate·telegramMsgId는 리스트 응답에서 제외
@@ -42,6 +47,7 @@ export async function GET(req: NextRequest) {
       hospitalName: true,
       clinicType: true,
       category: true,
+      diseaseType: true,
       examRound: true,
       title: true,
       content: true,

@@ -84,9 +84,10 @@ const STATUS_PRIORITY: Record<string, number> = {
   종결: 11,
 };
 
-// 회차별 특진/질판위 일정을 CaseEvent에 자동 반영 (멱등)
-// eventSubtype 패턴: COPD_R{round}_{kind}
-//   kind: APPLICATION / EXAM_REQUEST / EXAM_1 / EXAM_2 / EXPERT_ORG / OCC_REVIEW / DISPOSAL / DISABILITY
+// 회차별 특진/질판위/처분 일정을 SpecialClinicSchedule(캘린더)에 자동 반영 (멱등)
+// 식별: caseId + memo prefix "[COPD_AUTO_R{n}_{kind}]" — 자동생성 표식.
+//   kind: EXAM_1 / EXAM_2 / EXPERT_ORG / OCC_REVIEW
+// (요양급여 청구일 / 진찰요구서 수령일 / 처분일 / 장해처분일은 캘린더에 표시할 만한 일정 아님 — 메모성 정보)
 export async function syncCopdCaseEvents(caseId: string): Promise<void> {
   const detail = await prisma.copdDetail.findUnique({
     where: { caseId },
@@ -94,117 +95,126 @@ export async function syncCopdCaseEvents(caseId: string): Promise<void> {
   });
   if (!detail) return;
 
-  // 기존 COPD 자동 이벤트 모두 삭제 후 재생성 (멱등)
-  await prisma.caseEvent.deleteMany({
-    where: { caseId, eventSubtype: { startsWith: "COPD_R" } },
+  const caseInfo = await prisma.case.findUnique({
+    where: { id: caseId },
+    select: { tfName: true, patient: { select: { name: true, phone: true } } },
+  });
+  if (!caseInfo) return;
+
+  // 기존 COPD 자동 일정 삭제 후 재생성 (멱등) — memo 표식 기반
+  await prisma.specialClinicSchedule.deleteMany({
+    where: {
+      caseId,
+      memo: { contains: "[COPD_AUTO_" },
+    },
   });
 
-  type EventInput = {
-    subtype: string;
-    type: string;
+  type ScheduleInput = {
+    tag: string; // memo 식별자 (R1_EXAM_1 등)
+    category: string; // 캘린더 카테고리
+    clinicType: string | null;
+    examRound: number | null;
     date: Date;
-    title: string;
-    content: string;
+    hospital: string | null;
+    title: string | null;
+    content: string | null;
+    assignedStaff: string | null;
+    isPickup: boolean | null;
   };
-  const events: EventInput[] = [];
+  const schedules: ScheduleInput[] = [];
+  const patientName = caseInfo.patient.name;
+  const tfName = caseInfo.tfName ?? "";
 
   for (const app of detail.applications) {
     const r = app.applicationRound;
-    const tag = `${r}차`;
+    const roundLabel = r === 1 ? "특진" : `재특진${r > 2 ? `(${r - 1})` : ""}`;
 
-    if (app.applicationDate) {
-      events.push({
-        subtype: `COPD_R${r}_APPLICATION`,
-        type: "APPLICATION",
-        date: app.applicationDate,
-        title: `COPD ${tag} 요양급여 청구`,
-        content: app.applicationNote ?? "",
-      });
-    }
-    if (app.examRequestReceivedAt) {
-      events.push({
-        subtype: `COPD_R${r}_EXAM_REQUEST`,
-        type: "EXAM_REQUEST",
-        date: app.examRequestReceivedAt,
-        title: `COPD ${tag} 진찰요구서 수령`,
-        content: "",
-      });
-    }
     if (app.exam1Date) {
-      events.push({
-        subtype: `COPD_R${r}_EXAM_1`,
-        type: "EXAM",
+      schedules.push({
+        tag: `R${r}_EXAM_1`,
+        category: roundLabel === "특진" ? "특진" : "재특진",
+        clinicType: roundLabel === "특진" ? "특진" : "재특진",
+        examRound: 1,
         date: app.exam1Date,
-        title: `COPD ${tag} 1차 특진${app.exam1Hospital ? ` (${app.exam1Hospital})` : ""}`,
+        hospital: app.exam1Hospital,
+        title: null,
         content: [
           app.exam1Fev1Rate !== null ? `1초율 ${app.exam1Fev1Rate}%` : "",
           app.exam1Fev1Volume !== null ? `1초량 ${app.exam1Fev1Volume}L` : "",
           app.exam1Note ?? "",
         ].filter(Boolean).join(" / "),
+        assignedStaff: app.exam1Attendee,
+        isPickup: app.exam1Pickup,
       });
     }
     if (app.exam2Date && !app.exam2Skipped) {
-      events.push({
-        subtype: `COPD_R${r}_EXAM_2`,
-        type: "EXAM",
+      schedules.push({
+        tag: `R${r}_EXAM_2`,
+        category: roundLabel === "특진" ? "특진" : "재특진",
+        clinicType: roundLabel === "특진" ? "특진" : "재특진",
+        examRound: 2,
         date: app.exam2Date,
-        title: `COPD ${tag} 2차 특진${app.exam2Hospital ? ` (${app.exam2Hospital})` : ""}`,
+        hospital: app.exam2Hospital,
+        title: null,
         content: [
           app.exam2Fev1Rate !== null ? `1초율 ${app.exam2Fev1Rate}%` : "",
           app.exam2Fev1Volume !== null ? `1초량 ${app.exam2Fev1Volume}L` : "",
           app.exam2Note ?? "",
         ].filter(Boolean).join(" / "),
+        assignedStaff: app.exam2Attendee,
+        isPickup: app.exam2Pickup,
       });
     }
     if (app.expertOrgMeetingDate) {
-      events.push({
-        subtype: `COPD_R${r}_EXPERT_ORG`,
-        type: "EXPERT",
+      schedules.push({
+        tag: `R${r}_EXPERT_ORG`,
+        category: "회의",
+        clinicType: null,
+        examRound: null,
         date: app.expertOrgMeetingDate,
-        title: `COPD ${tag} 직업환경연구원 개최`,
+        hospital: null,
+        title: `직업환경연구원 (${r}차) - ${patientName}`,
         content: app.expertOrgResult ?? "",
+        assignedStaff: null,
+        isPickup: null,
       });
     }
     if (app.occReviewDate) {
-      events.push({
-        subtype: `COPD_R${r}_OCC_REVIEW`,
-        type: "OCC_COMMITTEE",
+      schedules.push({
+        tag: `R${r}_OCC_REVIEW`,
+        category: "질판위",
+        clinicType: null,
+        examRound: null,
         date: app.occReviewDate,
-        title: `COPD ${tag} 질판위 심의${app.occCommitteeName ? ` (${app.occCommitteeName})` : ""}`,
+        hospital: app.occCommitteeName,
+        title: `질판위 심의 (${r}차) - ${patientName}`,
         content: [app.occAttendanceType, app.occResult].filter(Boolean).join(" / "),
-      });
-    }
-    if (app.disposalDate) {
-      events.push({
-        subtype: `COPD_R${r}_DISPOSAL`,
-        type: "DISPOSAL",
-        date: app.disposalDate,
-        title: `COPD ${tag} 요양 처분: ${app.disposalType ?? "-"}`,
-        content: app.disposalReason ?? "",
-      });
-    }
-    if (app.disabilityDispositionDate) {
-      events.push({
-        subtype: `COPD_R${r}_DISABILITY`,
-        type: "DISABILITY",
-        date: app.disabilityDispositionDate,
-        title: `COPD ${tag} 장해 처분: ${app.disabilityDispositionGrade ?? app.disabilityDispositionType ?? "-"}`,
-        content: "",
+        assignedStaff: null,
+        isPickup: null,
       });
     }
   }
 
-  if (events.length === 0) return;
+  if (schedules.length === 0) return;
 
-  await prisma.caseEvent.createMany({
-    data: events.map((e) => ({
+  await prisma.specialClinicSchedule.createMany({
+    data: schedules.map((s) => ({
       caseId,
-      eventType: e.type,
-      eventSubtype: e.subtype,
-      eventDate: e.date,
-      title: e.title,
-      content: e.content,
-      hashtags: ["COPD"],
+      diseaseType: "COPD",
+      tfName,
+      category: s.category,
+      clinicType: s.clinicType,
+      examRound: s.examRound,
+      patientName,
+      hospitalName: s.hospital,
+      title: s.title,
+      content: s.content,
+      assignedStaff: s.assignedStaff,
+      isPickup: s.isPickup ?? false,
+      scheduledDate: s.date,
+      isAllDay: true,
+      status: "scheduled",
+      memo: `[COPD_AUTO_${s.tag}] 자동 동기화`,
     })),
   });
 }

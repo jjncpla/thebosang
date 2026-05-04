@@ -1309,6 +1309,7 @@ model SpecialClinicSchedule {
   id               String    @id @default(cuid())
   // 공통
   category         String    @default("특진") // "특진" | "재특진" | "영업" | "자료보완" | "교육" | "회의" | "질판위" | "상담" | "약정" | "기타"
+  diseaseType      String? // HEARING_LOSS / COPD / PNEUMOCONIOSIS / MUSCULOSKELETAL / OCCUPATIONAL_ACCIDENT / OCCUPATIONAL_CANCER / BEREAVED / OTHER — 상병별 캘린더 필터/색상용
   tfName           String    @default("")
   scheduledDate    DateTime?
   scheduledEndDate DateTime? // 종료일 (진폐 2박3일 등 멀티데이 일정용)
@@ -1348,6 +1349,7 @@ model SpecialClinicSchedule {
   @@index([scheduledDate])
   @@index([patientName, tfName, clinicType, examRound])
   @@index([caseId, clinicType, examRound])
+  @@index([diseaseType, scheduledDate])
 }
 
 model BranchIncentiveUsage {
