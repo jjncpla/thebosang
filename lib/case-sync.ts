@@ -65,7 +65,16 @@ export async function syncFromCaseStatus(caseId: string) {
       hearingLoss: { select: { decisionType: true, decisionReceivedAt: true } },
     },
   });
-  if (!caseInfo || caseInfo.caseType !== "HEARING_LOSS") return;
+  if (!caseInfo) return;
+
+  // COPD 등 비-HL 케이스: closedReason 반려/파기 시 업무처리부만 생성하고 종료
+  // (HL 전용 ObjectionReview 싱크 로직은 적용하지 않음)
+  if (caseInfo.caseType !== "HEARING_LOSS") {
+    if (caseInfo.closedReason === "반려" || caseInfo.closedReason === "파기") {
+      await autoGenerateLaborAttorneyRecord(caseId);
+    }
+    return;
+  }
 
   const status = caseInfo.status;
 
