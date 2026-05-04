@@ -111,6 +111,48 @@ export async function POST(req: NextRequest) {
           },
         });
         noticeId = created.id;
+
+        // [정정청구 검토] Todo 자동 생성
+        // 조건: needsCorrection=true && caseId 존재
+        // 중복 방지: 동일 caseId + type="WAGE_CORRECTION_REVIEW" + 동일 noticeId memo 표식 → skip
+        if (parsed.needsCorrection && caseId) {
+          try {
+            const memoTag = `[NOTICE:${created.id}]`;
+            const existing = await prisma.todo.findFirst({
+              where: {
+                caseId,
+                type: "WAGE_CORRECTION_REVIEW",
+                memo: { contains: memoTag },
+              },
+            });
+            if (!existing) {
+              const c = await prisma.case.findUnique({
+                where: { id: caseId },
+                select: {
+                  caseManagerId: true,
+                  patient: { select: { name: true } },
+                },
+              });
+              const workerName = parsed.workerName ?? c?.patient?.name ?? "";
+              const reasonShort = parsed.correctionReason
+                ? ` (${parsed.correctionReason.slice(0, 40)}${parsed.correctionReason.length > 40 ? "…" : ""})`
+                : "";
+              await prisma.todo.create({
+                data: {
+                  title: `[정정청구 검토] ${workerName} — 평균임금 정정 청구 검토 필요${reasonShort}`,
+                  type: "WAGE_CORRECTION_REVIEW",
+                  caseId,
+                  patientName: workerName || null,
+                  assignedTo: c?.caseManagerId ?? null,
+                  isDone: false,
+                  memo: `${memoTag} 평임고지서 OCR 인입 — needsCorrection=true / reason=${parsed.correctionReason ?? "(미상)"}`,
+                },
+              });
+            }
+          } catch (todoErr) {
+            console.error("[avg-wage/parse] todo auto-create error:", todoErr);
+          }
+        }
       } catch (saveErr) {
         // DB 저장 실패해도 파싱 결과는 반환
         console.error("[avg-wage/parse] DB save error:", saveErr);

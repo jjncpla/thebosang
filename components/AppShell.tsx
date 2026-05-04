@@ -50,6 +50,15 @@ const MENU_ITEMS: MenuItem[] = [
   },
   { id: "cases-view", label: "사건 조회 (전체)", icon: "🔍", path: "/cases-view" },
   {
+    id: "wage",
+    label: "임금 도구",
+    icon: "💰",
+    children: [
+      { id: "wage-avg-wage", label: "평균임금 OCR 인입", path: "/wage/avg-wage" },
+      { id: "wage-change-calc", label: "평균임금 증감 계산", path: "/wage/change-calc" },
+    ],
+  },
+  {
     id: "objection",
     label: "이의제기 관리",
     icon: "⚖",
