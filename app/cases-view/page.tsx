@@ -24,6 +24,23 @@ const STATUS_MAP: Record<string, string> = {
   CLOSED: "종결",
   OBJECTION: "이의제기 진행 중",
   WAGE_CORRECTION: "평균임금 정정",
+  // COPD/근골격계/진폐 등 한글 status alias (STATUS_MAP[c.status] ?? c.status fallback에서 미매칭 회피)
+  "접수대기": "접수 대기",
+  "접수완료": "접수 완료",
+  "특진중": "특진 진행 중",
+  "특진완료": "특진 완료",
+  "전문의뢰": "전문조사 의뢰",
+  "전문완료": "전문조사 완료",
+  "수치미달": "수치 미달",
+  "재진행가능": "재신청 가능",
+  "직력미달": "직력 미달",
+  "이의제기": "이의제기 진행 중",
+  "보류": "보류",
+  "반려": "반려",
+  "파기": "파기",
+  "종결": "종결",
+  "승인": "승인",
+  "불승인": "불승인",
 };
 
 const CASE_TYPE_MAP: Record<string, string> = {
