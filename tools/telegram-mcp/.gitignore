@@ -11,6 +11,9 @@ downloads/
 # Learning corpus — chat messages + media archives. Contains PII.
 corpus/
 
+# Daily learn state — last_seen msg ids per chat (ephemeral)
+.daily_state.json
+
 # Dialog dumps / whitelist drafts — chat room metadata can be sensitive
 dialogs_dump.json
 telegram-whitelist.draft.json
