@@ -179,9 +179,8 @@ Task tool로 자동 위임되며, 호출 흔적이 Claude Code UI에 별도 turn
 - 테스트·디버깅·더미 데이터·보안 리뷰 → `qa-tester`
 - 신규 기능 구상 / 기획서 업데이트 → `planning`
 
-> **qa-tester 상시 운영**: 본 에이전트는 호출 시점에만 작동. 상시 트리거는 `.github/workflows/`로 셋업됨 (자세한 내용: `.github/README.md`).
-> - `pr-validation.yml`: PR마다 정적 점검 (lint / build / 보안 grep) — 즉시 작동
-> - `claude-qa-review.yml`: PR마다 qa-tester 자동 리뷰 — `ANTHROPIC_API_KEY` secret 설정 후 활성화
+> **qa-tester 운영 방식**: 호출 시점에만 작동. 통합 작업 마지막 검증·품질 점검·디버깅·더미 데이터 생성 시 명시적으로 호출.
+> 상시 트리거(GitHub Actions)는 2026-05-04 시도했으나 claude-code-action OIDC 인증 반복 실패로 롤백. 향후 재도입 시 다른 방식 검토.
 
 > v1 (`agents/dev.md`, `agents/design.md`, `agents/security.md`, `agents/orchestrator.md`)은 deprecated.
 > design / security는 `code` 에이전트 내부 체크리스트로 흡수됨. 이전 파일은 `agents/` 폴더에 보존.
