@@ -307,12 +307,30 @@ def main():
     report_path = write_report(summary, fetch_status)
     print(f"    -> {report_path}")
 
+    # 신규 메시지 0이면 의미 변경 없음 → 발송/commit 모두 skip (timestamp 노이즈 방지).
+    has_new = summary.get("new_since_last", 0) > 0
+
     print("  [4] 텔레그램 발송 시도")
-    tg_result = maybe_send_telegram(report_path, summary)
+    if has_new:
+        tg_result = maybe_send_telegram(report_path, summary)
+    else:
+        tg_result = "신규 0건 — 발송 스킵"
     print(f"    -> {tg_result}")
 
     print("  [5] git auto-commit + push")
-    git_result = git_commit_push(report_path)
+    if has_new:
+        git_result = git_commit_push(report_path)
+    else:
+        # timestamp만 바뀐 경우 파일 자체를 원복 (git diff 노이즈 방지)
+        try:
+            subprocess.run(
+                ["git", "-C", str(REPO_ROOT), "checkout", "--",
+                 str(Path(report_path).relative_to(REPO_ROOT)).replace("\\", "/")],
+                capture_output=True, timeout=10,
+            )
+        except Exception:
+            pass
+        git_result = "신규 0건 — commit 스킵 (파일 원복)"
     print(f"    -> {git_result}")
 
     # state 갱신
