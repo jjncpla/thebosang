@@ -66,19 +66,19 @@ model Case {
   // 접수
   receptionDate DateTime?
 
-  memo String?
+  memo         String?
   closedReason String? // 반려 / 파기
 
   // 직업력 (상병 공통)
-  workHistory      Json?   // 상용직 최종 직업력
-  workHistoryDaily Json?   // 일용직 직업력
-  workHistoryRaw   Json?   // 소스별 원시 직업력
-  workHistoryMemo  String? // 직업력 메모
+  workHistory          Json? // 상용직 최종 직업력
+  workHistoryDaily     Json? // 일용직 직업력
+  workHistoryRaw       Json? // 소스별 원시 직업력
+  workHistoryMemo      String? // 직업력 메모
   lastNoiseWorkEndDate DateTime? // 마지막 소음작업 중단일
 
   // 관할 근로복지공단 지사 (서식 자동생성용)
-  kwcOfficeName   String?   // 관할 공단 지사명 (예: "울산", "부산동부") → "근로복지공단 {{kwcOfficeName}}장 귀하"
-  kwcOfficerName  String?   // 근로복지공단 지사담당자 이름
+  kwcOfficeName  String? // 관할 공단 지사명 (예: "울산", "부산동부") → "근로복지공단 {{kwcOfficeName}}장 귀하"
+  kwcOfficerName String? // 근로복지공단 지사담당자 이름
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -135,7 +135,7 @@ model HearingLossDetail {
 
   disabilityRegistrationDate  DateTime? // 국가장애 등록일자
   disabilityDiagnosisDate     DateTime? // 국가장애 진단일자
-  disabilityRegistrationLevel String?   // 국가장애 급수
+  disabilityRegistrationLevel String? // 국가장애 급수
 
   // 접수/청구
   claimSubmittedAt DateTime?
@@ -152,26 +152,26 @@ model HearingLossDetail {
   examClinicSelectionSubmittedAt DateTime?
 
   // 특진 일정 관리 (회차별 — 픽업 포함)
-  specialExam1Date      DateTime?
-  specialExam1Contact   String?
-  specialExam1Attendee  String?
-  specialExam1Pickup    Boolean?
-  specialExam2Date      DateTime?
-  specialExam2Contact   String?
-  specialExam2Attendee  String?
-  specialExam2Pickup    Boolean?
-  specialExam3Date      DateTime?
-  specialExam3Contact   String?
-  specialExam3Attendee  String?
-  specialExam3Pickup    Boolean?
-  specialExam4Date      DateTime?
-  specialExam4Contact   String?
-  specialExam4Attendee  String?
-  specialExam4Pickup    Boolean?
-  specialExam5Date      DateTime?
-  specialExam5Contact   String?
-  specialExam5Attendee  String?
-  specialExam5Pickup    Boolean?
+  specialExam1Date     DateTime?
+  specialExam1Contact  String?
+  specialExam1Attendee String?
+  specialExam1Pickup   Boolean?
+  specialExam2Date     DateTime?
+  specialExam2Contact  String?
+  specialExam2Attendee String?
+  specialExam2Pickup   Boolean?
+  specialExam3Date     DateTime?
+  specialExam3Contact  String?
+  specialExam3Attendee String?
+  specialExam3Pickup   Boolean?
+  specialExam4Date     DateTime?
+  specialExam4Contact  String?
+  specialExam4Attendee String?
+  specialExam4Pickup   Boolean?
+  specialExam5Date     DateTime?
+  specialExam5Contact  String?
+  specialExam5Attendee String?
+  specialExam5Pickup   Boolean?
 
   // 특진병원 비고 (픽업은 회차별이라 specialClinicPickup은 deprecated — 하위호환용 유지)
   specialClinicPickup Boolean?
@@ -179,7 +179,7 @@ model HearingLossDetail {
 
   // 재특진 병원
   reSpecialClinic       String?
-  reSpecialClinicPickup Boolean?  // deprecated, 회차별 reSpecialExamNPickup 사용
+  reSpecialClinicPickup Boolean? // deprecated, 회차별 reSpecialExamNPickup 사용
   reSpecialClinicNote   String?
 
   reSpecialExam1Date     DateTime?
@@ -197,7 +197,7 @@ model HearingLossDetail {
 
   // 재재특진 병원
   re2SpecialClinic       String?
-  re2SpecialClinicPickup Boolean?  // deprecated, 회차별 re2SpecialExamNPickup 사용
+  re2SpecialClinicPickup Boolean? // deprecated, 회차별 re2SpecialExamNPickup 사용
   re2SpecialClinicNote   String?
 
   re2SpecialExam1Date     DateTime?
@@ -245,25 +245,25 @@ model HearingLossDetail {
   reviewMemo                 String?
 
   // 장해급여청구서 — 수령계좌
-  bankName              String?   // 은행(증권사)명
-  bankAccount           String?   // 계좌번호
-  bankAccountHolder     String?   // 예금주
-  bankAccountType       String?   // "보통계좌" | "전용계좌"
+  bankName          String? // 은행(증권사)명
+  bankAccount       String? // 계좌번호
+  bankAccountHolder String? // 예금주
+  bankAccountType   String? // "보통계좌" | "전용계좌"
 
   // 장해급여청구서 — 확인사항
-  confirmPriorDisability   Boolean?  // ① 재해 이전 장해 여부
-  confirmPriorCompensation Boolean?  // ② 동일사유 배상/보상 수령 여부
-  receiptDate              String?   // 수령일자
-  receiptAmount            String?   // 수령금액
-  receiptPayer             String?   // 지급한 자
+  confirmPriorDisability   Boolean? // ① 재해 이전 장해 여부
+  confirmPriorCompensation Boolean? // ② 동일사유 배상/보상 수령 여부
+  receiptDate              String? // 수령일자
+  receiptAmount            String? // 수령금액
+  receiptPayer             String? // 지급한 자
 
   // 장해급여청구서 — 이송비
-  transferCost       String?   // 이송비용 (원)
-  transferCostDetail String?   // 이송비 산출내역
+  transferCost       String? // 이송비용 (원)
+  transferCostDetail String? // 이송비 산출내역
 
   // 장해급여청구서 — 합병증 등 예방관리
-  complicationPart     String?   // 구체적 부위 또는 상병명
-  complicationHospital String?   // 합병증 등 예방관리 의료기관명
+  complicationPart     String? // 구체적 부위 또는 상병명
+  complicationHospital String? // 합병증 등 예방관리 의료기관명
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -285,28 +285,28 @@ model HearingLossExam {
   attendedStaffId String?
 
   // 기도청력역치 우측 (dB) — 주파수별
-  air500R   Float?
-  air1kR    Float?
-  air2kR    Float?
-  air4kR    Float?
+  air500R        Float?
+  air1kR         Float?
+  air2kR         Float?
+  air4kR         Float?
   // 기도청력역치 좌측 (dB)
-  air500L   Float?
-  air1kL    Float?
-  air2kL    Float?
-  air4kL    Float?
+  air500L        Float?
+  air1kL         Float?
+  air2kL         Float?
+  air4kL         Float?
   // 골도청력역치 우측 (dB)
-  bone500R  Float?
-  bone1kR   Float?
-  bone2kR   Float?
-  bone4kR   Float?
+  bone500R       Float?
+  bone1kR        Float?
+  bone2kR        Float?
+  bone4kR        Float?
   // 골도청력역치 좌측 (dB)
-  bone500L  Float?
-  bone1kL   Float?
-  bone2kL   Float?
-  bone4kL   Float?
+  bone500L       Float?
+  bone1kL        Float?
+  bone2kL        Float?
+  bone4kL        Float?
   // 어음청취역치 (dB) — SRT
-  srtRight  Float?
-  srtLeft   Float?
+  srtRight       Float?
+  srtLeft        Float?
   speechRight    Float?
   speechLeft     Float?
   abrRight       Float?
@@ -315,14 +315,14 @@ model HearingLossExam {
   impedanceLeft  String?
 
   // PTA 요약 평균값 (임포트용 — 주파수별 미확보 시 임시 저장)
-  ptaAvgR  Float?   // 기도청력 우측 PTA 평균 (dB)
-  ptaAvgL  Float?   // 기도청력 좌측 PTA 평균 (dB)
-  boneAvgR Float?   // 골도청력 우측 평균 (dB)
-  boneAvgL Float?   // 골도청력 좌측 평균 (dB)
+  ptaAvgR  Float? // 기도청력 우측 PTA 평균 (dB)
+  ptaAvgL  Float? // 기도청력 좌측 PTA 평균 (dB)
+  boneAvgR Float? // 골도청력 우측 평균 (dB)
+  boneAvgL Float? // 골도청력 좌측 평균 (dB)
 
   // ASSR (청성안정반응)
-  assrRight Float?  // ASSR 우측 (dB)
-  assrLeft  Float?  // ASSR 좌측 (dB)
+  assrRight Float? // ASSR 우측 (dB)
+  assrLeft  Float? // ASSR 좌측 (dB)
 
   isReliable            Boolean?
   medicalRecordObtained Boolean  @default(false)
@@ -435,10 +435,10 @@ model MusculoskeletalDetail {
   memo                   String?
 
   // 양식 학습 결과 추가 필드 (P5)
-  injuryDescription   String?  // 구체적 상해 내용 (textarea)
-  restTimePattern     String?  // 휴식시간 (예: "1일 2회, 1회 30분")
-  qualityReviewStatus String?  // 질병판정위원회 진행 상태 (제출대기/심의예정/심의완료/재심의 등)
-  concurrentDiseases  Json?    // 동반 상병 배열 (예: [{name: "어깨", grade: "12급"}, ...])
+  injuryDescription   String? // 구체적 상해 내용 (textarea)
+  restTimePattern     String? // 휴식시간 (예: "1일 2회, 1회 30분")
+  qualityReviewStatus String? // 질병판정위원회 진행 상태 (제출대기/심의예정/심의완료/재심의 등)
+  concurrentDiseases  Json? // 동반 상병 배열 (예: [{name: "어깨", grade: "12급"}, ...])
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -473,10 +473,10 @@ model OccupationalAccidentDetail {
   memo                   String?
 
   // 양식 학습 결과 추가 필드 (P5)
-  injuryDescription   String?  // 구체적 상해 내용 (textarea)
-  restTimePattern     String?  // 휴식시간 (예: "1일 2회, 1회 30분")
-  qualityReviewStatus String?  // 질병판정위원회 진행 상태
-  concurrentDiseases  Json?    // 동반 상병 배열
+  injuryDescription   String? // 구체적 상해 내용 (textarea)
+  restTimePattern     String? // 휴식시간 (예: "1일 2회, 1회 30분")
+  qualityReviewStatus String? // 질병판정위원회 진행 상태
+  concurrentDiseases  Json? // 동반 상병 배열
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -500,11 +500,11 @@ model OccupationalCancerDetail {
   memo                 String?
 
   // 양식 학습 결과 추가 필드 (P5)
-  cancerType         String?  // 폐암 / 혈액암 / 방광암 / 대장암 / 위암 / 백혈병 / 기타
-  occupation         String?  // 직종
-  exposureSubstance  String?  // 노출 발암물질 (석면, 벤젠, 라돈 등)
-  exposurePeriod     String?  // 노출 기간 (예: "1980 ~ 2010")
-  concurrentDiseases Json?    // 동반 상병 배열 (폐암+COPD+난청 동반 청구 패턴)
+  cancerType         String? // 폐암 / 혈액암 / 방광암 / 대장암 / 위암 / 백혈병 / 기타
+  occupation         String? // 직종
+  exposureSubstance  String? // 노출 발암물질 (석면, 벤젠, 라돈 등)
+  exposurePeriod     String? // 노출 기간 (예: "1980 ~ 2010")
+  concurrentDiseases Json? // 동반 상병 배열 (폐암+COPD+난청 동반 청구 패턴)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -580,26 +580,26 @@ model User {
   calendarPresets Json?
 
   // 노무사 전문 정보 (서식 자동생성용)
-  licenseNo     String?   // 공인노무사 등록번호
-  birthDate     String?   // 생년월일 "YY.MM.DD" 형식 (예: "65.03.12")
-  officeAddress String?   // 사무소 주소
-  officeTel     String?   // 사무실 전화
-  officeFax     String?   // 팩스
-  branchName    String?   // 지사/상호 (예: "울산지사")
-  regionName    String?   // 담당 권역 (SENIOR_MANAGER 전용): "전라권역" | "대구경북권역" | "부울경남권역" | "수도권역"
-  department    String?   // 부서
-  jobTitle      String?   // 직책
-  personalId    String?   // 공인노무사 주민등록번호 (정보공개청구서 등 대리인 기재용)
+  licenseNo     String? // 공인노무사 등록번호
+  birthDate     String? // 생년월일 "YY.MM.DD" 형식 (예: "65.03.12")
+  officeAddress String? // 사무소 주소
+  officeTel     String? // 사무실 전화
+  officeFax     String? // 팩스
+  branchName    String? // 지사/상호 (예: "울산지사")
+  regionName    String? // 담당 권역 (SENIOR_MANAGER 전용): "전라권역" | "대구경북권역" | "부울경남권역" | "수도권역"
+  department    String? // 부서
+  jobTitle      String? // 직책
+  personalId    String? // 공인노무사 주민등록번호 (정보공개청구서 등 대리인 기재용)
 
-  salesCases     Case[]          @relation("SalesManager")
-  managedCases   Case[]          @relation("CaseManager")
-  branchCases    Case[]          @relation("BranchManager")
-  timelineEvents TimelineEvent[]
-  consultations  Consultation[]  @relation("ConsultationManager")
-  objectionCases   ObjectionCase[]   @relation("ObjectionManager")
-  objectionReviews  ObjectionReview[]  @relation("ObjectionReviewAssignee")
-  settlementRecords SettlementRecord[] @relation("SettlementStaffUser")
-  todos          Todo[]
+  salesCases          Case[]               @relation("SalesManager")
+  managedCases        Case[]               @relation("CaseManager")
+  branchCases         Case[]               @relation("BranchManager")
+  timelineEvents      TimelineEvent[]
+  consultations       Consultation[]       @relation("ConsultationManager")
+  objectionCases      ObjectionCase[]      @relation("ObjectionManager")
+  objectionReviews    ObjectionReview[]    @relation("ObjectionReviewAssignee")
+  settlementRecords   SettlementRecord[]   @relation("SettlementStaffUser")
+  todos               Todo[]
   evaluations         StaffEvaluation[]    @relation("EvaluationTarget")
   workOrders          WorkOrder[]          @relation("WorkOrderAuthor")
   outdoorPerformances OutdoorPerformance[]
@@ -633,28 +633,28 @@ model Notice {
 // 상담 관리
 // ─────────────────────────────────────────────
 model Consultation {
-  id             String    @id @default(cuid())
-  name           String
-  ssn            String?
-  address        String?
-  phone          String
-  caseTypes      String[]  // 다중 상병 (예: ["소음성난청", "근골격계"])
-  managerId      String?
-  manager        User?     @relation("ConsultationManager", fields: [managerId], references: [id])
-  routeMain      String?   // 상담경로 대분류
-  routeSub       String?   // 상담경로 중분류
-  routeDetail    String?   // 상담경로 소분류
-  visitDate      DateTime?
-  status         String    @default("진행중") // 약정 / 종결 / 연락대기 / 진행중
-  memo           String?
-  progressNote   String?   // 기준 진행경과
-  reminderDate   DateTime? // 알림 지정일 (없으면 3주 주기 자동)
-  linkedCaseId   String?   // 약정 시 연결된 Case ID
-  branchName     String?   // 담당 지사
-  tfName         String?   // 담당 TF
-  managerName    String?   // 담당자 이름 (텍스트, 임포트용)
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  id           String    @id @default(cuid())
+  name         String
+  ssn          String?
+  address      String?
+  phone        String
+  caseTypes    String[] // 다중 상병 (예: ["소음성난청", "근골격계"])
+  managerId    String?
+  manager      User?     @relation("ConsultationManager", fields: [managerId], references: [id])
+  routeMain    String? // 상담경로 대분류
+  routeSub     String? // 상담경로 중분류
+  routeDetail  String? // 상담경로 소분류
+  visitDate    DateTime?
+  status       String    @default("진행중") // 약정 / 종결 / 연락대기 / 진행중
+  memo         String?
+  progressNote String? // 기준 진행경과
+  reminderDate DateTime? // 알림 지정일 (없으면 3주 주기 자동)
+  linkedCaseId String? // 약정 시 연결된 Case ID
+  branchName   String? // 담당 지사
+  tfName       String? // 담당 TF
+  managerName  String? // 담당자 이름 (텍스트, 임포트용)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
   @@unique([name, phone])
   @@index([managerId])
@@ -670,17 +670,17 @@ model Consultation {
 // TF 텔레그램 메시지 (webhook 저장 - 구형, tf-monitor용)
 // ─────────────────────────────────────────────
 model TfMessage {
-  id          String   @id @default(cuid())
-  tfName      String   // 담당 TF명
-  messageId   String?  // 텔레그램 메시지 ID (중복 방지)
-  senderName  String?
-  content     String?  @db.Text
-  mediaType   String?  // photo / document / video / none
-  mediaUrl    String?  // 저장된 미디어 경로 (NAS 또는 로컬)
-  sentAt      DateTime
-  isProcessed Boolean  @default(false) // 재해자 DB 반영 여부
+  id           String   @id @default(cuid())
+  tfName       String // 담당 TF명
+  messageId    String? // 텔레그램 메시지 ID (중복 방지)
+  senderName   String?
+  content      String?  @db.Text
+  mediaType    String? // photo / document / video / none
+  mediaUrl     String? // 저장된 미디어 경로 (NAS 또는 로컬)
+  sentAt       DateTime
+  isProcessed  Boolean  @default(false) // 재해자 DB 반영 여부
   linkedCaseId String? // 연결된 Case ID
-  createdAt   DateTime @default(now())
+  createdAt    DateTime @default(now())
 
   @@unique([tfName, messageId])
   @@map("telegram_messages")
@@ -695,12 +695,12 @@ model TfMessage {
 // ─────────────────────────────────────────────
 model WebhookEvent {
   id           String    @id @default(cuid())
-  source       String    // "telegram" | "telegram_special_clinic" | "google_calendar" | "kwc_calendar" | ...
-  externalId   String    // 외부 시스템의 고유 ID (telegram message_id, gcal event id 등)
-  eventType    String?   // 이벤트 종류 (예: "schedule_created", "schedule_updated", "schedule_deleted", "special_clinic_message")
-  payload      Json      // 원본 webhook 페이로드 (보존 — rollback / 재처리용)
+  source       String // "telegram" | "telegram_special_clinic" | "google_calendar" | "kwc_calendar" | ...
+  externalId   String // 외부 시스템의 고유 ID (telegram message_id, gcal event id 등)
+  eventType    String? // 이벤트 종류 (예: "schedule_created", "schedule_updated", "schedule_deleted", "special_clinic_message")
+  payload      Json // 원본 webhook 페이로드 (보존 — rollback / 재처리용)
   processedAt  DateTime? // 처리 완료 시각 (null = 미처리)
-  processedBy  String?   // "webhook" (1차) | "cron_backup" (2차)
+  processedBy  String? // "webhook" (1차) | "cron_backup" (2차)
   errorMessage String?   @db.Text // 처리 실패 시 에러 메시지
   retries      Int       @default(0)
   createdAt    DateTime  @default(now())
@@ -714,22 +714,22 @@ model WebhookEvent {
 // 이의제기 최초총현황 (결정 수신 후 검토)
 // ─────────────────────────────────────────────
 model ObjectionReview {
-  id             String    @id @default(cuid())
-  caseId         String?
-  case           Case?     @relation(fields: [caseId], references: [id])
-  tfName         String
-  patientName    String
-  caseType       String    // 소음성 난청 / COPD 등
-  decisionDate   DateTime? // 처분일 (제척기간 기산일)
-  approvalStatus String    // 승인 / 불승인 / 일부승인
-  progressStatus String    // 종결 / 검토중 / 이의제기 진행 / 송무 검토 / 송무 인계 / 평정 청구 진행
-  hasInfoDisclosure Boolean @default(false) // 정공 여부 (하위 호환 — 상태값이 있으면 그것을 우선)
+  id                   String    @id @default(cuid())
+  caseId               String?
+  case                 Case?     @relation(fields: [caseId], references: [id])
+  tfName               String
+  patientName          String
+  caseType             String // 소음성 난청 / COPD 등
+  decisionDate         DateTime? // 처분일 (제척기간 기산일)
+  approvalStatus       String // 승인 / 불승인 / 일부승인
+  progressStatus       String // 종결 / 검토중 / 이의제기 진행 / 송무 검토 / 송무 인계 / 평정 청구 진행
+  hasInfoDisclosure    Boolean   @default(false) // 정공 여부 (하위 호환 — 상태값이 있으면 그것을 우선)
   infoDisclosureStatus String? // 정공 상세상태: 요청 / 요청중 / 확보 / 평임확보 / 평임 부존재 / 불필요
-  assignedTo   String?
-  assignedUser User?    @relation("ObjectionReviewAssignee", fields: [assignedTo], references: [id])
-  memo           String?
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  assignedTo           String?
+  assignedUser         User?     @relation("ObjectionReviewAssignee", fields: [assignedTo], references: [id])
+  memo                 String?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
 
   objectionCases ObjectionCase[]
 
@@ -745,56 +745,56 @@ model ObjectionReview {
 // 이의제기 기일 관리 (심사/재심사 청구 및 결과)
 // ─────────────────────────────────────────────
 model ObjectionCase {
-  id                    String    @id @default(cuid())
-  reviewId              String?   // ObjectionReview FK (최초총현황과 연결)
-  review                ObjectionReview? @relation(fields: [reviewId], references: [id])
-  caseId                String?
-  case                  Case?     @relation(fields: [caseId], references: [id])
-  tfName                String    // TF명 (예: 울산동부TF)
-  patientName           String
-  caseType              String    // 소음성 난청 / COPD / 근골격계 등
-  approvalStatus        String    // 승인 / 불승인 / 일부승인
-  decisionDate          DateTime? // 처분일(안날) — 제척기간 기산일
-  examClaimDeadline     DateTime? // 제척도래일 (처분일+90일 또는 +180일)
+  id                         String           @id @default(cuid())
+  reviewId                   String? // ObjectionReview FK (최초총현황과 연결)
+  review                     ObjectionReview? @relation(fields: [reviewId], references: [id])
+  caseId                     String?
+  case                       Case?            @relation(fields: [caseId], references: [id])
+  tfName                     String // TF명 (예: 울산동부TF)
+  patientName                String
+  caseType                   String // 소음성 난청 / COPD / 근골격계 등
+  approvalStatus             String // 승인 / 불승인 / 일부승인
+  decisionDate               DateTime? // 처분일(안날) — 제척기간 기산일
+  examClaimDeadline          DateTime? // 제척도래일 (처분일+90일 또는 +180일)
   // 심사청구
-  examClaimDate         DateTime? // 심사청구일
-  examResult            String?   // 기각 / 인용 / 취하 / null(진행중)
-  examResultDate        DateTime? // 심사 결정 송달일
+  examClaimDate              DateTime? // 심사청구일
+  examResult                 String? // 기각 / 인용 / 취하 / null(진행중)
+  examResultDate             DateTime? // 심사 결정 송달일
   // 재심사청구
-  reExamClaimDate       DateTime? // 재심사청구일
-  reExamResult          String?   // 기각 / 인용 / 취하 / null(진행중)
-  reExamResultDate      DateTime? // 재심사 결정 송달일
+  reExamClaimDate            DateTime? // 재심사청구일
+  reExamResult               String? // 기각 / 인용 / 취하 / null(진행중)
+  reExamResultDate           DateTime? // 재심사 결정 송달일
   // 업무상질병판정위원회 해당 여부 (질판위 거친 경우 심사 건너뛰고 재심사부터 가능)
-  isQualityReview       Boolean   @default(false)
+  isQualityReview            Boolean          @default(false)
   // 담당자
-  managerId             String?
-  manager               User?     @relation("ObjectionManager", fields: [managerId], references: [id])
+  managerId                  String?
+  manager                    User?            @relation("ObjectionManager", fields: [managerId], references: [id])
   // 진행 상태
-  progressStatus        String    // 진행중 / 종결 / 송무인계 / 검토중
-  memo                  String?
-  reasonContent         String?   // 이유서·의견서 본문 내용
+  progressStatus             String // 진행중 / 종결 / 송무인계 / 검토중
+  memo                       String?
+  reasonContent              String? // 이유서·의견서 본문 내용
   // 소송 인계 관련
-  litigationHandover    Boolean   @default(false) // 송무 인계 여부
-  litigationMemo        String?
+  litigationHandover         Boolean          @default(false) // 송무 인계 여부
+  litigationMemo             String?
   // 재처분 필요 여부 (제척 도과 시 자동 계산)
-  needsReDecision       Boolean   @default(false)
+  needsReDecision            Boolean          @default(false)
   // 소송 상태
-  litigationStatus      String?   // 소송 검토중 / 소송 검토 완료 / 소송 진행중 / 소송 종료
-  wageCorrectStatus     String?   // 접수 대기 / 진행중 / 처분완료
+  litigationStatus           String? // 소송 검토중 / 소송 검토 완료 / 소송 진행중 / 소송 종료
+  wageCorrectStatus          String? // 접수 대기 / 진행중 / 처분완료
   // 송무 인계 (관리파일 엑셀 L~U열)
-  litigationFirstReview      String?   // L. 송무 인계 1차 검토 (예: "완료")
+  litigationFirstReview      String? // L. 송무 인계 1차 검토 (예: "완료")
   litigationFirstDraftAt     DateTime? // M. 1차 기안 일자
-  litigationFirstDraftResult String?   // N. 1차 기안 결과 (예: "소송 진행", "기각")
-  litigationContractStatus   String?   // O. 송무 약정여부 (예: "완료")
-  litigationContractSent     String?   // P. 송무 약정서 송부 여부 (예: "완료")
+  litigationFirstDraftResult String? // N. 1차 기안 결과 (예: "소송 진행", "기각")
+  litigationContractStatus   String? // O. 송무 약정여부 (예: "완료")
+  litigationContractSent     String? // P. 송무 약정서 송부 여부 (예: "완료")
   litigationSecondDraftAt    DateTime? // Q. 2차 기안 일자
   // R~U: 승소 시 기입 그룹
-  litigationPoaReceived      String?   // R. 위임장·인감증명서 수령 (예: "완료")
-  litigationFinalDecision    String?   // S. 최종 처분 (예: "완료")
-  litigationPostHandling     String?   // T. 후처리 여부 (예: "완료")
-  litigationPostHandler      String?   // U. 후처리 담당자 (이름)
-  createdAt             DateTime  @default(now())
-  updatedAt             DateTime  @updatedAt
+  litigationPoaReceived      String? // R. 위임장·인감증명서 수령 (예: "완료")
+  litigationFinalDecision    String? // S. 최종 처분 (예: "완료")
+  litigationPostHandling     String? // T. 후처리 여부 (예: "완료")
+  litigationPostHandler      String? // U. 후처리 담당자 (이름)
+  createdAt                  DateTime         @default(now())
+  updatedAt                  DateTime         @updatedAt
 }
 
 // ─────────────────────────────────────────────
@@ -802,7 +802,7 @@ model ObjectionCase {
 // ─────────────────────────────────────────────
 model WageReviewData {
   id                    String    @id @default(cuid())
-  caseId                String?   // Case FK
+  caseId                String? // Case FK
   tfName                String
   patientName           String
   caseType              String
@@ -811,43 +811,43 @@ model WageReviewData {
   retirementDate        DateTime? // 퇴직일자
   diagnosisDate         DateTime? // 산정사유발생일(진단일)
   hasNationalDisability Boolean   @default(false) // 국가장애여부
-  disabilityGrade       String?   // 급수
-  workerType            String?   // 일용 / 상용
+  disabilityGrade       String? // 급수
+  workerType            String? // 일용 / 상용
   // 임금 산정 결과
-  comparisonWage        String?   // 비교임금 (실임금/동종임금/특례 등)
-  appliedWage           String?   // 적용임금 유형
-  workplaceName         String?   // 적용사업장명
-  occupation1           String?   // 직종1
-  occupation1Years      String?   // 직종1 직력
-  occupation2           String?   // 직종2
+  comparisonWage        String? // 비교임금 (실임금/동종임금/특례 등)
+  appliedWage           String? // 적용임금 유형
+  workplaceName         String? // 적용사업장명
+  occupation1           String? // 직종1
+  occupation1Years      String? // 직종1 직력
+  occupation2           String? // 직종2
   occupation2Years      String?
-  occupation3           String?   // 직종3
+  occupation3           String? // 직종3
   occupation3Years      String?
   // 실제임금
-  baseAvgWage           Float?    // 최초산출평균임금
-  basisNote             String?   // 산정 근거
-  hasCommuteCoef        Boolean?  // 통상근로계수 적용여부
-  changeRate            Float?    // 증감률
-  finalAvgWage          Float?    // 적용평균임금
+  baseAvgWage           Float? // 최초산출평균임금
+  basisNote             String? // 산정 근거
+  hasCommuteCoef        Boolean? // 통상근로계수 적용여부
+  changeRate            Float? // 증감률
+  finalAvgWage          Float? // 적용평균임금
   // 동종근로자/임금구조 임금
-  statWageGender        String?   // 성별
-  statWageSize          String?   // 규모
-  statWageIndustry      String?   // 업종
-  statWageOccupation    String?   // 직종
-  statWageQuarter       String?   // 적용분기
-  statWageBase          Float?    // 최초산정임금
-  statWageChangeRate    Float?    // 증감률
-  statWageFinal         Float?    // 적용평균임금
+  statWageGender        String? // 성별
+  statWageSize          String? // 규모
+  statWageIndustry      String? // 업종
+  statWageOccupation    String? // 직종
+  statWageQuarter       String? // 적용분기
+  statWageBase          Float? // 최초산정임금
+  statWageChangeRate    Float? // 증감률
+  statWageFinal         Float? // 적용평균임금
   // 최종 산정
-  finalSelectedWage     Float?    // 최종 채택 평균임금
+  finalSelectedWage     Float? // 최종 채택 평균임금
   // 검토 결과
-  reviewManagerName     String?   // 검토 담당자 (자유텍스트)
-  reviewResult          String?   // 종결 / 평정진행 등
-  reviewDetail          String?   // 상세 쟁점
-  progressNote          String?   // 진행경과
+  reviewManagerName     String? // 검토 담당자 (자유텍스트)
+  reviewResult          String? // 종결 / 평정진행 등
+  reviewDetail          String? // 상세 쟁점
+  progressNote          String? // 진행경과
   claimDate             DateTime? // 평정/적사변 청구일
   decisionResultDate    DateTime? // 결정일
-  additionalReview      String?   // 추가 검토
+  additionalReview      String? // 추가 검토
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
 }
@@ -856,7 +856,7 @@ model Todo {
   id          String    @id @default(cuid())
   title       String
   dueDate     DateTime?
-  type        String    // OBJECTION_DEADLINE / WAGE_REQUEST / GENERAL
+  type        String // OBJECTION_DEADLINE / WAGE_REQUEST / GENERAL
   caseId      String?
   patientName String?
   assignedTo  String?
@@ -865,49 +865,49 @@ model Todo {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
-  case        Case?     @relation(fields: [caseId], references: [id])
-  user        User?     @relation(fields: [assignedTo], references: [id])
+  case Case? @relation(fields: [caseId], references: [id])
+  user User? @relation(fields: [assignedTo], references: [id])
 }
 
 // ─────────────────────────────────────────────
 // 운영규정·취업규칙 문서
 // ─────────────────────────────────────────────
 model PolicyDocument {
-  id          String   @id @default(cuid())
-  title       String
-  category    String                        // OPERATION_RULE | WORK_RULE | OTHER
-  version     String?
-  fileUrl     String?
-  content     String?  @db.Text
-  isLatest    Boolean  @default(true)
-  createdBy   String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id        String   @id @default(cuid())
+  title     String
+  category  String // OPERATION_RULE | WORK_RULE | OTHER
+  version   String?
+  fileUrl   String?
+  content   String?  @db.Text
+  isLatest  Boolean  @default(true)
+  createdBy String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 // ─────────────────────────────────────────────
 // 인사평가
 // ─────────────────────────────────────────────
 model StaffEvaluation {
-  id               String   @id @default(cuid())
-  userId           String
-  evaluatorId      String?
-  period           String   // "2026-Q1", "2026-H1", "2026-YEAR" 등
-  evalType         String   @default("OUTDOOR") // OUTDOOR | INDOOR | YEAREND
-  score            Int?
-  performanceScore Int?
-  attendanceScore  Int?
-  attitudeScore    Int?
-  isPromotionTarget Boolean @default(false)
-  promotionGrade   String?
-  grade            String?  // 내근직 평가 등급: S | A | B | C
-  gradeReason      String?  @db.Text // 내근직 평가 사유
-  memo             String?  @db.Text
-  branchName       String?  // 평가 대상 지사
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  id                String   @id @default(cuid())
+  userId            String
+  evaluatorId       String?
+  period            String // "2026-Q1", "2026-H1", "2026-YEAR" 등
+  evalType          String   @default("OUTDOOR") // OUTDOOR | INDOOR | YEAREND
+  score             Int?
+  performanceScore  Int?
+  attendanceScore   Int?
+  attitudeScore     Int?
+  isPromotionTarget Boolean  @default(false)
+  promotionGrade    String?
+  grade             String? // 내근직 평가 등급: S | A | B | C
+  gradeReason       String?  @db.Text // 내근직 평가 사유
+  memo              String?  @db.Text
+  branchName        String? // 평가 대상 지사
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
-  user      User @relation("EvaluationTarget", fields: [userId], references: [id])
+  user User @relation("EvaluationTarget", fields: [userId], references: [id])
 
   @@unique([userId, period, evalType])
 }
@@ -916,17 +916,17 @@ model StaffEvaluation {
 // 업무 지시 게시판
 // ─────────────────────────────────────────────
 model WorkOrder {
-  id          String    @id @default(cuid())
-  title       String
-  content     String    @db.Text
-  authorId    String
-  dueDate     DateTime?
-  priority    String    @default("NORMAL")
-  isActive    Boolean   @default(true)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  id        String    @id @default(cuid())
+  title     String
+  content   String    @db.Text
+  authorId  String
+  dueDate   DateTime?
+  priority  String    @default("NORMAL")
+  isActive  Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
 
-  author    User @relation("WorkOrderAuthor", fields: [authorId], references: [id])
+  author User @relation("WorkOrderAuthor", fields: [authorId], references: [id])
 }
 
 model BranchFinancial {
@@ -1016,30 +1016,30 @@ model SalesContract {
 }
 
 model SettlementRecord {
-  id                  String                 @id @default(cuid())
-  branchName          String
-  year                Int
-  month               Int
-  paymentDate         DateTime?
-  victimName          String
-  caseType            String?
-  tfName              String?
-  salesStaffName      String?
-  settlementStaffName String?
-  settlementStaffId   String?
-  settlementStaffUser User?   @relation("SettlementStaffUser", fields: [settlementStaffId], references: [id])
-  grossAmount         Int
-  deduction           Int                    @default(0)
-  isInstallment           Boolean  @default(false)
-  totalInstallmentAmount  Int      @default(0)
-  paidInstallmentAmount   Int      @default(0)
+  id                     String                 @id @default(cuid())
+  branchName             String
+  year                   Int
+  month                  Int
+  paymentDate            DateTime?
+  victimName             String
+  caseType               String?
+  tfName                 String?
+  salesStaffName         String?
+  settlementStaffName    String?
+  settlementStaffId      String?
+  settlementStaffUser    User?                  @relation("SettlementStaffUser", fields: [settlementStaffId], references: [id])
+  grossAmount            Int
+  deduction              Int                    @default(0)
+  isInstallment          Boolean                @default(false)
+  totalInstallmentAmount Int                    @default(0)
+  paidInstallmentAmount  Int                    @default(0)
   // 월말보고(FILE2) 보조 필드 — 정산내역(FILE1)에서 임포트되는 salesStaffName/settlementStaffName과 별개
-  reportAssignee      String?                // 월말보고 '담당자' 컬럼 원문 (영업담당자 또는 '더보상XX')
-  isBranchOwned       Boolean   @default(false) // 지사 자체 영업 여부 (담당자가 '더보상XX'로 치환된 행)
-  memo                String?
-  allocations         SettlementAllocation[]
-  createdAt           DateTime               @default(now())
-  updatedAt           DateTime               @updatedAt
+  reportAssignee         String? // 월말보고 '담당자' 컬럼 원문 (영업담당자 또는 '더보상XX')
+  isBranchOwned          Boolean                @default(false) // 지사 자체 영업 여부 (담당자가 '더보상XX'로 치환된 행)
+  memo                   String?
+  allocations            SettlementAllocation[]
+  createdAt              DateTime               @default(now())
+  updatedAt              DateTime               @updatedAt
 }
 
 model SettlementAllocation {
@@ -1054,19 +1054,19 @@ model SettlementAllocation {
 
 model SettlementTracker {
   id            String    @id @default(cuid())
-  tfGroup       String    // TF 그룹명 (예: "울산/울동 TF")
-  category      String    // "미정산" | "정산예정"
-  isPaid        Boolean   @default(false)  // ★ 지급완료 여부
+  tfGroup       String // TF 그룹명 (예: "울산/울동 TF")
+  category      String // "미정산" | "정산예정"
+  isPaid        Boolean   @default(false) // ★ 지급완료 여부
   victimName    String
-  grade         String?   // 등급/유형 (예: "6급(근골)", "유족급여,장례비")
-  branchName    String?   // 지사명
-  managerName   String?   // 담당자 약칭
+  grade         String? // 등급/유형 (예: "6급(근골)", "유족급여,장례비")
+  branchName    String? // 지사명
+  managerName   String? // 담당자 약칭
   decisionDate  DateTime? // 결정·지급일
   scheduledDate DateTime? // 정산 예정일
-  status        String?   // 상태 (분할 납부중, 정산완료 등)
+  status        String? // 상태 (분할 납부중, 정산완료 등)
   isInstallment Boolean   @default(false)
-  totalAmount   Int?      // 총 정산금 (만원)
-  paidAmount    Int?      // 기납부액 (만원)
+  totalAmount   Int? // 총 정산금 (만원)
+  paidAmount    Int? // 기납부액 (만원)
   memo          String?
   sortOrder     Int       @default(0)
   createdAt     DateTime  @default(now())
@@ -1074,15 +1074,15 @@ model SettlementTracker {
 }
 
 model StaffRoster {
-  id           String   @id @default(cuid())
-  branchName   String
-  staffName    String
-  staffType    String   @default("EXTERNAL")   // EXTERNAL=외근직, INTERNAL=내근직
-  startYear    Int
-  startMonth   Int
-  endYear      Int?
-  endMonth     Int?
-  createdAt    DateTime @default(now())
+  id         String   @id @default(cuid())
+  branchName String
+  staffName  String
+  staffType  String   @default("EXTERNAL") // EXTERNAL=외근직, INTERNAL=내근직
+  startYear  Int
+  startMonth Int
+  endYear    Int?
+  endMonth   Int?
+  createdAt  DateTime @default(now())
 
   @@unique([branchName, staffName, startYear, startMonth])
 }
@@ -1093,13 +1093,13 @@ model WeeklyActivity {
   staffName          String
   year               Int
   month              Int
-  weekNumber         Int      // 1~6 (해당 월의 주차)
-  weekLabel          String   // 예: "25.04. 1주"
-  initialVisit       Int      @default(0)  // 초진
-  specialExam        Int      @default(0)  // 특진
-  docSupplementation Int      @default(0)  // 자료보완
-  submission         Int      @default(0)  // 접수
-  sales              Int      @default(0)  // 영업
+  weekNumber         Int // 1~6 (해당 월의 주차)
+  weekLabel          String // 예: "25.04. 1주"
+  initialVisit       Int      @default(0) // 초진
+  specialExam        Int      @default(0) // 특진
+  docSupplementation Int      @default(0) // 자료보완
+  submission         Int      @default(0) // 접수
+  sales              Int      @default(0) // 영업
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
@@ -1107,22 +1107,22 @@ model WeeklyActivity {
 }
 
 model Contact {
-  id           String   @id @default(cuid())
-  firmType     String   // "TBOSANG" | "ISAN"
+  id           String    @id @default(cuid())
+  firmType     String // "TBOSANG" | "ISAN"
   firm         String
   branch       String
   name         String
-  title        String   @default("")
-  mobile       String   @default("")
-  officePhone  String   @default("")
-  email        String   @default("")
-  displayOrder Int      @default(0)
-  jobGrade     String   @default("")  // 직군: 외근직 | 내근직 | 노무사 | 등기노무사 | 기타
-  hireDate     DateTime?  // 입사일
-  leaveDate    DateTime?  // 퇴사일
-  userId       String?    // auth DB의 User.id (FK 아님, 문자열 참조)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  title        String    @default("")
+  mobile       String    @default("")
+  officePhone  String    @default("")
+  email        String    @default("")
+  displayOrder Int       @default(0)
+  jobGrade     String    @default("") // 직군: 외근직 | 내근직 | 노무사 | 등기노무사 | 기타
+  hireDate     DateTime? // 입사일
+  leaveDate    DateTime? // 퇴사일
+  userId       String? // auth DB의 User.id (FK 아님, 문자열 참조)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 }
 
 model Branch {
@@ -1134,13 +1134,13 @@ model Branch {
   fax             String?
   region          String?
   assignedTFs     Json?
-  colorBase       String?  // 지사 대표 색(hex, 예: "#006838"). 소속 TF 색 계열의 베이스
+  colorBase       String? // 지사 대표 색(hex, 예: "#006838"). 소속 TF 색 계열의 베이스
   branchManagerId String?
   firmType        String   @default("TBOSANG")
   isActive        Boolean  @default(true)
   displayOrder    Int      @default(0)
-  bizNumber       String?  // 사업자등록번호
-  bankAccount     String?  // 계좌번호 + 예금주
+  bizNumber       String? // 사업자등록번호
+  bankAccount     String? // 계좌번호 + 예금주
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -1151,7 +1151,7 @@ model Branch {
 model TfMeta {
   id        String   @id @default(cuid())
   tfName    String   @unique
-  memo      String?  @db.Text    // 사용자 정리안 메모 (예: "대구달서/수성으로 세분화되기 전 명칭")
+  memo      String?  @db.Text // 사용자 정리안 메모 (예: "대구달서/수성으로 세분화되기 전 명칭")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -1170,13 +1170,13 @@ model CaseFile {
   id          String   @id @default(cuid())
   caseId      String
   case        Case     @relation(fields: [caseId], references: [id])
-  fileType    String   // NAS | GOOGLE_DRIVE
-  fileName    String?  // 파일명 또는 폴더명
-  nasPath     String?  // NAS 전체 경로 (fileType=NAS일 때)
-  driveFileId String?  // Google Drive 파일 ID (fileType=GOOGLE_DRIVE일 때)
-  driveLink   String?  // Google Drive 링크
+  fileType    String // NAS | GOOGLE_DRIVE
+  fileName    String? // 파일명 또는 폴더명
+  nasPath     String? // NAS 전체 경로 (fileType=NAS일 때)
+  driveFileId String? // Google Drive 파일 ID (fileType=GOOGLE_DRIVE일 때)
+  driveLink   String? // Google Drive 링크
   uploadedAt  DateTime @default(now())
-  uploadedBy  String?  // User ID
+  uploadedBy  String? // User ID
 
   @@map("case_files")
 }
@@ -1191,77 +1191,77 @@ model SystemConfig {
 }
 
 model FormRequest {
-  id          String    @id @default(cuid())
-  title       String
-  description String    @default("")
-  formType    String?
-  requestedBy String
+  id               String    @id @default(cuid())
+  title            String
+  description      String    @default("")
+  formType         String?
+  requestedBy      String
   requestedByEmail String?
-  branch      String?
-  status      String    @default("pending")
-  resolution  String    @default("")
-  resolvedBy  String?
-  resolvedAt  DateTime?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  branch           String?
+  status           String    @default("pending")
+  resolution       String    @default("")
+  resolvedBy       String?
+  resolvedAt       DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
   @@index([status, createdAt])
   @@map("form_requests")
 }
 
 model Minutes {
-  id          String   @id @default(cuid())
-  category    String
-  title       String
-  meetingDate DateTime
-  content         String   @default("")
-  authorName      String   @default("")
-  attachmentData  String?  // base64 인코딩된 파일 데이터
-  attachmentName  String?  // 원본 파일명
-  attachmentType  String?  // MIME 타입
-  attachmentSize  Int?     // 파일 크기 (bytes)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id             String   @id @default(cuid())
+  category       String
+  title          String
+  meetingDate    DateTime
+  content        String   @default("")
+  authorName     String   @default("")
+  attachmentData String? // base64 인코딩된 파일 데이터
+  attachmentName String? // 원본 파일명
+  attachmentType String? // MIME 타입
+  attachmentSize Int? // 파일 크기 (bytes)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 }
 
 model SpecialClinicSchedule {
-  id              String    @id @default(cuid())
+  id               String    @id @default(cuid())
   // 공통
-  category        String    @default("특진") // "특진" | "재특진" | "영업" | "자료보완" | "교육" | "회의" | "질판위" | "상담" | "약정" | "기타"
-  tfName          String    @default("")
-  scheduledDate   DateTime?
+  category         String    @default("특진") // "특진" | "재특진" | "영업" | "자료보완" | "교육" | "회의" | "질판위" | "상담" | "약정" | "기타"
+  tfName           String    @default("")
+  scheduledDate    DateTime?
   scheduledEndDate DateTime? // 종료일 (진폐 2박3일 등 멀티데이 일정용)
-  isAllDay        Boolean   @default(true)
-  scheduledHour   Int?
-  scheduledMinute Int?      @default(0)
-  status          String    @default("scheduled") // "scheduled" | "done" | "cancelled" | "unknown"
-  memo            String?   @db.Text
+  isAllDay         Boolean   @default(true)
+  scheduledHour    Int?
+  scheduledMinute  Int?      @default(0)
+  status           String    @default("scheduled") // "scheduled" | "done" | "cancelled" | "unknown"
+  memo             String?   @db.Text
 
   // 자유형 카테고리용 (영업, 자료보완, 교육, 회의, 질판위, 상담, 약정, 기타)
-  title           String?
-  content         String?   @db.Text
+  title   String?
+  content String? @db.Text
 
   // 특진/재특진 전용
-  caseId         String?  // 사건 상세에서 생성 시 연결 (선택)
-  patientName    String?
-  hospitalName   String?
-  clinicType     String?  // "특진" | "재특진" | "재재특진"
-  examRound      Int?
-  assignedStaff  String?  // 담당자 (= HearingLossDetail.specialExam${round}Attendee 와 싱크)
-  attended       Boolean? // 참석 여부
-  isPickup       Boolean? @default(false) // 픽업 필요 (= HearingLossDetail.{special|reSpecial|re2Special}ClinicPickup 와 싱크)
+  caseId        String? // 사건 상세에서 생성 시 연결 (선택)
+  patientName   String?
+  hospitalName  String?
+  clinicType    String? // "특진" | "재특진" | "재재특진"
+  examRound     Int?
+  assignedStaff String? // 담당자 (= HearingLossDetail.specialExam${round}Attendee 와 싱크)
+  attended      Boolean? // 참석 여부
+  isPickup      Boolean? @default(false) // 픽업 필요 (= HearingLossDetail.{special|reSpecial|re2Special}ClinicPickup 와 싱크)
 
   // 주기성 일정
   recurringGroupId String? // 같은 반복 그룹 레코드끼리 공유하는 ID
 
   // 텔레그램 수신
-  sender          String?
-  sourceDate      DateTime?
-  rawMessage      String?   @db.Text
-  telegramMsgId   String?
+  sender        String?
+  sourceDate    DateTime?
+  rawMessage    String?   @db.Text
+  telegramMsgId String?
 
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([tfName])
   @@index([scheduledDate])
@@ -1283,55 +1283,55 @@ model BranchIncentiveUsage {
 
 // 분기별 지사 단위 인센티브/평가 요약 (월말보고 '합계' 시트 재현)
 model BranchIncentiveSummary {
-  id                 String   @id @default(cuid())
-  branchName         String
-  year               Int
-  quarter            Int
+  id                String                        @id @default(cuid())
+  branchName        String
+  year              Int
+  quarter           Int
   // 지사 단위 금액
-  carryOverAmount    Int      @default(0)   // 전년도 잔여 지사인센티브 이월금
-  unallocatedAmount  Int      @default(0)   // 지사 인센 미배분액 (계산 결과 캐시)
+  carryOverAmount   Int                           @default(0) // 전년도 잔여 지사인센티브 이월금
+  unallocatedAmount Int                           @default(0) // 지사 인센 미배분액 (계산 결과 캐시)
   // 직원별 요약 (합계 시트의 per-staff 행 복제)
-  staffSummaries     BranchIncentiveStaffSummary[]
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  staffSummaries    BranchIncentiveStaffSummary[]
+  createdAt         DateTime                      @default(now())
+  updatedAt         DateTime                      @updatedAt
 
   @@unique([branchName, year, quarter])
 }
 
 model BranchIncentiveStaffSummary {
-  id                  String   @id @default(cuid())
-  summaryId           String
-  summary             BranchIncentiveSummary @relation(fields: [summaryId], references: [id], onDelete: Cascade)
-  staffName           String
-  personalIncentive   Int      @default(0)   // 개인
-  branchIncentive     Int      @default(0)   // 지사
-  carAllowance        Int      @default(0)   // 자차보조금
-  totalIncentive      Int      @default(0)   // 합계
-  roundedIncentive    Int      @default(0)   // 절사
-  quarterlyGrade      String?                // 외근직 분기평가 (S/A/B/C)
-  semiAnnualGrade     String?                // 내근직 반기평가 (S/A/B/C)
-  gradeReason         String?                // 평가 이유
-  memo                String?
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
+  id                String                 @id @default(cuid())
+  summaryId         String
+  summary           BranchIncentiveSummary @relation(fields: [summaryId], references: [id], onDelete: Cascade)
+  staffName         String
+  personalIncentive Int                    @default(0) // 개인
+  branchIncentive   Int                    @default(0) // 지사
+  carAllowance      Int                    @default(0) // 자차보조금
+  totalIncentive    Int                    @default(0) // 합계
+  roundedIncentive  Int                    @default(0) // 절사
+  quarterlyGrade    String? // 외근직 분기평가 (S/A/B/C)
+  semiAnnualGrade   String? // 내근직 반기평가 (S/A/B/C)
+  gradeReason       String? // 평가 이유
+  memo              String?
+  createdAt         DateTime               @default(now())
+  updatedAt         DateTime               @updatedAt
 
   @@unique([summaryId, staffName])
 }
 
 model CaseAttachment {
-  id            String   @id @default(cuid())
-  caseId        String
-  case          Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
-  fileName      String          // 원본 파일명
-  fileSize      Int             // 바이트 단위
-  mimeType      String
-  fileData      Bytes           // 실제 파일 바이너리
-  category      String?         // SENT(발신) / RECEIVED(수신) / INTERNAL(내부) / OTHER(기타)
-  description   String?
-  uploadedById  String?
-  uploadedBy    User?    @relation(fields: [uploadedById], references: [id])
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id           String   @id @default(cuid())
+  caseId       String
+  case         Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  fileName     String // 원본 파일명
+  fileSize     Int // 바이트 단위
+  mimeType     String
+  fileData     Bytes // 실제 파일 바이너리
+  category     String? // SENT(발신) / RECEIVED(수신) / INTERNAL(내부) / OTHER(기타)
+  description  String?
+  uploadedById String?
+  uploadedBy   User?    @relation(fields: [uploadedById], references: [id])
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   @@index([caseId])
   @@index([caseId, category])
@@ -1344,7 +1344,7 @@ model CaseAttachment {
 model TelegramChatRoom {
   chatId       String   @id
   chatName     String
-  roomType     String              // 'schedule' | 'tf_work' | 'company_notice'
+  roomType     String // 'schedule' | 'tf_work' | 'company_notice'
   tfName       String?
   isActive     Boolean  @default(true)
   registeredAt DateTime @default(now())
@@ -1357,16 +1357,16 @@ model TelegramChatRoom {
 }
 
 model TelegramMessage {
-  id             String   @id @default(cuid())
+  id             String           @id @default(cuid())
   telegramMsgId  String
   chatId         String
   chatRoom       TelegramChatRoom @relation(fields: [chatId], references: [chatId])
   senderName     String
   senderUsername String?
-  messageText    String   @db.Text
+  messageText    String           @db.Text
   messageType    String
   sentAt         DateTime
-  receivedAt     DateTime @default(now())
+  receivedAt     DateTime         @default(now())
 
   matchStatus         String
   matchedCaseId       String?
@@ -1401,7 +1401,7 @@ model CaseEvent {
   metadata Json?
   hashtags String[]
 
-  telegramMessageId String?         @unique
+  telegramMessageId String?          @unique
   telegramMessage   TelegramMessage? @relation(fields: [telegramMessageId], references: [id])
 
   pendingExamReview PendingExamReview?
@@ -1412,10 +1412,10 @@ model CaseEvent {
 }
 
 model PendingExamReview {
-  id          String @id @default(cuid())
+  id          String     @id @default(cuid())
   caseId      String
-  case        Case   @relation(fields: [caseId], references: [id], onDelete: Cascade)
-  caseEventId String? @unique
+  case        Case       @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  caseEventId String?    @unique
   caseEvent   CaseEvent? @relation(fields: [caseEventId], references: [id])
 
   examType     String
@@ -1450,16 +1450,16 @@ model JichimDocument {
 // 법령 별표·별지·첨부 (산재법 별표 1, 시행령 별표 2 등)
 model LawAttachment {
   id             String   @id @default(cuid())
-  lawId          String   // LAW_GROUPS의 lawId (예: "산재법", "산재령", "산재칙")
+  lawId          String // LAW_GROUPS의 lawId (예: "산재법", "산재령", "산재칙")
   attachmentType String   @default("별표") // "별표" | "별지" | "첨부"
-  number         String?  // "별표 1", "별지 제2호서식" 등 표시용 번호
-  title          String   // 사람이 읽는 제목 (예: "장해등급의 종류")
-  description    String?  // 추가 설명
-  fileName       String   // 원본 파일명
+  number         String? // "별표 1", "별지 제2호서식" 등 표시용 번호
+  title          String // 사람이 읽는 제목 (예: "장해등급의 종류")
+  description    String? // 추가 설명
+  fileName       String // 원본 파일명
   contentType    String   @default("application/pdf")
-  fileSize       Int      // bytes
-  fileData       Bytes    // PDF 파일 본문 (Postgres BYTEA, 5MB 제한)
-  uploadedBy     String?  // userId
+  fileSize       Int // bytes
+  fileData       Bytes // PDF 파일 본문 (Postgres BYTEA, 5MB 제한)
+  uploadedBy     String? // userId
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
@@ -1471,44 +1471,44 @@ model LawAttachment {
 // 결정통지서 자동 파싱 이력 (Phase A)
 // PDF 본문은 저장하지 않고 OCR 텍스트 + 파싱 결과만 보존
 model DecisionNotice {
-  id               String    @id @default(cuid())
+  id String @id @default(cuid())
 
   // 사건/재해자 연결 (선택적)
-  caseId           String?
-  patientId        String?
+  caseId    String?
+  patientId String?
 
   // 통지서 메타
-  fileName         String
-  fileSize         Int
-  decisionType     String    // 휴업급여/장해일시금/장해연금/유족연금/유족일시금/장례비/기타
-  decisionDate     DateTime?
-  managementNo     String?
-  caseNo           String?
-  resultStatus     String?   // 지급/부지급/일부지급 등
+  fileName     String
+  fileSize     Int
+  decisionType String // 휴업급여/장해일시금/장해연금/유족연금/유족일시금/장례비/기타
+  decisionDate DateTime?
+  managementNo String?
+  caseNo       String?
+  resultStatus String? // 지급/부지급/일부지급 등
 
   // 산재근로자
-  workerName       String?
-  birthDate        DateTime?
-  accidentDate     DateTime?
-  businessName     String?
+  workerName   String?
+  birthDate    DateTime?
+  accidentDate DateTime?
+  businessName String?
 
   // 금액
-  paymentAmount    Float?    // 지급결정액
-  cumulativeAmount Float?    // 누계액
-  initialAvgWage   Float?    // 평균임금 산정 후 최초 지급액
+  paymentAmount    Float? // 지급결정액
+  cumulativeAmount Float? // 누계액
+  initialAvgWage   Float? // 평균임금 산정 후 최초 지급액
 
   // 파싱 결과 전체 (Json)
-  parsedData       Json      // ParsedNotice 전체 구조
-  ocrText          String?   // 원본 OCR 텍스트 (디버깅용, 100k자 제한)
+  parsedData Json // ParsedNotice 전체 구조
+  ocrText    String? // 원본 OCR 텍스트 (디버깅용, 100k자 제한)
 
   // 검증 상태
-  verifyStatus     String?   // "일치" | "불일치" | "부분일치" | "미검증"
-  verifyNote       String?
+  verifyStatus String? // "일치" | "불일치" | "부분일치" | "미검증"
+  verifyNote   String?
 
   // 메타
-  uploadedBy       String?   // userId
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
+  uploadedBy String? // userId
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
   @@index([caseId])
   @@index([patientId])
@@ -1522,70 +1522,70 @@ model DecisionNotice {
 // 공단이 발신한 평균임금산정내역서 PDF를 OCR + 파싱하여 저장
 // 노무사가 검토 후 WageReviewData로 연결 가능
 model AvgWageNotice {
-  id                String    @id @default(cuid())
+  id String @id @default(cuid())
 
   // 사건/재해자/평균임금검토 연결 (선택적)
-  caseId            String?
-  patientId         String?
-  wageReviewId      String?   // WageReviewData FK (노무사가 검토 후 연결)
+  caseId       String?
+  patientId    String?
+  wageReviewId String? // WageReviewData FK (노무사가 검토 후 연결)
 
   // 양식 메타
-  fileName          String
-  fileSize          Int
-  managementNo      String?   // 관리번호 (예: 910-02-99141-7)
-  diagnosisDate     DateTime? // 산정사유발생년월일
+  fileName      String
+  fileSize      Int
+  managementNo  String? // 관리번호 (예: 910-02-99141-7)
+  diagnosisDate DateTime? // 산정사유발생년월일
 
   // 사업장
-  workplaceName     String?   // 회사명
-  businessRegNo     String?   // 사업개시번호
-  businessType      String?   // 사업종류 (예: 기타건설업)
+  workplaceName String? // 회사명
+  businessRegNo String? // 사업개시번호
+  businessType  String? // 사업종류 (예: 기타건설업)
 
   // 산재근로자
-  workerName        String?   // 성명
-  rrnPrefix         String?   // 주민번호 앞 6자리
-  hireDate          DateTime? // 채용일
-  retirementDate    DateTime?
-  occupation        String?   // 직종
+  workerName     String? // 성명
+  rrnPrefix      String? // 주민번호 앞 6자리
+  hireDate       DateTime? // 채용일
+  retirementDate DateTime?
+  occupation     String? // 직종
 
   // 임금산정형태
-  wageCalcType      String?   // "통상근로계수 적용" / "특례임금" 등
-  dailyWage         Float?    // 일당
-  commuteCoef       Float?    // 통상근로계수 (0.73 등)
+  wageCalcType String? // "통상근로계수 적용" / "특례임금" 등
+  dailyWage    Float? // 일당
+  commuteCoef  Float? // 통상근로계수 (0.73 등)
 
   // 근기법 평균임금
-  baseAvgWage       Float?    // 근기법 평균임금
+  baseAvgWage Float? // 근기법 평균임금
 
   // 노동통계 (특례임금 산출 자료)
-  statQuarter       String?   // 적용분기 (예: "2023년도 1분기")
-  statSize          String?   // 사업체 규모 (예: "1규모(5~9)")
-  statTotalDays     Int?      // 총일수 (보통 365)
-  statTotalAmount   Float?    // 총금액
+  statQuarter     String? // 적용분기 (예: "2023년도 1분기")
+  statSize        String? // 사업체 규모 (예: "1규모(5~9)")
+  statTotalDays   Int? // 총일수 (보통 365)
+  statTotalAmount Float? // 총금액
 
   // 특례임금
-  statWageBase      Float?    // 산재보험법 특례임금액
+  statWageBase Float? // 산재보험법 특례임금액
 
   // 최종 적용 평균임금
-  finalAvgWage      Float?    // 적용평균임금
-  finalApplyDate    DateTime? // 적용일자
+  finalAvgWage   Float? // 적용평균임금
+  finalApplyDate DateTime? // 적용일자
 
   // 정정청구 트리거 룰 적용 결과
   // ratio = finalAvgWage / max(baseAvgWage, statWageBase)
   // ratio < 0.95 → needsCorrection=true
-  needsCorrection   Boolean   @default(false)
-  correctionReason  String?   // "특례임금 대비 적용임금 N% 부족" 등
+  needsCorrection  Boolean @default(false)
+  correctionReason String? // "특례임금 대비 적용임금 N% 부족" 등
 
   // 파싱 결과 전체 (Json)
-  parsedData        Json      // 전체 파싱 구조 (특이사항 포함)
-  ocrText           String?   // 원본 OCR 텍스트 (디버깅용, 100k자 제한)
+  parsedData Json // 전체 파싱 구조 (특이사항 포함)
+  ocrText    String? // 원본 OCR 텍스트 (디버깅용, 100k자 제한)
 
   // 검증 상태
-  verifyStatus      String?   // "일치" | "불일치" | "부분일치" | "미검증"
-  verifyNote        String?
+  verifyStatus String? // "일치" | "불일치" | "부분일치" | "미검증"
+  verifyNote   String?
 
   // 메타
-  uploadedBy        String?   // userId
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
+  uploadedBy String? // userId
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
   @@index([caseId])
   @@index([patientId])
@@ -1601,12 +1601,12 @@ model AvgWageNotice {
 // branchKey = lib/constants/kwc-branches.ts 의 KWC_BRANCH_DETAILS 키 (예: "부산지역본부")
 model KwcBranchStaff {
   id             String   @id @default(cuid())
-  branchKey      String   // 지사 키 (예: "부산지역본부")
-  departmentName String   // 부서명 (예: "재활보상2부")
-  phone          String   // 직통 전화번호 (행 식별)
-  name           String?  // 담당자 이름 (사용자 입력)
-  position       String?  // 직책 (사용자 입력)
-  updatedBy      String?  // 편집자 User.id
+  branchKey      String // 지사 키 (예: "부산지역본부")
+  departmentName String // 부서명 (예: "재활보상2부")
+  phone          String // 직통 전화번호 (행 식별)
+  name           String? // 담당자 이름 (사용자 입력)
+  position       String? // 직책 (사용자 입력)
+  updatedBy      String? // 편집자 User.id
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
