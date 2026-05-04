@@ -103,7 +103,8 @@
       "mcp__Claude_in_Chrome__navigate",
       "mcp__Claude_in_Chrome__javascript_tool",
       "PowerShell([Convert]::ToBase64String\\([IO.File]::ReadAllBytes\\(\"C:\\\\Users\\\\jjakg\\\\thebosang\\\\tbss-494605-7be880b365d7.json\"\\)\\))",
-      "Bash(git merge *)"
+      "Bash(git merge *)",
+      "Bash(python -c ' *)"
     ]
   },
   "enableAllProjectMcpServers": true,
