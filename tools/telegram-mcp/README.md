@@ -199,13 +199,25 @@ Claude Code 종료 후 다시 실행. 새 세션에서:
 
 ---
 
-## 다음 단계 (별도 작업)
+## 학습 코퍼스 수집
 
-이 MCP 서버는 **조회용**입니다. 다음 단계는:
+본 MCP의 1차 목적은 **자동 인입 파이프라인이 아니라 학습용 코퍼스 수집**.
+노무사들이 텔레그램에서 실제로 주고받는 대화·첨부를 보고 TBSS 페이지 설계, 자동서식 매핑 룰, 직업력 산정 로직의 신뢰도를 끌어올린다.
 
-1. **상시 데몬 모드**: `events.NewMessage` hook으로 신규 메시지 자동 감지
-2. **TBSS API 인입**: `/api/telegram/ingest` Route 추가, Prisma `TelegramIngest` 모델
-3. **검수 UI**: `/admin/telegram-inbox` 미분류 인입 검수 페이지
-4. **자동 분류**: 파일명·OCR로 양식 종류 추정, 발신자로 Patient 자동 매칭
+### 절차
 
-각 단계는 별도 PRD로 진행. 본 디렉토리는 인프라 기반.
+1. `python classify_dialogs.py` — `dialogs_dump.json` (또는 마지막 MCP `list_dialogs` 결과)을 카테고리로 분류 → `telegram-whitelist.draft.json` (gitignored)
+2. `cp fetch_plan.example.json fetch_plan.json` — 학습 타깃 채팅방 직접 선정. `_pick_reason`에 학습 목표 명시.
+3. `python fetch_corpus.py` — `corpus/{category}/{chat_id}__{title}/messages.jsonl` 작성 (선택적으로 `media/` 첨부 다운로드).
+4. 1차 패스는 `download_media: false`로 텍스트만 봐서 어떤 첨부가 가치 있는지 인덱싱한 뒤, 2차에서 선별 다운로드.
+
+### 카테고리 (`lib/constants/telegram.ts`와 동기화)
+
+`patient_1to1` / `patient_family` / `kosha_officer` / `internal_branch` /
+`internal_tf` / `internal_topic` / `external_partner` / `personal` / `needs_review`
+
+### 보안
+
+- `corpus/`, `dialogs_dump.json`, `telegram-whitelist.draft.json`, `fetch_plan.json` 모두 gitignored.
+- 첨부파일에 환자 PII 포함 가능성 → 디스크 암호화(BitLocker) 켜져 있어야 함.
+- 학습 결과 분석 노트만 `docs/forms-learning/` 등에 commit. 원본 메시지·첨부는 절대 commit 금지.
