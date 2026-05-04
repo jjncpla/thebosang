@@ -39,10 +39,13 @@ export async function GET(req: NextRequest) {
         assignedTo: true,
       },
     }),
-    // DECISION_RECEIVED 상태 사건 자동 인입 (병렬 수행)
+    // 결정 수령 상태 사건 자동 인입 (HL: DECISION_RECEIVED + COPD/근골격계: 한글 status 승인/불승인)
     prisma.case.findMany({
       where: {
-        status: 'DECISION_RECEIVED',
+        OR: [
+          { status: 'DECISION_RECEIVED' }, // HEARING_LOSS 영문 enum
+          { status: { in: ['승인', '불승인', '이의제기'] } }, // COPD/근골격계 한글 status
+        ],
         ...(tfName ? { tfName } : {}),
         ...(caseType ? { caseType } : {}),
         ...(search ? { patient: { name: { contains: search, mode: "insensitive" as const } } } : {}),
@@ -51,8 +54,18 @@ export async function GET(req: NextRequest) {
         id: true,
         tfName: true,
         caseType: true,
+        status: true,
         patient: { select: { name: true } },
         hearingLoss: { select: { decisionReceivedAt: true } },
+        copd: {
+          select: {
+            applications: {
+              orderBy: { applicationRound: 'desc' },
+              take: 1,
+              select: { disposalDate: true, disabilityDispositionDate: true, disposalType: true, disabilityDispositionType: true },
+            },
+          },
+        },
       },
       orderBy: { createdAt: 'desc' },
     }),
@@ -62,21 +75,36 @@ export async function GET(req: NextRequest) {
   const existingCaseIds = new Set(items.map(r => r.caseId).filter(Boolean) as string[]);
   const autoItems = decisionCases
     .filter(c => !existingCaseIds.has(c.id))
-    .map(c => ({
-      id: `auto_${c.id}`,
-      tfName: c.tfName ?? '',
-      patientName: c.patient.name,
-      caseType: c.caseType,
-      approvalStatus: '',
-      progressStatus: '',
-      decisionDate: c.hearingLoss?.decisionReceivedAt?.toISOString() ?? null,
-      hasInfoDisclosure: false,
-      infoDisclosureStatus: null,
-      memo: null,
-      caseId: c.id,
-      isAutoFilled: true,
-      assignedTo: null,
-    }));
+    .map(c => {
+      // caseType별로 decisionDate / approvalStatus 산출
+      let autoDecisionDate: string | null = null;
+      let autoApproval = '';
+      if (c.caseType === 'HEARING_LOSS') {
+        autoDecisionDate = c.hearingLoss?.decisionReceivedAt?.toISOString() ?? null;
+      } else if (c.caseType === 'COPD') {
+        const latest = c.copd?.applications[0];
+        if (latest) {
+          autoDecisionDate = (latest.disabilityDispositionDate ?? latest.disposalDate)?.toISOString() ?? null;
+          if (latest.disabilityDispositionType === '부지급' || latest.disposalType === '부지급') autoApproval = '불승인';
+          else if (latest.disabilityDispositionType === '일시금' || latest.disabilityDispositionType === '연금' || latest.disposalType === '승인') autoApproval = '승인';
+        }
+      }
+      return {
+        id: `auto_${c.id}`,
+        tfName: c.tfName ?? '',
+        patientName: c.patient.name,
+        caseType: c.caseType,
+        approvalStatus: autoApproval,
+        progressStatus: '',
+        decisionDate: autoDecisionDate,
+        hasInfoDisclosure: false,
+        infoDisclosureStatus: null,
+        memo: null,
+        caseId: c.id,
+        isAutoFilled: true,
+        assignedTo: null,
+      };
+    });
 
   return NextResponse.json([...autoItems, ...items]);
 }
@@ -137,6 +165,12 @@ export async function POST(req: NextRequest) {
       if (updated.progressStatus === "이의제기 진행") {
         const existingObjectionCase = await prisma.objectionCase.findFirst({ where: { caseId } });
         if (!existingObjectionCase) {
+          // 90일 제척기간 자동 계산 (산재법 §103 심사청구 기간)
+          let examClaimDeadline: Date | null = null;
+          if (updated.decisionDate) {
+            examClaimDeadline = new Date(updated.decisionDate);
+            examClaimDeadline.setDate(examClaimDeadline.getDate() + 90);
+          }
           await prisma.objectionCase.create({
             data: {
               caseId,
@@ -147,6 +181,7 @@ export async function POST(req: NextRequest) {
               decisionDate: updated.decisionDate,
               approvalStatus: updated.approvalStatus,
               progressStatus: "진행중",
+              examClaimDeadline,
             }
           });
         }
@@ -211,6 +246,12 @@ export async function POST(req: NextRequest) {
     }
 
     if (!existingObjectionCase) {
+      // 90일 제척기간 자동 계산
+      let examClaimDeadline: Date | null = null;
+      if (item.decisionDate) {
+        examClaimDeadline = new Date(item.decisionDate);
+        examClaimDeadline.setDate(examClaimDeadline.getDate() + 90);
+      }
       await prisma.objectionCase.create({
         data: {
           caseId: item.caseId || null,
@@ -221,6 +262,7 @@ export async function POST(req: NextRequest) {
           decisionDate: item.decisionDate,
           approvalStatus: item.approvalStatus,
           progressStatus: "진행중",
+          examClaimDeadline,
         }
       });
     }

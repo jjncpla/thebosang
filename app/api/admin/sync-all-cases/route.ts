@@ -122,10 +122,15 @@ export async function POST() {
   // 신뢰도: 기일관리(ObjectionCase) > 처분검토(ObjectionReview)
   const targetCaseStatus = new Map<string, string>(); // caseId → targetStatus
 
-  // 처분검토 기준 (낮은 우선순위)
+  // caseType lookup (영문 enum 도메인 vs 한글 도메인 분기에 사용)
+  const caseTypeOf = new Map<string, string>();
+  for (const c of allCases) caseTypeOf.set(c.id, c.caseType);
+
+  // 처분검토 기준 (낮은 우선순위) — HEARING_LOSS만 적용 (그 외는 caseType별 자체 sync 유지)
   for (const r of allReviews) {
     const cId = r.caseId ?? reviewCaseIdMap.get(r.id);
     if (!cId) continue;
+    if (caseTypeOf.get(cId) !== "HEARING_LOSS") continue; // COPD/근골격계 한글 status 도메인 보호
     const progressMapped = PROGRESS_TO_CASE_STATUS[r.progressStatus ?? ""];
     if (progressMapped) {
       targetCaseStatus.set(cId, progressMapped);
@@ -136,12 +141,17 @@ export async function POST() {
     }
   }
 
-  // 기일관리 기준 (높은 우선순위 — 처분검토 결과 덮어씀)
+  // 기일관리 기준 (높은 우선순위 — 처분검토 결과 덮어씀) — caseType별 분기
   for (const oc of allObjCases) {
     const cId = oc.caseId ?? objCaseCaseIdMap.get(oc.id);
     if (!cId) continue;
-    if (oc.progressStatus === "종결") targetCaseStatus.set(cId, "CLOSED");
-    else if (oc.progressStatus === "진행중") targetCaseStatus.set(cId, "OBJECTION");
+    const ct = caseTypeOf.get(cId);
+    const isHL = ct === "HEARING_LOSS";
+    if (oc.progressStatus === "종결") {
+      targetCaseStatus.set(cId, isHL ? "CLOSED" : "종결");
+    } else if (oc.progressStatus === "진행중") {
+      targetCaseStatus.set(cId, isHL ? "OBJECTION" : "이의제기");
+    }
   }
 
   // ── 7. Case.status 변경 대상 필터링 ─────────────────────────────────────

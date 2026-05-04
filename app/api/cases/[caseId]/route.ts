@@ -19,7 +19,7 @@ export async function GET(
         hearingLoss: {
           include: { exams: { orderBy: [{ examSet: "asc" }, { examRound: "asc" }] } },
         },
-        copd: { select: { id: true } },
+        copd: { include: { applications: { orderBy: { applicationRound: "asc" } } } },
         pneumoconiosis: { select: { id: true } },
         musculoskeletal: { select: { id: true } },
         occupationalAccident: { select: { id: true } },
@@ -104,7 +104,7 @@ export async function PATCH(
         hearingLoss: {
           include: { exams: { orderBy: [{ examSet: "asc" }, { examRound: "asc" }] } },
         },
-        copd: { select: { id: true } },
+        copd: { include: { applications: { orderBy: { applicationRound: "asc" } } } },
         pneumoconiosis: { select: { id: true } },
         musculoskeletal: { select: { id: true } },
         occupationalAccident: { select: { id: true } },

@@ -224,7 +224,15 @@ export async function syncCopdCaseStatus(caseId: string): Promise<string | null>
     where: { caseId },
     include: { applications: true },
   });
-  if (!detail || detail.applications.length === 0) return null;
+  // CopdDetail / 회차가 없는 경우 — Case.status를 한글 default "접수대기"로 보정 (CONSULTING 박제 방지)
+  if (!detail || detail.applications.length === 0) {
+    const c = await prisma.case.findUnique({ where: { id: caseId }, select: { status: true } });
+    if (c && (c.status === "CONSULTING" || !c.status)) {
+      await prisma.case.update({ where: { id: caseId }, data: { status: "접수대기" } });
+      return "접수대기";
+    }
+    return null;
+  }
 
   const candidate = detail.applications
     .map(deriveCopdStatus)

@@ -42,17 +42,6 @@ type Case = {
   bereaved: DetailStatus;
 };
 
-function getCaseStatus(c: Case): string {
-  if (c.caseType === "HEARING_LOSS") return c.status;
-  if (c.caseType === "COPD") return c.copd?.status ?? "-";
-  if (c.caseType === "PNEUMOCONIOSIS") return c.pneumoconiosis?.status ?? "-";
-  if (c.caseType === "MUSCULOSKELETAL") return c.musculoskeletal?.status ?? "-";
-  if (c.caseType === "OCCUPATIONAL_ACCIDENT") return c.occupationalAccident?.status ?? "-";
-  if (c.caseType === "OCCUPATIONAL_CANCER") return c.occupationalCancer?.status ?? "-";
-  if (c.caseType === "BEREAVED") return c.bereaved?.status ?? "-";
-  return "-";
-}
-
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function formatDate(iso: string | null | undefined): string {
@@ -81,6 +70,25 @@ const STATUS_COLOR: Record<string, { bg: string; color: string; border: string; 
   "반려":        { bg: "#FEF2F2", color: "#b91c1c", border: "1px solid #FECACA", dot: "#EF4444" },
   "보류":        { bg: "#F1F5F9", color: "#64748B", border: "1px solid #CBD5E1", dot: "#94A3B8" },
   "파기":        { bg: "#F1F5F9", color: "#64748B", border: "1px solid #CBD5E1", dot: "#94A3B8" },
+  // COPD 한글 status (lib/constants/case.ts COPD_STATUS와 일치)
+  "전문의뢰":    { bg: "#FEF3C7", color: "#92400E", border: "1px solid #FCD34D", dot: "#F59E0B" },
+  "수치미달":    { bg: "#FEE2E2", color: "#991b1b", border: "1px solid #fecaca", dot: "#dc2626" },
+  "재진행가능":  { bg: "#FEF9C3", color: "#854d0e", border: "1px solid #fde68a", dot: "#eab308" },
+  "직력미달":    { bg: "#FEE2E2", color: "#991b1b", border: "1px solid #fecaca", dot: "#dc2626" },
+  "이의제기":    { bg: "#FFE4E6", color: "#9f1239", border: "1px solid #fda4af", dot: "#e11d48" },
+  "종결":        { bg: "#F1F5F9", color: "#475569", border: "1px solid #CBD5E1", dot: "#64748b" },
+  "질판위의뢰":  { bg: "#FCE7F3", color: "#9d174d", border: "1px solid #fbcfe8", dot: "#db2777" },
+  "요양승인":    { bg: "#E8F5D0", color: "#5A8A1F", border: "1px solid #A2D158", dot: "#8DC63F" },
+  "요양중":      { bg: "#D0EAD9", color: "#006838", border: "1px solid #00854A", dot: "#006838" },
+  "요양종결":    { bg: "#F1F5F9", color: "#475569", border: "1px solid #CBD5E1", dot: "#64748b" },
+  "장해승인":    { bg: "#E8F5D0", color: "#5A8A1F", border: "1px solid #A2D158", dot: "#8DC63F" },
+  "기각종결":    { bg: "#F1F5F9", color: "#475569", border: "1px solid #CBD5E1", dot: "#64748b" },
+  "송무인계":    { bg: "#EDE9FE", color: "#5b21b6", border: "1px solid #c4b5fd", dot: "#7c3aed" },
+  "이산인계":    { bg: "#EDE9FE", color: "#5b21b6", border: "1px solid #c4b5fd", dot: "#7c3aed" },
+  "정밀진행중":  { bg: "#D0EAD9", color: "#006838", border: "1px solid #00854A", dot: "#006838" },
+  "정밀완료":    { bg: "#FEF3C7", color: "#92400E", border: "1px solid #FCD34D", dot: "#F59E0B" },
+  "처분완료":    { bg: "#FEF3C7", color: "#92400E", border: "1px solid #FCD34D", dot: "#F59E0B" },
+  "진행중":      { bg: "#D0EAD9", color: "#006838", border: "1px solid #00854A", dot: "#006838" },
 };
 
 function StatusBadge({ status }: { status: string }) {

@@ -64,6 +64,7 @@ type CopdApplication = {
   occResult: string | null;
   disposalType: string | null;
   disposalDate: string | null;
+  disposalNoticeReceivedAt: string | null;
   disposalReason: string | null;
   reExamPossibleDate: string | null;
   disabilityClaimDate: string | null;
@@ -156,6 +157,7 @@ export default function CopdDetailPage({ params }: { params: Promise<{ caseId: s
               occReferralDate: dateOnly(a.occReferralDate),
               occReviewDate: dateOnly(a.occReviewDate),
               disposalDate: dateOnly(a.disposalDate),
+              disposalNoticeReceivedAt: dateOnly(a.disposalNoticeReceivedAt),
               reExamPossibleDate: dateOnly(a.reExamPossibleDate),
               disabilityClaimDate: dateOnly(a.disabilityClaimDate),
               disabilityDispositionDate: dateOnly(a.disabilityDispositionDate),
@@ -646,7 +648,7 @@ function ApplicationCard({
 
           {/* 처분 (요양) */}
           <div style={subStyle}>요양 처분</div>
-          <div style={grid3}>
+          <div style={grid4}>
             <Field label="처분 종류">
               <select style={inputStyle} value={data.disposalType ?? ""} onChange={(e) => u("disposalType", e.target.value || null)}>
                 <option value="">(선택)</option>
@@ -655,6 +657,9 @@ function ApplicationCard({
             </Field>
             <Field label="처분일자">
               <input style={inputStyle} type="date" value={data.disposalDate ?? ""} onChange={(e) => u("disposalDate", e.target.value || null)} />
+            </Field>
+            <Field label="결정통지 수령일">
+              <input style={inputStyle} type="date" value={data.disposalNoticeReceivedAt ?? ""} onChange={(e) => u("disposalNoticeReceivedAt", e.target.value || null)} title="이의제기 90일 D-day 기산점" />
             </Field>
             <Field label="재진행 가능일">
               <input style={inputStyle} type="date" value={data.reExamPossibleDate ?? ""} onChange={(e) => u("reExamPossibleDate", e.target.value || null)} />
