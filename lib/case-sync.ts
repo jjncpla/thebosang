@@ -338,7 +338,7 @@ export async function syncFromCopdDecision(caseId: string) {
   if (!approval) {
     if (hasOccRejection) {
       // 기각만 있고 처분이 없는 케이스 — 빈 approvalStatus + 메모로 표시
-      let review = await prisma.objectionReview.findFirst({ where: { caseId } });
+      const review = await prisma.objectionReview.findFirst({ where: { caseId } });
       if (!review) {
         await prisma.objectionReview.create({
           data: {
