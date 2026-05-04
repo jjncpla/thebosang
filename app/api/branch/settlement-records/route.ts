@@ -50,16 +50,40 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(existing)
   }
 
-  const record = await prisma.settlementRecord.create({
-    data: {
-      ...recordData,
-      paymentDate,
-      allocations: allocations?.length > 0
-        ? { create: allocations }
-        : undefined,
-    },
-    include: { allocations: true },
-  })
+  let record
+  try {
+    record = await prisma.settlementRecord.create({
+      data: {
+        branchName: recordData.branchName,
+        year: Number(recordData.year),
+        month: Number(recordData.month),
+        paymentDate,
+        victimName: recordData.victimName,
+        caseType: recordData.caseType ?? null,
+        tfName: recordData.tfName ?? null,
+        salesStaffName: recordData.salesStaffName ?? null,
+        settlementStaffName: recordData.settlementStaffName ?? null,
+        settlementStaffId: recordData.settlementStaffId ?? null,
+        grossAmount: Number(recordData.grossAmount) || 0,
+        deduction: Number(recordData.deduction) || 0,
+        isInstallment: Boolean(recordData.isInstallment),
+        totalInstallmentAmount: Number(recordData.totalInstallmentAmount) || 0,
+        paidInstallmentAmount: Number(recordData.paidInstallmentAmount) || 0,
+        memo: recordData.memo ?? null,
+        allocations: allocations?.length > 0
+          ? { create: allocations.map((a: { staffName: string; ratio: number; isExternal?: boolean }) => ({
+              staffName: a.staffName,
+              ratio: Number(a.ratio),
+              isExternal: Boolean(a.isExternal),
+            })) }
+          : undefined,
+      },
+      include: { allocations: true },
+    })
+  } catch (e) {
+    console.error('[settlement-records POST]', e)
+    return NextResponse.json({ error: String(e) }, { status: 500 })
+  }
 
   // 정산 담당자 지정 시 Todo 자동 생성
   if (recordData.settlementStaffId) {

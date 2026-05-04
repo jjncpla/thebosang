@@ -1212,7 +1212,7 @@ export default function PerformanceTab() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ ...row, branchName: branch }),
           })
-          if (!res.ok) { alert('저장 실패'); return }
+          if (!res.ok) { const e = await res.json().catch(() => ({})); alert('저장 실패: ' + (e.error || res.status)); return }
           await loadSettlements()
           setShowAddForm(false)
         }}
