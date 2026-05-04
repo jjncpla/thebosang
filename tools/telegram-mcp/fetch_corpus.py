@@ -121,7 +121,10 @@ async def main():
         print(f"[ERR] {plan_path} 없음. 채팅방 리스트 작성 필요.", file=sys.stderr)
         sys.exit(1)
     plan = json.loads(plan_path.read_text(encoding="utf-8"))
-    targets = [Target(**t) for t in plan["targets"]]
+    targets = [
+        Target(**{k: v for k, v in t.items() if not k.startswith("_")})
+        for t in plan["targets"]
+    ]
 
     session_path = HERE / SESSION_NAME
     client = TelegramClient(str(session_path), int(API_ID), API_HASH)

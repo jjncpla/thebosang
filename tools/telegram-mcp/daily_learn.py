@@ -55,21 +55,26 @@ def save_state(state: dict) -> None:
 
 
 def try_fetch() -> tuple[bool, str]:
-    """fetch_corpus.py 실행. lock 시 실패해도 OK (기존 corpus로 분석 진행)."""
+    """fetch_corpus.py 실행. lock/타임아웃 시 실패해도 OK (기존 corpus로 분석 진행).
+
+    환경변수 SKIP_FETCH=1 이면 fetch 스킵 (Claude Code 실행 중일 때 빠른 보고서 재생성용).
+    """
+    if os.getenv("SKIP_FETCH") == "1":
+        return False, "SKIP_FETCH=1 — fetch 스킵 (기존 corpus로 분석 진행)"
     plan = HERE / "fetch_plan.json"
     if not plan.exists():
         return False, "fetch_plan.json 없음 — fetch 스킵"
     try:
         r = subprocess.run(
             [sys.executable, str(HERE / "fetch_corpus.py")],
-            capture_output=True, text=True, timeout=600,
+            capture_output=True, text=True, timeout=120,
             env={**os.environ, "PYTHONIOENCODING": "utf-8"},
         )
         if r.returncode != 0:
             return False, f"fetch 실패 (lock 가능성): {r.stderr[-300:]}"
         return True, r.stdout[-500:]
     except subprocess.TimeoutExpired:
-        return False, "fetch 타임아웃"
+        return False, "fetch 타임아웃 (120s) — Claude Code MCP가 세션 잠금 가능. 다음 사이클 재시도."
     except Exception as e:
         return False, f"fetch 예외: {type(e).__name__}: {e}"
 
@@ -153,8 +158,8 @@ def analyze_corpus(state: dict) -> dict:
 
             # 양식 키워드 분포 (전체 corpus 기준)
             for m in msgs:
-                fn = m.get("media", {}).get("file_name", "") if m.get("media") else ""
-                text = m.get("text", "") or ""
+                fn = (m.get("media", {}).get("file_name") if m.get("media") else "") or ""
+                text = m.get("text") or ""
                 hay = fn + " " + text
                 for form, pat in FORM_KEYWORDS.items():
                     if re.search(pat, hay):
@@ -245,6 +250,47 @@ def maybe_send_telegram(report_path: str, summary: dict) -> str:
         return f"텔레그램 발송 실패: {type(e).__name__}: {e}"
 
 
+def git_commit_push(report_path: str) -> str:
+    """매일 보고서를 자동 commit + push (main 브랜치). 변경 없으면 skip."""
+    if os.getenv("SKIP_GIT") == "1":
+        return "SKIP_GIT=1 — git 스킵"
+    try:
+        # 현재 브랜치가 main인지 확인 (워크트리에서 실행되면 다른 브랜치일 수 있음)
+        r = subprocess.run(
+            ["git", "-C", str(REPO_ROOT), "branch", "--show-current"],
+            capture_output=True, text=True, timeout=10,
+        )
+        branch = r.stdout.strip()
+        if branch != "main":
+            return f"브랜치가 main이 아님 ({branch}) — git 스킵"
+
+        # 변경사항 확인
+        rel_path = str(Path(report_path).relative_to(REPO_ROOT)).replace("\\", "/")
+        r = subprocess.run(
+            ["git", "-C", str(REPO_ROOT), "status", "--porcelain", rel_path],
+            capture_output=True, text=True, timeout=10,
+        )
+        if not r.stdout.strip():
+            return "변경 없음 — commit 스킵"
+
+        # add + commit + push
+        subprocess.run(["git", "-C", str(REPO_ROOT), "add", rel_path], check=True, timeout=10)
+        msg = f"docs(daily-report): 텔레그램 학습 보고서 {DATE_TAG}\n\n자동 생성 by tools/telegram-mcp/daily_learn.py"
+        subprocess.run(
+            ["git", "-C", str(REPO_ROOT), "commit", "-m", msg],
+            check=True, timeout=15,
+        )
+        subprocess.run(
+            ["git", "-C", str(REPO_ROOT), "push", "origin", "main"],
+            check=True, timeout=60,
+        )
+        return f"git commit+push OK: {rel_path}"
+    except subprocess.CalledProcessError as e:
+        return f"git 명령 실패: {e}"
+    except Exception as e:
+        return f"git 예외: {type(e).__name__}: {e}"
+
+
 def main():
     print(f"[daily_learn] start {DATE_TAG}")
     state = load_state()
@@ -262,8 +308,12 @@ def main():
     print(f"    -> {report_path}")
 
     print("  [4] 텔레그램 발송 시도")
-    result = maybe_send_telegram(report_path, summary)
-    print(f"    -> {result}")
+    tg_result = maybe_send_telegram(report_path, summary)
+    print(f"    -> {tg_result}")
+
+    print("  [5] git auto-commit + push")
+    git_result = git_commit_push(report_path)
+    print(f"    -> {git_result}")
 
     # state 갱신
     state["last_seen"] = state.get("last_seen", {})
