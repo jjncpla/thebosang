@@ -1,4 +1,11 @@
-@import "tailwindcss";
+/* Tailwind v4: default source scan 비활성화 후 텍스트 소스 디렉토리만 명시.
+   사유: project root에 binary 파일(.pdf, .png, .otf, .db, .dll, .log) 다수 존재.
+   default 전체 scan이 이를 모두 읽으며 "Invalid code point" RangeError로 빌드 fail. */
+@import "tailwindcss" source(none);
+@source "../app/**/*.{tsx,ts,jsx,js,mdx}";
+@source "../components/**/*.{tsx,ts,jsx,js}";
+@source "../lib/**/*.{tsx,ts,jsx,js}";
+@source "../pages/**/*.{tsx,ts,jsx,js}";
 
 /* ============================================================
    TBSS Design Tokens — 법률사무소 서류 톤
