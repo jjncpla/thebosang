@@ -129,6 +129,8 @@ type FormData = {
   memo: string;
   progressNote: string;
   reminderDate: string;
+  branchName: string;
+  tfName: string;
 };
 
 const emptyForm: FormData = {
@@ -147,7 +149,44 @@ const emptyForm: FormData = {
   memo: "",
   progressNote: "",
   reminderDate: "",
+  branchName: "",
+  tfName: "",
 };
+
+// 지사/TF 선택 헬퍼 (모달 내부 사용)
+function BranchSelect({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const { tfByBranch } = useBranches();
+  return (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      style={{ border: "1px solid #e5e7eb", borderRadius: 6, padding: "7px 10px", fontSize: 13, color: "#374151", background: "#f9fafb", outline: "none", width: "100%" }}
+    >
+      <option value="">선택</option>
+      {Object.keys(tfByBranch).map((b) => (
+        <option key={b} value={b}>{b}</option>
+      ))}
+    </select>
+  );
+}
+
+function TfSelect({ branchName, value, onChange }: { branchName: string; value: string; onChange: (v: string) => void }) {
+  const { tfByBranch } = useBranches();
+  const tfList = branchName ? tfByBranch[branchName] ?? [] : [];
+  return (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      disabled={!branchName}
+      style={{ border: "1px solid #e5e7eb", borderRadius: 6, padding: "7px 10px", fontSize: 13, color: "#374151", background: "#f9fafb", outline: "none", width: "100%" }}
+    >
+      <option value="">{branchName ? "선택" : "지사 먼저 선택"}</option>
+      {tfList.map((t) => (
+        <option key={t} value={t}>{t}</option>
+      ))}
+    </select>
+  );
+}
 
 function ConsultationModal({
   initial,
@@ -179,6 +218,8 @@ function ConsultationModal({
       memo: initial.memo ?? "",
       progressNote: initial.progressNote ?? "",
       reminderDate: toInputDate(initial.reminderDate),
+      branchName: initial.branchName ?? "",
+      tfName: initial.tfName ?? "",
     };
   });
   const [saving, setSaving] = useState(false);
@@ -281,6 +322,14 @@ function ConsultationModal({
             <input type="date" style={inputStyle} value={form.visitDate} onChange={(e) => set("visitDate", e.target.value)} />
           </div>
           <div>
+            <label style={labelStyle}>담당 지사</label>
+            <BranchSelect value={form.branchName} onChange={(v) => { set("branchName", v); set("tfName", ""); }} />
+          </div>
+          <div>
+            <label style={labelStyle}>담당 TF</label>
+            <TfSelect branchName={form.branchName} value={form.tfName} onChange={(v) => set("tfName", v)} />
+          </div>
+          <div>
             <label style={labelStyle}>상담경로 대분류</label>
             <select style={{ ...inputStyle }} value={form.routeMain} onChange={(e) => { set("routeMain", e.target.value); set("routeSub", ""); set("routeDetail", ""); }}>
               <option value="">선택</option>
@@ -365,11 +414,17 @@ export default function ConsultationPage() {
   const [filterStatus, setFilterStatus] = useState("");
   const [filterCaseType, setFilterCaseType] = useState("");
   const [filterManagerId, setFilterManagerId] = useState("");
+  const [filterBranch, setFilterBranch] = useState("");
   const [filterTf, setFilterTf] = useState("");
   const [filterRoute, setFilterRoute] = useState("");
   const [filterDateFrom, setFilterDateFrom] = useState("");
   const [filterDateTo, setFilterDateTo] = useState("");
   const [search, setSearch] = useState("");
+
+  // 지사가 선택되면 그 지사의 더보상 TF 목록만 노출 (이산TF 제외)
+  const branchTfList: string[] = filterBranch
+    ? (TF_BY_BRANCH[filterBranch] ?? []).filter((tf) => !tf.startsWith("이산"))
+    : THEBOSANG_TF_LIST;
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<Consultation | null>(null);
@@ -422,6 +477,12 @@ export default function ConsultationPage() {
     if (filterCaseType) p.set("caseType", filterCaseType);
     if (filterManagerId) p.set("managerId", filterManagerId);
     if (filterTf) p.set("tfName", filterTf);
+    else if (filterBranch) {
+      // TF 미선택 + 지사 선택 → 지사 + 그 지사의 TF 목록 모두 OR
+      p.set("branchName", filterBranch);
+      const tfs = (TF_BY_BRANCH[filterBranch] ?? []).filter((tf) => !tf.startsWith("이산"));
+      tfs.forEach((tf) => p.append("tfNames", tf));
+    }
     if (filterRoute) p.set("routeMain", filterRoute);
     if (filterDateFrom) p.set("dateFrom", filterDateFrom);
     if (filterDateTo) p.set("dateTo", filterDateTo);
@@ -470,7 +531,7 @@ export default function ConsultationPage() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [filterStatus, filterCaseType, filterManagerId, filterTf, filterRoute, filterDateFrom, filterDateTo, search, page]);
+  }, [filterStatus, filterCaseType, filterManagerId, filterBranch, filterTf, filterRoute, filterDateFrom, filterDateTo, search, page, TF_BY_BRANCH]);
 
   useEffect(() => { fetchManagers(); }, []);
   useEffect(() => { fetchItems(); }, [fetchItems]);
@@ -547,14 +608,38 @@ export default function ConsultationPage() {
         </div>
       </div>
 
-      {/* Stats */}
+      {/* Stats — 줄바꿈 대신 폰트 크기를 화면 너비에 맞춰 축소 (clamp + nowrap) */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 16 }}>
         {statCards.map((card) => (
-          <div key={card.label} style={{ background: "white", borderRadius: 10, border: "1px solid #e5e7eb", padding: "16px 20px", boxShadow: "0 1px 3px rgba(0,0,0,0.05)" }}>
-            <div style={{ fontSize: 11, color: "#6b7280", fontWeight: 700, marginBottom: 4 }}>{card.label}</div>
-            <div style={{ fontSize: 26, fontWeight: 800, color: card.color }}>{card.value}</div>
+          <div key={card.label} style={{ background: "white", borderRadius: 10, border: "1px solid #e5e7eb", padding: "16px 20px", boxShadow: "0 1px 3px rgba(0,0,0,0.05)", minWidth: 0 }}>
+            <div style={{ fontSize: "clamp(10px, 1vw, 11px)", color: "#6b7280", fontWeight: 700, marginBottom: 4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{card.label}</div>
+            <div style={{ fontSize: "clamp(18px, 2.2vw, 26px)", fontWeight: 800, color: card.color, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{card.value}</div>
           </div>
         ))}
+      </div>
+
+      {/* 지사 선택 (지사 단위 집계·필터) */}
+      <div style={{ background: "white", borderRadius: 10, border: "1px solid #e5e7eb", padding: "14px 16px", marginBottom: 12, boxShadow: "0 1px 3px rgba(0,0,0,0.05)" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+          <div>
+            <label style={{ fontSize: 11, color: "#6b7280", fontWeight: 700, display: "block", marginBottom: 4 }}>지사 선택</label>
+            <select
+              value={filterBranch}
+              onChange={(e) => { setFilterBranch(e.target.value); setFilterTf(""); setPage(1); }}
+              style={{ border: "1px solid #e5e7eb", borderRadius: 6, padding: "6px 12px", fontSize: 13, color: "#374151", background: "#f9fafb", cursor: "pointer", minWidth: 200 }}
+            >
+              <option value="">전체 지사</option>
+              {Object.keys(TF_BY_BRANCH).map((b) => (
+                <option key={b} value={b}>{b}</option>
+              ))}
+            </select>
+          </div>
+          {filterBranch && (
+            <div style={{ fontSize: 11, color: "#6b7280" }}>
+              지사 단위 집계: 총 상담·약정·연락대기·종결 건수가 <b style={{ color: "#29ABE2" }}>{filterBranch}</b> 범위로 다시 계산됩니다.
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Filters */}
@@ -610,7 +695,7 @@ export default function ConsultationPage() {
               style={{ border: "1px solid #e5e7eb", borderRadius: 6, padding: "6px 10px", fontSize: 12, color: "#374151", background: "#f9fafb" }}
             >
               <option value="">전체</option>
-              {THEBOSANG_TF_LIST.map((tf) => <option key={tf} value={tf}>{tf}</option>)}
+              {branchTfList.map((tf) => <option key={tf} value={tf}>{tf}</option>)}
             </select>
           </div>
           <div>
@@ -647,9 +732,9 @@ export default function ConsultationPage() {
         </div>
       </div>
 
-      {/* Table */}
+      {/* Table — 자동 줄바꿈 대신 화면 너비에 맞춰 폰트 사이즈 축소 (clamp) + nowrap */}
       <div style={{ background: "white", borderRadius: 10, border: "1px solid #e5e7eb", overflow: "hidden", boxShadow: "0 1px 3px rgba(0,0,0,0.05)" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "clamp(11px, 1vw, 13px)" }}>
           <thead>
             <tr style={{ background: "#29ABE2", borderBottom: "2px solid #1A8BBF" }}>
               <th style={{ padding: "10px 10px", width: 36 }}>
@@ -688,18 +773,18 @@ export default function ConsultationPage() {
                 <td style={{ padding: "12px 10px" }} onClick={(e) => e.stopPropagation()}>
                   <input type="checkbox" checked={selectedIds.has(item.id)} onChange={() => toggleSelect(item.id)} />
                 </td>
-                <td style={{ padding: "12px 14px", fontWeight: 600, color: "#111827", cursor: "pointer" }} onClick={() => { setEditTarget(item); setModalOpen(true); }}>{item.name}</td>
-                <td style={{ padding: "12px 14px", color: "#374151", fontFamily: "monospace", cursor: "pointer" }} onClick={() => { setEditTarget(item); setModalOpen(true); }}>{item.phone}</td>
-                <td style={{ padding: "12px 14px", cursor: "pointer" }} onClick={() => { setEditTarget(item); setModalOpen(true); }}>
+                <td style={{ padding: "12px 14px", fontWeight: 600, color: "#111827", cursor: "pointer", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} onClick={() => { setEditTarget(item); setModalOpen(true); }} title={item.name}>{item.name}</td>
+                <td style={{ padding: "12px 14px", color: "#374151", fontFamily: "monospace", cursor: "pointer", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} onClick={() => { setEditTarget(item); setModalOpen(true); }} title={item.phone}>{item.phone}</td>
+                <td style={{ padding: "12px 14px", cursor: "pointer", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} onClick={() => { setEditTarget(item); setModalOpen(true); }} title={item.caseTypes.join(", ")}>
                   {item.caseTypes.length > 0 ? item.caseTypes.map((t) => <CaseTypeBadge key={t} type={t} />) : <span style={{ color: "#9ca3af" }}>-</span>}
                 </td>
-                <td style={{ padding: "12px 14px", color: "#374151", cursor: "pointer" }} onClick={() => { setEditTarget(item); setModalOpen(true); }}>{item.managerName || item.manager?.name || "-"}</td>
-                <td style={{ padding: "12px 14px", color: "#6b7280", fontSize: 12, cursor: "pointer" }} onClick={() => { setEditTarget(item); setModalOpen(true); }}>
+                <td style={{ padding: "12px 14px", color: "#374151", cursor: "pointer", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} onClick={() => { setEditTarget(item); setModalOpen(true); }} title={item.managerName || item.manager?.name || ""}>{item.managerName || item.manager?.name || "-"}</td>
+                <td style={{ padding: "12px 14px", color: "#6b7280", fontSize: "clamp(10px, 0.95vw, 12px)", cursor: "pointer", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} onClick={() => { setEditTarget(item); setModalOpen(true); }} title={[item.routeMain, item.routeSub, item.routeDetail].filter(Boolean).join(" / ")}>
                   {[item.routeMain, item.routeSub, item.routeDetail].filter(Boolean).join(" / ") || "-"}
                 </td>
-                <td style={{ padding: "12px 14px", color: "#6b7280", fontFamily: "monospace", fontSize: 12, cursor: "pointer" }} onClick={() => { setEditTarget(item); setModalOpen(true); }}>{formatDate(item.visitDate)}</td>
-                <td style={{ padding: "12px 14px", cursor: "pointer" }} onClick={() => { setEditTarget(item); setModalOpen(true); }}><StatusBadge status={item.status} /></td>
-                <td style={{ padding: "12px 14px", color: "#6b7280", fontSize: 12, maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", cursor: "pointer" }} onClick={() => { setEditTarget(item); setModalOpen(true); }}>{item.memo || "-"}</td>
+                <td style={{ padding: "12px 14px", color: "#6b7280", fontFamily: "monospace", fontSize: "clamp(10px, 0.95vw, 12px)", cursor: "pointer", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} onClick={() => { setEditTarget(item); setModalOpen(true); }}>{formatDate(item.visitDate)}</td>
+                <td style={{ padding: "12px 14px", cursor: "pointer", whiteSpace: "nowrap" }} onClick={() => { setEditTarget(item); setModalOpen(true); }}><StatusBadge status={item.status} /></td>
+                <td style={{ padding: "12px 14px", color: "#6b7280", fontSize: "clamp(10px, 0.95vw, 12px)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", cursor: "pointer" }} onClick={() => { setEditTarget(item); setModalOpen(true); }} title={item.memo ?? ""}>{item.memo || "-"}</td>
                 <td style={{ padding: "12px 10px" }}>
                   <button
                     onClick={(e) => { e.stopPropagation(); setSelectedIds(new Set([item.id])); setDeleteConfirm(true); }}

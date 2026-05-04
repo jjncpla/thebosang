@@ -1212,7 +1212,7 @@ export default function PerformanceTab() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ ...row, branchName: branch }),
           })
-          if (!res.ok) { alert('저장 실패'); return }
+          if (!res.ok) { const e = await res.json().catch(() => ({})); alert('저장 실패: ' + (e.error || res.status)); return }
           await loadSettlements()
           setShowAddForm(false)
         }}
@@ -1636,8 +1636,10 @@ function AddSettlementForm({
     const rowMonth = payDate ? parseInt(payDate.slice(5, 7)) : defaultMonth
     const rowYear  = payDate ? parseInt(payDate.slice(0, 4)) : year
     try {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { victimSearch, ...formData } = form
       await onSave({
-        ...form,
+        ...formData,
         year: rowYear,
         month: rowMonth,
         paymentDate: payDate || '',

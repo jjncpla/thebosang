@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { FORM_FIELDS, type FieldEntry } from "@/lib/formFields";
@@ -55,6 +55,20 @@ export default function PracticalFormsPage() {
   const [searchHits,  setSearchHits]    = useState<PatientHit[]>([]);
   const [searchOpen,  setSearchOpen]    = useState(false);
   const [searching,   setSearching]     = useState(false);
+
+  // 실시간 오버레이용
+  const imgRef = useRef<HTMLImageElement>(null);
+  const [imgWidth, setImgWidth] = useState(0);
+  const handleImgLoad = () => {
+    if (imgRef.current) setImgWidth(imgRef.current.offsetWidth);
+  };
+  useEffect(() => {
+    const onResize = () => {
+      if (imgRef.current) setImgWidth(imgRef.current.offsetWidth);
+    };
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
 
   // 개발자 요청 모달
   const [reqOpen, setReqOpen] = useState(false);
@@ -410,15 +424,44 @@ export default function PracticalFormsPage() {
               좌측에서 서식을 선택하세요.
             </div>
           ) : previewType === "png" ? (
-            // 동적 PNG 미리보기 + onError fallback이 있는 좌표 에디터 — Next.js <Image>는 width/height 강제라 부적합
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={previewUrl}
-              alt="서식 미리보기"
-              style={{ display: "block", maxWidth: "100%", userSelect: "none" }}
-              onError={() => setPreviewType("pdf")}
-              draggable={false}
-            />
+            <div style={{ position: "relative", display: "inline-block", maxWidth: "100%", lineHeight: 0 }}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                ref={imgRef}
+                src={previewUrl}
+                alt="서식 미리보기"
+                style={{ display: "block", maxWidth: "100%", userSelect: "none" }}
+                onLoad={handleImgLoad}
+                onError={() => setPreviewType("pdf")}
+                draggable={false}
+              />
+              {/* 실시간 입력값 오버레이 */}
+              {imgWidth > 0 && (
+                <div style={{ position: "absolute", inset: 0, pointerEvents: "none", overflow: "hidden" }}>
+                  {fields
+                    .filter(f => (f.page ?? 1) === previewPage && f.x && f.y && values[f.key])
+                    .map(f => (
+                      <span
+                        key={f.key}
+                        style={{
+                          position: "absolute",
+                          left: `${(f.x / 595) * 100}%`,
+                          top: `${((842 - f.y) / 842) * 100}%`,
+                          fontSize: `${Math.max(7, (imgWidth / 595) * 9)}px`,
+                          transform: "translateY(-85%)",
+                          color: "#1e3a8a",
+                          fontFamily: "'Noto Sans KR', 'Pretendard', sans-serif",
+                          whiteSpace: "nowrap",
+                          lineHeight: 1,
+                          letterSpacing: "0.02em",
+                        }}
+                      >
+                        {values[f.key]}
+                      </span>
+                    ))}
+                </div>
+              )}
+            </div>
           ) : (
             <iframe
               src={`/api/forms/blank?type=${selectedForm}`}

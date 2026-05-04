@@ -249,6 +249,46 @@ export default function WageChangeCalcPage() {
   const [uploadedFileName, setUploadedFileName] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // 사건 매칭 검토
+  type CaseCandidate = {
+    caseId: string;
+    patientId: string;
+    patientName: string;
+    ssnMasked: string;
+    caseType: string;
+    status: string;
+    tfName: string | null;
+    branch: string | null;
+  };
+  type MatchComparison = {
+    ocrFinalAvgWage: number | null;
+    ocrBaseAvgWage: number | null;
+    savedBaseAvgWage: number | null;
+    savedFinalAvgWage: number | null;
+    diffBase: number | null;
+    diffFinal: number | null;
+    isBaseMatch: boolean | null;
+    isFinalMatch: boolean | null;
+  };
+  type MatchResult = {
+    matched: boolean;
+    matchedCase?: CaseCandidate;
+    wageReview?: {
+      id: string;
+      baseAvgWage: number | null;
+      finalAvgWage: number | null;
+      finalSelectedWage: number | null;
+      comparisonWage: string | null;
+      appliedWage: string | null;
+      reviewResult: string | null;
+    } | null;
+    comparison?: MatchComparison;
+    candidates: CaseCandidate[];
+    message: string;
+  };
+  const [matchResult, setMatchResult] = useState<MatchResult | null>(null);
+  const [matchLoading, setMatchLoading] = useState(false);
+
   // 최근 업로드 이력
   type NoticeListItem = {
     id: string;
@@ -286,11 +326,51 @@ export default function WageChangeCalcPage() {
   const [ocrRawText, setOcrRawText] = useState<string | null>(null);
   const [showRaw, setShowRaw] = useState(false);
 
+  async function runCaseMatch(parsed: ParsedNotice) {
+    setMatchLoading(true);
+    try {
+      const body = {
+        workerName: parsed.workerName,
+        birthDateRaw: parsed.birthDateRaw,
+        birthDate: parsed.birthDate,
+        accidentDate: parsed.accidentDate,
+        ocrFinalAvgWage: parsed.initialAvgWage, // 결정통지서 — 최종 증감임금
+        ocrInitialAvgWage: parsed.initialAvgWage,
+        ocrOriginalAvgWage: parsed.originalAvgWage,
+        ocrPaymentAmount: parsed.paymentAmount,
+      };
+      const res = await fetch("/api/avg-wage/match-and-review", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setMatchResult(data);
+      } else {
+        setMatchResult({
+          matched: false,
+          candidates: [],
+          message: data.error ?? "사건 매칭 실패",
+        });
+      }
+    } catch (e) {
+      setMatchResult({
+        matched: false,
+        candidates: [],
+        message: e instanceof Error ? e.message : String(e),
+      });
+    } finally {
+      setMatchLoading(false);
+    }
+  }
+
   async function handleFileUpload(file: File) {
     setUploading(true);
     setUploadError(null);
     setUploadedFileName(file.name);
     setOcrRawText(null);
+    setMatchResult(null);
     try {
       const fd = new FormData();
       fd.append("file", file);
@@ -308,7 +388,10 @@ export default function WageChangeCalcPage() {
       // 추출된 필드로 입력 자동 채우기
       if (parsed.accidentDate) setAccidentDateStr(parsed.accidentDate);
       if (parsed.birthDate) setBirthDateStr(parsed.birthDate);
-      if (parsed.initialAvgWage) setInitialWage(String(parsed.initialAvgWage));
+      // 입력란 "최초 평균임금"은 재해 당시 원시 평균임금이므로 originalAvgWage 우선,
+      // 없으면 장해급여 일시금 산정 일당, 마지막 폴백으로 initialAvgWage(=최종 증감임금)
+      const autoOriginal = parsed.originalAvgWage ?? parsed.disabilityUnitWage ?? parsed.initialAvgWage;
+      if (autoOriginal) setInitialWage(String(autoOriginal));
 
       // 결정사항/사업장명으로 직업병 vs 일반사고 자동 추론
       const inferOccupational =
@@ -346,6 +429,9 @@ export default function WageChangeCalcPage() {
       }
       // 업로드 후 이력 새로고침
       fetchRecent();
+
+      // 사건 매칭 검토 (백그라운드)
+      runCaseMatch(parsed);
     } catch (e: unknown) {
       setUploadError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -357,6 +443,7 @@ export default function WageChangeCalcPage() {
     setParsedNotice(null);
     setUploadError(null);
     setUploadedFileName(null);
+    setMatchResult(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
@@ -477,6 +564,9 @@ export default function WageChangeCalcPage() {
           <div style={{ marginTop: 16 }}>
             <NoticeSummary notice={parsedNotice} fileName={uploadedFileName} />
 
+            {/* ─── 사건 매칭 검토 ─── */}
+            <CaseMatchSection result={matchResult} loading={matchLoading} />
+
             {/* OCR 원문 디버그 */}
             {ocrRawText && (
               <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px dashed #cbd5e1" }}>
@@ -563,7 +653,7 @@ export default function WageChangeCalcPage() {
                 <th style={{ padding: 8, textAlign: "left", fontWeight: 600 }}>재해자</th>
                 <th style={{ padding: 8, textAlign: "left", fontWeight: 600 }}>결정사항</th>
                 <th style={{ padding: 8, textAlign: "left", fontWeight: 600 }}>재해일</th>
-                <th style={{ padding: 8, textAlign: "right", fontWeight: 600 }}>최초 평임</th>
+                <th style={{ padding: 8, textAlign: "right", fontWeight: 600 }}>최종 증감임금</th>
                 <th style={{ padding: 8, textAlign: "right", fontWeight: 600 }}>지급결정액</th>
                 <th style={{ padding: 8, textAlign: "left", fontWeight: 600 }}>파일명</th>
                 <th style={{ padding: 8, textAlign: "center", fontWeight: 600 }}></th>
@@ -713,7 +803,13 @@ export default function WageChangeCalcPage() {
       </section>
 
       {/* ─── 자동 판단 + 결과 ─── */}
-      {result && (
+      {/*
+       * 고령자 감액 + 연차별 산정내역은 휴업급여에만 적용되는 검증 로직.
+       * - PDF 미업로드 (수동 입력 모드): 항상 표시
+       * - PDF 업로드 + 휴업급여: 표시 (정합성 검증)
+       * - PDF 업로드 + 그 외 (장해/장례/직접진료 등): 숨김 — 본 결정사항에는 무관
+       */}
+      {result && (!parsedNotice || parsedNotice.decisionType === "휴업급여") && (
         <>
           <section style={sectionStyle}>
             <h2 style={sectionTitleStyle}>자동 판단 결과</h2>
@@ -818,6 +914,19 @@ export default function WageChangeCalcPage() {
             </section>
           )}
         </>
+      )}
+
+      {/* 휴업급여가 아닌 결정통지서가 업로드된 경우 — 고령자 감액 미표시 안내 */}
+      {parsedNotice && parsedNotice.decisionType !== "휴업급여" && parsedNotice.decisionType !== "기타" && (
+        <section style={{ ...sectionStyle, background: "#f8fafc", borderColor: "#cbd5e1" }}>
+          <p style={{ fontSize: 13, color: "#475569", margin: 0, lineHeight: 1.6 }}>
+            ℹ️ 업로드된 통지서 결정사항은 <strong>{parsedNotice.decisionType}</strong>입니다.<br/>
+            <span style={{ fontSize: 12, color: "#64748b" }}>
+              산재법 제55조 별표1(고령자 휴업급여 감액) + 연차별 평균임금 산정내역은 <strong>휴업급여</strong>에만 적용되므로 본 결정사항에는 무관 — 표시하지 않습니다.<br/>
+              위 OCR 결과 카드에서 추출된 임금/지급결정액/장해 정보는 모두 정상 표시됩니다.
+            </span>
+          </p>
+        </section>
       )}
 
       {/* ─── 법령 안내 ─── */}
@@ -942,8 +1051,16 @@ function NoticeSummary({
         <InfoCell label="재해발생일" value={notice.accidentDate ?? "-"} />
         <InfoCell label="결정일" value={notice.decisionDate ?? "-"} />
         <InfoCell
-          label="최초 평균임금"
-          value={notice.initialAvgWage ? `${formatNum(notice.initialAvgWage)}원` : "-"}
+          label="최종 증감임금"
+          value={(() => {
+            const v = notice.initialAvgWage ?? notice.disabilityUnitWage;
+            return v ? `${formatNum(v)}원` : "-";
+          })()}
+          highlight
+        />
+        <InfoCell
+          label="최초 평균임금 (재해 당시)"
+          value={notice.originalAvgWage ? `${formatNum(notice.originalAvgWage)}원` : "-"}
           highlight
         />
         <InfoCell
@@ -1065,6 +1182,296 @@ function NoticeSummary({
     </div>
   );
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   사건 매칭 검토 결과
+   ═══════════════════════════════════════════════════════════════ */
+type MatchResultProps = {
+  result: {
+    matched: boolean;
+    matchedCase?: {
+      caseId: string;
+      patientId: string;
+      patientName: string;
+      ssnMasked: string;
+      caseType: string;
+      status: string;
+      tfName: string | null;
+      branch: string | null;
+    };
+    wageReview?: {
+      id: string;
+      baseAvgWage: number | null;
+      finalAvgWage: number | null;
+      finalSelectedWage: number | null;
+      comparisonWage: string | null;
+      appliedWage: string | null;
+      reviewResult: string | null;
+    } | null;
+    comparison?: {
+      ocrFinalAvgWage: number | null;
+      ocrBaseAvgWage: number | null;
+      savedBaseAvgWage: number | null;
+      savedFinalAvgWage: number | null;
+      diffBase: number | null;
+      diffFinal: number | null;
+      isBaseMatch: boolean | null;
+      isFinalMatch: boolean | null;
+    };
+    candidates: Array<{
+      caseId: string;
+      patientId: string;
+      patientName: string;
+      ssnMasked: string;
+      caseType: string;
+      status: string;
+      tfName: string | null;
+      branch: string | null;
+    }>;
+    message: string;
+  } | null;
+  loading: boolean;
+};
+
+function CaseMatchSection({ result, loading }: MatchResultProps) {
+  const fmt = (n: number | null | undefined) =>
+    n != null ? n.toLocaleString("ko-KR") + "원" : "-";
+
+  if (loading) {
+    return (
+      <div style={{
+        marginTop: 12,
+        padding: 12,
+        background: "#f1f5f9",
+        border: "1px dashed #cbd5e1",
+        borderRadius: 8,
+        fontSize: 12,
+        color: "#64748b",
+      }}>
+        🔍 사건 DB 매칭 검토 중...
+      </div>
+    );
+  }
+
+  if (!result) return null;
+
+  // 매칭 성공
+  if (result.matched && result.matchedCase) {
+    const c = result.matchedCase;
+    const cmp = result.comparison;
+    const finalMatchOK = cmp?.isFinalMatch === true;
+    const finalMatchFail = cmp?.isFinalMatch === false;
+
+    const bgColor = finalMatchOK
+      ? "#f0fdf4"
+      : finalMatchFail
+        ? "#fef2f2"
+        : "#f8fafc";
+    const borderColor = finalMatchOK
+      ? "#bbf7d0"
+      : finalMatchFail
+        ? "#fecaca"
+        : "#cbd5e1";
+    const titleColor = finalMatchOK
+      ? "#16a34a"
+      : finalMatchFail
+        ? "#dc2626"
+        : "#64748b";
+
+    return (
+      <div style={{
+        marginTop: 12,
+        padding: 14,
+        background: bgColor,
+        border: `1px solid ${borderColor}`,
+        borderRadius: 8,
+      }}>
+        <div style={{ fontSize: 14, fontWeight: 700, color: titleColor, marginBottom: 8 }}>
+          🔗 사건 매칭 검토 — {finalMatchOK ? "✅ 일치" : finalMatchFail ? "❌ 불일치" : "⚠️ 검토 필요"}
+        </div>
+        <div style={{ fontSize: 12, color: "#374151", marginBottom: 10 }}>
+          {result.message}
+        </div>
+
+        {/* 매칭된 사건 정보 */}
+        <div style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
+          gap: 8,
+          marginBottom: 10,
+        }}>
+          <div style={miniCellStyle}>
+            <div style={miniLabelStyle}>재해자</div>
+            <div style={miniValueStyle}>{c.patientName} <span style={{ color: "#9ca3af", fontSize: 11 }}>({c.ssnMasked})</span></div>
+          </div>
+          <div style={miniCellStyle}>
+            <div style={miniLabelStyle}>상병계열</div>
+            <div style={miniValueStyle}>{c.caseType}</div>
+          </div>
+          <div style={miniCellStyle}>
+            <div style={miniLabelStyle}>상태</div>
+            <div style={miniValueStyle}>{c.status}</div>
+          </div>
+          <div style={miniCellStyle}>
+            <div style={miniLabelStyle}>TF / 지사</div>
+            <div style={miniValueStyle}>{c.tfName ?? "-"} / {c.branch ?? "-"}</div>
+          </div>
+        </div>
+
+        {/* 비교 표 */}
+        {cmp && (
+          <div style={{
+            background: "#fff",
+            border: "1px solid #e5e7eb",
+            borderRadius: 6,
+            padding: 10,
+            marginBottom: 10,
+          }}>
+            <table style={{ width: "100%", fontSize: 12, borderCollapse: "collapse" }}>
+              <thead>
+                <tr style={{ background: "#f9fafb" }}>
+                  <th style={{ padding: 6, textAlign: "left", fontWeight: 600 }}>항목</th>
+                  <th style={{ padding: 6, textAlign: "right", fontWeight: 600 }}>OCR 추출</th>
+                  <th style={{ padding: 6, textAlign: "right", fontWeight: 600 }}>저장된 검토</th>
+                  <th style={{ padding: 6, textAlign: "right", fontWeight: 600 }}>차이</th>
+                  <th style={{ padding: 6, textAlign: "center", fontWeight: 600 }}>일치</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr style={{ borderTop: "1px solid #f1f5f9" }}>
+                  <td style={{ padding: 6 }}>적용평균임금</td>
+                  <td style={{ padding: 6, textAlign: "right" }}>{fmt(cmp.ocrFinalAvgWage)}</td>
+                  <td style={{ padding: 6, textAlign: "right" }}>{fmt(cmp.savedFinalAvgWage)}</td>
+                  <td style={{ padding: 6, textAlign: "right", color: cmp.isFinalMatch === false ? "#dc2626" : "#374151" }}>
+                    {cmp.diffFinal != null ? (cmp.diffFinal >= 0 ? "+" : "") + cmp.diffFinal.toLocaleString("ko-KR") + "원" : "-"}
+                  </td>
+                  <td style={{ padding: 6, textAlign: "center" }}>
+                    {cmp.isFinalMatch === true ? "✅" : cmp.isFinalMatch === false ? "❌" : "—"}
+                  </td>
+                </tr>
+                <tr style={{ borderTop: "1px solid #f1f5f9" }}>
+                  <td style={{ padding: 6 }}>최초산출평균임금</td>
+                  <td style={{ padding: 6, textAlign: "right" }}>{fmt(cmp.ocrBaseAvgWage)}</td>
+                  <td style={{ padding: 6, textAlign: "right" }}>{fmt(cmp.savedBaseAvgWage)}</td>
+                  <td style={{ padding: 6, textAlign: "right", color: cmp.isBaseMatch === false ? "#dc2626" : "#374151" }}>
+                    {cmp.diffBase != null ? (cmp.diffBase >= 0 ? "+" : "") + cmp.diffBase.toLocaleString("ko-KR") + "원" : "-"}
+                  </td>
+                  <td style={{ padding: 6, textAlign: "center" }}>
+                    {cmp.isBaseMatch === true ? "✅" : cmp.isBaseMatch === false ? "❌" : "—"}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        <a
+          href={`/cases/${c.caseId}`}
+          style={{
+            display: "inline-block",
+            padding: "6px 12px",
+            background: "#29ABE2",
+            color: "#fff",
+            fontSize: 12,
+            fontWeight: 600,
+            borderRadius: 6,
+            textDecoration: "none",
+          }}
+        >
+          사건 #{c.caseId.slice(0, 8)} 상세 열기 →
+        </a>
+      </div>
+    );
+  }
+
+  // 매칭 실패 / 다중 후보
+  return (
+    <div style={{
+      marginTop: 12,
+      padding: 14,
+      background: "#fffbeb",
+      border: "1px solid #fde68a",
+      borderRadius: 8,
+    }}>
+      <div style={{ fontSize: 14, fontWeight: 700, color: "#92400e", marginBottom: 6 }}>
+        🔗 사건 매칭 검토 — {result.candidates.length === 0 ? "❓ 매칭 사건 없음" : "⚠️ 다중 매칭"}
+      </div>
+      <div style={{ fontSize: 12, color: "#374151", marginBottom: 8 }}>
+        {result.message}
+      </div>
+
+      {result.candidates.length > 0 && (
+        <div style={{ background: "#fff", border: "1px solid #fde68a", borderRadius: 6, padding: 8 }}>
+          <div style={{ fontSize: 11, fontWeight: 600, color: "#92400e", marginBottom: 6 }}>
+            매칭 후보 ({result.candidates.length}건)
+          </div>
+          <table style={{ width: "100%", fontSize: 11, borderCollapse: "collapse" }}>
+            <thead>
+              <tr style={{ background: "#f9fafb" }}>
+                <th style={{ padding: 4, textAlign: "left" }}>재해자</th>
+                <th style={{ padding: 4, textAlign: "left" }}>상병계열</th>
+                <th style={{ padding: 4, textAlign: "left" }}>상태</th>
+                <th style={{ padding: 4, textAlign: "left" }}>TF/지사</th>
+                <th style={{ padding: 4, textAlign: "center" }}>열기</th>
+              </tr>
+            </thead>
+            <tbody>
+              {result.candidates.map((c) => (
+                <tr key={c.caseId} style={{ borderTop: "1px solid #f1f5f9" }}>
+                  <td style={{ padding: 4 }}>{c.patientName} <span style={{ color: "#9ca3af" }}>({c.ssnMasked})</span></td>
+                  <td style={{ padding: 4 }}>{c.caseType}</td>
+                  <td style={{ padding: 4 }}>{c.status}</td>
+                  <td style={{ padding: 4 }}>{c.tfName ?? "-"} / {c.branch ?? "-"}</td>
+                  <td style={{ padding: 4, textAlign: "center" }}>
+                    <a href={`/cases/${c.caseId}`} style={{ color: "#29ABE2", textDecoration: "underline" }}>
+                      #{c.caseId.slice(0, 8)}
+                    </a>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {result.candidates.length === 0 && (
+        <a
+          href="/inquiry"
+          style={{
+            display: "inline-block",
+            padding: "6px 12px",
+            background: "#29ABE2",
+            color: "#fff",
+            fontSize: 12,
+            fontWeight: 600,
+            borderRadius: 6,
+            textDecoration: "none",
+            marginTop: 4,
+          }}
+        >
+          🔎 재해자 수동 검색
+        </a>
+      )}
+    </div>
+  );
+}
+
+const miniCellStyle: React.CSSProperties = {
+  background: "#fff",
+  border: "1px solid #e5e7eb",
+  borderRadius: 6,
+  padding: 8,
+};
+const miniLabelStyle: React.CSSProperties = {
+  fontSize: 10,
+  color: "#9ca3af",
+  marginBottom: 2,
+};
+const miniValueStyle: React.CSSProperties = {
+  fontSize: 13,
+  fontWeight: 600,
+  color: "#111827",
+};
 
 /* ═══════════════════════════════════════════════════════════════
    스타일

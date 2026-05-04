@@ -26,9 +26,12 @@ export async function GET(req: NextRequest) {
 
   const items = await prisma.objectionCase.findMany({
     where,
-    include: { manager: { select: { id: true, name: true } } },
+    include: {
+      manager: { select: { id: true, name: true } },
+    },
     orderBy: { createdAt: "desc" },
   });
+  // 송무 인계 필드(L~U)는 ObjectionCase 자체 필드로 자동 포함됨
 
   // 소송인계 탭이면 autoItems 제외
   if (type === "litigation") {

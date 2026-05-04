@@ -1,6 +1,13 @@
 import { parseSpecialClinicMessage, type TfOrg } from "@/lib/parse-special-clinic-message"
 import { prisma } from "@/lib/prisma"
+import {
+  recordWebhookEvent,
+  markWebhookProcessed,
+  markWebhookFailed,
+} from "@/lib/webhook-idempotency"
 import { NextRequest, NextResponse } from "next/server"
+
+const WEBHOOK_SOURCE = "telegram_special_clinic" as const
 
 /**
  * 채팅방 ID → TF 조직 매핑을 환경변수에서 구성.
@@ -65,48 +72,72 @@ export async function POST(req: NextRequest) {
   const sender = msg.from?.first_name ?? msg.from?.username ?? "unknown"
   const msgDate = new Date(msg.date * 1000)
   const telegramMsgId = String(msg.message_id)
-  const parsed = parseSpecialClinicMessage(text, sender, msgDate, { tfOrg })
 
-  // 6. DB upsert
-  let count = 0
-  for (const p of parsed) {
-    if (!p.patientName || !p.tfName) continue
-
-    const existing = await prisma.specialClinicSchedule.findFirst({
-      where: {
-        patientName: p.patientName,
-        tfName: p.tfName,
-        clinicType: p.clinicType,
-        examRound: p.examRound,
-      },
-      select: { id: true },
-    })
-
-    const data = {
-      patientName: p.patientName,
-      tfName: p.tfName,
-      hospitalName: p.hospitalName,
-      clinicType: p.clinicType,
-      examRound: p.examRound,
-      scheduledDate: p.scheduledDate,
-      isAllDay: p.isAllDay,
-      scheduledHour: p.scheduledHour ?? null,
-      scheduledMinute: p.scheduledMinute ?? 0,
-      status: p.status,
-      memo: p.memo || null,
-      sender,
-      sourceDate: msgDate,
-      telegramMsgId,
-      rawMessage: text,
-    }
-
-    if (existing) {
-      await prisma.specialClinicSchedule.update({ where: { id: existing.id }, data })
-    } else {
-      await prisma.specialClinicSchedule.create({ data })
-    }
-    count++
+  // 5-1. Idempotency: WebhookEvent 기록 (중복 webhook 시 중단)
+  // externalId는 chat_id + message_id 조합으로 텔레그램 전체에서 unique 보장
+  const externalId = `${chatId}:${telegramMsgId}`
+  const recorded = await recordWebhookEvent(
+    WEBHOOK_SOURCE,
+    externalId,
+    body as Record<string, unknown>,
+    "special_clinic_message",
+  )
+  if (recorded.status === "duplicate_skipped") {
+    return NextResponse.json({ ok: true, status: "duplicate_skipped" })
   }
 
-  return NextResponse.json({ ok: true, count })
+  try {
+    const parsed = parseSpecialClinicMessage(text, sender, msgDate, { tfOrg })
+
+    // 6. DB upsert
+    let count = 0
+    for (const p of parsed) {
+      if (!p.patientName || !p.tfName) continue
+
+      const existing = await prisma.specialClinicSchedule.findFirst({
+        where: {
+          patientName: p.patientName,
+          tfName: p.tfName,
+          clinicType: p.clinicType,
+          examRound: p.examRound,
+        },
+        select: { id: true },
+      })
+
+      const data = {
+        patientName: p.patientName,
+        tfName: p.tfName,
+        hospitalName: p.hospitalName,
+        clinicType: p.clinicType,
+        examRound: p.examRound,
+        scheduledDate: p.scheduledDate,
+        isAllDay: p.isAllDay,
+        scheduledHour: p.scheduledHour ?? null,
+        scheduledMinute: p.scheduledMinute ?? 0,
+        status: p.status,
+        memo: p.memo || null,
+        sender,
+        sourceDate: msgDate,
+        telegramMsgId,
+        rawMessage: text,
+      }
+
+      if (existing) {
+        await prisma.specialClinicSchedule.update({ where: { id: existing.id }, data })
+      } else {
+        await prisma.specialClinicSchedule.create({ data })
+      }
+      count++
+    }
+
+    // 7. 처리 완료 마킹
+    await markWebhookProcessed(WEBHOOK_SOURCE, externalId, "webhook")
+    return NextResponse.json({ ok: true, count })
+  } catch (e: unknown) {
+    const message = e instanceof Error ? e.message : String(e)
+    console.error("[special-clinic webhook] 처리 실패", message)
+    await markWebhookFailed(WEBHOOK_SOURCE, externalId, message)
+    // 200 반환: 텔레그램 webhook 재전송 폭주 방지 (cron backup-poll 또는 수동 재처리 사용)
+    return NextResponse.json({ ok: false, error: "internal_error" })
+  }
 }

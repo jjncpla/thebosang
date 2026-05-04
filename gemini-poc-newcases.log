@@ -1,0 +1,295 @@
+
+▶ Gemini POC: 5회 반복, model=gemini-2.5-flash, chunkPages=5
+
+=== [강한곤 자격득실] (건보) ===
+[강한곤 자격득실확인서.pdf] 건보 | gemini-2.5-flash | 1청크
+  Run 1: 15.6s | {"고용산재":0,"건보":5,"연금":0,"일용직":0}
+[강한곤 자격득실확인서.pdf] 건보 | gemini-2.5-flash | 1청크
+  Run 2: 12.5s | {"고용산재":0,"건보":5,"연금":0,"일용직":0}
+[강한곤 자격득실확인서.pdf] 건보 | gemini-2.5-flash | 1청크
+  Run 3: 13.4s | {"고용산재":0,"건보":5,"연금":0,"일용직":0}
+[강한곤 자격득실확인서.pdf] 건보 | gemini-2.5-flash | 1청크
+  Run 4: 13.1s | {"고용산재":0,"건보":5,"연금":0,"일용직":0}
+[강한곤 자격득실확인서.pdf] 건보 | gemini-2.5-flash | 1청크
+  Run 5: 13.4s | {"고용산재":0,"건보":5,"연금":0,"일용직":0}
+  ▶ 평균 13.6s (12.5-15.6s) | 일관성 ✓
+
+=== [강한곤 국민연금] (연금) ===
+[강한곤 국민연금공단.pdf] 연금 | gemini-2.5-flash | 1청크
+  Run 1: 12.7s | {"고용산재":0,"건보":0,"연금":5,"일용직":0}
+[강한곤 국민연금공단.pdf] 연금 | gemini-2.5-flash | 1청크
+  Run 2: 12.5s | {"고용산재":0,"건보":0,"연금":5,"일용직":0}
+[강한곤 국민연금공단.pdf] 연금 | gemini-2.5-flash | 1청크
+  Run 3: 11.0s | {"고용산재":0,"건보":0,"연금":5,"일용직":0}
+[강한곤 국민연금공단.pdf] 연금 | gemini-2.5-flash | 1청크
+  Run 4: 10.2s | {"고용산재":0,"건보":0,"연금":5,"일용직":0}
+[강한곤 국민연금공단.pdf] 연금 | gemini-2.5-flash | 1청크
+  Run 5: 10.3s | {"고용산재":0,"건보":0,"연금":5,"일용직":0}
+  ▶ 평균 11.3s (10.2-12.7s) | 일관성 ✓
+
+=== [강한곤 고용보험] (고용산재_전체) ===
+[강한곤 고용보험.pdf] 고용산재_전체 | gemini-2.5-flash | 8청크
+  Run 1: ERROR TypeError: fetch failed
+[강한곤 고용보험.pdf] 고용산재_전체 | gemini-2.5-flash | 8청크
+  [p26-30] Parse error: SyntaxError: Expected ',' or '}' after property value in JSON at position 6115 (line 282 column 17), text: ```json
+{
+  "name": "성명",
+  "sources": {
+    "고용산재": [],
+    "건보": [],
+    "소득금액": [],
+    "연금": []
+  },
+  "dailyEntries": [
+    {
+      "company": "에이스대리운전",
+      "jobType": "대리운전기사 (958)",
+      "totalDays": 1,
+      "startYear": 2022,
+      "startMonth": 9,
+      "convertedMonths": 1,
+      "sou
+  Run 2: 436.2s | {"고용산재":8,"건보":0,"연금":8,"일용직":691}
+[강한곤 고용보험.pdf] 고용산재_전체 | gemini-2.5-flash | 8청크
+  [p26-30] Parse error: SyntaxError: Expected ',' or '}' after property value in JSON at position 6115 (line 282 column 17), text: ```json
+{
+  "name": "성명",
+  "sources": {
+    "고용산재": [],
+    "건보": [],
+    "소득금액": [],
+    "연금": []
+  },
+  "dailyEntries": [
+    {
+      "company": "에이스대리운전",
+      "jobType": "대리운전기사 (958)",
+      "totalDays": 1,
+      "startYear": 2022,
+      "startMonth": 9,
+      "convertedMonths": 1,
+      "sou
+  [p31-35] Parse error: SyntaxError: Expected ',' or '}' after property value in JSON at position 6107 (line 282 column 17), text: ```json
+{
+  "name": "",
+  "sources": {
+    "고용산재": [],
+    "건보": [],
+    "소득금액": [],
+    "연금": []
+  },
+  "dailyEntries": [
+    {
+      "company": "주식회사 청방",
+      "jobType": "대리운전기사 (958)",
+      "totalDays": 1,
+      "startYear": 2022,
+      "startMonth": 5,
+      "convertedMonths": 1,
+      "sourc
+  Run 3: 506.4s | {"고용산재":8,"건보":0,"연금":8,"일용직":571}
+[강한곤 고용보험.pdf] 고용산재_전체 | gemini-2.5-flash | 8청크
+  [p26-30] Parse error: SyntaxError: Expected ',' or '}' after property value in JSON at position 6115 (line 282 column 17), text: ```json
+{
+  "name": "성명",
+  "sources": {
+    "고용산재": [],
+    "건보": [],
+    "소득금액": [],
+    "연금": []
+  },
+  "dailyEntries": [
+    {
+      "company": "에이스대리운전",
+      "jobType": "대리운전기사 (958)",
+      "totalDays": 1,
+      "startYear": 2022,
+      "startMonth": 9,
+      "convertedMonths": 1,
+      "sou
+  Run 4: 432.1s | {"고용산재":8,"건보":0,"연금":8,"일용직":691}
+[강한곤 고용보험.pdf] 고용산재_전체 | gemini-2.5-flash | 8청크
+  [p26-30] Parse error: SyntaxError: Expected ',' or '}' after property value in JSON at position 6115 (line 282 column 17), text: ```json
+{
+  "name": "성명",
+  "sources": {
+    "고용산재": [],
+    "건보": [],
+    "소득금액": [],
+    "연금": []
+  },
+  "dailyEntries": [
+    {
+      "company": "에이스대리운전",
+      "jobType": "대리운전기사 (958)",
+      "totalDays": 1,
+      "startYear": 2022,
+      "startMonth": 9,
+      "convertedMonths": 1,
+      "sou
+  [p21-25] Parse error: SyntaxError: Expected ',' or '}' after property value in JSON at position 6126 (line 282 column 17), text: ```json
+{
+  "name": "성명",
+  "sources": {
+    "고용산재": [],
+    "건보": [],
+    "소득금액": [],
+    "연금": []
+  },
+  "dailyEntries": [
+    {
+      "company": "88둘리대리운전",
+      "jobType": "대리운전기사 (958)",
+      "totalDays": 2,
+      "startYear": 2022,
+      "startMonth": 12,
+      "convertedMonths": 1,
+      "s
+  [p31-35] Parse error: SyntaxError: Expected ',' or '}' after property value in JSON at position 6107 (line 282 column 17), text: ```json
+{
+  "name": "",
+  "sources": {
+    "고용산재": [],
+    "건보": [],
+    "소득금액": [],
+    "연금": []
+  },
+  "dailyEntries": [
+    {
+      "company": "주식회사 청방",
+      "jobType": "대리운전기사 (958)",
+      "totalDays": 1,
+      "startYear": 2022,
+      "startMonth": 5,
+      "convertedMonths": 1,
+      "sourc
+  Run 5: 534.2s | {"고용산재":8,"건보":0,"연금":8,"일용직":451}
+  ▶ 평균 477.2s (432.1-534.2s) | 일관성 ✗
+
+=== [김석광 자격득실] (건보) ===
+[김석광 자격득실확인서.pdf] 건보 | gemini-2.5-flash | 1청크
+  Run 1: 37.4s | {"고용산재":0,"건보":26,"연금":0,"일용직":0}
+[김석광 자격득실확인서.pdf] 건보 | gemini-2.5-flash | 1청크
+  Run 2: 39.7s | {"고용산재":0,"건보":26,"연금":0,"일용직":0}
+[김석광 자격득실확인서.pdf] 건보 | gemini-2.5-flash | 1청크
+  Run 3: 35.0s | {"고용산재":0,"건보":26,"연금":0,"일용직":0}
+[김석광 자격득실확인서.pdf] 건보 | gemini-2.5-flash | 1청크
+  Run 4: 37.4s | {"고용산재":0,"건보":26,"연금":0,"일용직":0}
+[김석광 자격득실확인서.pdf] 건보 | gemini-2.5-flash | 1청크
+  Run 5: 38.3s | {"고용산재":0,"건보":26,"연금":0,"일용직":0}
+  ▶ 평균 37.6s (35.0-39.7s) | 일관성 ✓
+
+=== [김석광 국민연금] (연금) ===
+[김석광 국민연금.pdf] 연금 | gemini-2.5-flash | 1청크
+  Run 1: 24.4s | {"고용산재":0,"건보":0,"연금":20,"일용직":0}
+[김석광 국민연금.pdf] 연금 | gemini-2.5-flash | 1청크
+  Run 2: 24.4s | {"고용산재":0,"건보":0,"연금":20,"일용직":0}
+[김석광 국민연금.pdf] 연금 | gemini-2.5-flash | 1청크
+  Run 3: 26.8s | {"고용산재":0,"건보":0,"연금":20,"일용직":0}
+[김석광 국민연금.pdf] 연금 | gemini-2.5-flash | 1청크
+  Run 4: 22.1s | {"고용산재":0,"건보":0,"연금":20,"일용직":0}
+[김석광 국민연금.pdf] 연금 | gemini-2.5-flash | 1청크
+  Run 5: 22.9s | {"고용산재":0,"건보":0,"연금":20,"일용직":0}
+  ▶ 평균 24.1s (22.1-26.8s) | 일관성 ✓
+
+=== [김석광 고용보험] (고용산재_전체) ===
+[김석광 고용보험.pdf] 고용산재_전체 | gemini-2.5-flash | 2청크
+  Run 1: 112.3s | {"고용산재":10,"건보":0,"연금":0,"일용직":127}
+[김석광 고용보험.pdf] 고용산재_전체 | gemini-2.5-flash | 2청크
+  Run 2: 134.9s | {"고용산재":10,"건보":0,"연금":0,"일용직":127}
+[김석광 고용보험.pdf] 고용산재_전체 | gemini-2.5-flash | 2청크
+  Run 3: 91.1s | {"고용산재":10,"건보":0,"연금":0,"일용직":127}
+[김석광 고용보험.pdf] 고용산재_전체 | gemini-2.5-flash | 2청크
+  Run 4: 90.4s | {"고용산재":10,"건보":0,"연금":0,"일용직":127}
+[김석광 고용보험.pdf] 고용산재_전체 | gemini-2.5-flash | 2청크
+  Run 5: 108.4s | {"고용산재":10,"건보":0,"연금":0,"일용직":127}
+  ▶ 평균 107.4s (90.4-134.9s) | 일관성 ✓
+
+=== [김종식 자격득실] (건보) ===
+[김종식 자격득실확인서.pdf] 건보 | gemini-2.5-flash | 1청크
+  Run 1: 17.6s | {"고용산재":0,"건보":6,"연금":0,"일용직":0}
+[김종식 자격득실확인서.pdf] 건보 | gemini-2.5-flash | 1청크
+  Run 2: 14.4s | {"고용산재":0,"건보":6,"연금":0,"일용직":0}
+[김종식 자격득실확인서.pdf] 건보 | gemini-2.5-flash | 1청크
+  Run 3: 18.2s | {"고용산재":0,"건보":6,"연금":0,"일용직":0}
+[김종식 자격득실확인서.pdf] 건보 | gemini-2.5-flash | 1청크
+  Run 4: 16.7s | {"고용산재":0,"건보":6,"연금":0,"일용직":0}
+[김종식 자격득실확인서.pdf] 건보 | gemini-2.5-flash | 1청크
+  Run 5: 15.3s | {"고용산재":0,"건보":6,"연금":0,"일용직":0}
+  ▶ 평균 16.4s (14.4-18.2s) | 일관성 ✓
+
+=== [김종식 국민연금] (연금) ===
+[김종식 국민연금.pdf] 연금 | gemini-2.5-flash | 1청크
+  Run 1: 24.7s | {"고용산재":0,"건보":0,"연금":5,"일용직":0}
+[김종식 국민연금.pdf] 연금 | gemini-2.5-flash | 1청크
+  Run 2: 11.3s | {"고용산재":0,"건보":0,"연금":5,"일용직":0}
+[김종식 국민연금.pdf] 연금 | gemini-2.5-flash | 1청크
+  Run 3: 13.8s | {"고용산재":0,"건보":0,"연금":5,"일용직":0}
+[김종식 국민연금.pdf] 연금 | gemini-2.5-flash | 1청크
+  Run 4: 13.3s | {"고용산재":0,"건보":0,"연금":5,"일용직":0}
+[김종식 국민연금.pdf] 연금 | gemini-2.5-flash | 1청크
+  Run 5: 11.9s | {"고용산재":0,"건보":0,"연금":5,"일용직":0}
+  ▶ 평균 15.0s (11.3-24.7s) | 일관성 ✓
+
+=== [김종식 고용보험] (고용산재_전체) ===
+[김종식 고용보험.pdf] 고용산재_전체 | gemini-2.5-flash | 2청크
+  Run 1: 132.9s | {"고용산재":4,"건보":0,"연금":0,"일용직":94}
+[김종식 고용보험.pdf] 고용산재_전체 | gemini-2.5-flash | 2청크
+  Run 2: 98.3s | {"고용산재":4,"건보":0,"연금":0,"일용직":94}
+[김종식 고용보험.pdf] 고용산재_전체 | gemini-2.5-flash | 2청크
+  Run 3: 124.8s | {"고용산재":4,"건보":0,"연금":0,"일용직":94}
+[김종식 고용보험.pdf] 고용산재_전체 | gemini-2.5-flash | 2청크
+  [p1-5] Parse error: SyntaxError: Expected ',' or '}' after property value in JSON at position 5563 (line 1 column 5564), text: ```json
+{"name": "김종식", "sources": {"고용산재": [{"company": "(주)흥진산업", "startYear": 2013, "startMonth": 5, "endYear": 2013, "endMonth": 6, "department": "", "jobType": "도장기 및 도금기 조작원(165)", "workDays": 0, "noiseExposure": true}, {"company": "성양기업", "startYear": 2012, "startMonth": 5, "endYear": 2012, "
+  Run 4: 248.7s | {"고용산재":0,"건보":0,"연금":0,"일용직":5}
+[김종식 고용보험.pdf] 고용산재_전체 | gemini-2.5-flash | 2청크
+  Run 5: 122.4s | {"고용산재":4,"건보":0,"연금":0,"일용직":94}
+  ▶ 평균 145.4s (98.3-248.7s) | 일관성 ✗
+
+=== [이봉근 자격득실] (건보) ===
+[이봉근 자격득실확인서.pdf] 건보 | gemini-2.5-flash | 2청크
+  Run 1: 56.2s | {"고용산재":0,"건보":46,"연금":0,"일용직":0}
+[이봉근 자격득실확인서.pdf] 건보 | gemini-2.5-flash | 2청크
+  Run 2: 52.7s | {"고용산재":0,"건보":46,"연금":0,"일용직":0}
+[이봉근 자격득실확인서.pdf] 건보 | gemini-2.5-flash | 2청크
+  Run 3: 49.0s | {"고용산재":0,"건보":46,"연금":0,"일용직":0}
+[이봉근 자격득실확인서.pdf] 건보 | gemini-2.5-flash | 2청크
+  Run 4: 38.7s | {"고용산재":0,"건보":46,"연금":0,"일용직":0}
+[이봉근 자격득실확인서.pdf] 건보 | gemini-2.5-flash | 2청크
+  Run 5: 40.9s | {"고용산재":0,"건보":46,"연금":0,"일용직":0}
+  ▶ 평균 47.5s (38.7-56.2s) | 일관성 ✓
+
+=== [이봉근 국민연금] (연금) ===
+[이봉근 국민연금.pdf] 연금 | gemini-2.5-flash | 1청크
+  Run 1: 10.7s | {"고용산재":0,"건보":0,"연금":2,"일용직":0}
+[이봉근 국민연금.pdf] 연금 | gemini-2.5-flash | 1청크
+  Run 2: 9.1s | {"고용산재":0,"건보":0,"연금":2,"일용직":0}
+[이봉근 국민연금.pdf] 연금 | gemini-2.5-flash | 1청크
+  Run 3: 10.7s | {"고용산재":0,"건보":0,"연금":2,"일용직":0}
+[이봉근 국민연금.pdf] 연금 | gemini-2.5-flash | 1청크
+  Run 4: 9.1s | {"고용산재":0,"건보":0,"연금":2,"일용직":0}
+[이봉근 국민연금.pdf] 연금 | gemini-2.5-flash | 1청크
+  Run 5: 9.6s | {"고용산재":0,"건보":0,"연금":2,"일용직":0}
+  ▶ 평균 9.8s (9.1-10.7s) | 일관성 ✓
+
+=== [이봉근 고용보험] (고용산재_전체) ===
+[이봉근 고용보험.pdf] 고용산재_전체 | gemini-2.5-flash | 3청크
+  Run 1: 185.6s | {"고용산재":5,"건보":0,"연금":0,"일용직":277}
+[이봉근 고용보험.pdf] 고용산재_전체 | gemini-2.5-flash | 3청크
+  Run 2: 147.1s | {"고용산재":5,"건보":0,"연금":0,"일용직":277}
+[이봉근 고용보험.pdf] 고용산재_전체 | gemini-2.5-flash | 3청크
+  Run 3: 181.4s | {"고용산재":5,"건보":0,"연금":0,"일용직":253}
+[이봉근 고용보험.pdf] 고용산재_전체 | gemini-2.5-flash | 3청크
+  [p1-5] Parse error: SyntaxError: Expected ':' after property name in JSON at position 7237 (line 1 column 7238), text: ```json
+{"name":"이봉근","sources":{"고용산재":[{"company":"(주)삼현종합건설","startYear":2003,"startMonth":1,"endYear":2003,"endMonth":2,"department":"","jobType":"단순노무직근로자(9)","workDays":0,"noiseExposure":true},{"company":"울산광역시교육청사신축","startYear":2002,"startMonth":5,"endYear":2002,"endMonth":8,"department":"",
+  Run 4: 184.6s | {"고용산재":0,"건보":0,"연금":0,"일용직":188}
+[이봉근 고용보험.pdf] 고용산재_전체 | gemini-2.5-flash | 3청크
+  Run 5: 136.7s | {"고용산재":5,"건보":0,"연금":0,"일용직":253}
+  ▶ 평균 167.1s (136.7-185.6s) | 일관성 ✗
+
+=== [이봉근 경력증명서] (경력증명서) ===
+  Run 1: ERROR Error: Input document to `PDFDocument.load` is encrypted. You can use `PDFDocument.load(..., { ignoreEncryption: true })` if you wish to load the document anyways.
+  Run 2: ERROR Error: Input document to `PDFDocument.load` is encrypted. You can use `PDFDocument.load(..., { ignoreEncryption: true })` if you wish to load the document anyways.
+  Run 3: ERROR Error: Input document to `PDFDocument.load` is encrypted. You can use `PDFDocument.load(..., { ignoreEncryption: true })` if you wish to load the document anyways.
+  Run 4: ERROR Error: Input document to `PDFDocument.load` is encrypted. You can use `PDFDocument.load(..., { ignoreEncryption: true })` if you wish to load the document anyways.
+  Run 5: ERROR Error: Input document to `PDFDocument.load` is encrypted. You can use `PDFDocument.load(..., { ignoreEncryption: true })` if you wish to load the document anyways.

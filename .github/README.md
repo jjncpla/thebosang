@@ -23,16 +23,21 @@ PR open/synchronize 시 + main push 시 자동 실행. **secret 필요 없음**.
 
 ### 2. `workflows/claude-qa-review.yml` — qa-tester 자동 리뷰 (secret 필요)
 
-다음 4가지 트리거에서 작동. **`ANTHROPIC_API_KEY` secret 필요**.
+다음 3가지 트리거에서 작동. **`ANTHROPIC_API_KEY` secret 필요**.
 
 | 트리거 | 시점 | 결과 위치 |
 |-------|------|----------|
 | ① **PR open/synchronize/reopened** | PR 만들거나 업데이트 | PR 코멘트 |
-| ② **main push** ⭐ | main에 직접 푸시 (이정준 fast-forward 흐름) | commit comment |
-| ③ **PR 댓글 `@claude`** | PR에서 멘션 | PR 코멘트 |
-| ④ **수동 (workflow_dispatch)** | Actions UI "Run workflow" | run summary |
+| ② **PR 댓글 `@claude`** | PR에서 멘션 | PR 코멘트 |
+| ③ **수동 (workflow_dispatch)** | Actions UI "Run workflow" | run summary |
 
-> **⭐ main push 트리거가 핵심**: 이정준 운영 방식이 PR 안 만들고 main에 직접 fast-forward 푸시하기 때문. 이 트리거 없으면 워크플로가 거의 발동 안 함.
+> **⚠️ main push 트리거 제거됨 (2026-05-01)**:
+> `anthropics/claude-code-action@v1`이 push 이벤트를 지원하지 않아 (`Unsupported event type: push` 에러), main fast-forward 운영 패턴에서 워크플로가 매번 실패함. 메일 알림 스팸의 원인이었음.
+>
+> **대안**:
+> - PR 기반 흐름으로 운영 (자동 작동)
+> - main push 후 리뷰가 필요하면 Actions UI > Run workflow로 수동 실행
+> - `pr-validation.yml`은 main push에서도 정상 작동 (정적 점검 / lint / build)
 
 **작동**:
 - `.claude/agents/qa-tester.md` 매뉴얼 따라 변경 사항 자동 리뷰
@@ -68,13 +73,15 @@ PR open/synchronize 시 + main push 시 자동 실행. **secret 필요 없음**.
 2. 우측 "Run workflow" 클릭 → 브랜치 `main` 선택 → "Run workflow"
 3. 1~2분 후 run summary에 qa-tester 결과 표시
 
-**방법 B. main 직접 푸시 (이정준 일상 흐름)**
-- 평소처럼 main에 fast-forward 푸시하면 자동 발동
-- commit comment(GitHub repo > Commits > 해당 커밋)에 결과 표시
-
-**방법 C. PR 만들기 (선택적)**
+**방법 B. PR 만들기 (정식 흐름)**
 - 다음 PR 열면 자동 실행
 - PR 코멘트에 결과 표시
+
+**방법 C. PR 댓글 멘션**
+- 기존 PR에 `@claude` 댓글 달면 자동 실행
+- PR 코멘트에 결과 표시
+
+> ~~main 직접 푸시~~ 트리거는 제거됨 (2026-05-01). claude-code-action이 push 이벤트 미지원.
 
 ---
 
@@ -93,9 +100,9 @@ PR open/synchronize 시 + main push 시 자동 실행. **secret 필요 없음**.
 
 ### 비용 더 줄이고 싶을 때
 
-**옵션 1**: main push 트리거 제거 — `claude-qa-review.yml`의 `on:` 섹션에서 `push: branches: [main]` 4줄 삭제. 그러면 PR + 댓글 멘션 + 수동만 발동.
+**옵션 1**: 댓글 멘션 전용 — `on:` 섹션에서 `pull_request:`도 삭제. `@claude` 멘션 시에만 호출됨.
 
-**옵션 2**: 댓글 멘션 전용 — `on:` 섹션에서 `pull_request:`와 `push:` 모두 삭제. `@claude` 멘션 시에만 호출됨.
+**옵션 2**: PR open만 — `on: pull_request:`의 `types`에서 `synchronize`를 제거. PR 열 때 1회만 실행.
 
 **옵션 3**: 사용 한도 설정 — Anthropic console > Settings > Spend limits에서 월 $10/$30 등 한도 설정. 초과 시 자동 차단.
 

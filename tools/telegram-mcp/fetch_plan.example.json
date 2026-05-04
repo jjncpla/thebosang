@@ -1,0 +1,19 @@
+{
+  "_comment": "fetch_corpus.py 입력 템플릿. 실제 fetch_plan.json은 gitignored.",
+  "_strategy": "어떤 학습 목표를 위해 어떤 채팅방을 고를지 메모.",
+  "_categories_available": [
+    "patient_1to1", "patient_family", "kosha_officer",
+    "internal_branch", "internal_tf", "internal_topic",
+    "external_partner", "personal", "needs_review"
+  ],
+  "targets": [
+    {
+      "_pick_reason": "왜 이 방을 골랐는지 한 줄 메모",
+      "chat_id": -1001234567890,
+      "title": "방 제목 (식별용, 안전한 별칭 가능)",
+      "category": "internal_topic",
+      "limit": 200,
+      "download_media": false
+    }
+  ]
+}

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
+import { useSession } from "next-auth/react";
 
 const PdfViewerModal = dynamic(() => import("../../components/PdfViewerModal"), { ssr: false });
 const InlinePdfViewer = dynamic(() => import("../../components/InlinePdfViewer"), { ssr: false });
@@ -810,20 +811,68 @@ type GuidanceEntry = {
   id: string;
   title: string;
   cat1: string;
-  cat2?: string;
+  cat2?: string | null;
   fileUrl: string;
+  description?: string | null;
+  fileSize?: number;
+  createdAt?: string;
 };
 
-const GUIDANCE_LIST: GuidanceEntry[] = [
-  { id: "g1", cat1: "상병별", cat2: "소음성난청", title: "소음성 난청 업무처리기준 개선 전문 (2021.12.23. 시행)", fileUrl: "/docs/소음성_난청_업무처리기준_2021.pdf" },
+// 정적 fallback (배포 직후 / DB 비었을 때 표시)
+const STATIC_GUIDANCE_LIST: GuidanceEntry[] = [
+  { id: "static-g1", cat1: "상병별", cat2: "소음성난청", title: "소음성 난청 업무처리기준 개선 전문 (2021.12.23. 시행)", fileUrl: "/docs/소음성_난청_업무처리기준_2021.pdf" },
 ];
 
 type GSelState = { cat1?: string; cat2?: string };
 
-function GuidelinesTab() {
+function GuidelinesTab({ isAdmin }: { isAdmin: boolean }) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [sel, setSel] = useState<GSelState>({});
   const [selectedPdf, setSelectedPdf] = useState<GuidanceEntry | null>(null);
+  const [dbGuidances, setDbGuidances] = useState<GuidanceEntry[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [showUploadModal, setShowUploadModal] = useState(false);
+
+  // DB 목록 조회
+  const reloadList = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch("/api/kwc-guideline");
+      if (!res.ok) throw new Error("조회 실패");
+      const items: Array<{
+        id: string;
+        attachmentType: string;
+        number: string | null;
+        title: string;
+        description: string | null;
+        fileSize: number;
+        createdAt: string;
+      }> = await res.json();
+      setDbGuidances(
+        items.map(it => ({
+          id: it.id,
+          cat1: it.attachmentType,
+          cat2: it.number,
+          title: it.title,
+          description: it.description,
+          fileSize: it.fileSize,
+          createdAt: it.createdAt,
+          fileUrl: `/api/kwc-guideline/${it.id}/file?inline=1`,
+        }))
+      );
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    reloadList();
+  }, []);
+
+  // 정적 + DB 병합 (DB 우선, 정적은 fallback)
+  const allList: GuidanceEntry[] = [...dbGuidances, ...STATIC_GUIDANCE_LIST];
 
   function toggleExpand(key: string) {
     setExpanded(prev => {
@@ -834,15 +883,30 @@ function GuidelinesTab() {
   }
 
   function cntPdf(cat1: string, cat2?: string) {
-    return GUIDANCE_LIST.filter(g =>
+    return allList.filter(g =>
       g.cat1 === cat1 && (cat2 === undefined || g.cat2 === cat2)
     ).length;
   }
 
-  const filtered = GUIDANCE_LIST.filter(g =>
+  const filtered = allList.filter(g =>
     (!sel.cat1 || g.cat1 === sel.cat1) &&
     (!sel.cat2 || g.cat2 === sel.cat2)
   );
+
+  async function handleDelete(id: string) {
+    if (!confirm("이 지침을 삭제하시겠습니까?")) return;
+    try {
+      const res = await fetch(`/api/kwc-guideline/${id}`, { method: "DELETE" });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || "삭제 실패");
+      }
+      await reloadList();
+      if (selectedPdf?.id === id) setSelectedPdf(null);
+    } catch (err) {
+      alert((err as Error).message);
+    }
+  }
 
   return (
     <div style={{ display: "flex", height: "calc(100vh - 160px)" }}>
@@ -860,7 +924,7 @@ function GuidelinesTab() {
             }}
           >
             <span style={{ flex: 1 }}>전체</span>
-            <span style={{ fontSize: 10, color: "#9ca3af" }}>{GUIDANCE_LIST.length}</span>
+            <span style={{ fontSize: 10, color: "#9ca3af" }}>{allList.length}</span>
           </button>
 
           {G_CAT1.map(c1 => {
@@ -934,49 +998,280 @@ function GuidelinesTab() {
             </div>
           </>
         ) : (
-          <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px" }}>
-            {filtered.length === 0 ? (
-              <div style={{ textAlign: "center", padding: 48, color: "#9ca3af", fontSize: 14 }}>
-                등록된 지침이 없습니다.
-              </div>
-            ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                {filtered.map(g => {
-                  const c1Label = G_CAT1.find(c => c.key === g.cat1)?.label ?? g.cat1;
-                  const c2Label = g.cat2 ? (G_CAT2[g.cat1]?.find(c => c.key === g.cat2)?.label ?? g.cat2) : null;
-                  return (
-                    <button
-                      key={g.id}
-                      onClick={() => setSelectedPdf(g)}
-                      style={{
-                        display: "flex", alignItems: "center", gap: 12, textAlign: "left",
-                        padding: "12px 16px", border: "1px solid #e5e7eb", borderRadius: 8,
-                        background: "#fff", cursor: "pointer",
-                      }}
-                    >
-                      <span style={{ fontSize: 20, flexShrink: 0 }}>📄</span>
-                      <span style={{ flex: 1, fontSize: 13, fontWeight: 600, color: "#111827", lineHeight: 1.5 }}>
-                        {g.title}
-                      </span>
-                      <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 3, flexShrink: 0 }}>
-                        {!sel.cat1 && (
-                          <span style={{ fontSize: 10, padding: "2px 6px", borderRadius: 6, background: "#dbeafe", color: "#1e40af", fontWeight: 600, whiteSpace: "nowrap" }}>
-                            {c1Label}
-                          </span>
-                        )}
-                        {!sel.cat2 && c2Label && (
-                          <span style={{ fontSize: 10, padding: "2px 6px", borderRadius: 6, background: "#f3f4f6", color: "#4b5563", whiteSpace: "nowrap" }}>
-                            {c2Label}
-                          </span>
-                        )}
+          <>
+            {/* 목록 상단: 등록 버튼 (ADMIN만) */}
+            <div style={{ padding: "10px 16px", borderBottom: "1px solid #e5e7eb", background: "#fff", display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+              <span style={{ fontSize: 13, color: "#6b7280" }}>
+                총 {filtered.length}건
+                {loading && <span style={{ marginLeft: 8, color: "#9ca3af" }}>(불러오는 중...)</span>}
+              </span>
+              {isAdmin && (
+                <button
+                  onClick={() => setShowUploadModal(true)}
+                  style={{
+                    marginLeft: "auto", padding: "6px 14px", fontSize: 12, fontWeight: 600,
+                    background: "#29ABE2", color: "#fff", border: "none", borderRadius: 6, cursor: "pointer",
+                  }}
+                >
+                  + 지침 PDF 등록
+                </button>
+              )}
+            </div>
+
+            <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px" }}>
+              {filtered.length === 0 ? (
+                <div style={{ textAlign: "center", padding: 48, color: "#9ca3af", fontSize: 14 }}>
+                  등록된 지침이 없습니다.
+                  {isAdmin && (
+                    <div style={{ marginTop: 12 }}>
+                      <button
+                        onClick={() => setShowUploadModal(true)}
+                        style={{ padding: "6px 14px", fontSize: 12, background: "#29ABE2", color: "#fff", border: "none", borderRadius: 6, cursor: "pointer" }}
+                      >
+                        + 첫 지침 등록하기
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  {filtered.map(g => {
+                    const c1Label = G_CAT1.find(c => c.key === g.cat1)?.label ?? g.cat1;
+                    const c2Label = g.cat2 ? (G_CAT2[g.cat1]?.find(c => c.key === g.cat2)?.label ?? g.cat2) : null;
+                    const isStatic = g.id.startsWith("static-");
+                    return (
+                      <div
+                        key={g.id}
+                        style={{
+                          display: "flex", alignItems: "center", gap: 12,
+                          padding: "12px 16px", border: "1px solid #e5e7eb", borderRadius: 8,
+                          background: "#fff",
+                        }}
+                      >
+                        <button
+                          onClick={() => setSelectedPdf(g)}
+                          style={{
+                            display: "flex", alignItems: "center", gap: 12, flex: 1, textAlign: "left",
+                            background: "transparent", border: "none", cursor: "pointer", padding: 0,
+                          }}
+                        >
+                          <span style={{ fontSize: 20, flexShrink: 0 }}>📄</span>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 13, fontWeight: 600, color: "#111827", lineHeight: 1.5 }}>
+                              {g.title}
+                            </div>
+                            {g.description && (
+                              <div style={{ fontSize: 11, color: "#6b7280", marginTop: 2, lineHeight: 1.5 }}>
+                                {g.description}
+                              </div>
+                            )}
+                            {(g.fileSize || g.createdAt) && (
+                              <div style={{ fontSize: 10, color: "#9ca3af", marginTop: 3, display: "flex", gap: 10 }}>
+                                {g.fileSize && <span>{(g.fileSize / 1024 / 1024).toFixed(2)} MB</span>}
+                                {g.createdAt && <span>{new Date(g.createdAt).toLocaleDateString("ko-KR")}</span>}
+                              </div>
+                            )}
+                          </div>
+                        </button>
+                        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 3, flexShrink: 0 }}>
+                          {!sel.cat1 && (
+                            <span style={{ fontSize: 10, padding: "2px 6px", borderRadius: 6, background: "#dbeafe", color: "#1e40af", fontWeight: 600, whiteSpace: "nowrap" }}>
+                              {c1Label}
+                            </span>
+                          )}
+                          {!sel.cat2 && c2Label && (
+                            <span style={{ fontSize: 10, padding: "2px 6px", borderRadius: 6, background: "#f3f4f6", color: "#4b5563", whiteSpace: "nowrap" }}>
+                              {c2Label}
+                            </span>
+                          )}
+                          {isAdmin && !isStatic && (
+                            <button
+                              onClick={(e) => { e.stopPropagation(); handleDelete(g.id); }}
+                              style={{ fontSize: 10, padding: "2px 6px", borderRadius: 6, background: "#fee2e2", color: "#dc2626", border: "none", cursor: "pointer", fontWeight: 600 }}
+                            >
+                              삭제
+                            </button>
+                          )}
+                        </div>
                       </div>
-                    </button>
-                  );
-                })}
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* 업로드 모달 */}
+      {showUploadModal && (
+        <KwcGuidelineUploadModal
+          onClose={() => setShowUploadModal(false)}
+          onUploaded={async () => { setShowUploadModal(false); await reloadList(); }}
+        />
+      )}
+    </div>
+  );
+}
+
+// ─── 지침 PDF 업로드 모달 ─────────────────────────────────────────────────────
+
+function KwcGuidelineUploadModal({ onClose, onUploaded }: { onClose: () => void; onUploaded: () => void }) {
+  const [cat1, setCat1] = useState<string>(G_CAT1[0].key);
+  const [cat2, setCat2] = useState<string>("");
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [file, setFile] = useState<File | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const c2Options = G_CAT2[cat1] ?? [];
+
+  async function submit() {
+    setError(null);
+    if (!file) return setError("파일을 선택해주세요.");
+    if (!title.trim()) return setError("제목을 입력해주세요.");
+    if (file.size > 10 * 1024 * 1024) return setError("파일 크기는 10MB 이하여야 합니다.");
+    if (file.type !== "application/pdf") return setError("PDF 파일만 등록 가능합니다.");
+
+    setSubmitting(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("cat1", cat1);
+      if (cat2) fd.append("cat2", cat2);
+      fd.append("title", title.trim());
+      if (description.trim()) fd.append("description", description.trim());
+
+      const res = await fetch("/api/kwc-guideline", { method: "POST", body: fd });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || "업로드 실패");
+      }
+      onUploaded();
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: "fixed", inset: 0, zIndex: 1000,
+        background: "rgba(0,0,0,0.5)",
+        display: "flex", alignItems: "center", justifyContent: "center", padding: 20,
+      }}
+    >
+      <div
+        onClick={e => e.stopPropagation()}
+        style={{
+          background: "#fff", borderRadius: 12, width: 460, maxWidth: "100%",
+          padding: 0, boxShadow: "0 20px 60px rgba(0,0,0,0.3)", overflow: "hidden",
+        }}
+      >
+        <div style={{ padding: "14px 20px", borderBottom: "1px solid #e5e7eb", background: "#f9fafb" }}>
+          <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: "#111827" }}>지침 PDF 등록</h3>
+        </div>
+
+        <div style={{ padding: "16px 20px", display: "flex", flexDirection: "column", gap: 12 }}>
+          {/* 분류 1 */}
+          <div>
+            <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "#374151", marginBottom: 4 }}>분류</label>
+            <select
+              value={cat1}
+              onChange={e => { setCat1(e.target.value); setCat2(""); }}
+              style={{ width: "100%", padding: "7px 10px", fontSize: 13, border: "1px solid #d1d5db", borderRadius: 6 }}
+            >
+              {G_CAT1.map(c => <option key={c.key} value={c.key}>{c.label}</option>)}
+            </select>
+          </div>
+
+          {/* 분류 2 */}
+          {c2Options.length > 0 && (
+            <div>
+              <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "#374151", marginBottom: 4 }}>세부 분류 (선택)</label>
+              <select
+                value={cat2}
+                onChange={e => setCat2(e.target.value)}
+                style={{ width: "100%", padding: "7px 10px", fontSize: 13, border: "1px solid #d1d5db", borderRadius: 6 }}
+              >
+                <option value="">-- 미지정 --</option>
+                {c2Options.map(c => <option key={c.key} value={c.key}>{c.label}</option>)}
+              </select>
+            </div>
+          )}
+
+          {/* 제목 */}
+          <div>
+            <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "#374151", marginBottom: 4 }}>제목 *</label>
+            <input
+              type="text"
+              value={title}
+              onChange={e => setTitle(e.target.value)}
+              placeholder="예: 산재보험 업무처리기준 2024"
+              style={{ width: "100%", padding: "7px 10px", fontSize: 13, border: "1px solid #d1d5db", borderRadius: 6, boxSizing: "border-box" }}
+            />
+          </div>
+
+          {/* 설명 */}
+          <div>
+            <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "#374151", marginBottom: 4 }}>설명 (선택)</label>
+            <textarea
+              value={description}
+              onChange={e => setDescription(e.target.value)}
+              rows={2}
+              placeholder="지침 요약이나 시행일 등"
+              style={{ width: "100%", padding: "7px 10px", fontSize: 12, border: "1px solid #d1d5db", borderRadius: 6, boxSizing: "border-box", resize: "vertical", fontFamily: "inherit" }}
+            />
+          </div>
+
+          {/* 파일 */}
+          <div>
+            <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: "#374151", marginBottom: 4 }}>PDF 파일 * (최대 10MB)</label>
+            <input
+              type="file"
+              accept="application/pdf"
+              onChange={e => setFile(e.target.files?.[0] ?? null)}
+              style={{ fontSize: 12, color: "#374151" }}
+            />
+            {file && (
+              <div style={{ fontSize: 11, color: "#6b7280", marginTop: 4 }}>
+                {file.name} · {(file.size / 1024 / 1024).toFixed(2)} MB
               </div>
             )}
           </div>
-        )}
+
+          {error && (
+            <div style={{ padding: "8px 10px", background: "#fee2e2", color: "#dc2626", fontSize: 12, borderRadius: 6 }}>
+              {error}
+            </div>
+          )}
+        </div>
+
+        <div style={{ padding: "12px 20px", borderTop: "1px solid #e5e7eb", display: "flex", gap: 8, justifyContent: "flex-end" }}>
+          <button
+            onClick={onClose}
+            disabled={submitting}
+            style={{ padding: "7px 16px", fontSize: 13, background: "#f3f4f6", color: "#374151", border: "1px solid #d1d5db", borderRadius: 6, cursor: submitting ? "not-allowed" : "pointer" }}
+          >
+            취소
+          </button>
+          <button
+            onClick={submit}
+            disabled={submitting || !file || !title.trim()}
+            style={{
+              padding: "7px 16px", fontSize: 13, fontWeight: 600,
+              background: submitting || !file || !title.trim() ? "#94a3b8" : "#29ABE2",
+              color: "#fff", border: "none", borderRadius: 6,
+              cursor: submitting || !file || !title.trim() ? "not-allowed" : "pointer",
+            }}
+          >
+            {submitting ? "업로드 중..." : "등록"}
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -995,6 +1290,8 @@ type TabId = (typeof TABS)[number]["id"];
 
 export default function LawPage() {
   const [activeTab, setActiveTab] = useState<TabId>("law");
+  const { data: session } = useSession();
+  const isAdmin = (session?.user as { role?: string } | undefined)?.role === "ADMIN";
 
   return (
     <div
@@ -1037,7 +1334,7 @@ export default function LawPage() {
       <div style={{ flex: 1, overflow: "hidden" }}>
         {activeTab === "law"        && <LawTab />}
         {activeTab === "internal"   && <InternalRegulationTab />}
-        {activeTab === "guidelines" && <GuidelinesTab />}
+        {activeTab === "guidelines" && <GuidelinesTab isAdmin={isAdmin} />}
       </div>
     </div>
   );

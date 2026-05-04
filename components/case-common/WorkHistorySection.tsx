@@ -460,12 +460,15 @@ function WorkHistoryDrawerContent({
     try {
       const { PDFDocument } = await import("pdf-lib");
 
-      // 1) PDF 청크 분할 — 작은 PDF(≤5p)는 단일 청크, 큰 PDF는 3p 청크
+      // 1) PDF 청크 분할 — 페이지 수에 따라 자동 조정 (A1 정책: 헤비 케이스 더 작게)
+      // ≤5p: 단일 청크
+      // 6-15p: 3페이지
+      // 16+p: 3페이지 (헤비 케이스 정확도 ↑, 강한곤 고용보험 일관성 보강)
       type Chunk = { blob: Blob; chunkName: string; docType: string; chunkIndex: number };
       const allChunks: Chunk[] = [];
       for (const { file, docType } of valid) {
         const buffer = await file.arrayBuffer();
-        const srcDoc = await PDFDocument.load(buffer);
+        const srcDoc = await PDFDocument.load(buffer, { ignoreEncryption: true });
         const totalPages = srcDoc.getPageCount();
         const CHUNK_PAGES = totalPages <= 5 ? totalPages : 3;
         let fileChunkIndex = 0;
@@ -486,8 +489,12 @@ function WorkHistoryDrawerContent({
 
       // 진행률 추적 초기화
       // 추정: 청크당 평균 ~10초 (OCR 6-8s + Haiku 3-5s, 동시성 고려)
-      const concurrency = allChunks.length <= 3 ? 3 : allChunks.length <= 6 ? 2 : 1;
-      const estimatedTotalSec = Math.ceil(allChunks.length / concurrency) * 12;
+      // 동시성: 작은 청크 수면 공격적, 많으면 보수적 (rate limit 방지)
+      const concurrency = allChunks.length <= 4 ? 4
+                        : allChunks.length <= 8 ? 3
+                        : allChunks.length <= 12 ? 2
+                        : 1;
+      const estimatedTotalSec = Math.ceil(allChunks.length / concurrency) * 10;
       let doneCount = 0;
       setAnalyzeProgress({
         done: 0,

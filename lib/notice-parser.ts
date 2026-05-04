@@ -59,7 +59,8 @@ export interface ParsedNotice {
   // 금액
   paymentAmount: number | null;    // 지급결정액
   cumulativeAmount: number | null; // 누계액
-  initialAvgWage: number | null;   // 평균임금 산정 후 최초 지급되는 금액
+  initialAvgWage: number | null;   // 결정통지서 본문 "평균임금 산정 후 최초로 지급되는 급여" — 실제 의미는 최종 증감임금
+  originalAvgWage: number | null;  // 재해 당시 산정된 원시 평균임금 (장해급여 산정 기초가 되는 최초 평균임금)
 
   // 기간별 산정내역
   periods: PaymentPeriod[];
@@ -179,23 +180,29 @@ export function parseDecisionNotice(rawText: string): ParsedNotice {
   const accidentDate = accidentMatch ? accidentMatch[1] : null;
 
   // 결정사항: 명시 라벨 → 실패 시 제목 키워드로 추론
+  // ※ 우선순위: 장해 > 장례 (장해 결정통지서 본문에 "장례비" 단어가 단순 등장하는 경우 false-positive 회피)
   let decisionType: DecisionType = "기타";
   const decisionMatch = text.match(/결정사항[\s:]+(휴업급여|장해일시금|장해연금|유족연금|유족일시금|상병보상연금|장례비|요양급여|재요양|간병급여|장례비)/);
   if (decisionMatch) {
     decisionType = decisionMatch[1] as DecisionType;
   } else {
-    // 제목/본문 키워드 휴리스틱
-    if (/장례비/.test(text)) decisionType = "장례비";
+    // 1순위: 장해(난청/일반/진폐) — "장해등급" 또는 "장해급여 일시금/연금" 명시
+    const hasDisabilityGrade = /장\s*해\s*\(?중증요양상태\)?\s*등\s*급|난청\s*장해|일반\s*\d{2}급\d{2}호|진폐\s*\d{2}급\d{2}호/.test(text);
+    const hasDisabilityKeyword = /장해보상연금|장해보상일시금|장해\s*연금|장해급여\s*일시금|장해급여\s*결정액/.test(text);
+    if (hasDisabilityGrade || hasDisabilityKeyword) {
+      decisionType = /일시금|장해급여\s*결정액/.test(text) ? "장해일시금" : "장해연금";
+    }
+    // 2순위: 유족
     else if (/유족보상연금|유족\s*연금/.test(text)) decisionType = "유족연금";
     else if (/유족보상일시금|유족\s*일시금/.test(text)) decisionType = "유족일시금";
-    else if (/장해보상연금|장해\s*연금/.test(text)) decisionType = "장해연금";
-    else if (/장\s*해\s*\(?중증요양상태\)?\s*등\s*급/.test(text)) {
-      // 장해등급 결정통지서 → 일시금/연금 둘 중 추가 추론
-      decisionType = /일시금/.test(text) ? "장해일시금" : "장해연금";
-    }
+    // 3순위: 휴업/상병
     else if (/상병보상연금/.test(text)) decisionType = "상병보상연금";
     else if (/휴업급여/.test(text)) decisionType = "휴업급여";
+    // 4순위: 요양
     else if (/요양급여|재요양/.test(text)) decisionType = "요양급여";
+    // 5순위(최후): 장례비 — "장의비" 라벨 또는 결정사항 명시가 직접 있을 때만
+    else if (/장의비|장례비\s*(?:결정|지급|일시금)|결정사항[^\n]{0,30}장례비/.test(text)) decisionType = "장례비";
+    // 폴백: 단순 "장례비" 단어만 있는 경우 기타로 분류 (장해 통지서 본문에 단순 등장하는 false-positive 회피)
   }
 
   // 처리결과
@@ -235,6 +242,29 @@ export function parseDecisionNotice(rawText: string): ParsedNotice {
   ) ?? parseAmountWithJeon(
     pickFirst<string>(text.match(/평균임금[\s:]+([\d,]+\.?\d*원\s*\d{0,2}\s*전?)/))
   );
+
+  // 원시(재해 당시) 최초 평균임금 — 장해급여 일시금 산정의 기초가 되는 값
+  // 패턴 후보:
+  //   "최초 평균임금 126,290원" / "최초평균임금 : 126,290원"
+  //   "당초 평균임금 ..." / "재해 당시 평균임금 ..."
+  //   "평균임금산정내역서 평균임금 ..."
+  let originalAvgWage: number | null = null;
+  const originalPatterns = [
+    /최\s*초\s*평\s*균\s*임\s*금[\s:：]*([\d,]+(?:\.\d+)?원?\s*\d{0,2}\s*전?)/,
+    /당\s*초\s*평\s*균\s*임\s*금[\s:：]*([\d,]+(?:\.\d+)?원?\s*\d{0,2}\s*전?)/,
+    /재\s*해\s*당\s*시\s*평\s*균\s*임\s*금[\s:：]*([\d,]+(?:\.\d+)?원?\s*\d{0,2}\s*전?)/,
+    /평\s*균\s*임\s*금\s*산\s*정\s*내\s*역[^\n]{0,40}?([\d,]+(?:\.\d+)?원?\s*\d{0,2}\s*전?)/,
+  ];
+  for (const re of originalPatterns) {
+    const mm = text.match(re);
+    if (mm) {
+      const v = parseAmountWithJeon(mm[1]);
+      if (v && v > 1000 && v < 1_000_000) { // 일급 1천 ~ 100만원 범위만 인정 (오인식 차단)
+        originalAvgWage = v;
+        break;
+      }
+    }
+  }
 
   // ── 2. 기간별 산정내역 (통합 파서) ──
   const periods = parsePaymentPeriods(text);
@@ -315,6 +345,7 @@ export function parseDecisionNotice(rawText: string): ParsedNotice {
     paymentAmount,
     cumulativeAmount,
     initialAvgWage,
+    originalAvgWage,
 
     periods,
 

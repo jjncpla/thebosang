@@ -9,24 +9,32 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   const { id } = await params;
   const body = await req.json();
-  const { tfName, patientName, caseType, approvalStatus, progressStatus, decisionDate, hasInfoDisclosure, infoDisclosureStatus, memo, caseId } = body;
+  const {
+    tfName, patientName, caseType, approvalStatus, progressStatus, decisionDate,
+    hasInfoDisclosure, infoDisclosureStatus, memo, caseId,
+  } = body;
+
+  // 부분 업데이트 지원: undefined 인 필드는 변경하지 않음
+  const data: Record<string, unknown> = {};
+  if (tfName !== undefined) data.tfName = tfName;
+  if (patientName !== undefined) data.patientName = patientName;
+  if (caseType !== undefined) data.caseType = caseType;
+  if (approvalStatus !== undefined) data.approvalStatus = approvalStatus;
+  if (progressStatus !== undefined) data.progressStatus = progressStatus;
+  if (decisionDate !== undefined) data.decisionDate = decisionDate ? new Date(decisionDate) : null;
+  if (infoDisclosureStatus !== undefined) {
+    data.infoDisclosureStatus = infoDisclosureStatus ?? null;
+    data.hasInfoDisclosure = ["확보", "평임확보"].includes(infoDisclosureStatus);
+  } else if (hasInfoDisclosure !== undefined) {
+    data.hasInfoDisclosure = !!hasInfoDisclosure;
+  }
+  if (memo !== undefined) data.memo = memo || null;
+  if (caseId !== undefined) data.caseId = caseId || null;
+  // (송무 인계 필드는 ObjectionCase 모델로 이동됨 — /api/objection/cases/[id] PATCH에서 처리)
 
   const item = await prisma.objectionReview.update({
     where: { id },
-    data: {
-      tfName,
-      patientName,
-      caseType,
-      approvalStatus,
-      progressStatus,
-      decisionDate: decisionDate ? new Date(decisionDate) : null,
-      hasInfoDisclosure: infoDisclosureStatus !== undefined
-        ? ["확보", "평임확보"].includes(infoDisclosureStatus)
-        : !!hasInfoDisclosure,
-      infoDisclosureStatus: infoDisclosureStatus ?? null,
-      memo: memo || null,
-      caseId: caseId || null,
-    },
+    data,
   });
 
   if (item.progressStatus === "평정청구 진행" || item.approvalStatus === "승인" || item.approvalStatus === "일부승인") {
