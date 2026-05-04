@@ -1636,8 +1636,10 @@ function AddSettlementForm({
     const rowMonth = payDate ? parseInt(payDate.slice(5, 7)) : defaultMonth
     const rowYear  = payDate ? parseInt(payDate.slice(0, 4)) : year
     try {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { victimSearch, ...formData } = form
       await onSave({
-        ...form,
+        ...formData,
         year: rowYear,
         month: rowMonth,
         paymentDate: payDate || '',
