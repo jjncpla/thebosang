@@ -65,7 +65,24 @@ async def main() -> None:
     print("   (SMS 아님 — Telegram 공식 계정에서 도착)")
     print()
 
-    await client.start(phone=PHONE)
+    # 2FA 비밀번호는 visible input으로 받음 (Windows PowerShell의 getpass 호환성 문제 회피).
+    # 보안 trade-off: 어깨너머 보일 수 있음. 1회용 스크립트라 허용.
+    def visible_password_prompt() -> str:
+        print()
+        print("🔐 2단계 인증 켜져있음 — Cloud password를 입력하세요.")
+        print("   ⚠️  타이핑이 화면에 그대로 보입니다. 주변에 사람 없는지 확인하세요.")
+        pw = input("Cloud password: ")
+        return pw
+
+    # 인증 코드도 명시적으로 input으로 받음 (일관성)
+    def visible_code_prompt() -> str:
+        return input("텔레그램 앱에서 받은 인증 코드 (5자리): ")
+
+    await client.start(
+        phone=PHONE,
+        code_callback=visible_code_prompt,
+        password=visible_password_prompt,
+    )
 
     me = await client.get_me()
     print()

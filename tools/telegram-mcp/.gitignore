@@ -8,6 +8,11 @@
 # Downloaded attachments (local cache only)
 downloads/
 
+# Dialog dumps / whitelist drafts — chat room metadata can be sensitive
+dialogs_dump.json
+telegram-whitelist.draft.json
+*.local.json
+
 # Python
 __pycache__/
 *.pyc
