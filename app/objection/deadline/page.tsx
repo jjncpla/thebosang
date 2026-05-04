@@ -614,7 +614,7 @@ export default function ObjectionDeadlinePage() {
       body: JSON.stringify(payload),
     });
     if (!res.ok) throw new Error();
-    await fetchLitigation();
+    await Promise.all([fetchLitigation(), fetchItems()]);
   };
 
   const handleWageDateSave = async (id: string, claimDate: string, decisionResultDate: string) => {
@@ -821,71 +821,107 @@ export default function ObjectionDeadlinePage() {
           </div>
 
           {/* Main table */}
-          <div style={{ background: "white", borderRadius: 10, border: "1px solid #e5e7eb", overflow: "hidden", boxShadow: "0 1px 3px rgba(0,0,0,0.05)" }}>
-            <div style={{ overflowX: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
-                <thead>
-                  <tr style={{ background: "#29ABE2", borderBottom: "2px solid #1A8BBF" }}>
-                    {["승인여부","TF","성명","사건분류","처분일","제척도래일","심사청구일","심사결과","심사송달일","재심사청구일","재심사결과","재심사송달일","담당자","진행상태","관리"].map(h => (
-                      <th key={h} style={thStyle}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredItems.length === 0 && (
-                    <tr><td colSpan={15} style={{ padding: "40px 16px", textAlign: "center", color: "#9ca3af", fontSize: 13 }}>데이터가 없습니다</td></tr>
-                  )}
-                  {filteredItems.map(item => {
-                    const deadline = getDeadline(item);
-                    const bg = item.isAutoFilled ? "#eff6ff" : getRowBg(item);
-                    const diff = deadline ? dayDiff(deadline, now) : null;
-                    return (
-                      <tr key={item.id} onClick={() => { if (!item.isAutoFilled) { setTarget(item); setModal(true); } }} style={{ background: bg, borderBottom: "1px solid #f1f5f9", cursor: item.isAutoFilled ? "default" : "pointer" }}>
-                        <td style={{ padding: "8px 10px" }}>
-                          {item.isAutoFilled
-                            ? <span style={{ display: "inline-block", padding: "2px 8px", borderRadius: 999, fontSize: 11, fontWeight: 700, background: "#DCEEFA", color: "#1480B0", border: "1px solid #50BDEA" }}>이의제기</span>
-                            : <><ApprovalBadge status={item.approvalStatus} />{item.isQualityReview && <span style={{ marginLeft: 4, fontSize: 9, background: "#7c3aed", color: "white", borderRadius: 3, padding: "1px 5px" }}>질판위</span>}</>
-                          }
-                        </td>
-                        <td style={{ padding: "8px 10px", color: "#374151" }}>{item.tfName}</td>
-                        <td style={{ padding: "8px 10px", fontWeight: 600, color: "#111827" }}>{item.patientName}</td>
-                        <td style={{ padding: "8px 10px", color: "#6b7280" }}>{CASE_TYPE_LABELS[item.caseType] || item.caseType}</td>
-                        <td style={{ padding: "8px 10px", fontFamily: "monospace", fontSize: 11, color: "#6b7280" }}>{formatDate(item.decisionDate)}</td>
-                        <td style={{ padding: "8px 10px", fontFamily: "monospace", fontSize: 11, color: diff !== null && diff <= 7 ? "#dc2626" : "#374151", fontWeight: diff !== null && diff <= 7 ? 700 : 400 }}>
-                          {deadline ? formatDate(deadline.toISOString()) : "-"}{diff !== null && diff <= 7 && diff >= 0 && " ⚠️"}{diff !== null && diff < 0 && " 🔴"}
-                        </td>
-                        <td style={{ padding: "8px 10px", fontFamily: "monospace", fontSize: 11, color: "#6b7280" }}>{formatDate(item.examClaimDate)}</td>
-                        <td style={{ padding: "8px 10px", color: "#374151" }}>{item.examResult ?? (item.examClaimDate ? "진행중" : "접수대기")}</td>
-                        <td style={{ padding: "8px 10px", fontFamily: "monospace", fontSize: 11, color: "#6b7280" }}>{formatDate(item.examResultDate)}</td>
-                        <td style={{ padding: "8px 10px", fontFamily: "monospace", fontSize: 11, color: "#6b7280" }}>{formatDate(item.reExamClaimDate)}</td>
-                        <td style={{ padding: "8px 10px", color: "#374151" }}>{item.reExamResult ?? (item.reExamClaimDate ? "진행중" : "접수대기")}</td>
-                        <td style={{ padding: "8px 10px", fontFamily: "monospace", fontSize: 11, color: "#6b7280" }}>{formatDate(item.reExamResultDate)}</td>
-                        <td style={{ padding: "8px 10px", color: "#374151" }}>{item.manager?.name ?? "-"}</td>
-                        <td style={{ padding: "8px 10px" }}>
-                          <span style={{ display: "inline-block", padding: "2px 7px", borderRadius: 999, fontSize: 10, fontWeight: 600, background: item.progressStatus === "진행중" ? "#eff6ff" : item.progressStatus === "종결" ? "#f1f5f9" : "#fdf4ff", color: item.progressStatus === "진행중" ? "#29ABE2" : item.progressStatus === "종결" ? "#6b7280" : "#7c3aed" }}>{item.progressStatus}</span>
-                        </td>
-                        <td style={{ padding: "8px 10px" }}>
-                          {item.isAutoFilled ? (
-                            <button onClick={async e => {
-                              e.stopPropagation();
-                              await fetch('/api/objection/cases', {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ caseId: item.caseId, tfName: item.tfName, patientName: item.patientName, caseType: item.caseType, approvalStatus: '불승인', progressStatus: '진행중' }),
-                              });
-                              fetchItems();
-                            }} style={{ border: "none", borderRadius: 5, padding: "3px 10px", fontSize: 10, fontWeight: 600, color: "white", background: "#29ABE2", cursor: "pointer" }}>등록</button>
-                          ) : (
-                            <button onClick={async e => { e.stopPropagation(); if (!confirm("삭제?")) return; await fetch(`/api/objection/cases/${item.id}`, { method: "DELETE" }); fetchItems(); }} style={{ border: "1px solid #e5e7eb", borderRadius: 4, padding: "2px 7px", fontSize: 10, color: "#dc2626", background: "white", cursor: "pointer" }}>삭제</button>
-                          )}
-                        </td>
+          {(() => {
+            const allLitigation = filteredItems.length > 0 && filteredItems.every(i => i.progressStatus === "송무인계");
+            const midHeaders = allLitigation
+              ? ["1차 검토","1차 기안일","1차 기안 결과","송무 약정","약정서 송부","2차 기안일"]
+              : ["심사청구일","심사결과","심사송달일","재심사청구일","재심사결과","재심사송달일"];
+            const midBg = allLitigation ? "#7C3AED" : "#29ABE2";
+            return (
+              <div style={{ background: "white", borderRadius: 10, border: "1px solid #e5e7eb", overflow: "hidden", boxShadow: "0 1px 3px rgba(0,0,0,0.05)" }}>
+                <div style={{ overflowX: "auto" }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                    <thead>
+                      <tr style={{ background: "#29ABE2", borderBottom: "2px solid #1A8BBF" }}>
+                        {["승인여부","TF","성명","사건분류","처분일","제척도래일"].map(h => (
+                          <th key={h} style={thStyle}>{h}</th>
+                        ))}
+                        {midHeaders.map(h => (
+                          <th key={h} style={{ ...thStyle, background: midBg }}>{h}</th>
+                        ))}
+                        {["담당자","진행상태","관리"].map(h => (
+                          <th key={h} style={thStyle}>{h}</th>
+                        ))}
                       </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
+                    </thead>
+                    <tbody>
+                      {filteredItems.length === 0 && (
+                        <tr><td colSpan={15} style={{ padding: "40px 16px", textAlign: "center", color: "#9ca3af", fontSize: 13 }}>데이터가 없습니다</td></tr>
+                      )}
+                      {filteredItems.map(item => {
+                        const isLit = item.progressStatus === "송무인계";
+                        const deadline = getDeadline(item);
+                        const bg = item.isAutoFilled ? "#eff6ff" : isLit ? "#fdf4ff" : getRowBg(item);
+                        const diff = deadline ? dayDiff(deadline, now) : null;
+                        const litCell: React.CSSProperties = { padding: "8px 10px", fontSize: 11, color: "#7c3aed", background: "#f5f3ff", whiteSpace: "nowrap" };
+                        const litCellMono: React.CSSProperties = { ...litCell, fontFamily: "monospace" };
+                        return (
+                          <tr key={item.id} onClick={() => {
+                            if (!item.isAutoFilled) {
+                              if (isLit) { setLitHandoverModal(item); }
+                              else { setTarget(item); setModal(true); }
+                            }
+                          }} style={{ background: bg, borderBottom: "1px solid #f1f5f9", cursor: item.isAutoFilled ? "default" : "pointer" }}>
+                            <td style={{ padding: "8px 10px" }}>
+                              {item.isAutoFilled
+                                ? <span style={{ display: "inline-block", padding: "2px 8px", borderRadius: 999, fontSize: 11, fontWeight: 700, background: "#DCEEFA", color: "#1480B0", border: "1px solid #50BDEA" }}>이의제기</span>
+                                : <><ApprovalBadge status={item.approvalStatus} />{item.isQualityReview && <span style={{ marginLeft: 4, fontSize: 9, background: "#7c3aed", color: "white", borderRadius: 3, padding: "1px 5px" }}>질판위</span>}</>
+                              }
+                            </td>
+                            <td style={{ padding: "8px 10px", color: "#374151" }}>{item.tfName}</td>
+                            <td style={{ padding: "8px 10px", fontWeight: 600, color: "#111827" }}>{item.patientName}</td>
+                            <td style={{ padding: "8px 10px", color: "#6b7280" }}>{CASE_TYPE_LABELS[item.caseType] || item.caseType}</td>
+                            <td style={{ padding: "8px 10px", fontFamily: "monospace", fontSize: 11, color: "#6b7280" }}>{formatDate(item.decisionDate)}</td>
+                            <td style={{ padding: "8px 10px", fontFamily: "monospace", fontSize: 11, color: diff !== null && diff <= 7 ? "#dc2626" : "#374151", fontWeight: diff !== null && diff <= 7 ? 700 : 400 }}>
+                              {deadline ? formatDate(deadline.toISOString()) : "-"}{diff !== null && diff <= 7 && diff >= 0 && " ⚠️"}{diff !== null && diff < 0 && " 🔴"}
+                            </td>
+                            {isLit ? (
+                              <>
+                                <td style={litCell}>{item.litigationFirstReview ?? "-"}</td>
+                                <td style={litCellMono}>{formatDate(item.litigationFirstDraftAt)}</td>
+                                <td style={litCell}>{item.litigationFirstDraftResult ?? "-"}</td>
+                                <td style={litCell}>{item.litigationContractStatus ?? "-"}</td>
+                                <td style={litCell}>{item.litigationContractSent ?? "-"}</td>
+                                <td style={litCellMono}>{formatDate(item.litigationSecondDraftAt)}</td>
+                              </>
+                            ) : (
+                              <>
+                                <td style={{ padding: "8px 10px", fontFamily: "monospace", fontSize: 11, color: "#6b7280" }}>{formatDate(item.examClaimDate)}</td>
+                                <td style={{ padding: "8px 10px", color: "#374151" }}>{item.examResult ?? (item.examClaimDate ? "진행중" : "접수대기")}</td>
+                                <td style={{ padding: "8px 10px", fontFamily: "monospace", fontSize: 11, color: "#6b7280" }}>{formatDate(item.examResultDate)}</td>
+                                <td style={{ padding: "8px 10px", fontFamily: "monospace", fontSize: 11, color: "#6b7280" }}>{formatDate(item.reExamClaimDate)}</td>
+                                <td style={{ padding: "8px 10px", color: "#374151" }}>{item.reExamResult ?? (item.reExamClaimDate ? "진행중" : "접수대기")}</td>
+                                <td style={{ padding: "8px 10px", fontFamily: "monospace", fontSize: 11, color: "#6b7280" }}>{formatDate(item.reExamResultDate)}</td>
+                              </>
+                            )}
+                            <td style={{ padding: "8px 10px", color: "#374151" }}>{item.manager?.name ?? "-"}</td>
+                            <td style={{ padding: "8px 10px" }}>
+                              <span style={{ display: "inline-block", padding: "2px 7px", borderRadius: 999, fontSize: 10, fontWeight: 600, background: item.progressStatus === "진행중" ? "#eff6ff" : item.progressStatus === "종결" ? "#f1f5f9" : "#fdf4ff", color: item.progressStatus === "진행중" ? "#29ABE2" : item.progressStatus === "종결" ? "#6b7280" : "#7c3aed" }}>{item.progressStatus}</span>
+                            </td>
+                            <td style={{ padding: "8px 10px" }}>
+                              {item.isAutoFilled ? (
+                                <button onClick={async e => {
+                                  e.stopPropagation();
+                                  await fetch('/api/objection/cases', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ caseId: item.caseId, tfName: item.tfName, patientName: item.patientName, caseType: item.caseType, approvalStatus: '불승인', progressStatus: '진행중' }),
+                                  });
+                                  fetchItems();
+                                }} style={{ border: "none", borderRadius: 5, padding: "3px 10px", fontSize: 10, fontWeight: 600, color: "white", background: "#29ABE2", cursor: "pointer" }}>등록</button>
+                              ) : (
+                                <button onClick={async e => { e.stopPropagation(); if (!confirm("삭제?")) return; await fetch(`/api/objection/cases/${item.id}`, { method: "DELETE" }); fetchItems(); }} style={{ border: "1px solid #e5e7eb", borderRadius: 4, padding: "2px 7px", fontSize: 10, color: "#dc2626", background: "white", cursor: "pointer" }}>삭제</button>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            );
+          })()}
         </>
       )}
 
