@@ -1,13 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
+// CopdDetail = 사건 단위 공통 정보 (흡연력, 진단, 초진).
+// 회차별 신청은 /api/cases/[caseId]/copd/applications 에서 관리.
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ caseId: string }> }
 ) {
   const { caseId } = await params;
   try {
-    const detail = await prisma.copdDetail.findUnique({ where: { caseId } });
+    const detail = await prisma.copdDetail.findUnique({
+      where: { caseId },
+      include: {
+        applications: { orderBy: { applicationRound: "asc" } },
+      },
+    });
     return NextResponse.json(detail ?? {});
   } catch (err) {
     console.error("[GET /api/cases/[caseId]/copd]", err);
@@ -24,37 +31,28 @@ export async function PUT(
     const body = await req.json();
 
     const parseDate = (v: unknown) => (v ? new Date(v as string) : null);
-    const parseFloat_ = (v: unknown) =>
+    const parseNumber = (v: unknown) =>
       v !== undefined && v !== null && v !== "" ? Number(v) : null;
+    const parseInt_ = (v: unknown) =>
+      v !== undefined && v !== null && v !== "" ? parseInt(String(v), 10) : null;
 
     const data = {
+      // 흡연력
+      smokingStatus: body.smokingStatus ?? null,
+      smokingPacks: parseInt_(body.smokingPacks),
+      smokingYears: parseInt_(body.smokingYears),
+      exSmokingYears: parseInt_(body.exSmokingYears),
+      // 진단
+      firstSymptomDate: parseDate(body.firstSymptomDate),
+      diagnosisDate: parseDate(body.diagnosisDate),
+      diagnosisHospital: body.diagnosisHospital ?? null,
+      // 초진
       firstClinic: body.firstClinic ?? null,
       firstExamDate: parseDate(body.firstExamDate),
-      fev1Rate: parseFloat_(body.fev1Rate),
-      fev1Volume: parseFloat_(body.fev1Volume),
-      specialClinic: body.specialClinic ?? null,
-      exam1Date: parseDate(body.exam1Date),
-      exam1Rate: parseFloat_(body.exam1Rate),
-      exam1Volume: parseFloat_(body.exam1Volume),
-      exam2Date: parseDate(body.exam2Date),
-      exam2Rate: parseFloat_(body.exam2Rate),
-      exam2Volume: parseFloat_(body.exam2Volume),
-      examMemo: body.examMemo ?? null,
-      expertOrgDate: parseDate(body.expertOrgDate),
-      occDiseaseCommittee: body.occDiseaseCommittee ?? null,
-      occReferralDate: parseDate(body.occReferralDate),
-      occReviewDate: parseDate(body.occReviewDate),
-      occAttendanceType: body.occAttendanceType ?? null,
-      occAttendanceNote: body.occAttendanceNote ?? null,
-      disposalType: body.disposalType ?? null,
-      disposalDate: parseDate(body.disposalDate),
-      reExamPossibleDate: parseDate(body.reExamPossibleDate),
-      disabilityClaimDate: parseDate(body.disabilityClaimDate),
-      disabilityDispositionType: body.disabilityDispositionType ?? null,
-      disabilityGradeType: body.disabilityGradeType ?? null,
-      disabilityDispositionGrade: body.disabilityDispositionGrade ?? null,
-      disabilityDispositionDate: parseDate(body.disabilityDispositionDate),
-      disabilityDispositionNoticeDate: parseDate(body.disabilityDispositionNoticeDate),
+      fev1Rate: parseNumber(body.fev1Rate),
+      fev1Volume: parseNumber(body.fev1Volume),
+      // 메모
+      copdMemo: body.copdMemo ?? null,
     };
 
     const detail = await prisma.copdDetail.upsert({
