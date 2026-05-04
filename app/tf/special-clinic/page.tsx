@@ -14,6 +14,7 @@ interface Schedule {
   hospitalName: string | null
   clinicType: string | null
   category: string
+  diseaseType: string | null
   examRound: number | null
   title: string | null
   content: string | null
@@ -106,6 +107,32 @@ const CATEGORY_COLORS: Record<string, string> = {
   '약정': '#EC4899',
   '기타': '#95A5A6',
 }
+
+// 상병별 라벨/색상 (캘린더 필터 + 표시 prefix)
+const DISEASE_TYPES = [
+  'HEARING_LOSS', 'COPD', 'PNEUMOCONIOSIS', 'MUSCULOSKELETAL',
+  'OCCUPATIONAL_ACCIDENT', 'OCCUPATIONAL_CANCER', 'BEREAVED', 'OTHER',
+] as const
+const DISEASE_LABELS: Record<string, string> = {
+  HEARING_LOSS: '난청',
+  COPD: 'COPD',
+  PNEUMOCONIOSIS: '진폐',
+  MUSCULOSKELETAL: '근골격',
+  OCCUPATIONAL_ACCIDENT: '업무상사고',
+  OCCUPATIONAL_CANCER: '직업성암',
+  BEREAVED: '유족',
+  OTHER: '기타',
+}
+const DISEASE_COLORS: Record<string, string> = {
+  HEARING_LOSS: '#1d4ed8',
+  COPD: '#0d9488',
+  PNEUMOCONIOSIS: '#7c3aed',
+  MUSCULOSKELETAL: '#ea580c',
+  OCCUPATIONAL_ACCIDENT: '#dc2626',
+  OCCUPATIONAL_CANCER: '#be185d',
+  BEREAVED: '#475569',
+  OTHER: '#6b7280',
+}
 function isFreeform(category: string) {
   return (FREEFORM_CATEGORIES as readonly string[]).includes(category)
 }
@@ -114,8 +141,11 @@ function eventColor(s: Schedule, colorMap?: Record<string, string>) {
   return getTFColor(s.tfName, colorMap)
 }
 function eventTitle(s: Schedule) {
-  if (isFreeform(s.category)) return s.title || s.category
-  return s.patientName || ''
+  const prefix = s.diseaseType && DISEASE_LABELS[s.diseaseType]
+    ? `[${DISEASE_LABELS[s.diseaseType]}] `
+    : ''
+  if (isFreeform(s.category)) return prefix + (s.title || s.category)
+  return prefix + (s.patientName || '')
 }
 /** 특진/재특진 일정의 담당자 라벨 — 없으면 '미배정' */
 function attendeeLabel(s: Schedule): string {
@@ -160,6 +190,9 @@ function SpecialClinicCalendar() {
   const [staffPanelOpen, setStaffPanelOpen] = useState(false)
   const staffPanelRef = useRef<HTMLDivElement>(null)
   const [staffSearch, setStaffSearch] = useState('')
+  const [diseaseFilters, setDiseaseFilters] = useState<string[]>([])
+  const [diseasePanelOpen, setDiseasePanelOpen] = useState(false)
+  const diseasePanelRef = useRef<HTMLDivElement>(null)
 
   // 필터 프리셋 (계정별 저장)
   interface FilterPreset {
@@ -306,6 +339,15 @@ function SpecialClinicCalendar() {
     return () => document.removeEventListener('mousedown', handleClick)
   }, [presetPanelOpen])
 
+  // 상병 패널 외부 클릭 닫기
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (diseasePanelRef.current && !diseasePanelRef.current.contains(e.target as Node)) setDiseasePanelOpen(false)
+    }
+    if (diseasePanelOpen) document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [diseasePanelOpen])
+
   // 프리셋 로드
   useEffect(() => {
     fetch('/api/me/calendar-presets')
@@ -368,6 +410,7 @@ function SpecialClinicCalendar() {
     setHospitalFilters([])
     setStatusFilters([])
     setStaffFilters([])
+    setDiseaseFilters([])
   }
 
   const hasAnyFilter =
@@ -376,7 +419,8 @@ function SpecialClinicCalendar() {
     categoryFilters.length > 0 ||
     hospitalFilters.length > 0 ||
     statusFilters.length > 0 ||
-    staffFilters.length > 0
+    staffFilters.length > 0 ||
+    diseaseFilters.length > 0
 
   // 데이터 로드 (전체 — 프론트에서 필터링) + stale-while-revalidate
   const load = useCallback(async () => {
@@ -468,6 +512,11 @@ function SpecialClinicCalendar() {
   const filteredSchedules = schedules.filter(s => {
     if (selectedTFs.length > 0 && !selectedTFs.includes(s.tfName)) return false
     if (categoryFilters.length > 0 && !categoryFilters.includes(s.category) && !categoryFilters.includes(s.clinicType ?? '')) return false
+    if (diseaseFilters.length > 0) {
+      const dt = s.diseaseType ?? '__NULL__'
+      const matchNull = diseaseFilters.includes('__NULL__') && !s.diseaseType
+      if (!matchNull && !diseaseFilters.includes(dt)) return false
+    }
     if (hospitalFilters.length > 0 && (!s.hospitalName || !hospitalFilters.includes(s.hospitalName))) return false
     if (statusFilters.length > 0 && !statusFilters.includes(s.status)) return false
     if (staffFilters.length > 0) {
@@ -771,6 +820,50 @@ function SpecialClinicCalendar() {
                   ))}
                 </div>
               ))}
+            </div>
+          )}
+        </div>
+
+        {/* 상병별 복수선택 드롭다운 */}
+        <div className="relative" ref={diseasePanelRef}>
+          <button
+            onClick={() => setDiseasePanelOpen(p => !p)}
+            className={`border rounded px-2 py-1 text-xs flex items-center gap-1 hover:bg-gray-50 ${diseaseFilters.length > 0 ? 'bg-emerald-50 border-emerald-300 text-emerald-700' : ''}`}
+          >
+            {diseaseFilters.length === 0
+              ? '전체 상병'
+              : diseaseFilters.length === 1
+                ? (DISEASE_LABELS[diseaseFilters[0]] ?? diseaseFilters[0])
+                : `${DISEASE_LABELS[diseaseFilters[0]] ?? diseaseFilters[0]} 외 ${diseaseFilters.length - 1}개`}
+            {' '}<span className="text-gray-400">▼</span>
+          </button>
+          {diseasePanelOpen && (
+            <div className="absolute top-full mt-1 left-0 bg-white border rounded-lg shadow-lg z-40 w-44 py-1">
+              <div className="px-2 py-1 border-b">
+                <button onClick={() => setDiseaseFilters([])} className="text-[10px] text-sky-500 hover:underline">전체 초기화</button>
+              </div>
+              {DISEASE_TYPES.map(dt => (
+                <label key={dt} className="flex items-center gap-2 px-2 py-1 hover:bg-gray-50 cursor-pointer text-xs">
+                  <input
+                    type="checkbox"
+                    checked={diseaseFilters.includes(dt)}
+                    onChange={() => setDiseaseFilters(prev => prev.includes(dt) ? prev.filter(x => x !== dt) : [...prev, dt])}
+                    className="rounded"
+                  />
+                  <span className="w-2 h-2 rounded-sm flex-shrink-0" style={{ backgroundColor: DISEASE_COLORS[dt] }} />
+                  {DISEASE_LABELS[dt]}
+                </label>
+              ))}
+              <label className="flex items-center gap-2 px-2 py-1 hover:bg-gray-50 cursor-pointer text-xs border-t">
+                <input
+                  type="checkbox"
+                  checked={diseaseFilters.includes('__NULL__')}
+                  onChange={() => setDiseaseFilters(prev => prev.includes('__NULL__') ? prev.filter(x => x !== '__NULL__') : [...prev, '__NULL__'])}
+                  className="rounded"
+                />
+                <span className="w-2 h-2 rounded-sm flex-shrink-0" style={{ backgroundColor: '#d1d5db' }} />
+                미지정
+              </label>
             </div>
           )}
         </div>
