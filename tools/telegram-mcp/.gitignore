@@ -1,0 +1,15 @@
+# Telegram session files = full account access. NEVER commit.
+*.session
+*.session-journal
+
+# Credentials
+.env
+
+# Downloaded attachments (local cache only)
+downloads/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
