@@ -68,11 +68,14 @@ export async function GET(
 
   const patient = caseData.patient;
   const manager = caseData.caseManager;
-  // COPD 케이스에서도 동일 양식 사용 시 firstExamDate를 CopdDetail.firstExamDate로 보충
+  // COPD 케이스에서도 동일 양식 사용 시 CopdDetail에서 공통 필드를 보충
+  // (HL specific 필드 — bankAccount, confirmPriorDisability 등 — 은 null로 남음)
   const copdFallback = caseData.copd
     ? {
         firstClinic: caseData.copd.firstClinic,
         firstExamDate: caseData.copd.firstExamDate,
+        specialClinic: caseData.copd.specialClinic ?? null,
+        expertClinic: null as string | null, // CopdDetail에는 expertClinic 없음 — 향후 CopdApplication 연계 필요
       }
     : null;
   const detail = (caseData.hearingLoss ?? copdFallback) as (typeof caseData.hearingLoss & {
@@ -155,6 +158,16 @@ export async function GET(
       }
 
       case "NOISE_WORK_CONFIRM": {
+        // COPD 사건은 소음노출 확인서 부적합 — 분진작업 확인서로 안내
+        if (caseData.caseType === "COPD") {
+          return NextResponse.json(
+            {
+              error: "COPD 사건은 소음노출 확인서를 사용할 수 없습니다. 분진작업 종사사실 확인서(DUST_WORK_CONFIRM)를 사용하세요.",
+              redirect: "DUST_WORK_CONFIRM",
+            },
+            { status: 400 }
+          );
+        }
         const pdfDoc = await loadBlankForm("noise_work_confirm.pdf");
         const font = await loadKoreanFont(pdfDoc);
         const page = pdfDoc.getPages()[0];
@@ -282,8 +295,10 @@ export async function GET(
         drawText(page, patient.address ?? "", 148, 642, font, 8);
         drawText(page, patient.phone ?? "",   465, 640, font, 9);
 
-        // 특진 사유 (고정 텍스트)
-        drawText(page, "소음성 난청(특별진찰)", 148, 572, font, 9);
+        // 특진 사유 (caseType별 분기)
+        const specialClinicReason =
+          caseData.caseType === "COPD" ? "COPD(특별진찰)" : "소음성 난청(특별진찰)";
+        drawText(page, specialClinicReason, 148, 572, font, 9);
         drawText(page, `- 대리인 Tel: ${manager?.officeTel ?? ""}  Fax: ${manager?.officeFax ?? ""}`, 148, 560, font, 8);
 
         // 특진의료기관 1행
@@ -334,8 +349,12 @@ export async function GET(
         drawText(page, patient.address ?? "", 148, 642, font, 8);
         drawText(page, patient.phone ?? "",   465, 640, font, 9);
 
-        // 특진 사유
-        drawText(page, "소음성 난청(업무관련성 평가)", 148, 572, font, 9);
+        // 특진 사유 (caseType별 분기)
+        const expertClinicReason =
+          caseData.caseType === "COPD"
+            ? "COPD(업무관련성 평가)"
+            : "소음성 난청(업무관련성 평가)";
+        drawText(page, expertClinicReason, 148, 572, font, 9);
         drawText(page, `- 대리인 H.P: ${manager?.officeTel ?? ""}  Tel: ${manager?.officeTel ?? ""}  Fax: ${manager?.officeFax ?? ""}`, 148, 560, font, 8);
 
         // 전문조사기관

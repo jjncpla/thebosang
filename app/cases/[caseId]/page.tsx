@@ -1225,6 +1225,21 @@ function CopdTab({ caseId }: { caseId: string }) {
 
   return (
     <div>
+      {/* 🛈 deprecated 안내 — 신규 회차 기반 페이지로 이동 권장 */}
+      <div style={{ marginBottom: 16, padding: "12px 16px", background: "#fff7ed", border: "1px solid #fdba74", borderRadius: 8, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+        <div style={{ fontSize: 12, color: "#9a3412", lineHeight: 1.5 }}>
+          ⚠ 이 탭은 <b>구버전(deprecated) UI</b> 입니다. 특진/처분/장해 입력은 신규 회차 기반 페이지에서 진행해 주세요.
+          <br />
+          여기서 입력한 일부 필드(특진·처분·장해 등)는 <b>저장되지 않을 수 있습니다.</b>
+        </div>
+        <button
+          onClick={() => { if (typeof window !== "undefined") window.location.href = `/cases/${caseId}/copd`; }}
+          style={{ background: "#ea580c", color: "white", border: "none", borderRadius: 6, padding: "8px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}
+        >
+          신규 페이지로 이동 →
+        </button>
+      </div>
+
       {/* (1) 사건초기 */}
       <div style={secWrap}>
         <AccordionHeader open={sec1Open} onToggle={() => setSec1Open((o) => !o)} label="(1) 사건초기" />
