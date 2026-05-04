@@ -83,5 +83,22 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }
   }
 
+  // claimDate / decisionResultDate 입력 시 ObjectionCase.wageCorrectStatus 동기화
+  if (item.caseId && (body.claimDate !== undefined || body.decisionResultDate !== undefined)) {
+    const oc = await prisma.objectionCase.findFirst({ where: { caseId: item.caseId } });
+    if (oc) {
+      let wageStatus: string | null = null;
+      if (item.decisionResultDate) wageStatus = "처분완료";
+      else if (item.claimDate) wageStatus = "진행중";
+      else wageStatus = "접수 대기";
+      if (oc.wageCorrectStatus !== wageStatus) {
+        await prisma.objectionCase.update({
+          where: { id: oc.id },
+          data: { wageCorrectStatus: wageStatus },
+        });
+      }
+    }
+  }
+
   return NextResponse.json(item);
 }

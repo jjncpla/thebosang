@@ -15,6 +15,40 @@ export async function POST(req: NextRequest) {
   const action = new URL(req.url).searchParams.get("action") ?? "";
 
   try {
+    if (action === "migrate-legacy-casetype") {
+      // legacy 한글 caseType → 영문 enum 통일 마이그레이션
+      // /objection/deadline에서 한글로 저장된 ObjectionCase.caseType과 ObjectionReview.caseType 둘 다 처리
+      const labelToEnum: Record<string, string> = {
+        "난청": "HEARING_LOSS",
+        "소음성 난청": "HEARING_LOSS",
+        "진폐": "PNEUMOCONIOSIS",
+        "근골격계": "MUSCULOSKELETAL",
+        "업무상 사고": "OCCUPATIONAL_ACCIDENT",
+        "직업성 암": "OCCUPATIONAL_CANCER",
+        "유족": "BEREAVED",
+        "기타": "OTHER",
+      };
+      const stats: Record<string, number> = {};
+      for (const [label, enumKey] of Object.entries(labelToEnum)) {
+        const ocResult = await prisma.objectionCase.updateMany({
+          where: { caseType: label },
+          data: { caseType: enumKey },
+        });
+        const orResult = await prisma.objectionReview.updateMany({
+          where: { caseType: label },
+          data: { caseType: enumKey },
+        });
+        const wgResult = await prisma.wageReviewData.updateMany({
+          where: { caseType: label },
+          data: { caseType: enumKey },
+        });
+        if (ocResult.count + orResult.count + wgResult.count > 0) {
+          stats[label] = ocResult.count + orResult.count + wgResult.count;
+        }
+      }
+      return NextResponse.json({ updated: Object.values(stats).reduce((a, b) => a + b, 0), stats });
+    }
+
     if (action === "backfill-disease-type") {
       // caseId가 있는 일정 중 diseaseType이 NULL인 것들을 Case.caseType으로 채움
       const targets = await prisma.specialClinicSchedule.findMany({

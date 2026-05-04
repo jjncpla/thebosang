@@ -69,6 +69,12 @@ export async function DELETE(
     const caseIds = cases.map(c => c.id);
 
     if (caseIds.length > 0) {
+      // 처분검토 / 기일관리 / 평임 정정 / 캘린더 일정 등 caseId FK dangling 방지
+      await prisma.objectionCase.deleteMany({ where: { caseId: { in: caseIds } } });
+      await prisma.objectionReview.deleteMany({ where: { caseId: { in: caseIds } } });
+      await prisma.wageReviewData.deleteMany({ where: { caseId: { in: caseIds } } });
+      await prisma.specialClinicSchedule.deleteMany({ where: { caseId: { in: caseIds } } });
+      // 상병별 detail
       await prisma.hearingLossDetail.deleteMany({ where: { caseId: { in: caseIds } } });
       await prisma.copdDetail.deleteMany({ where: { caseId: { in: caseIds } } });
       await prisma.pneumoconiosisDetail.deleteMany({ where: { caseId: { in: caseIds } } });

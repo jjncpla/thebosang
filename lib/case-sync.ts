@@ -86,6 +86,7 @@ export async function syncFromCaseStatus(caseId: string) {
           caseType: "HEARING_LOSS",
           tfName: caseInfo.tfName ?? "",
           patientName: caseInfo.patient?.name ?? "",
+          caseId: null, // 이미 다른 caseId에 묶인 Review 오매칭 방지 (동명이인 안전성)
         },
       });
       if (review) {
@@ -281,16 +282,24 @@ export async function syncFromCopdDecision(caseId: string) {
       copd: {
         include: {
           applications: {
-            orderBy: { applicationRound: "desc" },
-            take: 1,
+            orderBy: { applicationRound: "desc" }, // 모두 가져와서 처분 있는 회차 fallback
           },
         },
       },
     },
   });
   if (!caseInfo || caseInfo.caseType !== "COPD") return;
-  const latest = caseInfo.copd?.applications[0];
-  if (!latest) return;
+  const apps = caseInfo.copd?.applications ?? [];
+  if (apps.length === 0) return;
+  // 처분(요양 또는 장해)이 입력된 가장 최근 회차를 사용
+  // → 새 회차가 빈 상태로 추가돼도 직전 처분의 ObjectionReview는 유지됨
+  const latest =
+    apps.find(
+      (a) =>
+        a.disabilityDispositionType ||
+        a.disposalType === "승인" ||
+        a.disposalType === "부지급"
+    ) ?? apps[0];
 
   // 결정 산출
   let approval: "승인" | "불승인" | null = null;
@@ -313,8 +322,31 @@ export async function syncFromCopdDecision(caseId: string) {
   }
   // "반려"/"보류"/null은 처분이 아직 확정되지 않은 상태로 간주 → Review 생성 안 함
 
+  // 질판위 기각 케이스 — 처분은 아직 없지만 사용자가 즉시 이의제기 절차 검토하도록 빈 Review 생성
+  // (어떤 회차에서든 기각이 한 번이라도 입력됐으면 Review 생성)
+  const hasOccRejection = apps.some((a) => a.occResult === "기각");
+
   if (!approval) {
-    // 처분이 철회된 경우 — 기존 자동 생성 Review가 있으면 정리 (사용자 수동 입력은 보존: progressStatus가 비어있고 memo 표식이 있는 것만 정리)
+    if (hasOccRejection) {
+      // 기각만 있고 처분이 없는 케이스 — 빈 approvalStatus + 메모로 표시
+      let review = await prisma.objectionReview.findFirst({ where: { caseId } });
+      if (!review) {
+        await prisma.objectionReview.create({
+          data: {
+            caseId,
+            tfName: caseInfo.tfName ?? "",
+            patientName: caseInfo.patient?.name ?? "",
+            caseType: "COPD",
+            approvalStatus: "",
+            progressStatus: "",
+            decisionDate: null,
+            memo: "[COPD_AUTO] 질판위 기각 — 이의제기 검토 필요",
+          },
+        });
+      }
+      return;
+    }
+    // 처분이 철회된 경우 — 기존 자동 생성 Review가 있으면 정리 (사용자 수동 입력은 보존)
     const auto = await prisma.objectionReview.findFirst({
       where: { caseId, memo: { contains: "[COPD_AUTO]" } },
     });
@@ -360,6 +392,23 @@ export async function syncFromCopdDecision(caseId: string) {
 
   // 결정 확정 → 업무처리부 자동 생성 (HEARING_LOSS와 동일)
   await autoGenerateLaborAttorneyRecord(caseId);
+
+  // 승인 시 WageReviewData 자동 생성 (HL의 처분검토 POST/PATCH 흐름과 동일)
+  if (approval === "승인") {
+    const existingWage = await prisma.wageReviewData.findFirst({ where: { caseId } });
+    if (!existingWage) {
+      await prisma.wageReviewData.create({
+        data: {
+          caseId,
+          tfName: caseInfo.tfName ?? "",
+          patientName: caseInfo.patient?.name ?? "",
+          caseType: "COPD",
+          decisionDate,
+          hasInfoDisclosure: false,
+        },
+      });
+    }
+  }
 }
 
 /**
