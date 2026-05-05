@@ -6,6 +6,8 @@ import { CASE_TYPE_LABELS, DISPOSAL_TYPE, GRADE_TYPE, STATUS_BY_CASE_TYPE, CASE_
 import ContactSelector from "@/components/ui/ContactSelector";
 import BranchSelector from "@/components/ui/BranchSelector";
 import DateSegmentInput from "@/components/ui/DateSegmentInput";
+import { REGION_BRANCHES } from "@/lib/constants/regions";
+import { THEBOSANG_STAFF } from "@/lib/constants/staff";
 
 const S = { fontFamily: "'Malgun Gothic', 'Apple SD Gothic Neo', 'Segoe UI', sans-serif" };
 
@@ -1465,8 +1467,8 @@ function BasicInfoTab({ caseData, onUpdated }: { caseData: CaseData; onUpdated: 
           <InfoCard title="담당자 정보">
             <InfoRow label="영업담당">{caseData.salesManager ?? "-"}</InfoRow>
             <InfoRow label="실무담당">{caseData.caseManager ?? "-"}</InfoRow>
-            <InfoRow label="지사장">{caseData.branchManager ?? "-"}</InfoRow>
-            <InfoRow label="부지사">{caseData.subAgent ?? "-"}</InfoRow>
+            <InfoRow label="담당 더보상 지사">{caseData.branchManager ?? "-"}</InfoRow>
+            <InfoRow label="대리인명">{caseData.subAgent ?? "-"}</InfoRow>
             <InfoRow label="영업경로">{caseData.salesRoute ?? "-"}</InfoRow>
           </InfoCard>
           <InfoCard title="일정">
@@ -1518,7 +1520,6 @@ function BasicInfoTab({ caseData, onUpdated }: { caseData: CaseData; onUpdated: 
         </div>
         {([
           ["사건번호", "caseNumber"], ["TF명", "tfName"],
-          ["지사장", "branchManager"], ["부지사", "subAgent"],
           ["관할공단", "kwcOfficeName"], ["지사담당자", "kwcOfficerName"],
         ] as [string, keyof typeof form][]).map(([label, key]) => (
           <div key={key} style={{ display: "flex", flexDirection: "column", gap: 3 }}>
@@ -1526,6 +1527,20 @@ function BasicInfoTab({ caseData, onUpdated }: { caseData: CaseData; onUpdated: 
             <input style={inputStyle} value={String(form[key])} onChange={(e) => setForm({ ...form, [key]: e.target.value })} />
           </div>
         ))}
+        <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+          <label style={{ fontSize: 12, color: "#6b7280" }}>담당 더보상 지사</label>
+          <select style={inputStyle} value={form.branchManager} onChange={(e) => setForm({ ...form, branchManager: e.target.value })}>
+            <option value="">선택</option>
+            {Object.values(REGION_BRANCHES).flat().map((b) => <option key={b} value={b}>{b}</option>)}
+          </select>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+          <label style={{ fontSize: 12, color: "#6b7280" }}>대리인명</label>
+          <select style={inputStyle} value={form.subAgent} onChange={(e) => setForm({ ...form, subAgent: e.target.value })}>
+            <option value="">선택</option>
+            {THEBOSANG_STAFF.filter((s) => s.includes("노무사")).map((s) => <option key={s} value={s}>{s}</option>)}
+          </select>
+        </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
           <label style={{ fontSize: 12, color: "#6b7280" }}>영업담당자</label>
           <ContactSelector
