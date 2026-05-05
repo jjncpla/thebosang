@@ -16,6 +16,7 @@ const S = { fontFamily: "'Malgun Gothic', 'Apple SD Gothic Neo', 'Segoe UI', san
 
 import { WorkHistorySection } from "@/components/case-common/WorkHistorySection";
 import type { WorkHistoryItem, WorkHistoryRaw, WorkHistoryDailyEntry } from "@/components/case-common/WorkHistoryTypes";
+import CopdCaseDetailInline from "@/components/copd/CopdCaseDetailInline";
 
 type HearingLossExam = {
   id: string;
@@ -1160,20 +1161,9 @@ function HearingLossTab({ caseId, initial }: { caseId: string; initial: HearingL
   );
 }
 
-/* ── COPD 상세 탭 — 신규 회차 기반 페이지로 자동 redirect ── */
+/* ── COPD 상세 탭 — 인라인 회차 기반 UI ── */
 function CopdTab({ caseId }: { caseId: string }) {
-  const router = useRouter();
-  useEffect(() => {
-    router.replace(`/cases/${caseId}/copd`);
-  }, [caseId, router]);
-  return (
-    <div style={{ padding: 24, color: "#6b7280", fontSize: 13, textAlign: "center" }}>
-      신규 COPD 회차별 페이지로 이동 중...{" "}
-      <a href={`/cases/${caseId}/copd`} style={{ color: "#29ABE2", textDecoration: "underline" }}>
-        바로 가기
-      </a>
-    </div>
-  );
+  return <CopdCaseDetailInline caseId={caseId} embedded />;
 }
 
 /* ── 진폐 상세 탭 ── */
