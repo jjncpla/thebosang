@@ -54,6 +54,37 @@ def save_state(state: dict) -> None:
     STATE_FILE.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
+def cleanup_zombie_servers() -> str:
+    """
+    .session 파일을 잡고 있는 좀비 server.py 프로세스 정리.
+
+    Claude Code MCP는 부모 종료 시 자식 server.py를 항상 정리하지 않아 누적됨 →
+    fetch_corpus.py가 sqlite write lock을 못 받음. cron 실행 시점(새벽 03시)에는
+    Claude Code가 거의 꺼져있으므로 모두 kill해도 안전. 살아있다면 다음 도구 호출 시 재spawn.
+
+    SKIP_CLEANUP=1 이면 skip.
+    """
+    if os.getenv("SKIP_CLEANUP") == "1":
+        return "SKIP_CLEANUP=1 — cleanup 스킵"
+    if sys.platform != "win32":
+        return "Windows 외 환경 — cleanup 스킵 (수동 처리)"
+    try:
+        ps_cmd = (
+            "Get-CimInstance Win32_Process -Filter \"Name='python.exe'\" | "
+            "Where-Object { $_.CommandLine -like '*telegram-mcp*server.py*' } | "
+            "ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue; "
+            "$_.ProcessId } | Measure-Object | Select-Object -ExpandProperty Count"
+        )
+        r = subprocess.run(
+            ["powershell", "-NoProfile", "-Command", ps_cmd],
+            capture_output=True, text=True, timeout=15,
+        )
+        killed = r.stdout.strip() or "0"
+        return f"좀비 server.py {killed}개 정리"
+    except Exception as e:
+        return f"cleanup 예외: {type(e).__name__}: {e}"
+
+
 def try_fetch() -> tuple[bool, str]:
     """fetch_corpus.py 실행. lock/타임아웃 시 실패해도 OK (기존 corpus로 분석 진행).
 
@@ -295,9 +326,14 @@ def main():
     print(f"[daily_learn] start {DATE_TAG}")
     state = load_state()
 
+    print("  [0] 좀비 server.py 정리")
+    cleanup_msg = cleanup_zombie_servers()
+    print(f"    -> {cleanup_msg}")
+
     print("  [1] fetch_corpus 실행")
     ok, fetch_status = try_fetch()
     print(f"    -> {'OK' if ok else 'SKIP'}: {fetch_status[:200]}")
+    fetch_status = cleanup_msg + " | " + fetch_status
 
     print("  [2] corpus 분석")
     summary = analyze_corpus(state)
