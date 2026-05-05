@@ -60,6 +60,9 @@ async def fetch_one(client: TelegramClient, t: Target) -> dict:
 
     with msgs_path.open("w", encoding="utf-8") as f:
         async for m in client.iter_messages(t.chat_id, limit=t.limit):
+            if m is None or getattr(m, "id", None) is None:
+                # telethon이 가끔 None/empty placeholder를 흘림 (서비스 메시지/삭제됨 등)
+                continue
             row: dict = {
                 "id": m.id,
                 "date": m.date.isoformat() if m.date else None,
