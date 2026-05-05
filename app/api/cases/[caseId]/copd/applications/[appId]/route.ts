@@ -99,6 +99,35 @@ export async function PUT(
       data,
     });
 
+    // D2: 처분일 입력 + 수령일 빈칸 시 Todo 자동 생성 (자동 추정 X — 천차만별)
+    if (data.disposalType && data.disposalDate && !data.disposalNoticeReceivedAt) {
+      try {
+        const c = await prisma.case.findUnique({
+          where: { id: caseId },
+          select: { caseManagerId: true, patient: { select: { name: true } } },
+        });
+        const memoTag = `[COPD_R${updated.applicationRound}_NOTICE_TODO]`;
+        const exists = await prisma.todo.findFirst({
+          where: { caseId, memo: { contains: memoTag } },
+        });
+        if (!exists) {
+          await prisma.todo.create({
+            data: {
+              title: `[수령일 입력] ${c?.patient?.name ?? ""} R${updated.applicationRound} 결정통지 수령일 — 90일 이의제기 D-day 정확화 필요`,
+              type: "COPD_NOTICE_RECEIVED",
+              caseId,
+              patientName: c?.patient?.name ?? null,
+              assignedTo: c?.caseManagerId ?? null,
+              isDone: false,
+              memo: `${memoTag} 처분일 ${new Date(data.disposalDate).toISOString().slice(0, 10)} 입력됨. 수령일 입력 후 본 Todo 완료 처리.`,
+            },
+          });
+        }
+      } catch (todoErr) {
+        console.error("[copd PUT] D2 todo error:", todoErr);
+      }
+    }
+
     // 마지막 회차 기준으로 Case.status 자동 동기화 + 캘린더 이벤트 갱신 + 처분검토 자동 인입
     const newStatus = await syncCopdCaseStatus(caseId);
     await syncCopdCaseEvents(caseId);

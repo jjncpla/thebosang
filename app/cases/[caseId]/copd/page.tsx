@@ -210,6 +210,23 @@ export default function CopdDetailPage({ params }: { params: Promise<{ caseId: s
 
   async function addApplication() {
     setError(null);
+    // D3: 직전 회차의 처분이 미완료이면 경고 confirm
+    if (applications.length > 0) {
+      const last = applications.reduce(
+        (a, b) => (a.applicationRound > b.applicationRound ? a : b),
+        applications[0]
+      );
+      const finalized = ["승인", "부지급", "반려"].includes(last.disposalType ?? "");
+      if (!finalized) {
+        const ok = window.confirm(
+          `⚠ 직전 회차(R${last.applicationRound})의 처분이 아직 확정되지 않았습니다.\n` +
+          `(현재 처분 종류: ${last.disposalType || "(미입력)"})\n\n` +
+          `보통 직전 회차의 처분(승인/부지급/반려) 확정 후 다음 회차를 추가합니다.\n` +
+          `그래도 새 회차를 추가하시겠습니까?`
+        );
+        if (!ok) return;
+      }
+    }
     try {
       const res = await fetch(`/api/cases/${caseId}/copd/applications`, { method: "POST" });
       if (!res.ok) {
@@ -616,20 +633,20 @@ function ApplicationCard({
           <div style={subStyle}>
             업무상 질병판정위원회
             <span style={{ fontSize: 11, fontWeight: 500, color: "#9ca3af", marginLeft: 8 }}>
-              ※ 특진 기준 통과 후 불승인된 경우 → 이의제기 경로 (반복신청 불가)
+              ※ 통지서 없이 문자로 통지 — 회부 후 심의일자가 별도 통지됨. 직접 입력하세요.
             </span>
           </div>
           <div style={grid3}>
-            <Field label="질판위 명">
+            <Field label="질판위 명 (소속 위원회)">
               <select style={inputStyle} value={data.occCommitteeName ?? ""} onChange={(e) => u("occCommitteeName", e.target.value || null)}>
                 <option value="">(선택)</option>
                 {OCC_DISEASE_COMMITTEES.map((c: string) => <option key={c} value={c}>{c}</option>)}
               </select>
             </Field>
-            <Field label="회부일">
+            <Field label="심의 의뢰일 (회부일)">
               <input style={inputStyle} type="date" value={data.occReferralDate ?? ""} onChange={(e) => u("occReferralDate", e.target.value || null)} />
             </Field>
-            <Field label="심의일">
+            <Field label="심의일 (문자 수신 후 입력)">
               <input style={inputStyle} type="date" value={data.occReviewDate ?? ""} onChange={(e) => u("occReviewDate", e.target.value || null)} />
             </Field>
             <Field label="참석 유형">
