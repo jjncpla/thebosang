@@ -180,6 +180,166 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    if (action === "migrate-deprecated-fields") {
+      // CopdDetail의 deprecated 필드 → CopdApplication 회차 1로 이전
+      // 회차 1이 없으면 새로 생성, 있으면 빈 필드만 채움 (기존 입력 보존). 멱등.
+      const details = await prisma.copdDetail.findMany({
+        select: {
+          id: true,
+          specialClinic: true,
+          exam1Date: true,
+          exam1Rate: true,
+          exam1Volume: true,
+          exam2Date: true,
+          exam2Rate: true,
+          exam2Volume: true,
+          examMemo: true,
+          expertOrgDate: true,
+          reExamPossibleDate: true,
+          occDiseaseCommittee: true,
+          occReferralDate: true,
+          occReviewDate: true,
+          occAttendanceType: true,
+          occAttendanceNote: true,
+          disposalType: true,
+          disposalDate: true,
+          disabilityClaimDate: true,
+          disabilityDispositionType: true,
+          disabilityGradeType: true,
+          disabilityDispositionGrade: true,
+          disabilityDispositionDate: true,
+          disabilityDispositionNoticeDate: true,
+          applications: {
+            where: { applicationRound: 1 },
+            take: 1,
+          },
+        },
+      });
+
+      let createdCount = 0;
+      let updatedCount = 0;
+      let skippedCount = 0;
+
+      for (const d of details) {
+        // deprecated 필드가 모두 비어있으면 스킵
+        const hasAnyData =
+          d.specialClinic ||
+          d.exam1Date ||
+          d.exam1Rate !== null ||
+          d.exam1Volume !== null ||
+          d.exam2Date ||
+          d.exam2Rate !== null ||
+          d.exam2Volume !== null ||
+          d.examMemo ||
+          d.expertOrgDate ||
+          d.reExamPossibleDate ||
+          d.occDiseaseCommittee ||
+          d.occReferralDate ||
+          d.occReviewDate ||
+          d.occAttendanceType ||
+          d.occAttendanceNote ||
+          d.disposalType ||
+          d.disposalDate ||
+          d.disabilityClaimDate ||
+          d.disabilityDispositionType ||
+          d.disabilityGradeType ||
+          d.disabilityDispositionGrade ||
+          d.disabilityDispositionDate ||
+          d.disabilityDispositionNoticeDate;
+
+        if (!hasAnyData) {
+          skippedCount++;
+          continue;
+        }
+
+        const r1 = d.applications[0];
+
+        if (!r1) {
+          // 회차 1 신규 생성
+          await prisma.copdApplication.create({
+            data: {
+              copdDetailId: d.id,
+              applicationRound: 1,
+              exam1Hospital: d.specialClinic ?? null,
+              exam1Date: d.exam1Date ?? null,
+              exam1Fev1Rate: d.exam1Rate ?? null,
+              exam1Fev1Volume: d.exam1Volume ?? null,
+              exam2Date: d.exam2Date ?? null,
+              exam2Fev1Rate: d.exam2Rate ?? null,
+              exam2Fev1Volume: d.exam2Volume ?? null,
+              expertOrgMeetingDate: d.expertOrgDate ?? null,
+              reExamPossibleDate: d.reExamPossibleDate ?? null,
+              occCommitteeName: d.occDiseaseCommittee ?? null,
+              occReferralDate: d.occReferralDate ?? null,
+              occReviewDate: d.occReviewDate ?? null,
+              occAttendanceType: d.occAttendanceType ?? null,
+              occAttendanceNote: d.occAttendanceNote ?? null,
+              disposalType: d.disposalType ?? null,
+              disposalDate: d.disposalDate ?? null,
+              disabilityClaimDate: d.disabilityClaimDate ?? null,
+              disabilityGradeType: d.disabilityGradeType ?? null,
+              disabilityDispositionType: d.disabilityDispositionType ?? null,
+              disabilityDispositionGrade: d.disabilityDispositionGrade ?? null,
+              disabilityDispositionDate: d.disabilityDispositionDate ?? null,
+              disabilityDispositionNoticeDate: d.disabilityDispositionNoticeDate ?? null,
+              memo: d.examMemo ?? null,
+            },
+          });
+          createdCount++;
+        } else {
+          // 회차 1 존재 — 빈 필드만 채움
+          const patch: Record<string, unknown> = {};
+          const setIfEmpty = (key: string, current: unknown, val: unknown) => {
+            if ((current === null || current === undefined || current === "") && val !== null && val !== undefined && val !== "") {
+              patch[key] = val;
+            }
+          };
+          setIfEmpty("exam1Hospital", r1.exam1Hospital, d.specialClinic);
+          setIfEmpty("exam1Date", r1.exam1Date, d.exam1Date);
+          setIfEmpty("exam1Fev1Rate", r1.exam1Fev1Rate, d.exam1Rate);
+          setIfEmpty("exam1Fev1Volume", r1.exam1Fev1Volume, d.exam1Volume);
+          setIfEmpty("exam2Date", r1.exam2Date, d.exam2Date);
+          setIfEmpty("exam2Fev1Rate", r1.exam2Fev1Rate, d.exam2Rate);
+          setIfEmpty("exam2Fev1Volume", r1.exam2Fev1Volume, d.exam2Volume);
+          setIfEmpty("expertOrgMeetingDate", r1.expertOrgMeetingDate, d.expertOrgDate);
+          setIfEmpty("reExamPossibleDate", r1.reExamPossibleDate, d.reExamPossibleDate);
+          setIfEmpty("occCommitteeName", r1.occCommitteeName, d.occDiseaseCommittee);
+          setIfEmpty("occReferralDate", r1.occReferralDate, d.occReferralDate);
+          setIfEmpty("occReviewDate", r1.occReviewDate, d.occReviewDate);
+          setIfEmpty("occAttendanceType", r1.occAttendanceType, d.occAttendanceType);
+          setIfEmpty("occAttendanceNote", r1.occAttendanceNote, d.occAttendanceNote);
+          setIfEmpty("disposalType", r1.disposalType, d.disposalType);
+          setIfEmpty("disposalDate", r1.disposalDate, d.disposalDate);
+          setIfEmpty("disabilityClaimDate", r1.disabilityClaimDate, d.disabilityClaimDate);
+          setIfEmpty("disabilityGradeType", r1.disabilityGradeType, d.disabilityGradeType);
+          setIfEmpty("disabilityDispositionType", r1.disabilityDispositionType, d.disabilityDispositionType);
+          setIfEmpty("disabilityDispositionGrade", r1.disabilityDispositionGrade, d.disabilityDispositionGrade);
+          setIfEmpty("disabilityDispositionDate", r1.disabilityDispositionDate, d.disabilityDispositionDate);
+          setIfEmpty("disabilityDispositionNoticeDate", r1.disabilityDispositionNoticeDate, d.disabilityDispositionNoticeDate);
+          setIfEmpty("memo", r1.memo, d.examMemo);
+
+          if (Object.keys(patch).length > 0) {
+            await prisma.copdApplication.update({
+              where: { id: r1.id },
+              data: patch,
+            });
+            updatedCount++;
+          } else {
+            skippedCount++;
+          }
+        }
+      }
+
+      return NextResponse.json({
+        ok: true,
+        total: details.length,
+        created: createdCount,
+        updated: updatedCount,
+        skipped: skippedCount,
+        message: `회차1 ${createdCount}건 신규 생성, ${updatedCount}건 빈 필드 채움, ${skippedCount}건 변경 없음`,
+      });
+    }
+
     return NextResponse.json({ error: `unknown action: ${action}` }, { status: 400 });
   } catch (err) {
     console.error("[admin/copd-tools]", err);

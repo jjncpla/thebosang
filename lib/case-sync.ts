@@ -366,7 +366,8 @@ export async function syncFromCopdDecision(caseId: string) {
   // upsert
   let review = await prisma.objectionReview.findFirst({ where: { caseId } });
   if (!review) {
-    review = await prisma.objectionReview.findFirst({
+    // D9: 동명이인 검출 — caseId:null fallback 매칭 시 동일 조건 row가 2건 이상이면 자동 인입 차단 + Todo 생성
+    const fallbackCandidates = await prisma.objectionReview.findMany({
       where: {
         caseType: "COPD",
         tfName: caseInfo.tfName ?? "",
@@ -374,14 +375,54 @@ export async function syncFromCopdDecision(caseId: string) {
         caseId: null,
       },
     });
+    if (fallbackCandidates.length > 1) {
+      console.warn(
+        "[syncFromCopdDecision] 동명이인 검출:",
+        caseInfo.patient?.name,
+        "@",
+        caseInfo.tfName,
+        "— 자동 인입 차단",
+        { caseId, candidates: fallbackCandidates.map((r) => r.id) }
+      );
+      // Todo 자동 생성 (중복 방지)
+      const memoTag = `[DUPLICATE_NAME:${caseId}]`;
+      const exists = await prisma.todo.findFirst({ where: { memo: { contains: memoTag } } });
+      if (!exists) {
+        await prisma.todo.create({
+          data: {
+            title: `[동명이인 경고] ${caseInfo.patient?.name} (${caseInfo.tfName}) — COPD 처분검토 자동 인입 차단됨, 수동 매칭 필요`,
+            type: "DUPLICATE_NAME_REVIEW",
+            caseId,
+            patientName: caseInfo.patient?.name ?? null,
+            isDone: false,
+            memo: `${memoTag} 동일 patientName+tfName+caseType+caseId=null 후보 ${fallbackCandidates.length}건. 처분검토 페이지에서 직접 review에 caseId 매핑 필요.`,
+          },
+        });
+      }
+      return; // 자동 인입 차단
+    }
+    review = fallbackCandidates[0] ?? null;
   }
   if (review) {
+    // D1: 회차별 이력 보존 — 기존 처분이 다르면 memo에 prepend로 누적
+    const prevApproval = review.approvalStatus;
+    const prevDate = review.decisionDate;
+    let memo = review.memo ?? "";
+    if (prevApproval && prevApproval !== approval) {
+      const prevDateStr = prevDate ? new Date(prevDate).toISOString().slice(0, 10) : "(미상)";
+      const historyLine = `[이전처분] R? → ${prevApproval} (${prevDateStr})`;
+      // 중복 prepend 방지
+      if (!memo.includes(historyLine)) {
+        memo = historyLine + "\n" + memo;
+      }
+    }
     await prisma.objectionReview.update({
       where: { id: review.id },
       data: {
         caseId: review.caseId ?? caseId,
         approvalStatus: approval,
         decisionDate: decisionDate ?? review.decisionDate,
+        memo: memo + (memo.includes("[COPD_AUTO]") ? "" : `\n[COPD_AUTO] 회차 R${latest.applicationRound} 처분 자동 인입`),
       },
     });
   } else {
@@ -394,7 +435,7 @@ export async function syncFromCopdDecision(caseId: string) {
         approvalStatus: approval,
         progressStatus: "",
         decisionDate,
-        memo: "[COPD_AUTO] 회차 처분 자동 인입 — 회차 R" + latest.applicationRound,
+        memo: `[COPD_AUTO] 회차 처분 자동 인입 — 회차 R${latest.applicationRound}`,
       },
     });
   }

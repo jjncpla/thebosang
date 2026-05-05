@@ -82,6 +82,20 @@ export default function CopdToolsPage() {
         </button>
       </div>
 
+      <div style={card}>
+        <h2 style={{ fontSize: 15, fontWeight: 700, marginBottom: 6 }}>4. CopdDetail deprecated 필드 → 회차1 마이그레이션</h2>
+        <p style={{ fontSize: 13, color: "#6b7280", marginBottom: 12 }}>
+          구버전 CopdTab UI에서 입력된 CopdDetail의 deprecated 필드(특진/처분/장해 등 23종)를 CopdApplication 회차 1로 이전합니다.
+          회차 1이 없으면 신규 생성, 있으면 빈 필드만 채움 (기존 회차1 입력 보존). 멱등 (재실행해도 안전).
+          <br />
+          <strong style={{ color: "#dc2626" }}>실행 후 검증되면 다음 PR에서 prisma 스키마의 deprecated 필드를 정리합니다.</strong>
+        </p>
+        <button onClick={() => call("migrate-deprecated-fields")} disabled={busy === "migrate-deprecated-fields"}
+          style={btn("#ea580c", busy === "migrate-deprecated-fields")}>
+          {busy === "migrate-deprecated-fields" ? "실행 중..." : "🔄 deprecated 필드 → 회차1 마이그레이션"}
+        </button>
+      </div>
+
       {result !== null && (
         <div style={{ ...card, background: "#f0fdf4", borderColor: "#bbf7d0" }}>
           <h3 style={{ fontSize: 13, fontWeight: 700, color: "#166534", marginBottom: 8 }}>✅ 실행 결과</h3>

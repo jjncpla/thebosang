@@ -319,6 +319,17 @@ export async function GET(
       }
 
       case "EXPERT_CLINIC": {
+        // COPD 사건은 전문조사기관 의뢰서 부적합 — 업무상질병판정위원회 심의로 진행됨
+        // (질판위 명/심의 의뢰일/심의일은 사건 상세 페이지에서 직접 입력)
+        if (caseData.caseType === "COPD") {
+          return NextResponse.json(
+            {
+              error: "COPD 사건은 전문조사기관 의뢰서를 사용하지 않습니다. 업무상질병판정위원회 심의로 진행되며, 사건 상세 페이지의 회차 카드에서 질판위 정보를 직접 입력하세요.",
+              redirect: "/cases/" + caseId + "/copd",
+            },
+            { status: 400 }
+          );
+        }
         const pdfDoc = await loadBlankForm("expert_clinic.pdf");
         const font = await loadKoreanFont(pdfDoc);
         const page = pdfDoc.getPages()[0];

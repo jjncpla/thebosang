@@ -6,7 +6,6 @@ import { CASE_TYPE_LABELS, DISPOSAL_TYPE, GRADE_TYPE, STATUS_BY_CASE_TYPE, CASE_
 import ContactSelector from "@/components/ui/ContactSelector";
 import BranchSelector from "@/components/ui/BranchSelector";
 import DateSegmentInput from "@/components/ui/DateSegmentInput";
-import { OCC_DISEASE_COMMITTEES } from "@/constants/occDiseaseCommittees";
 
 const S = { fontFamily: "'Malgun Gothic', 'Apple SD Gothic Neo', 'Segoe UI', sans-serif" };
 
@@ -1154,233 +1153,22 @@ function HearingLossTab({ caseId, initial, status, onStatusChange }: { caseId: s
   );
 }
 
-/* ── COPD 상세 탭 ── */
-type CopdForm = Record<string, string | number | null>;
-
+/* ── COPD 상세 탭 — 신규 회차 기반 페이지로 자동 redirect ── */
 function CopdTab({ caseId }: { caseId: string }) {
-  const [form, setForm] = useState<CopdForm>({});
-  const [loadingData, setLoadingData] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [saveMsg, setSaveMsg] = useState<string | null>(null);
-  const [sec1Open, setSec1Open] = useState(true);
-  const [sec2Open, setSec2Open] = useState(false);
-  const [sec3Open, setSec3Open] = useState(false);
-  const [sec4Open, setSec4Open] = useState(false);
-
+  const router = useRouter();
   useEffect(() => {
-    fetch(`/api/cases/${caseId}/copd`)
-      .then((r) => r.json())
-      .then((data) => { setForm(data ?? {}); setLoadingData(false); })
-      .catch(() => setLoadingData(false));
-  }, [caseId]);
-
-  const f = (key: string) => String(form[key] ?? "");
-  const set = (key: string, val: string) => setForm((prev) => ({ ...prev, [key]: val }));
-
-  const save = async () => {
-    setSaving(true);
-    setSaveMsg(null);
-    try {
-      const res = await fetch(`/api/cases/${caseId}/copd`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
-      });
-      if (!res.ok) {
-        const errBody = await res.json().catch(() => ({}));
-        throw new Error(errBody.error || "저장에 실패했습니다");
-      }
-      setSaveMsg("저장되었습니다");
-      setTimeout(() => setSaveMsg(null), 3000);
-    } catch (e) {
-      setSaveMsg(e instanceof Error ? e.message : "오류가 발생했습니다");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const SectionTitle = ({ children }: { children: React.ReactNode }) => (
-    <div style={{ fontSize: 13, fontWeight: 700, color: "#374151", padding: "14px 0 8px 0", borderBottom: "2px solid #e5e7eb", marginBottom: 12 }}>{children}</div>
-  );
-
-  const Row = ({ label, fieldKey, type = "text" }: { label: string; fieldKey: string; type?: string }) => (
-    <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-      <label style={{ fontSize: 11, color: "#9ca3af", fontWeight: 600 }}>{label}</label>
-      <input type={type} style={inputStyle} value={f(fieldKey)} onChange={(e) => set(fieldKey, e.target.value)} />
-    </div>
-  );
-
-  const SaveBar = () => (
-    <div style={{ display: "flex", alignItems: "center", gap: 12, paddingTop: 16, borderTop: "1px solid #e5e7eb" }}>
-      <button onClick={save} disabled={saving} style={{ background: "#29ABE2", color: "white", border: "none", borderRadius: 6, padding: "8px 20px", fontSize: 13, fontWeight: 600, cursor: "pointer", opacity: saving ? 0.6 : 1 }}>
-        {saving ? "저장중..." : "저장"}
-      </button>
-      {saveMsg && <span style={{ fontSize: 13, color: saveMsg.includes("오류") ? "#dc2626" : "#8DC63F" }}>{saveMsg}</span>}
-    </div>
-  );
-
-  if (loadingData) return <div style={{ padding: 24, color: "#9ca3af", fontSize: 13 }}>로딩중...</div>;
-
-  const dispType = f("disabilityDispositionType");
-
+    router.replace(`/cases/${caseId}/copd`);
+  }, [caseId, router]);
   return (
-    <div>
-      {/* 🛈 deprecated 안내 — 신규 회차 기반 페이지로 이동 권장 */}
-      <div style={{ marginBottom: 16, padding: "12px 16px", background: "#fff7ed", border: "1px solid #fdba74", borderRadius: 8, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
-        <div style={{ fontSize: 12, color: "#9a3412", lineHeight: 1.5 }}>
-          ⚠ 이 탭은 <b>구버전(deprecated) UI</b> 입니다. 특진/처분/장해 입력은 신규 회차 기반 페이지에서 진행해 주세요.
-          <br />
-          여기서 입력한 일부 필드(특진·처분·장해 등)는 <b>저장되지 않을 수 있습니다.</b>
-        </div>
-        <button
-          onClick={() => { if (typeof window !== "undefined") window.location.href = `/cases/${caseId}/copd`; }}
-          style={{ background: "#ea580c", color: "white", border: "none", borderRadius: 6, padding: "8px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}
-        >
-          신규 페이지로 이동 →
-        </button>
-      </div>
-
-      {/* (1) 사건초기 */}
-      <div style={secWrap}>
-        <AccordionHeader open={sec1Open} onToggle={() => setSec1Open((o) => !o)} label="(1) 사건초기" />
-        {sec1Open && (
-          <div style={{ padding: 20 }}>
-            <SectionTitle>초진</SectionTitle>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 20 }}>
-              <Row label="초진 병원" fieldKey="firstClinic" />
-              <Row label="초진 날짜" fieldKey="firstExamDate" type="date" />
-              <div />
-              <Row label="1초율 (%)" fieldKey="fev1Rate" type="number" />
-              <Row label="1초량 (L)" fieldKey="fev1Volume" type="number" />
-            </div>
-            <SaveBar />
-          </div>
-        )}
-      </div>
-
-      {/* (2) 요양 */}
-      <div style={secWrap}>
-        <AccordionHeader open={sec2Open} onToggle={() => setSec2Open((o) => !o)} label="(2) 요양" />
-        {sec2Open && (
-          <div style={{ padding: 20 }}>
-            <SectionTitle>특진</SectionTitle>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 20 }}>
-              <Row label="특진 병원" fieldKey="specialClinic" />
-              <Row label="1차특진일" fieldKey="exam1Date" type="date" />
-              <div />
-              <Row label="1차 1초율 (%)" fieldKey="exam1Rate" type="number" />
-              <Row label="1차 1초량 (L)" fieldKey="exam1Volume" type="number" />
-              <div />
-              <Row label="2차특진일" fieldKey="exam2Date" type="date" />
-              <Row label="2차 1초율 (%)" fieldKey="exam2Rate" type="number" />
-              <Row label="2차 1초량 (L)" fieldKey="exam2Volume" type="number" />
-            </div>
-            <div style={{ marginBottom: 20 }}>
-              <label style={{ fontSize: 11, color: "#9ca3af", fontWeight: 600 }}>특이사항 메모</label>
-              <textarea style={{ ...inputStyle, minHeight: 60, resize: "vertical", marginTop: 3 }} value={f("examMemo")} onChange={(e) => set("examMemo", e.target.value)} />
-            </div>
-
-            <SectionTitle>업무상질병판정</SectionTitle>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 20 }}>
-              <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-                <label style={{ fontSize: 11, color: "#9ca3af", fontWeight: 600 }}>관할 업무상질병판정위원회</label>
-                <select style={inputStyle} value={f("occDiseaseCommittee")} onChange={(e) => set("occDiseaseCommittee", e.target.value)}>
-                  <option value="">선택</option>
-                  {OCC_DISEASE_COMMITTEES.map((c) => <option key={c} value={c}>{c}</option>)}
-                </select>
-              </div>
-              <Row label="의뢰일" fieldKey="occReferralDate" type="date" />
-              <Row label="심의일" fieldKey="occReviewDate" type="date" />
-              <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-                <label style={{ fontSize: 11, color: "#9ca3af", fontWeight: 600 }}>참석여부</label>
-                <select style={inputStyle} value={f("occAttendanceType")} onChange={(e) => set("occAttendanceType", e.target.value)}>
-                  <option value="">선택</option>
-                  {["미참석", "재해자", "대리인", "둘다"].map((o) => <option key={o} value={o}>{o}</option>)}
-                </select>
-              </div>
-              <div style={{ gridColumn: "1 / -1", display: "flex", flexDirection: "column", gap: 3 }}>
-                <label style={{ fontSize: 11, color: "#9ca3af", fontWeight: 600 }}>참석 시 내용</label>
-                <textarea style={{ ...inputStyle, minHeight: 60, resize: "vertical" }} value={f("occAttendanceNote")} onChange={(e) => set("occAttendanceNote", e.target.value)} />
-              </div>
-            </div>
-
-            <SectionTitle>처분</SectionTitle>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 20 }}>
-              <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-                <label style={{ fontSize: 11, color: "#9ca3af", fontWeight: 600 }}>처분결과</label>
-                <select style={inputStyle} value={f("disposalType")} onChange={(e) => set("disposalType", e.target.value)}>
-                  <option value="">선택</option>
-                  {DISPOSAL_TYPE.map((t) => <option key={t} value={t}>{t}</option>)}
-                </select>
-              </div>
-              <Row label="처분일자" fieldKey="disposalDate" type="date" />
-              <Row label="재진행가능일" fieldKey="reExamPossibleDate" type="date" />
-            </div>
-            <SaveBar />
-          </div>
-        )}
-      </div>
-
-      {/* (3) 장해 */}
-      <div style={secWrap}>
-        <AccordionHeader open={sec3Open} onToggle={() => setSec3Open((o) => !o)} label="(3) 장해" />
-        {sec3Open && (
-          <div style={{ padding: 20 }}>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 20 }}>
-              <Row label="장해급여청구일" fieldKey="disabilityClaimDate" type="date" />
-            </div>
-
-            <SectionTitle>처분</SectionTitle>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, marginBottom: 20 }}>
-              <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-                <label style={{ fontSize: 11, color: "#9ca3af", fontWeight: 600 }}>처분결과</label>
-                <div style={{ display: "flex", gap: 16, alignItems: "center", padding: "6px 0" }}>
-                  {["승인", "불승인"].map((opt) => (
-                    <label key={opt} style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 13, cursor: "pointer" }}>
-                      <input type="radio" name={`dispType-${caseId}`} value={opt} checked={dispType === opt} onChange={() => set("disabilityDispositionType", opt)} />
-                      {opt}
-                    </label>
-                  ))}
-                </div>
-              </div>
-              {dispType === "승인" && (
-                <>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-                    <label style={{ fontSize: 11, color: "#9ca3af", fontWeight: 600 }}>장해 유형</label>
-                    <select style={inputStyle} value={f("disabilityGradeType")} onChange={(e) => set("disabilityGradeType", e.target.value)}>
-                      <option value="">선택</option>
-                      {["일반", "가중"].map((o) => <option key={o} value={o}>{o}</option>)}
-                    </select>
-                  </div>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-                    <label style={{ fontSize: 11, color: "#9ca3af", fontWeight: 600 }}>장해 등급</label>
-                    <select style={inputStyle} value={f("disabilityDispositionGrade")} onChange={(e) => set("disabilityDispositionGrade", e.target.value)}>
-                      <option value="">선택</option>
-                      {Array.from({ length: 14 }, (_, i) => `${i + 1}급`).map((g) => <option key={g} value={g}>{g}</option>)}
-                    </select>
-                  </div>
-                </>
-              )}
-              <Row label="처분일자" fieldKey="disabilityDispositionDate" type="date" />
-              <Row label="처분을 안 날" fieldKey="disabilityDispositionNoticeDate" type="date" />
-            </div>
-            <SaveBar />
-          </div>
-        )}
-      </div>
-
-      {/* (4) 유족 */}
-      <div style={secWrap}>
-        <AccordionHeader open={sec4Open} onToggle={() => setSec4Open((o) => !o)} label="(4) 유족" />
-        {sec4Open && (
-          <div style={{ padding: 20, fontSize: 13, color: "#9ca3af", textAlign: "center" }}>
-            추후 별도 안내 예정입니다.
-          </div>
-        )}
-      </div>
+    <div style={{ padding: 24, color: "#6b7280", fontSize: 13, textAlign: "center" }}>
+      신규 COPD 회차별 페이지로 이동 중...{" "}
+      <a href={`/cases/${caseId}/copd`} style={{ color: "#29ABE2", textDecoration: "underline" }}>
+        바로 가기
+      </a>
     </div>
   );
 }
+
 
 /* ── 진폐 상세 탭 ── */
 type PneumoForm = Record<string, string | boolean | null>;
