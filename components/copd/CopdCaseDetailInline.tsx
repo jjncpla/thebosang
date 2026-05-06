@@ -280,10 +280,10 @@ export default function CopdCaseDetailInline({ caseId, embedded = false }: { cas
         </div>
       )}
 
-      {/* 카드 1: 공통 정보 */}
+      {/* 카드 1: 공통 정보 (진단 섹션은 초진과 중복되어 제거됨 — 2026-05-06) */}
       <div style={cardStyle}>
         <div style={cardHeader}>
-          <h2 style={cardTitle}>공통 정보 (흡연력 · 진단 · 초진)</h2>
+          <h2 style={cardTitle}>공통 정보 (흡연력 · 초진)</h2>
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
             {savedAt && <span style={{ color: "#16a34a", fontSize: 12 }}>✅ 저장됨 ({savedAt})</span>}
             <button onClick={saveDetail} disabled={savingDetail}
@@ -302,8 +302,8 @@ export default function CopdCaseDetailInline({ caseId, embedded = false }: { cas
               </select>
             </Field>
             <Field label="1일 개피">
-              <input style={inputStyle} type="number" min={0} value={detail.smokingPacks ?? ""}
-                onChange={(e) => updateDetail("smokingPacks", e.target.value ? parseInt(e.target.value, 10) : null)} placeholder="개피" />
+              <input style={inputStyle} type="number" min={0} step="0.5" value={detail.smokingPacks ?? ""}
+                onChange={(e) => updateDetail("smokingPacks", e.target.value ? parseFloat(e.target.value) : null)} placeholder="개피 (반갑=10)" />
             </Field>
             <Field label="흡연 기간 (년)">
               <input style={inputStyle} type="number" min={0} value={detail.smokingYears ?? ""}
@@ -314,19 +314,30 @@ export default function CopdCaseDetailInline({ caseId, embedded = false }: { cas
                 onChange={(e) => updateDetail("exSmokingYears", e.target.value ? parseInt(e.target.value, 10) : null)} />
             </Field>
           </div>
-
-          <div style={sectionTitle}>진단</div>
-          <div style={grid3}>
-            <Field label="증상 최초 발현일">
-              <input style={inputStyle} type="date" value={detail.firstSymptomDate ?? ""} onChange={(e) => updateDetail("firstSymptomDate", e.target.value || null)} />
-            </Field>
-            <Field label="진단 일자">
-              <input style={inputStyle} type="date" value={detail.diagnosisDate ?? ""} onChange={(e) => updateDetail("diagnosisDate", e.target.value || null)} />
-            </Field>
-            <Field label="진단 받은 의료기관">
-              <input style={inputStyle} value={detail.diagnosisHospital ?? ""} onChange={(e) => updateDetail("diagnosisHospital", e.target.value || null)} />
-            </Field>
-          </div>
+          {/* 갑년 자동 계산: (1일 개피 / 20) × (흡연기간 + 과거흡연기간) */}
+          {(() => {
+            const packs = detail.smokingPacks ?? 0;
+            const years = detail.smokingYears ?? 0;
+            const exYears = detail.exSmokingYears ?? 0;
+            const totalYears = years + exYears;
+            const packYears = (packs / 20) * totalYears;
+            if (packs <= 0 || totalYears <= 0) {
+              return (
+                <div style={{ marginTop: 8, padding: "8px 12px", background: "#f9fafb", borderRadius: 6, fontSize: 12, color: "#9ca3af" }}>
+                  💡 갑년 자동계산: 1일 개피 + 흡연기간(과거 포함) 입력 시 자동 표시
+                </div>
+              );
+            }
+            const display = packYears.toFixed(1);
+            return (
+              <div style={{ marginTop: 8, padding: "10px 14px", background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: 6, fontSize: 13, color: "#1d4ed8", fontWeight: 600 }}>
+                📊 자동 계산: <strong>{display}갑년</strong>
+                <span style={{ fontSize: 11, color: "#6b7280", fontWeight: 400, marginLeft: 8 }}>
+                  ({packs}개피 ÷ 20) × {totalYears}년 (현재 {years}년 + 과거 {exYears}년)
+                </span>
+              </div>
+            );
+          })()}
 
           <div style={sectionTitle}>초진</div>
           <div style={grid4}>
@@ -355,29 +366,65 @@ export default function CopdCaseDetailInline({ caseId, embedded = false }: { cas
         </div>
       </div>
 
-      {/* 카드 2-pre: 양식 다운로드 */}
+      {/* 카드 2-pre: 양식 자동생성 — COPD 최초 요양급여 청구 (PDF 분석 기반 재구성, 2026-05-06) */}
       <div style={cardStyle}>
         <div style={cardHeader}>
-          <h2 style={cardTitle}>📄 양식 자동생성</h2>
+          <h2 style={cardTitle}>📄 양식 자동생성 — COPD 최초 요양급여 청구</h2>
         </div>
-        <div style={{ ...cardBody, display: "flex", flexWrap: "wrap", gap: 8 }}>
-          {[
-            { type: "POWER_OF_ATTORNEY", label: "위임장" },
-            { type: "AGENT_APPOINTMENT", label: "수임 신고서" },
-            { type: "INFO_DISCLOSURE", label: "정보공개청구서" },
-            { type: "INFO_DISCLOSURE_PROXY", label: "정보공개 위임장" },
-            { type: "DUST_WORK_CONFIRM", label: "분진작업 확인서" },
-            { type: "PENSION_CHOICE", label: "연금/일시금 선택서" },
-            { type: "WORK_HISTORY", label: "직업력 조사표" },
-            { type: "LABOR_ATTORNEY_RECORD", label: "노무사 처리부" },
-          ].map((f) => (
-            <a key={f.type} href={`/api/cases/${caseId}/forms?type=${f.type}`} target="_blank" rel="noreferrer"
-              style={{ background: "white", color: "#374151", border: "1px solid #d1d5db", borderRadius: 6, padding: "7px 14px", fontSize: 12, fontWeight: 600, textDecoration: "none", cursor: "pointer" }}>
-              📥 {f.label}
-            </a>
-          ))}
-          <p style={{ flexBasis: "100%", margin: "8px 0 0 0", fontSize: 11, color: "#9ca3af" }}>
-            ※ 요양급여신청서 / 장해급여청구서 등 COPD 전용 좌표는 별도 작업 예정 (공통 양식 우선)
+        <div style={{ ...cardBody }}>
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: "#374151", marginBottom: 6 }}>① 위임 / 청구 (산재공단 제출)</div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+              {[
+                { type: "POWER_OF_ATTORNEY", label: "위임장" },
+                { type: "AGENT_APPOINTMENT", label: "수임 신고서" },
+                { type: "MEDICAL_BENEFIT", label: "요양급여신청서" },
+              ].map((f) => (
+                <a key={f.type} href={`/api/cases/${caseId}/forms?type=${f.type}`} target="_blank" rel="noreferrer"
+                  style={{ background: "white", color: "#374151", border: "1px solid #d1d5db", borderRadius: 6, padding: "7px 14px", fontSize: 12, fontWeight: 600, textDecoration: "none", cursor: "pointer" }}>
+                  📥 {f.label}
+                </a>
+              ))}
+            </div>
+          </div>
+
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: "#374151", marginBottom: 6 }}>② 사실관계·재해경위 (분진작업 입증용)</div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+              {[
+                { type: "COPD_FACT_CONFIRM", label: "사실관계 확인서 (COPD)", note: "사업장 작성용" },
+                { type: "COPD_INJURY_REPORT", label: "재해경위서", note: "분진작업/거주이력/COPD 병력 통합" },
+                { type: "COPD_INJURY_INCIDENT", label: "재해발생경위서", note: "분진직력 표 + 의학적 소견" },
+                { type: "DUST_WORK_CONFIRM", label: "분진작업 확인서" },
+              ].map((f) => (
+                <a key={f.type} href={`/api/cases/${caseId}/forms?type=${f.type}`} target="_blank" rel="noreferrer"
+                  title={f.note}
+                  style={{ background: "white", color: "#374151", border: "1px solid #d1d5db", borderRadius: 6, padding: "7px 14px", fontSize: 12, fontWeight: 600, textDecoration: "none", cursor: "pointer" }}>
+                  📥 {f.label}
+                </a>
+              ))}
+            </div>
+          </div>
+
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: "#374151", marginBottom: 6 }}>③ 정보공개·기타</div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+              {[
+                { type: "INFO_DISCLOSURE", label: "정보공개청구서" },
+                { type: "INFO_DISCLOSURE_PROXY", label: "정보공개 위임장" },
+                { type: "WORK_HISTORY", label: "직업력 조사표" },
+                { type: "LABOR_ATTORNEY_RECORD", label: "노무사 처리부" },
+              ].map((f) => (
+                <a key={f.type} href={`/api/cases/${caseId}/forms?type=${f.type}`} target="_blank" rel="noreferrer"
+                  style={{ background: "white", color: "#374151", border: "1px solid #d1d5db", borderRadius: 6, padding: "7px 14px", fontSize: 12, fontWeight: 600, textDecoration: "none", cursor: "pointer" }}>
+                  📥 {f.label}
+                </a>
+              ))}
+            </div>
+          </div>
+
+          <p style={{ margin: "8px 0 0 0", fontSize: 11, color: "#9ca3af" }}>
+            ※ 요양급여신청 소견서 / 폐기능 검사 결과지는 의료기관에서 발급받아 첨부합니다.
           </p>
         </div>
       </div>
@@ -608,24 +655,62 @@ function ApplicationCard({
             </p>
           </div>
 
-          <div style={subStyle}>직업환경연구원 (전문조사)</div>
-          <div style={grid3}>
-            <Field label="의뢰일">
-              <input style={inputStyle} type="date" value={data.expertOrgRequestDate ?? ""} onChange={(e) => u("expertOrgRequestDate", e.target.value || null)} />
-            </Field>
-            <Field label="개최일">
-              <input style={inputStyle} type="date" value={data.expertOrgMeetingDate ?? ""} onChange={(e) => u("expertOrgMeetingDate", e.target.value || null)} />
-            </Field>
-            <Field label="결과">
-              <input style={inputStyle} value={data.expertOrgResult ?? ""} onChange={(e) => u("expertOrgResult", e.target.value || null)} placeholder="ex: 직력 확인 / 미달" />
-            </Field>
-          </div>
-          <div style={{ marginTop: 10 }}>
-            <Field label="전문조사 메모">
-              <textarea style={{ ...inputStyle, minHeight: 50, resize: "vertical", fontFamily: "inherit" }}
-                value={data.expertOrgMemo ?? ""} onChange={(e) => u("expertOrgMemo", e.target.value || null)} />
-            </Field>
-          </div>
+          {/* 직업환경연구원 (전문조사) — 의뢰되는 경우만 펼침 */}
+          {(() => {
+            const hasExpertOrg =
+              !!data.expertOrgRequestDate ||
+              !!data.expertOrgMeetingDate ||
+              !!data.expertOrgResult ||
+              !!data.expertOrgMemo;
+            return (
+              <>
+                <div style={subStyle}>
+                  <label style={{ cursor: "pointer", display: "inline-flex", alignItems: "center", gap: 6 }}>
+                    <input
+                      type="checkbox"
+                      checked={hasExpertOrg}
+                      onChange={(e) => {
+                        if (!e.target.checked) {
+                          u("expertOrgRequestDate", null);
+                          u("expertOrgMeetingDate", null);
+                          u("expertOrgResult", null);
+                          u("expertOrgMemo", null);
+                        } else {
+                          // 토글 ON 시 더미 값 입력하여 펼침 상태 유지 (사용자가 입력 시작하면 자동 채움)
+                          u("expertOrgRequestDate", data.expertOrgRequestDate ?? "");
+                        }
+                      }}
+                    />
+                    직업환경연구원 (전문조사) 의뢰
+                  </label>
+                  <span style={{ fontSize: 11, fontWeight: 500, color: "#9ca3af", marginLeft: 8 }}>
+                    ※ 일반적으로 특진 결과가 기준내일 때 곧바로 질판위 심의 — 연구원 의뢰는 드문 경우만 체크
+                  </span>
+                </div>
+                {hasExpertOrg && (
+                  <>
+                    <div style={grid3}>
+                      <Field label="의뢰일">
+                        <input style={inputStyle} type="date" value={data.expertOrgRequestDate ?? ""} onChange={(e) => u("expertOrgRequestDate", e.target.value || null)} />
+                      </Field>
+                      <Field label="개최일">
+                        <input style={inputStyle} type="date" value={data.expertOrgMeetingDate ?? ""} onChange={(e) => u("expertOrgMeetingDate", e.target.value || null)} />
+                      </Field>
+                      <Field label="결과">
+                        <input style={inputStyle} value={data.expertOrgResult ?? ""} onChange={(e) => u("expertOrgResult", e.target.value || null)} placeholder="ex: 직력 확인 / 미달" />
+                      </Field>
+                    </div>
+                    <div style={{ marginTop: 10 }}>
+                      <Field label="전문조사 메모">
+                        <textarea style={{ ...inputStyle, minHeight: 50, resize: "vertical", fontFamily: "inherit" }}
+                          value={data.expertOrgMemo ?? ""} onChange={(e) => u("expertOrgMemo", e.target.value || null)} />
+                      </Field>
+                    </div>
+                  </>
+                )}
+              </>
+            );
+          })()}
 
           <div style={subStyle}>
             업무상 질병판정위원회
