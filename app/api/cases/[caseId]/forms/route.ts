@@ -11,6 +11,17 @@ import {
   drawText,
 } from "@/lib/pdf/formUtils";
 import { generateLaborAttorneyRecord } from "@/lib/pdf/labor-attorney-record";
+import { buildTextFormPdf } from "@/lib/text-form-pdf";
+import {
+  buildCopdFactConfirm,
+  buildCopdInjuryReport,
+  buildCopdInjuryIncident,
+  type CopdFactConfirmData,
+  type CopdInjuryReportData,
+  type CopdInjuryIncidentData,
+  type CopdDustWorkItem,
+  type CopdInjuryIncidentDustJob,
+} from "@/lib/text-form-templates";
 
 export const runtime = "nodejs";
 
@@ -60,7 +71,7 @@ export async function GET(
       patient: true,
       caseManager: true,
       hearingLoss: { include: { exams: true } },
-      copd: true,
+      copd: { include: { applications: { orderBy: { applicationRound: "asc" } } } },
     },
   });
 
@@ -799,6 +810,187 @@ export async function GET(
         drawText(page, patient.name ?? "", 300, 143, font, 9);
 
         pdfBytes = await pdfDoc.save();
+        break;
+      }
+
+      case "COPD_FACT_CONFIRM": {
+        const copd = caseData.copd;
+        const lastJob = workHistory[workHistory.length - 1] ?? null;
+        const birth = (() => {
+          const bf = parseBirthDate(patient.ssn ?? "");
+          if (!bf.Y1) return "";
+          return `${bf.Y1}${bf.Y2}${bf.Y3}${bf.Y4}-${bf.M1}${bf.M2}-${bf.D1}${bf.D2}`;
+        })();
+        const injuryDate = (() => {
+          const d = copd?.firstExamDate ?? copd?.diagnosisDate ?? null;
+          if (!d) return "";
+          const dd = new Date(d);
+          return `${dd.getFullYear()}-${String(dd.getMonth() + 1).padStart(2, "0")}-${String(dd.getDate()).padStart(2, "0")}`;
+        })();
+        const data: CopdFactConfirmData = {
+          workerName: patient.name ?? "",
+          workerBirth: birth,
+          injuryDate,
+          workplaceName: lastJob?.company ?? "",
+          confirmerName: `공인노무사 ${manager?.name ?? ""}`,
+          confirmerAddr: manager?.officeAddress ?? "",
+          confirmerPhone: manager?.officeTel ?? "",
+          confirmerEtc: manager?.officeFax ? `Fax: ${manager.officeFax}` : "",
+          relation: "대리인",
+          agentLicenseType: "공인노무사",
+          contentText: copd?.copdMemo ?? "",
+        };
+        const spec = buildCopdFactConfirm(data);
+        pdfBytes = await buildTextFormPdf(spec);
+        break;
+      }
+
+      case "COPD_INJURY_REPORT": {
+        const copd = caseData.copd;
+        const lastJob = workHistory[workHistory.length - 1] ?? null;
+        const totalMonths = workHistory.reduce((acc, j) => acc + calcMonths(j), 0);
+        const totalCareer = totalMonths
+          ? `약 ${Math.floor(totalMonths / 12)}년 ${totalMonths % 12}개월`
+          : "";
+        const dustJobs: CopdDustWorkItem[] = workHistory.map((j) => ({
+          workplace: j.company ?? "",
+          period: fmtPeriod(j),
+          jobDescription: `${j.department ?? ""} ${j.jobType ?? ""}`.trim(),
+          dustHours: j.workHours ?? "",
+        }));
+
+        const birth = (() => {
+          const bf = parseBirthDate(patient.ssn ?? "");
+          if (!bf.Y1) return "";
+          return `${bf.Y1}${bf.Y2}${bf.Y3}${bf.Y4}-${bf.M1}${bf.M2}-${bf.D1}${bf.D2}`;
+        })();
+        const age = (() => {
+          if (!birth) return "";
+          const y = parseInt(birth.slice(0, 4), 10);
+          if (!y) return "";
+          return new Date().getFullYear() - y;
+        })();
+
+        const fmtDate = (d: Date | null | undefined) => {
+          if (!d) return "";
+          const dd = new Date(d);
+          return `${dd.getFullYear()}-${String(dd.getMonth() + 1).padStart(2, "0")}-${String(dd.getDate()).padStart(2, "0")}`;
+        };
+
+        const smokingMap: Record<string, "비해당" | "과거 흡연" | "흡연 중"> = {
+          비흡연: "비해당",
+          금연: "과거 흡연",
+          현재흡연: "흡연 중",
+        };
+        const smoking = copd?.smokingStatus
+          ? smokingMap[copd.smokingStatus] ?? "비해당"
+          : "비해당";
+
+        const data: CopdInjuryReportData = {
+          workerName: patient.name ?? "",
+          workerBirth: birth,
+          age,
+          hireDate: lastJob ? `${lastJob.startYear}-${String(lastJob.startMonth).padStart(2, "0")}` : "",
+          height: "",
+          weight: "",
+          position: "",
+          workplaceName: lastJob?.company ?? "",
+          totalCareer,
+          currentDept: lastJob?.department ?? "",
+          chargeYears: lastJob ? fmtPeriod(lastJob) : "",
+          jobType: lastJob?.jobType ?? "",
+          dustWorkHours: lastJob?.workHours ?? "",
+          workType: "",
+          workHoursPerDay: "",
+          workDaysPerMonth: "",
+          offDaysPerMonth: "",
+          workEnv: "",
+          workTools: "",
+          workMethod: "",
+          maskUse: "",
+          ventilation: "",
+          healthCheck: "",
+          hometown: "",
+          residenceBeforeHire: "",
+          militaryPeriod: "",
+          riskFactors: "",
+          diseaseCause: "",
+          pastAccident: "",
+          dustJobs,
+          postRetirement: "",
+          coughStartDate: fmtDate(copd?.firstSymptomDate ?? null),
+          diagnosisDate: fmtDate(copd?.diagnosisDate ?? null),
+          diagnosisHospital: copd?.diagnosisHospital ?? copd?.firstClinic ?? "",
+          smokingStatus: smoking,
+          smokingPacks: copd?.smokingPacks ? String(copd.smokingPacks) : "",
+          smokingYears: copd?.smokingYears ? String(copd.smokingYears) : "",
+          exSmokingYears: copd?.exSmokingYears ? String(copd.exSmokingYears) : "",
+          familyHistory: "",
+          etcNote: copd?.copdMemo ?? "",
+          truthConfirm: "본인은 위 답변이 사실임을 확인합니다.",
+          authorName: patient.name ?? "",
+          workplaceConfirmerName: "",
+        };
+        const spec = buildCopdInjuryReport(data);
+        pdfBytes = await buildTextFormPdf(spec);
+        break;
+      }
+
+      case "COPD_INJURY_INCIDENT": {
+        const copd = caseData.copd;
+        const firstApp = copd?.applications?.[0] ?? null;
+
+        const totalMonths = workHistory.reduce((acc, j) => acc + calcMonths(j), 0);
+        const totalDuration = totalMonths
+          ? `약 ${Math.floor(totalMonths / 12)}년 ${totalMonths % 12}개월 (${totalMonths}개월)`
+          : "";
+
+        const dustJobs: CopdInjuryIncidentDustJob[] = workHistory.map((j, i) => ({
+          seq: i + 1,
+          period: fmtPeriod(j),
+          workplace: j.company ?? "",
+          jobType: j.jobType ?? "",
+          duration: `${calcMonths(j)}개월`,
+          dataHealth: j.source?.includes("건강") ?? false,
+          dataPension: j.source?.includes("연금") ?? false,
+          dataEmployment: j.source?.includes("고용") ?? false,
+          dataIncome: j.source?.includes("소득") ?? false,
+          dataStatement: j.source?.includes("진술") ?? false,
+        }));
+
+        // 의학적 소견 (1차 특진 결과 활용)
+        const medicalParts: string[] = [];
+        if (copd?.firstClinic) medicalParts.push(`초진 의료기관: ${copd.firstClinic}`);
+        if (copd?.fev1Rate) medicalParts.push(`초진 1초율: ${copd.fev1Rate}%`);
+        if (copd?.fev1Volume) medicalParts.push(`초진 1초량: ${copd.fev1Volume}L`);
+        if (firstApp?.exam1Hospital) medicalParts.push(`1차 특진 의료기관: ${firstApp.exam1Hospital}`);
+        if (firstApp?.exam1Fev1Rate) medicalParts.push(`1차 특진 1초율: ${firstApp.exam1Fev1Rate}%`);
+        if (firstApp?.exam1Fev1Volume) medicalParts.push(`1차 특진 1초량: ${firstApp.exam1Fev1Volume}L`);
+        const medicalOpinion =
+          medicalParts.length > 0
+            ? `${medicalParts.join("\n")}\n\n위 검사 결과를 종합하면, 피재근로자는 만성폐쇄성폐질환(COPD)으로 진단되었고, 분진작업 노출 이력에 비추어 업무 관련성이 인정됩니다.`
+            : "(의료기관 진단 결과 — 입력 필요)";
+
+        const lastJob = workHistory[workHistory.length - 1] ?? null;
+
+        const data: CopdInjuryIncidentData = {
+          workerName: patient.name ?? "",
+          workerSsn: patient.ssn ?? "",
+          workerAddr: patient.address ?? "",
+          workplaceName: lastJob?.company ?? "",
+          dustJobs,
+          specialNote: copd?.copdMemo ?? "",
+          totalDuration,
+          incidentNarrative: undefined, // 템플릿 기본값 사용
+          medicalOpinion,
+          claimantView: undefined,
+          conclusion: undefined,
+          agentName: manager?.name ?? "",
+          agentLicenseNo: manager?.licenseNo ?? "",
+          agentOfficeName: `노무법인 더보상 ${manager?.branchName ?? ""}`.trim(),
+        };
+        const spec = buildCopdInjuryIncident(data);
+        pdfBytes = await buildTextFormPdf(spec);
         break;
       }
 
